@@ -58,7 +58,7 @@ export function renderClientContract(
 	input: Readonly<{
 		application: string;
 		clientContractDigest: string;
-		wireDigest: string;
+		httpContractDigest: string;
 		contextCodec?: unknown;
 		realtime?: RealtimeWireContractV1;
 	}>,
@@ -200,6 +200,8 @@ export interface GeneratedClientScope {
 export interface GeneratedClient {
 	withContext(input: AppContextInput): GeneratedClientScope;
 }
+
+type FetchTransport = (request: Request) => Promise<Response>;
 
 export class CommittedResultUnavailable extends Error {
 	readonly name = "CommittedResultUnavailable" as const;
@@ -464,7 +466,7 @@ export function createClient(input: Readonly<{
 	readonly baseUrl: string;
 	readonly fetch?: typeof globalThis.fetch;
 }>): GeneratedClient {
-	const transport = input.fetch ?? globalThis.fetch;
+	const transport: FetchTransport = input.fetch ?? ((request) => globalThis.fetch(request));
 	const invoke = async <Result>(context: AppContextInput, operation: string, operationInput: unknown, options: CallOptions | ActionCallOptions = {}): Promise<Result> => {
 		const callId = options.callId ?? crypto.randomUUID();
 		if (!isCallIdentity(callId)) protocolFailure();

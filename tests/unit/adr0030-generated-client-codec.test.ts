@@ -76,7 +76,7 @@ test("compiler-owned input codec encodes no-zone timestamps before transport", a
 				{
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
-					wireDigest: "2".repeat(64),
+					httpContractDigest: "2".repeat(64),
 				},
 			),
 		);
@@ -180,7 +180,7 @@ test("compiler-owned input codec rejects lossy tagged JSON before transport", as
 				{
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
-					wireDigest: "2".repeat(64),
+					httpContractDigest: "2".repeat(64),
 				},
 			),
 		);
@@ -271,7 +271,7 @@ test("generated transform preserves optional, array, cursor, and object directio
 				{
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
-					wireDigest: "2".repeat(64),
+					httpContractDigest: "2".repeat(64),
 				},
 			),
 		);
@@ -368,7 +368,7 @@ test("generated JSON declarations preserve the exact recursive value grammar", a
 				{
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
-					wireDigest: "2".repeat(64),
+					httpContractDigest: "2".repeat(64),
 				},
 			),
 		);

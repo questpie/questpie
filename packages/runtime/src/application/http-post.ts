@@ -214,7 +214,7 @@ export function createCanonicalPostHttp<ContextInput, View>(
 	input: Readonly<{
 		application: string;
 		clientContractDigest: string;
-		wireDigest: string;
+		httpContractDigest: string;
 		maximumRequestBytes: number;
 		maximumResponseBytes: number;
 		contextCodec: RuntimeCodec;
@@ -330,7 +330,7 @@ export function createCanonicalPostHttp<ContextInput, View>(
 					compatibility.some((value) => value !== null) &&
 					(compatibility[0] !== input.application ||
 						compatibility[1] !== input.clientContractDigest ||
-						compatibility[2] !== input.wireDigest)
+						compatibility[2] !== input.httpContractDigest)
 				)
 					protocol();
 				if (!contentType(header(request, "content-type"))) protocol();

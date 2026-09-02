@@ -137,7 +137,9 @@ async function useGeneratedApp() {
 			},
 		},
 	});
-	const response: Response = await app.fetch(new Request("http://runtime.test/_questpie/operation"));
+	const response: Response = await app.fetch(
+		new Request("http://runtime.test/_questpie/query/messages.page"),
+	);
 	const page = await app.execution(
 		{
 			principal: principal.user({ id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4" }),

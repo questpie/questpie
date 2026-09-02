@@ -93,30 +93,10 @@ function runtimeArtifacts(
 				]
 			: [];
 	});
-	const unsignedWire = {
-		format: "questpie.operation-wire",
+	const unsignedHttp = {
+		format: "questpie.operation-http",
 		version: 1,
 		application: "application:collaboration",
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
-		protocol: { name: "questpie.operation", version: 1 },
-		requestKeys: [
-			"application",
-			"callId",
-			"clientContractDigest",
-			"context",
-			"input",
-			"operation",
-			"protocol",
-			"timeoutMilliseconds",
-			"wireDigest",
-		],
-		responseKeys: {
-			declaredError: ["callId", "error", "kind", "operation", "protocol"],
-			result: ["callId", "kind", "operation", "payload", "protocol"],
-			failure: ["callId", "error", "kind", "operation", "protocol"],
-			rejection: ["error", "kind"],
-		},
 		operations: [
 			...mutationOperations,
 			{
@@ -141,6 +121,7 @@ function runtimeArtifacts(
 		failures: [
 			"APPLICATION_MISMATCH",
 			"CLIENT_OUTDATED",
+			"COMMITTED_RESULT_UNAVAILABLE",
 			"DEADLINE_EXCEEDED",
 			"INTERNAL",
 			"NOT_FOUND",
@@ -153,9 +134,9 @@ function runtimeArtifacts(
 		mutationAutomaticRetry: false,
 		clientContractDigest: sha("7"),
 	} as const;
-	const wireContract = {
-		...unsignedWire,
-		digest: digest("questpie-operation-wire-v1", unsignedWire),
+	const httpContract = {
+		...unsignedHttp,
+		digest: digest("questpie-operation-http-v1", unsignedHttp),
 	};
 	const inferredActionIdentities = additionalSlots.flatMap((raw) => {
 		const slot = raw as Readonly<{ identity?: unknown; kind?: unknown }>;
@@ -182,7 +163,7 @@ function runtimeArtifacts(
 		version: 1,
 		operations: [
 			...actionOperations,
-			...unsignedWire.operations.map((operation) =>
+			...unsignedHttp.operations.map((operation) =>
 				operation.identity.startsWith("mutation:")
 					? { ...operation, admission: "authenticated" as const }
 					: operation,
@@ -244,7 +225,7 @@ function runtimeArtifacts(
 		"query-projection.json": "{}\n",
 		"runtime-executables.json": `${JSON.stringify(runtimeExecutables)}\n`,
 		"schema-projection.json": "{}\n",
-		"wire-contract.json": `${JSON.stringify(wireContract)}\n`,
+		"operation-http-contract.json": `${JSON.stringify(httpContract)}\n`,
 	};
 	const compiler = {
 		version: "4.0.0-beta.1",
@@ -282,7 +263,7 @@ function runtimeArtifacts(
 		),
 		manifestDigest: fileDigest(artifactFiles["manifest.json"]),
 		appContractDigest: fileDigest(artifactFiles["app.ts"]),
-		clientContractDigest: unsignedWire.clientContractDigest,
+		clientContractDigest: unsignedHttp.clientContractDigest,
 		packageInventoryDigest: fileDigest(
 			artifactFiles["internal/package-inventories.json"],
 		),
@@ -311,7 +292,7 @@ function runtimeArtifacts(
 			operationContracts,
 		),
 		runtimeGraphDigest,
-		wireDigest: wireContract.digest,
+		operationHttpContractDigest: httpContract.digest,
 		executableSlots: slots.map((slot) => `${slot.identity}#${slot.slot}`),
 		slots,
 		later: {
@@ -320,16 +301,18 @@ function runtimeArtifacts(
 			durableCompatibilityDigest: null,
 			reactionDigest: null,
 		},
-		inventory: Object.entries(artifactFiles).map(([path, bytes]) => ({
-			path,
-			digest: fileDigest(bytes),
-		})),
+		inventory: Object.entries(artifactFiles)
+			.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+			.map(([path, bytes]) => ({
+				path,
+				digest: fileDigest(bytes),
+			})),
 	};
 	return {
 		artifactFiles,
 		runtimeExecutables,
 		operationContracts,
-		wireContract,
+		httpContract,
 		runtimeBuild: {
 			...runtimeBuildWithoutDigest,
 			digest: digest("questpie-runtime-build-v1", runtimeBuildWithoutDigest),
@@ -342,7 +325,7 @@ function runtimeArtifactEnvelope(value: ReturnType<typeof runtimeArtifacts>) {
 		runtimeBuild: value.runtimeBuild,
 		runtimeExecutables: value.runtimeExecutables,
 		operationContracts: value.operationContracts,
-		wireContract: value.wireContract,
+		httpContract: value.httpContract,
 	};
 }
 
@@ -518,24 +501,24 @@ test("binds Runtime Build Application Identity to the executable bundle", async 
 		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
 	});
 	const original = runtimeArtifacts();
-	const { digest: _wireDigest, ...unsignedWire } = original.wireContract;
-	const changedUnsignedWire = {
-		...unsignedWire,
+	const { digest: _httpDigest, ...unsignedHttp } = original.httpContract;
+	const changedUnsignedHttp = {
+		...unsignedHttp,
 		application: "application:forged",
 	};
-	const wireContract = {
-		...changedUnsignedWire,
-		digest: digest("questpie-operation-wire-v1", changedUnsignedWire),
+	const httpContract = {
+		...changedUnsignedHttp,
+		digest: digest("questpie-operation-http-v1", changedUnsignedHttp),
 	};
-	const wireBytes = `${JSON.stringify(wireContract)}\n`;
+	const httpBytes = `${JSON.stringify(httpContract)}\n`;
 	const { digest: _buildDigest, ...unsignedBuild } = original.runtimeBuild;
 	const changedUnsignedBuild = {
 		...unsignedBuild,
 		application: "application:forged",
-		wireDigest: wireContract.digest,
+		operationHttpContractDigest: httpContract.digest,
 		inventory: unsignedBuild.inventory.map((item) =>
-			item.path === "wire-contract.json"
-				? { ...item, digest: fileDigest(wireBytes) }
+			item.path === "operation-http-contract.json"
+				? { ...item, digest: fileDigest(httpBytes) }
 				: item,
 		),
 	};
@@ -547,10 +530,10 @@ test("binds Runtime Build Application Identity to the executable bundle", async 
 		...original,
 		artifactFiles: {
 			...original.artifactFiles,
-			"wire-contract.json": wireBytes,
+			"operation-http-contract.json": httpBytes,
 		},
 		runtimeBuild,
-		wireContract,
+		httpContract,
 	};
 	const bindings = [
 		{
@@ -1040,7 +1023,7 @@ test("sanitizes unknown operation errors identically for direct and canonical ne
 				"Questpie-Context": Buffer.from(JSON.stringify(contextInput)).toString(
 					"base64url",
 				),
-				"Questpie-Wire-Digest": artifacts.wireContract.digest,
+				"Questpie-Wire-Digest": artifacts.httpContract.digest,
 			},
 		},
 	);
@@ -1118,7 +1101,7 @@ test("runs one canonical Query GET through the existing Operation executor", asy
 					"base64url",
 				),
 				"Questpie-Timeout-Milliseconds": "5000",
-				"Questpie-Wire-Digest": artifacts.wireContract.digest,
+				"Questpie-Wire-Digest": artifacts.httpContract.digest,
 			},
 		},
 	);
@@ -1152,7 +1135,7 @@ test("runs one canonical Query GET through the existing Operation executor", asy
 		"Questpie-Context": Buffer.from(JSON.stringify(contextInput)).toString(
 			"base64url",
 		),
-		"Questpie-Wire-Digest": artifacts.wireContract.digest,
+		"Questpie-Wire-Digest": artifacts.httpContract.digest,
 	};
 	for (const hostile of [
 		"http://runtime.test/_questpie/query/messages.page?first=2&first=2",
@@ -1294,7 +1277,7 @@ test("runs canonical Mutation POST and replay through the existing Mutation exec
 					"Questpie-Application": artifacts.runtimeBuild.application,
 					"Questpie-Client-Contract":
 						artifacts.runtimeBuild.clientContractDigest,
-					"Questpie-Wire-Digest": artifacts.wireContract.digest,
+					"Questpie-Wire-Digest": artifacts.httpContract.digest,
 				},
 				body: JSON.stringify({ context: contextInput, input: "hello" }),
 			}),
@@ -1710,7 +1693,7 @@ test("separates runtime deadlines from Fetch disconnect cancellation", async () 
 				"Questpie-Context": Buffer.from(JSON.stringify(context)).toString(
 					"base64url",
 				),
-				"Questpie-Wire-Digest": artifacts.wireContract.digest,
+				"Questpie-Wire-Digest": artifacts.httpContract.digest,
 			},
 			signal: disconnect.signal,
 		},

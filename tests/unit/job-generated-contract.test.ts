@@ -126,7 +126,7 @@ test("does not project Job acceptance into the browser client", () => {
 	const client = renderClientContract(resources, {
 		application: "application:test",
 		clientContractDigest: "1".repeat(64),
-		wireDigest: "2".repeat(64),
+		httpContractDigest: "2".repeat(64),
 	});
 
 	expect(client).not.toContain("reports.companyDigest");

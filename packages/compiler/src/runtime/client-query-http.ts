@@ -3,7 +3,7 @@ export function renderClientQueryHttp(
 	input: Readonly<{
 		application: string;
 		clientContractDigest: string;
-		wireDigest: string;
+		httpContractDigest: string;
 	}>,
 ): string {
 	return String.raw`
@@ -74,7 +74,7 @@ function identityHeader(value: string): string {
 	return encodeURIComponent(value);
 }
 async function invokeCanonicalQuery<Result>(input: Readonly<{
-	transport: typeof globalThis.fetch;
+	transport: FetchTransport;
 	baseUrl: string;
 	context: AppContextInput;
 	operation: string;
@@ -92,7 +92,7 @@ async function invokeCanonicalQuery<Result>(input: Readonly<{
 		"Questpie-Application": ${JSON.stringify(input.application)},
 		"Questpie-Client-Contract": ${JSON.stringify(input.clientContractDigest)},
 		"Questpie-Context": canonicalContext(contextCodec, input.context),
-		"Questpie-Wire-Digest": ${JSON.stringify(input.wireDigest)},
+		"Questpie-Wire-Digest": ${JSON.stringify(input.httpContractDigest)},
 		"Questpie-Call-Id": identityHeader(input.callId),
 	});
 	if (input.options.timeoutMilliseconds !== undefined) headers.set("Questpie-Timeout-Milliseconds", String(input.options.timeoutMilliseconds));

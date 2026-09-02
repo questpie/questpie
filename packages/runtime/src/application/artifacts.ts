@@ -16,11 +16,6 @@ import {
 	type RuntimeExecutablesV1,
 } from "./executable-artifact";
 import { decodeRuntimeIssueMappings } from "./issue-mappings";
-import { validateOperationWireV2 } from "./wire-v2-artifact";
-import {
-	operationWireV3ExtensionKeys,
-	validateRuntimeOperationWireV3,
-} from "./wire-v3-runtime-artifact";
 
 type RuntimeBuildV1 = Readonly<{
 	format: "questpie.runtime-build";
@@ -59,7 +54,7 @@ type RuntimeBuildV1 = Readonly<{
 	runtimeExecutablesDigest: string;
 	operationContractsDigest: string;
 	runtimeGraphDigest: string;
-	wireDigest: string;
+	operationHttpContractDigest: string;
 	realtimeWireDigest: string | null;
 	later: Readonly<{
 		changeLedgerDigest: string | null;
@@ -89,15 +84,10 @@ type RuntimeBuildV1 = Readonly<{
 	digest: string;
 }>;
 
-type OperationWireContractBase = Readonly<{
-	format: "questpie.operation-wire";
-	version: 1 | 2 | 3;
+type OperationHttpContractV1 = Readonly<{
+	format: "questpie.operation-http";
+	version: 1;
 	application: string;
-	path: string;
-	mediaType: string;
-	protocol: Readonly<{ name: "questpie.operation"; version: 1 }>;
-	requestKeys: readonly string[];
-	responseKeys: Readonly<Record<string, readonly string[]>>;
 	operations: readonly RuntimeOperationContract[];
 	failures: readonly string[];
 	limits: Readonly<{ requestBytes: number; responseBytes: number }>;
@@ -106,33 +96,6 @@ type OperationWireContractBase = Readonly<{
 	clientContractDigest: string;
 	digest: string;
 }>;
-
-type OperationWireContractV1 = OperationWireContractBase &
-	Readonly<{ version: 1 }>;
-
-type OperationWireContractV2 = OperationWireContractBase &
-	Readonly<{
-		version: 2;
-		compatibility: Readonly<{
-			clientContractDigest: string;
-			wireV1Digest: string;
-		}>;
-	}>;
-
-type OperationWireContractV3 = OperationWireContractBase &
-	Readonly<{
-		version: 3;
-		compatibility: Readonly<{
-			clientContractDigest: string;
-			wireV1Digest: string;
-			wireV2Digest: string;
-		}>;
-	}>;
-
-type OperationWireContract =
-	| OperationWireContractV1
-	| OperationWireContractV2
-	| OperationWireContractV3;
 
 export type OperationContractsV1 = Readonly<{
 	format: "questpie.operation-contracts";
@@ -144,7 +107,7 @@ export type RuntimeArtifactsV1 = Readonly<{
 	runtimeBuild: RuntimeBuildV1;
 	runtimeExecutables: RuntimeExecutablesV1;
 	operationContracts: OperationContractsV1;
-	wireContract: OperationWireContract;
+	httpContract: OperationHttpContractV1;
 }>;
 
 function decodeOperationContracts(value: unknown): OperationContractsV1 {
@@ -157,7 +120,7 @@ function decodeOperationContracts(value: unknown): OperationContractsV1 {
 	)
 		fail("operation contracts artifact is invalid");
 	const operations = artifact.operations.map((operation, index) =>
-		decodeOperationWireContract(operation, index, true),
+		decodeOperationContract(operation, index, true),
 	);
 	const identities = operations.map(({ identity }) => identity);
 	if (
@@ -174,16 +137,13 @@ function decodeOperationContracts(value: unknown): OperationContractsV1 {
 	});
 }
 
-function decodeOperationWireContract(
+function decodeOperationContract(
 	value: unknown,
 	index: number,
 	direct = false,
 ): RuntimeOperationContract {
-	const operation = record(value, `wire operation ${index}`);
-	const identity = string(
-		operation.identity,
-		`wire operation ${index} identity`,
-	);
+	const operation = record(value, `operation ${index}`);
+	const identity = string(operation.identity, `operation ${index} identity`);
 	const carriesAdmission =
 		direct &&
 		(identity.startsWith("mutation:") || identity.startsWith("action:"));
@@ -203,7 +163,7 @@ function decodeOperationWireContract(
 			...(carriesLimits ? ["limits"] : []),
 			...(carriesIssueMappings ? ["issueMappings"] : []),
 		],
-		`wire operation ${index}`,
+		`operation ${index}`,
 	);
 	const admission = operation.admission;
 	if (
@@ -212,21 +172,18 @@ function decodeOperationWireContract(
 			admission as "authenticated" | "public" | "system",
 		)
 	)
-		fail(`wire operation ${index} admission is invalid`);
+		fail(`operation ${index} admission is invalid`);
 	let limits: Readonly<{
 		inputBytes: number;
 		resultBytes: number;
 		durationMilliseconds: number;
 	}> | null = null;
 	if (carriesLimits) {
-		const candidate = record(
-			operation.limits,
-			`wire operation ${index} limits`,
-		);
+		const candidate = record(operation.limits, `operation ${index} limits`);
 		exact(
 			candidate,
 			["durationMilliseconds", "inputBytes", "resultBytes"],
-			`wire operation ${index} limits`,
+			`operation ${index} limits`,
 		);
 		if (
 			!Number.isSafeInteger(candidate.inputBytes) ||
@@ -236,7 +193,7 @@ function decodeOperationWireContract(
 			!Number.isSafeInteger(candidate.durationMilliseconds) ||
 			Number(candidate.durationMilliseconds) < 0
 		)
-			fail(`wire operation ${index} limits are invalid`);
+			fail(`operation ${index} limits are invalid`);
 		limits = Object.freeze({
 			inputBytes: Number(candidate.inputBytes),
 			resultBytes: Number(candidate.resultBytes),
@@ -245,14 +202,14 @@ function decodeOperationWireContract(
 	}
 	const rawDeclaredErrors = record(
 		operation.declaredErrors,
-		`wire operation ${index} declared errors`,
+		`operation ${index} declared errors`,
 	);
 	const declaredErrors: RuntimeDeclaredErrorContract[] = Object.entries(
 		rawDeclaredErrors,
 	)
 		.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
 		.map(([key, raw]) => {
-			const path = `wire operation ${index} declared error ${key}`;
+			const path = `operation ${index} declared error ${key}`;
 			const declaredError = record(raw, path);
 			exact(declaredError, ["code", "status", "payload"], path);
 			const status = declaredError.status;
@@ -280,12 +237,12 @@ function decodeOperationWireContract(
 		new Set(declaredErrors.map(({ code }) => code)).size !==
 		declaredErrors.length
 	)
-		fail(`wire operation ${index} declared error codes must be unique`);
+		fail(`operation ${index} declared error codes must be unique`);
 	const issueMappings = carriesIssueMappings
 		? decodeRuntimeIssueMappings(
 				operation.issueMappings,
 				declaredErrors,
-				`wire operation ${index} issue mapping`,
+				`operation ${index} issue mapping`,
 			)
 		: undefined;
 	return Object.freeze({
@@ -307,98 +264,45 @@ function decodeOperationWireContract(
 	});
 }
 
-function decodeWire(value: unknown): OperationWireContract {
-	const wire = record(value, "wire contract");
-	const isV2 = wire.version === 2;
-	const isV3 = wire.version === 3;
+function decodeHttpContract(value: unknown): OperationHttpContractV1 {
+	const http = record(value, "operation HTTP contract");
 	exact(
-		wire,
+		http,
 		[
 			"format",
 			"version",
 			"application",
-			"path",
-			"mediaType",
-			"protocol",
-			"requestKeys",
-			"responseKeys",
 			"operations",
 			"failures",
 			"limits",
 			"principalSource",
 			"mutationAutomaticRetry",
 			"clientContractDigest",
-			...(isV2 || isV3
-				? [
-						"failureDetails",
-						"resultKinds",
-						"callIdentity",
-						"transactionIdentity",
-						"committedResultUnavailable",
-						"compatibility",
-					]
-				: []),
-			...(isV3 ? [...operationWireV3ExtensionKeys] : []),
 			"digest",
 		],
-		"wire contract",
+		"operation HTTP contract",
 	);
 	if (
-		wire.format !== "questpie.operation-wire" ||
-		(wire.version !== 1 && wire.version !== 2 && wire.version !== 3) ||
-		typeof wire.application !== "string" ||
-		wire.path !== "/_questpie/operation" ||
-		wire.mediaType !== "application/vnd.questpie.operation+json;version=1" ||
-		wire.principalSource !== "ingressOutsideBody" ||
-		wire.mutationAutomaticRetry !== false ||
-		!Array.isArray(wire.requestKeys) ||
-		!Array.isArray(wire.operations) ||
-		!Array.isArray(wire.failures)
+		http.format !== "questpie.operation-http" ||
+		http.version !== 1 ||
+		typeof http.application !== "string" ||
+		http.principalSource !== "ingressOutsideBody" ||
+		http.mutationAutomaticRetry !== false ||
+		!Array.isArray(http.operations) ||
+		!Array.isArray(http.failures)
 	)
-		fail("wire contract is invalid");
-	const protocol = record(wire.protocol, "wire protocol");
-	exact(protocol, ["name", "version"], "wire protocol");
-	if (protocol.name !== "questpie.operation" || protocol.version !== 1)
-		fail("wire protocol is invalid");
-	const limits = record(wire.limits, "wire limits");
-	exact(limits, ["requestBytes", "responseBytes"], "wire limits");
+		fail("operation HTTP contract is invalid");
+	const limits = record(http.limits, "operation HTTP limits");
+	exact(limits, ["requestBytes", "responseBytes"], "operation HTTP limits");
 	if (
 		!Number.isSafeInteger(limits.requestBytes) ||
 		(limits.requestBytes as number) <= 0 ||
 		!Number.isSafeInteger(limits.responseBytes) ||
 		(limits.responseBytes as number) <= 0
 	)
-		fail("wire limits are invalid");
-	const expectedRequestKeys = [
-		"application",
-		"callId",
-		"clientContractDigest",
-		"context",
-		"input",
-		"operation",
-		"protocol",
-		"timeoutMilliseconds",
-		"wireDigest",
-	];
-	if (JSON.stringify(wire.requestKeys) !== JSON.stringify(expectedRequestKeys))
-		fail("wire request keys are invalid");
-	const responseKeys = record(wire.responseKeys, "wire response keys");
-	exact(
-		responseKeys,
-		["declaredError", "failure", "rejection", "result"],
-		"wire response keys",
-	);
-	const responseShape = {
-		declaredError: ["callId", "error", "kind", "operation", "protocol"],
-		failure: ["callId", "error", "kind", "operation", "protocol"],
-		rejection: ["error", "kind"],
-		result: ["callId", "kind", "operation", "payload", "protocol"],
-	};
-	for (const [key, expected] of Object.entries(responseShape))
-		if (JSON.stringify(responseKeys[key]) !== JSON.stringify(expected))
-			fail("wire response keys are invalid");
-	const operations = wire.operations.map((operation, index) =>
-		decodeOperationWireContract(operation, index),
+		fail("operation HTTP limits are invalid");
+	const operations = http.operations.map((operation, index) =>
+		decodeOperationContract(operation, index),
 	);
 	const operationIds = operations.map((operation) => operation.identity);
 	if (
@@ -407,14 +311,13 @@ function decodeWire(value: unknown): OperationWireContract {
 			(identity, index) => identity !== [...operationIds].sort()[index],
 		)
 	)
-		fail("wire operations must be unique and sorted");
-	if (isV3) validateRuntimeOperationWireV3(wire);
-	else if (isV2) validateOperationWireV2(wire);
-	else if (
-		JSON.stringify(wire.failures) !==
+		fail("operation HTTP operations must be unique and sorted");
+	if (
+		JSON.stringify(http.failures) !==
 		JSON.stringify([
 			"APPLICATION_MISMATCH",
 			"CLIENT_OUTDATED",
+			"COMMITTED_RESULT_UNAVAILABLE",
 			"DEADLINE_EXCEEDED",
 			"INTERNAL",
 			"NOT_FOUND",
@@ -423,24 +326,15 @@ function decodeWire(value: unknown): OperationWireContract {
 			"RUNTIME_UNAVAILABLE",
 		])
 	)
-		fail("wire failures are invalid");
-	const digest = digestValue(wire.digest, "wire digest");
-	const { digest: _digest, ...unsigned } = wire;
-	if (
-		artifactDigest(
-			isV3
-				? "questpie-operation-wire-v3"
-				: isV2
-					? "questpie-operation-wire-v2"
-					: "questpie-operation-wire-v1",
-			unsigned,
-		) !== digest
-	)
-		fail("wire digest does not match");
+		fail("operation HTTP failures are invalid");
+	const digest = digestValue(http.digest, "operation HTTP digest");
+	const { digest: _digest, ...unsigned } = http;
+	if (artifactDigest("questpie-operation-http-v1", unsigned) !== digest)
+		fail("operation HTTP digest does not match");
 	return Object.freeze({
-		...wire,
+		...http,
 		operations: Object.freeze(operations),
-	}) as OperationWireContract;
+	}) as OperationHttpContractV1;
 }
 
 function decodeBuild(value: unknown): RuntimeBuildV1 {
@@ -481,7 +375,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 			"runtimeExecutablesDigest",
 			"operationContractsDigest",
 			"runtimeGraphDigest",
-			"wireDigest",
+			"operationHttpContractDigest",
 			...(v3 ? ["realtimeWireDigest"] : []),
 			"later",
 			"executableSlots",
@@ -512,7 +406,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		"runtimeExecutablesDigest",
 		"operationContractsDigest",
 		"runtimeGraphDigest",
-		"wireDigest",
+		"operationHttpContractDigest",
 		"digest",
 	] as const)
 		digestValue(build[key], key);
@@ -711,7 +605,7 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 			"runtimeBuild",
 			"runtimeExecutables",
 			"operationContracts",
-			"wireContract",
+			"httpContract",
 		],
 		"artifact envelope",
 	);
@@ -722,7 +616,7 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 	const operationContracts = decodeOperationContracts(
 		envelope.operationContracts,
 	);
-	const wireContract = decodeWire(envelope.wireContract);
+	const httpContract = decodeHttpContract(envelope.httpContract);
 	if (
 		artifactDigest("questpie-runtime-executables-v1", runtimeExecutables) !==
 		runtimeBuild.runtimeExecutablesDigest
@@ -754,19 +648,19 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 	)
 		fail("Action executable and operation contract inventories do not match");
 	if (
-		!wireContract.operations.every((operation) =>
+		!httpContract.operations.every((operation) =>
 			operationContracts.operations.some(
 				(candidate) => candidate.identity === operation.identity,
 			),
 		)
 	)
-		fail("wire operations are not covered by the operation contracts");
+		fail("HTTP operations are not covered by the operation contracts");
 	if (
-		wireContract.digest !== runtimeBuild.wireDigest ||
-		wireContract.application !== runtimeBuild.application ||
-		wireContract.clientContractDigest !== runtimeBuild.clientContractDigest
+		httpContract.digest !== runtimeBuild.operationHttpContractDigest ||
+		httpContract.application !== runtimeBuild.application ||
+		httpContract.clientContractDigest !== runtimeBuild.clientContractDigest
 	)
-		fail("wire binding does not match");
+		fail("operation HTTP binding does not match");
 	if (
 		runtimeBuild.executableSlots.length !== runtimeExecutables.slots.length ||
 		runtimeBuild.executableSlots.some(
@@ -794,6 +688,6 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 		runtimeBuild,
 		runtimeExecutables,
 		operationContracts,
-		wireContract,
+		httpContract,
 	});
 }

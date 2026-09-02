@@ -254,7 +254,7 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 	input: Readonly<{
 		application: string;
 		clientContractDigest: string;
-		wireDigest: string;
+		httpContractDigest: string;
 		maximumResponseBytes: number;
 		contextCodec: RuntimeCodec;
 		operations: readonly RuntimeOperationContract[];
@@ -328,7 +328,7 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 					compatibility.some((value) => value !== null) &&
 					(compatibility[0] !== input.application ||
 						compatibility[1] !== input.clientContractDigest ||
-						compatibility[2] !== input.wireDigest)
+						compatibility[2] !== input.httpContractDigest)
 				)
 					protocol();
 				if (

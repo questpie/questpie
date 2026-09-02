@@ -557,69 +557,6 @@ test("waits for concurrent Service dependencies before failure cleanup", async (
 	await runtime.close();
 });
 
-test("decodes direct and Operation-Wire Context input through one root", async () => {
-	let resolutions = 0;
-	const wireContext = defineContext({
-		name: "wire.context",
-		input: codec.object({ companyId: codec.uuid() }),
-		resolve: ({ input }) => {
-			resolutions += 1;
-			return {
-				tenant: { id: input.companyId },
-				values: { resolvedCompanyId: input.companyId },
-			};
-		},
-	});
-	const runtime = createApplicationRuntime({
-		services: [],
-		context: wireContext,
-		bootstrap: () => ({ get: async () => null }),
-		project: ({ facts }) => facts,
-	});
-	const useFacts = ({
-		tenant,
-		values,
-	}: {
-		tenant: unknown;
-		values: unknown;
-	}) => ({
-		tenant,
-		values,
-	});
-	const runDirect = (context: { readonly companyId: string }) =>
-		runtime.execution(
-			{
-				principal: principal.user({ id: principalId }),
-				context,
-			},
-			useFacts,
-		);
-	const runWire = (context: unknown) =>
-		runtime.operationWire(
-			{
-				principal: principal.user({ id: principalId }),
-				frame: JSON.parse(
-					JSON.stringify({
-						format: "questpie.operation-wire-root",
-						version: 1,
-						context,
-					}),
-				),
-			},
-			useFacts,
-		);
-	const direct = await runDirect({ companyId });
-	const fromWire = await runWire({ companyId });
-	expect(fromWire).toEqual(direct);
-	expect(resolutions).toBe(2);
-
-	await expect(
-		runWire({ companyId: "not-a-uuid", authority: "system" }),
-	).rejects.toThrow("Context input");
-	expect(resolutions).toBe(2);
-	await runtime.close();
-});
-
 test("rejects a structurally forged Principal before Context Resolution", async () => {
 	let resolutions = 0;
 	const trustedContext = defineContext({

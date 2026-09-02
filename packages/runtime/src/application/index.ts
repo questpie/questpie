@@ -107,7 +107,7 @@ export async function createRuntimeApplication<
 			(contract) => !contract.identity.startsWith("action:"),
 		),
 	);
-	const networkActionCount = artifacts.wireContract.operations.filter(
+	const networkActionCount = artifacts.httpContract.operations.filter(
 		(contract) => contract.identity.startsWith("action:"),
 	).length;
 	if (networkActionCount > 0 && !input.program.invokeAction)
@@ -392,10 +392,10 @@ export async function createRuntimeApplication<
 	>({
 		application: artifacts.runtimeBuild.application,
 		clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
-		wireDigest: artifacts.wireContract.digest,
-		maximumResponseBytes: artifacts.wireContract.limits.responseBytes,
+		httpContractDigest: artifacts.httpContract.digest,
+		maximumResponseBytes: artifacts.httpContract.limits.responseBytes,
 		contextCodec: input.program.context.input as never,
-		operations: artifacts.wireContract.operations,
+		operations: artifacts.httpContract.operations,
 		prepare: operationEngine.prepare,
 		resolvePrincipal: async (request) =>
 			input.program.resolvePrincipal(request),
@@ -419,11 +419,11 @@ export async function createRuntimeApplication<
 	>({
 		application: artifacts.runtimeBuild.application,
 		clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
-		wireDigest: artifacts.wireContract.digest,
-		maximumRequestBytes: artifacts.wireContract.limits.requestBytes,
-		maximumResponseBytes: artifacts.wireContract.limits.responseBytes,
+		httpContractDigest: artifacts.httpContract.digest,
+		maximumRequestBytes: artifacts.httpContract.limits.requestBytes,
+		maximumResponseBytes: artifacts.httpContract.limits.responseBytes,
 		contextCodec: input.program.context.input as never,
-		operations: artifacts.wireContract.operations,
+		operations: artifacts.httpContract.operations,
 		prepare: operationEngine.prepare,
 		resolvePrincipal: async (request) =>
 			input.program.resolvePrincipal(request),

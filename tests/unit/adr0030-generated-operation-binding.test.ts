@@ -20,8 +20,8 @@ test("binds Collection Operation Set writes as ordinary exact Operations", async
 			output: unknown;
 		}>[];
 	}>;
-	const wire = JSON.parse(
-		compilation.generatedFiles["wire-contract.json"] ?? "null",
+	const http = JSON.parse(
+		compilation.generatedFiles["operation-http-contract.json"] ?? "null",
 	) as Readonly<{ operations: readonly Readonly<{ identity: string }>[] }>;
 	const executables = JSON.parse(
 		compilation.generatedFiles["runtime-executables.json"] ?? "null",
@@ -85,7 +85,7 @@ test("binds Collection Operation Set writes as ordinary exact Operations", async
 		},
 	});
 	expect(
-		wire.operations.some(
+		http.operations.some(
 			({ identity }) => identity === "mutation:messages.create",
 		),
 	).toBe(false);
@@ -124,11 +124,11 @@ test("publishes only explicitly networked generated writes", async () => {
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
 		});
-		const wire = JSON.parse(
-			compilation.generatedFiles["wire-contract.json"] ?? "null",
+		const http = JSON.parse(
+			compilation.generatedFiles["operation-http-contract.json"] ?? "null",
 		) as Readonly<{ operations: readonly Readonly<{ identity: string }>[] }>;
 		expect(
-			wire.operations.some(
+			http.operations.some(
 				({ identity }) => identity === "mutation:messages.create",
 			),
 		).toBe(true);

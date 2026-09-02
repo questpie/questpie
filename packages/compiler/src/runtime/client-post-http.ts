@@ -3,12 +3,12 @@ export function renderClientPostHttp(
 	input: Readonly<{
 		application: string;
 		clientContractDigest: string;
-		wireDigest: string;
+		httpContractDigest: string;
 	}>,
 ): string {
 	return String.raw`
 async function invokeCanonicalPost<Result>(input: Readonly<{
-	transport: typeof globalThis.fetch;
+	transport: FetchTransport;
 	baseUrl: string;
 	context: AppContextInput;
 	operation: string;
@@ -31,7 +31,7 @@ async function invokeCanonicalPost<Result>(input: Readonly<{
 		"content-type": "application/json",
 		"Questpie-Application": ${JSON.stringify(input.application)},
 		"Questpie-Client-Contract": ${JSON.stringify(input.clientContractDigest)},
-		"Questpie-Wire-Digest": ${JSON.stringify(input.wireDigest)},
+		"Questpie-Wire-Digest": ${JSON.stringify(input.httpContractDigest)},
 	});
 	if (input.action) {
 		headers.set("Effect-Key", identityHeader((input.options as ActionCallOptions).effectKey));

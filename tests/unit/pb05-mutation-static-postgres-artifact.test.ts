@@ -93,7 +93,9 @@ test("Runtime Build binds the compiled fixed Mutation statement artifact", async
 		operationContracts: JSON.parse(
 			compilation.generatedFiles["operation-contracts.json"]!,
 		),
-		wireContract: JSON.parse(compilation.generatedFiles["wire-contract.json"]!),
+		httpContract: JSON.parse(
+			compilation.generatedFiles["operation-http-contract.json"]!,
+		),
 	});
 	const inventoryFiles = Object.fromEntries(
 		runtimeBuild.inventory.map(({ path }: { path: string }) => [

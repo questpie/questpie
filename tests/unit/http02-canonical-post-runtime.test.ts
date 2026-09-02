@@ -57,7 +57,7 @@ test("canonical POST decodes after credentials and preserves kind identities", a
 	const transport = createCanonicalPostHttp({
 		application: "application:test",
 		clientContractDigest: "1".repeat(64),
-		wireDigest: "2".repeat(64),
+		httpContractDigest: "2".repeat(64),
 		maximumRequestBytes: 4096,
 		maximumResponseBytes: 4096,
 		contextCodec: contextCodec as never,

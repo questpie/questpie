@@ -60,6 +60,19 @@ export type OperationFailureCode =
 	| "RESOURCE_LIMIT"
 	| "RUNTIME_UNAVAILABLE";
 
+export function operationFailureStatus(
+	code: OperationFailureCode | "COMMITTED_RESULT_UNAVAILABLE",
+): number {
+	if (code === "COMMITTED_RESULT_UNAVAILABLE") return 500;
+	if (code === "NOT_FOUND") return 404;
+	if (code === "PROTOCOL_UNSUPPORTED") return 400;
+	if (code === "APPLICATION_MISMATCH" || code === "CLIENT_OUTDATED") return 409;
+	if (code === "DEADLINE_EXCEEDED") return 408;
+	if (code === "RESOURCE_LIMIT") return 429;
+	if (code === "RUNTIME_UNAVAILABLE") return 503;
+	return 500;
+}
+
 export class OperationFailure extends Error {
 	constructor(
 		readonly code: OperationFailureCode,
@@ -292,15 +305,3 @@ export {
 	type CommittedResultUnavailablePayload,
 } from "./committed-result-unavailable";
 export { bindIngressPrincipal, readIngressPrincipal } from "./ingress";
-export {
-	committedResultUnavailableFrame,
-	decodeOperationWireRequest,
-	declaredErrorFrame,
-	failureFrame,
-	operationFailureStatus,
-	operationMediaType,
-	operationPath,
-	operationWireResponse,
-	rejectionFrame,
-	resultFrame,
-} from "./wire";

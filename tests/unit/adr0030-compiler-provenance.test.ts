@@ -201,11 +201,13 @@ test("generates an internal create/update kernel without publishing Collection R
 		const operationContracts = JSON.parse(
 			compilation.generatedFiles["operation-contracts.json"]!,
 		);
-		const wire = JSON.parse(compilation.generatedFiles["wire-contract.json"]!);
+		const http = JSON.parse(
+			compilation.generatedFiles["operation-http-contract.json"]!,
+		);
 		for (const resources of [
 			manifest.composition.resources,
 			operationContracts.operations,
-			wire.operations,
+			http.operations,
 		] as const)
 			expect(
 				resources.filter(({ identity }: { identity: string }) =>

@@ -411,7 +411,7 @@ export async function createArtifacts(
 	const realtime = projectRealtimeWireContract({
 		application: `application:${input.configuration.application.name}`,
 		clientContractDigest: runtime.clientContractDigest,
-		operationWireDigest: runtime.wireDigest,
+		operationHttpContractDigest: runtime.httpContractDigest,
 		resources: operationResources,
 		watchableQueries: (
 			liveQuery.artifacts["query-watchability.json"]
@@ -459,7 +459,7 @@ export async function createArtifacts(
 		"client.ts": renderClientContract(operationResources, {
 			application: `application:${input.configuration.application.name}`,
 			clientContractDigest: runtime.clientContractDigest,
-			wireDigest: runtime.wireDigest,
+			httpContractDigest: runtime.httpContractDigest,
 			contextCodec: input.resources.find(
 				(resource) => resource.kind === "context",
 			)?.contract.input ?? { kind: "object", properties: {} },
@@ -484,7 +484,7 @@ export async function createArtifacts(
 		),
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
 		"realtime-wire-contract.json": runtimeArtifactBytes(realtime),
-		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
+		"operation-http-contract.json": runtimeArtifactBytes(runtime.http),
 	};
 	if (lifecyclePrograms.programs.length > 0)
 		generated["collection-lifecycle-programs.json"] =

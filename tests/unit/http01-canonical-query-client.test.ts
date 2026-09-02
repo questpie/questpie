@@ -10,7 +10,7 @@ type GeneratedClientModule = Readonly<{
 	createClient(
 		input: Readonly<{
 			baseUrl: string;
-			fetch(request: Request): Promise<Response>;
+			fetch?(request: Request): Promise<Response>;
 		}>,
 	): Readonly<{
 		withContext(context: Readonly<{ companyId: string }>): Readonly<{
@@ -70,7 +70,7 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 				{
 					application: "application:collaboration",
 					clientContractDigest: "1".repeat(64),
-					wireDigest: "2".repeat(64),
+					httpContractDigest: "2".repeat(64),
 					contextCodec: {
 						kind: "object",
 						properties: { companyId: { kind: "uuid" } },
@@ -123,6 +123,34 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 			"1".repeat(64),
 		);
 		expect(observed?.headers.get("Questpie-Wire-Digest")).toBe("2".repeat(64));
+
+		const originalFetch = globalThis.fetch;
+		try {
+			globalThis.fetch = async function (_request) {
+				expect(this).toBe(globalThis);
+				return new Response(
+					JSON.stringify({
+						callId: "query-default-fetch",
+						result: { count: 1 },
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json; charset=utf-8" },
+					},
+				);
+			};
+			await generated
+				.createClient({ baseUrl: "http://runtime.test" })
+				.withContext({
+					companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+				})
+				.queries["messages.page"](
+					{ after: null, first: 1, search: "receiver" },
+					{ callId: "query-default-fetch", timeoutMilliseconds: 5_000 },
+				);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
 	} finally {
 		await rm(directory, { force: true, recursive: true });
 	}

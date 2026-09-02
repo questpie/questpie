@@ -44,7 +44,9 @@ Principal. Session Organization, Membership, and role values are routing hints:
 authority. The browser then creates a context-scoped generated client and sends
 every application Query, Mutation, and Action through `#questpie/client`. The
 generated client calls
-`/_questpie/operation`; the host delegates it unchanged to `application.fetch`.
+kind-specific `/_questpie/query/<name>`, `/_questpie/mutation/<name>`, and
+`/_questpie/action/<name>` endpoints; the host delegates them unchanged to
+`application.fetch`.
 Mutations use Policy-authorized Collection operations, comments enqueue their
 immediate SLA Job, and the Action performs the external notification request.
 The same host polls durable work so delayed, retrying, cancelled, and recovered

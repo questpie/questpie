@@ -16,7 +16,6 @@ import {
 	type AnyService,
 	createServiceOwner,
 } from "./services";
-import { decodeOperationWireRoot } from "./wire";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
@@ -99,8 +98,6 @@ export interface RuntimeProgram<Context extends ContextDefinition, View> {
 	) => MaybePromise<View>;
 }
 
-export type { OperationWireRootFrame } from "./wire";
-
 export interface ApplicationRuntime<Input, View> {
 	applicationService<Definition extends AnyApplicationService>(
 		definition: Definition,
@@ -112,15 +109,6 @@ export interface ApplicationRuntime<Input, View> {
 			signal?: AbortSignal;
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
-		}>,
-		use: (view: View) => MaybePromise<Result>,
-	): Promise<Awaited<Result>>;
-	operationWire<Result>(
-		input: Readonly<{
-			principal: Principal;
-			frame: unknown;
-			signal?: AbortSignal;
-			deadline?: number;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
@@ -246,26 +234,6 @@ export function createApplicationRuntime<
 	return Object.freeze({
 		applicationService: services.application,
 		execution,
-		operationWire: <Result>(
-			input: Readonly<{
-				principal: Principal;
-				frame: unknown;
-				signal?: AbortSignal;
-				deadline?: number;
-			}>,
-			use: (view: View) => MaybePromise<Result>,
-		) => {
-			const decoded = decodeOperationWireRoot(input.frame, input.principal);
-			return execution(
-				{
-					principal: decoded.principal,
-					context: decoded.context as ContextInputOf<Context>,
-					signal: input.signal,
-					deadline: input.deadline,
-				},
-				use,
-			);
-		},
 		route: <Result>(
 			input: Readonly<{
 				principal: Principal;

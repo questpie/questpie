@@ -465,40 +465,23 @@ postgresTest(
 
 		// `message.recordDelivery` has an Operation contract, so the engine can
 		// prepare it for the Reaction, but it is absent from the network wire.
-		const forged = prepared.wireFrame("mutation:message.recordDelivery", {
+		const forged = prepared.mutationRequest("mutation:message.recordDelivery", {
 			messageId,
 		});
-		const response = await prepared.fetch(
-			prepared.bindPrincipal(
-				new Request("http://runtime.test/_questpie/operation", {
-					method: "POST",
-					headers: { "content-type": forged.mediaType },
-					body: forged.body,
-				}),
-			),
-		);
+		const response = await prepared.fetch(prepared.bindPrincipal(forged));
 		expect(response.status).toBe(404);
 		expect(await response.json()).toMatchObject({
-			kind: "failure",
 			error: { code: "NOT_FOUND" },
 		});
 		expect(await deliveredEvents(messageId)).toBe(0);
 
 		// The network Mutation on the same wire still answers, so the refusal is
 		// about exposure rather than a broken Fetch path.
-		const allowed = prepared.wireFrame("mutation:message.publish", {
+		const allowed = prepared.mutationRequest("mutation:message.publish", {
 			channelId: beta05Ids.channel,
 			body: "network publish",
 		});
-		const published = await prepared.fetch(
-			prepared.bindPrincipal(
-				new Request("http://runtime.test/_questpie/operation", {
-					method: "POST",
-					headers: { "content-type": allowed.mediaType },
-					body: allowed.body,
-				}),
-			),
-		);
+		const published = await prepared.fetch(prepared.bindPrincipal(allowed));
 		if (published.status !== 200)
 			throw new Error(
 				`network Mutation failed with ${published.status}: ${await published.text()}`,

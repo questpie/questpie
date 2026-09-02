@@ -405,47 +405,12 @@ postgresTest(
 							return actions.delivery.publish(input, options);
 						},
 					);
-				const generatedWire = JSON.parse(
-					await Bun.file(
-						join(temporary, ".questpie/generated/wire-contract.json"),
-					).text(),
-				) as Readonly<{
-					clientContractDigest: string;
-					compatibility: Readonly<{
-						wireV1Digest: string;
-						wireV2Digest: string;
-					}>;
-				}>;
-				for (const legacyDigest of [
-					generatedWire.compatibility.wireV1Digest,
-					generatedWire.compatibility.wireV2Digest,
-				]) {
-					const outdated = await routeApplication.fetch(
-						new Request("https://app.test/_questpie/operation", {
-							method: "POST",
-							headers: {
-								"content-type":
-									"application/vnd.questpie.operation+json;version=1",
-							},
-							body: JSON.stringify({
-								protocol: { name: "questpie.operation", version: 1 },
-								application: "application:collaboration",
-								clientContractDigest: generatedWire.clientContractDigest,
-								wireDigest: legacyDigest,
-								operation: "action:delivery.publish",
-								callId: "legacy-action-call",
-								context: { companyId: tracerIds.company },
-								input: { effectKey: "domain-legacy", message: "never-run" },
-								timeoutMilliseconds: 500,
-							}),
-						}),
-					);
-					expect(outdated.status).toBe(409);
-					expect(await outdated.json()).toEqual({
-						kind: "failure",
-						error: { code: "CLIENT_OUTDATED", retryable: false },
-					});
-				}
+				const removed = await routeApplication.fetch(
+					new Request("https://app.test/_questpie/operation", {
+						method: "POST",
+					}),
+				);
+				expect(removed.status).toBe(404);
 
 				await expect(
 					routeApplication.execution(

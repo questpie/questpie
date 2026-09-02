@@ -56,7 +56,7 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 				{
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
-					wireDigest: "2".repeat(64),
+					httpContractDigest: "2".repeat(64),
 					contextCodec,
 				},
 			),

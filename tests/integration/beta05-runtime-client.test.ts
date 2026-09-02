@@ -76,6 +76,7 @@ type GeneratedOperationContext = Readonly<{
 let compilation: GeneratedCompilation;
 let runtimeBuild: Readonly<Record<string, unknown>>;
 let operationContracts: Readonly<Record<string, unknown>>;
+let httpContract: Readonly<Record<string, unknown>>;
 let runtimeExecutables: Readonly<{
 	slots: readonly RuntimeSlot[];
 }>;
@@ -371,6 +372,9 @@ beforeAll(async () => {
 	operationContracts = JSON.parse(
 		compilation.generatedFiles["operation-contracts.json"]!,
 	);
+	httpContract = JSON.parse(
+		compilation.generatedFiles["operation-http-contract.json"]!,
+	);
 });
 
 function definitions(): ReadonlyMap<string, Definition> {
@@ -553,6 +557,7 @@ async function runtimeHarness(
 			runtimeBuild,
 			runtimeExecutables,
 			operationContracts,
+			httpContract,
 		},
 		artifactFiles: artifactFiles(),
 		serverExports: bindings.serverExports,
@@ -638,7 +643,9 @@ function queryRequest(
 						JSON.stringify({ companyId }),
 					).toString("base64url"),
 					"Questpie-Timeout-Milliseconds": "5000",
-					"Questpie-Wire-Digest": String(runtimeBuild.wireDigest),
+					"Questpie-Wire-Digest": String(
+						runtimeBuild.operationHttpContractDigest,
+					),
 					...options.extraHeaders,
 				},
 			},
@@ -794,7 +801,9 @@ test("request abort cannot mask a known post-commit Mutation outcome", async () 
 					"Idempotency-Key": encodeURIComponent(callId),
 					"Questpie-Application": String(runtimeBuild.application),
 					"Questpie-Client-Contract": String(runtimeBuild.clientContractDigest),
-					"Questpie-Wire-Digest": String(runtimeBuild.wireDigest),
+					"Questpie-Wire-Digest": String(
+						runtimeBuild.operationHttpContractDigest,
+					),
 				},
 				body: JSON.stringify({
 					context: { companyId },

@@ -64,7 +64,8 @@ export const createRuntimeRealtime: RuntimeRealtimeFactory<unknown> = (
 		contract.application !== input.artifacts.runtimeBuild.application ||
 		contract.clientContractDigest !==
 			input.artifacts.runtimeBuild.clientContractDigest ||
-		contract.operationWireDigest !== input.artifacts.wireContract.digest ||
+		contract.operationHttpContractDigest !==
+			input.artifacts.httpContract.digest ||
 		contract.digest !== input.artifacts.runtimeBuild.realtimeWireDigest
 	)
 		throw new TypeError("realtime wire binding does not match");

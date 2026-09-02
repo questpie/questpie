@@ -64,20 +64,15 @@ try {
 			);
 			directRoots += 1;
 		} else {
-			const frame = prepared.wireFrame("mutation:message.publish", input);
 			const response = await application.fetch(
 				prepared.bindPrincipal(
-					new Request("http://runtime.test/_questpie/operation", {
-						method: "POST",
-						headers: { "content-type": frame.mediaType },
-						body: frame.body,
-					}),
+					prepared.mutationRequest("mutation:message.publish", input),
 				),
 			);
 			if (response.status !== 200)
 				throw new Error(`network publication failed with ${response.status}`);
-			const result = (await response.json()) as Readonly<{ kind?: unknown }>;
-			if (result.kind !== "result")
+			const result = (await response.json()) as Readonly<{ result?: unknown }>;
+			if (!Object.hasOwn(result, "result"))
 				throw new Error(`network publication returned ${String(result.kind)}`);
 			networkPosts += 1;
 		}

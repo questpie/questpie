@@ -26,14 +26,14 @@ test("projects one canonical HTTP contract without retained Operation Wire pairs
 		contextProjection: { context: null },
 	});
 
-	expect(runtime.wire).toMatchObject({
+	expect(runtime.http).toMatchObject({
 		format: "questpie.operation-http",
 		version: 1,
 		application: "application:http02",
 		operations: [],
 	});
-	expect(runtime.wire).not.toHaveProperty("path");
-	expect(runtime.wire).not.toHaveProperty("compatibility");
+	expect(runtime.http).not.toHaveProperty("path");
+	expect(runtime.http).not.toHaveProperty("compatibility");
 });
 
 test("production contains no deleted polymorphic route or compatibility kernel", async () => {

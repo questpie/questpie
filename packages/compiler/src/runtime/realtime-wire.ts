@@ -9,7 +9,7 @@ export interface RealtimeWireContractV1 {
 	readonly commandMediaType: "application/vnd.questpie.realtime+json;version=1";
 	readonly streamMediaType: "text/event-stream";
 	readonly protocol: Readonly<{ name: "questpie.realtime"; version: 1 }>;
-	readonly operationWireDigest: string;
+	readonly operationHttpContractDigest: string;
 	readonly clientContractDigest: string;
 	readonly watchableQueries: readonly Readonly<{
 		identity: string;
@@ -92,7 +92,7 @@ export function projectRealtimeWireContract(
 	input: Readonly<{
 		application: string;
 		clientContractDigest: string;
-		operationWireDigest: string;
+		operationHttpContractDigest: string;
 		resources: readonly NormalizedResource[];
 		watchableQueries: readonly string[];
 	}>,
@@ -129,7 +129,7 @@ export function projectRealtimeWireContract(
 			"application/vnd.questpie.realtime+json;version=1" as const,
 		streamMediaType: "text/event-stream" as const,
 		protocol: { name: "questpie.realtime" as const, version: 1 as const },
-		operationWireDigest: input.operationWireDigest,
+		operationHttpContractDigest: input.operationHttpContractDigest,
 		clientContractDigest: input.clientContractDigest,
 		watchableQueries,
 		commands: { open: OPEN_KEYS, ack: ACK_KEYS, close: CLOSE_KEYS },

@@ -39,8 +39,8 @@ function loadFixtureArtifacts() {
 			operationContracts: JSON.parse(
 				compilation.generatedFiles["operation-contracts.json"]!,
 			),
-			wireContract: JSON.parse(
-				compilation.generatedFiles["wire-contract.json"]!,
+			httpContract: JSON.parse(
+				compilation.generatedFiles["operation-http-contract.json"]!,
 			),
 		}),
 	);
@@ -49,7 +49,7 @@ function loadFixtureArtifacts() {
 
 test("decodes exact declared-error contracts from the complete Runtime artifacts", async () => {
 	const artifacts = await loadFixtureArtifacts();
-	const decoded = artifacts.wireContract.operations.find(
+	const decoded = artifacts.httpContract.operations.find(
 		({ identity }) => identity === "mutation:message.publish",
 	)!;
 	expect(decoded.declaredErrors).toEqual([
@@ -78,7 +78,7 @@ test("decodes exact declared-error contracts from the complete Runtime artifacts
 		},
 	]);
 
-	const rawWire = artifacts.wireContract;
+	const rawHttp = artifacts.httpContract;
 	for (const declaredErrors of [
 		{
 			bad: { code: "BAD", status: 400, payload: null, authority: "system" },
@@ -95,9 +95,9 @@ test("decodes exact declared-error contracts from the complete Runtime artifacts
 				runtimeBuild: artifacts.runtimeBuild,
 				runtimeExecutables: artifacts.runtimeExecutables,
 				operationContracts: artifacts.operationContracts,
-				wireContract: {
-					...rawWire,
-					operations: rawWire.operations.map((operation) =>
+				httpContract: {
+					...rawHttp,
+					operations: rawHttp.operations.map((operation) =>
 						operation.identity === decoded.identity
 							? { ...operation, declaredErrors }
 							: operation,
@@ -109,7 +109,7 @@ test("decodes exact declared-error contracts from the complete Runtime artifacts
 
 test("prepares normalized contracts and encodes only exact declared errors", async () => {
 	const artifacts = await loadFixtureArtifacts();
-	const contract = artifacts.wireContract.operations.find(
+	const contract = artifacts.httpContract.operations.find(
 		({ identity }) => identity === "mutation:message.publish",
 	)!;
 	const engine = createOperationEngine(
@@ -323,7 +323,7 @@ test("generated client verifies declared-error status and decodes its exact payl
 				{
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
-					wireDigest: "2".repeat(64),
+					httpContractDigest: "2".repeat(64),
 				},
 			),
 		);

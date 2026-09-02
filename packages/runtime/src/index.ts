@@ -17,7 +17,6 @@ export {
 export type {
 	ApplicationRuntime,
 	ExecutionFacts,
-	OperationWireRootFrame,
 	RouteExecutionScope,
 	RuntimeCredentialBinding,
 	RuntimeCredentialOutcome,

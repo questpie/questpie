@@ -22,7 +22,7 @@ export type DecodedRealtimeWireContractV1 = Readonly<{
 	commandMediaType: "application/vnd.questpie.realtime+json;version=1";
 	streamMediaType: "text/event-stream";
 	protocol: Readonly<{ name: "questpie.realtime"; version: 1 }>;
-	operationWireDigest: string;
+	operationHttpContractDigest: string;
 	clientContractDigest: string;
 	digest: string;
 	watchableQueries: ReadonlyMap<string, DecodedRealtimeQueryV1>;
@@ -46,7 +46,7 @@ const ROOT_KEYS = [
 	"commandMediaType",
 	"streamMediaType",
 	"protocol",
-	"operationWireDigest",
+	"operationHttpContractDigest",
 	"clientContractDigest",
 	"watchableQueries",
 	"commands",
@@ -256,9 +256,9 @@ export function decodeRealtimeWireContract(
 		commandMediaType: "application/vnd.questpie.realtime+json;version=1",
 		streamMediaType: "text/event-stream",
 		protocol: Object.freeze({ name: "questpie.realtime", version: 1 }),
-		operationWireDigest: digestValue(
-			wire.operationWireDigest,
-			"realtime operation wire digest",
+		operationHttpContractDigest: digestValue(
+			wire.operationHttpContractDigest,
+			"realtime operation HTTP contract digest",
 		),
 		clientContractDigest: digestValue(
 			wire.clientContractDigest,

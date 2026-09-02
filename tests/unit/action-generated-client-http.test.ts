@@ -68,7 +68,7 @@ async function generatedClient(): Promise<
 			{
 				application: "application:test",
 				clientContractDigest: "1".repeat(64),
-				wireDigest: "2".repeat(64),
+				httpContractDigest: "2".repeat(64),
 			},
 		),
 	);

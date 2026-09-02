@@ -400,7 +400,7 @@ test("projects only execution-owned external Action Service closures", () => {
 	]);
 });
 
-test("adds direct Action artifacts and projects network intent through Wire v3", () => {
+test("adds direct Action artifacts and projects network intent through canonical HTTP", () => {
 	const contract = normalizeActionContract(actionValue, codec);
 	const action: NormalizedResource = {
 		identity: "action:delivery.publish",
@@ -460,16 +460,19 @@ test("adds direct Action artifacts and projects network intent through Wire v3",
 		],
 	});
 	expect(projected.clientContract).toEqual(baseline.clientContract);
-	expect(projected.wire).toEqual(baseline.wire);
-	expect(stagedNetworkIntent.clientContract).toEqual(baseline.clientContract);
-	expect(stagedNetworkIntent.wire).toMatchObject({
-		version: 3,
-		compatibility: { wireV2Digest: baseline.wire.digest },
+	expect(projected.http).toEqual(baseline.http);
+	expect(stagedNetworkIntent.clientContract).not.toEqual(
+		baseline.clientContract,
+	);
+	expect(stagedNetworkIntent.http).toMatchObject({
+		format: "questpie.operation-http",
+		version: 1,
 	});
-	expect(stagedNetworkIntent.wire).not.toEqual(baseline.wire);
+	expect(stagedNetworkIntent.http).not.toHaveProperty("compatibility");
+	expect(stagedNetworkIntent.http).not.toEqual(baseline.http);
 	expect(
 		(
-			stagedNetworkIntent.wire.operations as readonly { identity: string }[]
+			stagedNetworkIntent.http.operations as readonly { identity: string }[]
 		).map(({ identity }) => identity),
 	).toEqual(["action:delivery.publish"]);
 	expect(stagedNetworkIntent.operationContracts.operations).toHaveLength(1);

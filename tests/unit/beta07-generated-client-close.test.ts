@@ -56,14 +56,14 @@ async function verifyCloseOrder(
 	const realtime = projectRealtimeWireContract({
 		application: "application:collaboration",
 		clientContractDigest: "1".repeat(64),
-		operationWireDigest: "2".repeat(64),
+		operationHttpContractDigest: "2".repeat(64),
 		resources: [query],
 		watchableQueries: [query.identity],
 	});
 	const source = renderClientContract([query], {
 		application: realtime.application,
 		clientContractDigest: realtime.clientContractDigest,
-		wireDigest: realtime.operationWireDigest,
+		httpContractDigest: realtime.operationHttpContractDigest,
 		realtime,
 	});
 	const directory = await mkdtemp(join(tmpdir(), "questpie-client-close-"));

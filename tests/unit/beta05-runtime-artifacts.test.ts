@@ -26,7 +26,9 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		const operationContracts = JSON.parse(
 			first.generatedFiles["operation-contracts.json"]!,
 		);
-		const wire = JSON.parse(first.generatedFiles["wire-contract.json"]!);
+		const http = JSON.parse(
+			first.generatedFiles["operation-http-contract.json"]!,
+		);
 
 		expect(runtimeBuild).toMatchObject({
 			format: "questpie.runtime-build",
@@ -72,7 +74,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 				runtimeBuild: v4RuntimeBuild,
 				runtimeExecutables: executables,
 				operationContracts,
-				wireContract: wire,
+				httpContract: http,
 			}).runtimeBuild.internalProtocol,
 		).toBe("questpie.internal.v4");
 		expect(() =>
@@ -83,7 +85,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 				},
 				runtimeExecutables: executables,
 				operationContracts,
-				wireContract: wire,
+				httpContract: http,
 			}),
 		).toThrow();
 		expect(runtimeBuild.inventory).toContainEqual(
@@ -138,16 +140,12 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		expect(runtimeBuild.executableSlots).toContain(
 			"service:audit.connection#create",
 		);
-		expect(wire).toMatchObject({
-			format: "questpie.operation-wire",
-			version: 3,
-			path: "/_questpie/operation",
-			protocol: { name: "questpie.operation", version: 1 },
-			compatibility: expect.objectContaining({
-				wireV2ActionExecution: "rejectBeforeContextServiceAndHandler",
-			}),
+		expect(http).toMatchObject({
+			format: "questpie.operation-http",
+			version: 1,
 		});
-		expect(wire.operations).toContainEqual(
+		expect(http).not.toHaveProperty("compatibility");
+		expect(http.operations).toContainEqual(
 			expect.objectContaining({
 				identity: "query:messages.page",
 				input: {
