@@ -15,10 +15,7 @@ const fixtureRoot = resolve(
 	import.meta.dir,
 	"../../fixtures/team-support-desk",
 );
-const toOneFixtureRoot = resolve(
-	import.meta.dir,
-	"../../fixtures/archive",
-);
+const toOneFixtureRoot = resolve(import.meta.dir, "../../fixtures/archive");
 
 test("carries the accepted inverse fixture through Template and Query Projection v2", async () => {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-inv02-artifacts-"));
