@@ -146,8 +146,8 @@ test("starts a compiler-generated Job-only durable application", async () => {
 			operationContracts: JSON.parse(
 				compilation.generatedFiles["operation-contracts.json"]!,
 			),
-			wireContract: JSON.parse(
-				compilation.generatedFiles["wire-contract.json"]!,
+			httpContract: JSON.parse(
+				compilation.generatedFiles["operation-http-contract.json"]!,
 			),
 		};
 		expect(

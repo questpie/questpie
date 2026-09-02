@@ -6,8 +6,7 @@ import { pathToFileURL } from "node:url";
 
 import { renderClientContract } from "../../packages/compiler/src/runtime/client";
 
-const mediaType = "application/vnd.questpie.operation+json;version=1";
-const protocol = Object.freeze({ name: "questpie.operation", version: 1 });
+const mediaType = "application/json; charset=utf-8";
 
 type Generated = Readonly<{
 	ActionOutcomeAmbiguous: new (...args: never[]) => Error;
@@ -69,9 +68,7 @@ async function generatedClient(): Promise<
 			{
 				application: "application:test",
 				clientContractDigest: "1".repeat(64),
-				wireDigest: "2".repeat(64),
-				path: "/_questpie/operation",
-				mediaType,
+				httpContractDigest: "2".repeat(64),
 			},
 		),
 	);
@@ -85,11 +82,8 @@ async function generatedClient(): Promise<
 
 function validFrame(callId: string) {
 	return {
-		protocol,
-		kind: "result",
-		operation: "action:delivery.publish",
 		callId,
-		payload: { receipt: "ok" },
+		result: { receipt: "ok" },
 	};
 }
 
@@ -259,13 +253,13 @@ test("Action client rejects invalid metadata and prior cancellation before trans
 test("Action client sends no implicit deadline and preserves a safe-integer caller limit", async () => {
 	const generated = await generatedClient();
 	try {
-		const observed: unknown[] = [];
+		const observed: Request[] = [];
 		const client = generated.module.createClient({
 			baseUrl: "http://runtime.test",
 			fetch: async (request) => {
-				observed.push(await request.json());
-				const callId = String(
-					(observed.at(-1) as Readonly<{ callId: unknown }>).callId,
+				observed.push(request);
+				const callId = decodeURIComponent(
+					request.headers.get("Questpie-Call-Id") ?? "",
 				);
 				return new Response(JSON.stringify(validFrame(callId)), {
 					headers: { "content-type": mediaType },
@@ -285,10 +279,12 @@ test("Action client sends no implicit deadline and preserves a safe-integer call
 				timeoutMilliseconds: Number.MAX_SAFE_INTEGER,
 			},
 		);
-		expect(observed).toMatchObject([
-			{ timeoutMilliseconds: null },
-			{ timeoutMilliseconds: Number.MAX_SAFE_INTEGER },
-		]);
+		expect(
+			observed[0]!.headers.get("Questpie-Timeout-Milliseconds"),
+		).toBeNull();
+		expect(observed[1]!.headers.get("Questpie-Timeout-Milliseconds")).toBe(
+			String(Number.MAX_SAFE_INTEGER),
+		);
 	} finally {
 		await rm(generated.directory, { force: true, recursive: true });
 	}
@@ -307,9 +303,6 @@ test("Action client preserves a correlated PROTOCOL_UNSUPPORTED framework failur
 					JSON.stringify({
 						callId,
 						error: { code: "PROTOCOL_UNSUPPORTED", retryable: false },
-						kind: "failure",
-						operation: "action:delivery.publish",
-						protocol,
 					}),
 					{ status: 400, headers: { "content-type": mediaType } },
 				);

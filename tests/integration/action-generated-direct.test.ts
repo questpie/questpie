@@ -36,7 +36,7 @@ async function compileFixture(includeAction: boolean) {
 	return compilation;
 }
 
-test("projects one authored Action into exact direct and Wire v3 artifacts", async () => {
+test("projects one authored Action into exact direct and canonical HTTP artifacts", async () => {
 	const baseline = await compileFixture(false);
 	const compilation = await compileFixture(true);
 	const contracts = JSON.parse(
@@ -110,35 +110,35 @@ test("projects one authored Action into exact direct and Wire v3 artifacts", asy
 	expect(app).toContain("actions: GeneratedActionOperations");
 	expect(runtime).toContain("createRuntimeActionExecutor");
 
-	const retainedWire = JSON.parse(
-		baseline.generatedFiles["wire-contract.json"]!,
+	const baselineHttp = JSON.parse(
+		baseline.generatedFiles["operation-http-contract.json"]!,
 	) as Readonly<{ digest: string; version: number }>;
-	const wire = JSON.parse(
-		compilation.generatedFiles["wire-contract.json"]!,
+	const http = JSON.parse(
+		compilation.generatedFiles["operation-http-contract.json"]!,
 	) as Readonly<{
-		compatibility: Readonly<{ wireV2Digest: string }>;
 		digest: string;
+		format: string;
 		operations: readonly Readonly<{ identity: string }>[];
 		version: number;
 	}>;
-	expect(retainedWire.version).toBe(2);
-	expect(wire.version).toBe(3);
-	expect(wire.compatibility.wireV2Digest).toBe(retainedWire.digest);
-	expect(wire.operations.map(({ identity }) => identity)).toEqual([
+	expect(baselineHttp.version).toBe(1);
+	expect(http).toMatchObject({ format: "questpie.operation-http", version: 1 });
+	expect(http).not.toHaveProperty("compatibility");
+	expect(http.operations.map(({ identity }) => identity)).toEqual([
 		"action:delivery.publish",
 		"mutation:message.publish",
 		"mutation:message.requestDigest",
 		"query:messages.page",
 	]);
-	expect(wire.digest).not.toBe(retainedWire.digest);
+	expect(http.digest).not.toBe(baselineHttp.digest);
 	const decoded = decodeRuntimeArtifacts({
 		runtimeBuild: JSON.parse(compilation.generatedFiles["runtime-build.json"]!),
 		runtimeExecutables: executables,
 		operationContracts: contracts,
-		wireContract: wire,
+		httpContract: http,
 	});
-	expect(decoded.wireContract.version).toBe(3);
-	expect(decoded.runtimeBuild.wireDigest).toBe(wire.digest);
+	expect(decoded.httpContract.version).toBe(1);
+	expect(decoded.runtimeBuild.operationHttpContractDigest).toBe(http.digest);
 
 	const client = compilation.generatedFiles["client.ts"]!;
 	expect(client).not.toBe(baseline.generatedFiles["client.ts"]);

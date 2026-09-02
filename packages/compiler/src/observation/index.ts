@@ -112,7 +112,7 @@ const SPAN_ATTRIBUTE_SCOPES = Object.freeze({
 const SPAN_GRAPH = Object.freeze([
 	{
 		kind: "SERVER",
-		name: "POST /_questpie/operation",
+		name: "{METHOD} /_questpie/{kind}/{name}",
 		parent: "remote_parent_or_restart_link_or_root",
 		scope: "generated_operation_fetch",
 	},

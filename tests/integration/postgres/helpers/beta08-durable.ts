@@ -160,10 +160,7 @@ export type Beta08Harness = Readonly<{
 	createCompatibleV5Application(): Promise<Beta08Application>;
 	fetch(request: Request): Promise<Response>;
 	bindPrincipal(request: Request): Request;
-	wireFrame(
-		operation: string,
-		input: unknown,
-	): Readonly<{ body: string; mediaType: string }>;
+	mutationRequest(operation: string, input: unknown): Request;
 	compilation: Readonly<{
 		measurements: Readonly<{
 			publicDeclarationBytes: number;
@@ -295,13 +292,8 @@ async function buildBeta08Durable(
 	const runtimeBuild = JSON.parse(prepared.runtimeBuildBytes) as Readonly<{
 		application: string;
 		clientContractDigest: string;
-		wireDigest: string;
+		operationHttpContractDigest: string;
 	}>;
-	const wire = JSON.parse(
-		await Bun.file(
-			resolve(prepared.generated.generatedRoot, "wire-contract.json"),
-		).text(),
-	) as Readonly<{ mediaType: string; protocol: unknown }>;
 	const principal = framework.principal.user({ id: beta05Ids.principal });
 	const readerPrincipal = framework.principal.user({
 		id: beta05Ids.readerPrincipal,
@@ -382,21 +374,24 @@ async function buildBeta08Durable(
 				principal,
 			);
 		},
-		wireFrame: (operation: string, input: unknown) =>
-			Object.freeze({
-				mediaType: wire.mediaType,
+		mutationRequest: (operation: string, input: unknown) => {
+			const name = operation.slice("mutation:".length);
+			return new Request(`http://runtime.test/_questpie/mutation/${name}`, {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Idempotency-Key": encodeURIComponent(crypto.randomUUID()),
+					"Questpie-Application": runtimeBuild.application,
+					"Questpie-Client-Contract": runtimeBuild.clientContractDigest,
+					"Questpie-Wire-Digest": runtimeBuild.operationHttpContractDigest,
+					"Questpie-Timeout-Milliseconds": "5000",
+				},
 				body: JSON.stringify({
-					application: runtimeBuild.application,
-					callId: crypto.randomUUID(),
-					clientContractDigest: runtimeBuild.clientContractDigest,
 					context: { companyId: beta05Ids.company },
 					input,
-					operation,
-					protocol: wire.protocol,
-					timeoutMilliseconds: 5_000,
-					wireDigest: runtimeBuild.wireDigest,
 				}),
-			}),
+			});
+		},
 		compilation: prepared.compilation,
 		database: runtimeDatabase,
 		kernel,

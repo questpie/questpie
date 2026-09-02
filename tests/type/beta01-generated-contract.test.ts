@@ -97,10 +97,10 @@ describe("BETA-01 generated contract", () => {
 			"durable-kernel.json",
 			"execution-composition-explain.json",
 			"field-normalizer-programs.json",
-			"internal/application-3tatyqev.js",
-			"internal/application-h8k688m6.js",
-			"internal/application-h8vfb7x1.js",
-			"internal/application-s4ahpvbd.js",
+			"internal/application-eegb4k3t.js",
+			"internal/application-hqv612q0.js",
+			"internal/application-ssk2zkr8.js",
+			"internal/application-wxphhmax.js",
 			"internal/application.d.ts",
 			"internal/application.js",
 			"internal/checksums.json",
@@ -115,6 +115,7 @@ describe("BETA-01 generated contract", () => {
 			"mutation-transaction-plans.json",
 			"opentelemetry-signal-projection.json",
 			"operation-contracts.json",
+			"operation-http-contract.json",
 			"origin-map.json",
 			"policy-projection.json",
 			"postgres-collection-operation-plans.json",
@@ -132,7 +133,6 @@ describe("BETA-01 generated contract", () => {
 			"schema-projection.json",
 			"server-value-programs.json",
 			"service-projection.json",
-			"wire-contract.json",
 		]);
 
 		const manifest = JSON.parse(

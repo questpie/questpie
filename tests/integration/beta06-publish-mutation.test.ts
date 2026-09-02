@@ -19,7 +19,9 @@ test("projects the authored message.publish Mutation into the executable applica
 			slot: string;
 		}>[];
 	}>;
-	const wire = JSON.parse(compilation.generatedFiles["wire-contract.json"]!) as
+	const http = JSON.parse(
+		compilation.generatedFiles["operation-http-contract.json"]!,
+	) as
 		| Readonly<{
 				operations: readonly Readonly<{
 					identity: string;
@@ -74,7 +76,7 @@ test("projects the authored message.publish Mutation into the executable applica
 			slot: "handler",
 		}),
 	);
-	expect(wire?.operations).toContainEqual(
+	expect(http?.operations).toContainEqual(
 		expect.objectContaining({
 			identity: "mutation:message.publish",
 			declaredErrors: {
@@ -99,10 +101,10 @@ test("projects the authored message.publish Mutation into the executable applica
 			identity: "mutation:message.publish",
 		}),
 	);
-	const publishWire = wire?.operations.find(
+	const publishHttp = http?.operations.find(
 		({ identity }) => identity === "mutation:message.publish",
 	);
-	expect(publishWire?.declaredErrors).toMatchObject({
+	expect(publishHttp?.declaredErrors).toMatchObject({
 		idempotencyConflict: {
 			code: "IDEMPOTENCY_CONFLICT",
 			status: 409,

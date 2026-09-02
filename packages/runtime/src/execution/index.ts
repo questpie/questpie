@@ -21,7 +21,6 @@ import {
 	type AnyService,
 	createServiceOwner,
 } from "./services";
-import { decodeOperationWireRoot } from "./wire";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
@@ -125,8 +124,6 @@ export interface RuntimeProgram<Context extends ContextDefinition, View> {
 	) => MaybePromise<View>;
 }
 
-export type { OperationWireRootFrame } from "./wire";
-
 export interface ApplicationRuntime<Input, View> {
 	applicationService<Definition extends AnyApplicationService>(
 		definition: Definition,
@@ -139,15 +136,6 @@ export interface ApplicationRuntime<Input, View> {
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
 			observation?: RuntimeExecutionObservationBinding;
-		}>,
-		use: (view: View) => MaybePromise<Result>,
-	): Promise<Awaited<Result>>;
-	operationWire<Result>(
-		input: Readonly<{
-			principal: Principal;
-			frame: unknown;
-			signal?: AbortSignal;
-			deadline?: number;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
@@ -321,30 +309,11 @@ export function createApplicationRuntime<
 				"route",
 				owned.signal,
 				owned.finalize,
+				owned.outcome,
 			);
 		},
 		observeUnmatchedFetch: (_request: Request, use: () => Promise<Response>) =>
 			use(),
-		operationWire: <Result>(
-			input: Readonly<{
-				principal: Principal;
-				frame: unknown;
-				signal?: AbortSignal;
-				deadline?: number;
-			}>,
-			use: (view: View) => MaybePromise<Result>,
-		) => {
-			const decoded = decodeOperationWireRoot(input.frame, input.principal);
-			return execution(
-				{
-					principal: decoded.principal,
-					context: decoded.context as ContextInputOf<Context>,
-					signal: input.signal,
-					deadline: input.deadline,
-				},
-				use,
-			);
-		},
 		route: <Result>(
 			input: Readonly<{
 				principal: Principal;

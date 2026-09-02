@@ -6,11 +6,6 @@ import {
 	type QuestpieObservability,
 } from "questpie";
 
-import {
-	decodeRuntimeCodec,
-	encodeRuntimeCodec,
-	RuntimeCodecError,
-} from "../codec";
 import { createApplicationRuntime } from "../execution";
 import type { LiveQueryObservation } from "../live-query";
 import type { MutationInvoker } from "../mutation";
@@ -22,23 +17,9 @@ import {
 import {
 	createOperationEngine,
 	CommittedResultUnavailable,
-	committedResultUnavailableFrame,
-	DeclaredOperationError,
-	declaredErrorFrame,
-	decodeOperationWireRequest,
-	encodeDeclaredOperationError,
-	failureFrame,
 	isOperationCallId,
-	normalizeOperationError,
 	OperationFailure,
-	operationFailureStatus,
-	operationMediaType,
-	operationPath,
-	operationWireResponse,
 	type PreparedOperation,
-	readBoundedRequestBody,
-	rejectionFrame,
-	resultFrame,
 } from "../operation";
 import { verifyRuntimeArtifactFiles } from "./artifact-files";
 import { decodeRuntimeArtifacts } from "./artifacts";
@@ -55,6 +36,7 @@ import type {
 	RuntimeOperations,
 	WorkerExecutionAround,
 } from "./contract";
+import { createCanonicalPostHttp } from "./http-post";
 import { createCanonicalQueryApplicationHttp } from "./http-query";
 import {
 	applicationObservationFailure,
@@ -72,11 +54,6 @@ import {
 	isOperationAbort,
 	normalizeExecutedOperationError,
 } from "./operation-error";
-import {
-	matchesRetainedClientPair,
-	retainClientPairs,
-	type RetainedClientPair,
-} from "./retained-clients";
 import { controlledRoot, principalIdentity } from "./root";
 
 export type {
@@ -103,7 +80,6 @@ export async function createRuntimeApplication<
 		serverExports: Readonly<Record<string, unknown>>;
 		bindings: RuntimeExecutableBindings<OperationView>;
 		program: RuntimeApplicationProgram<Context, OperationView, ExecutionView>;
-		retainedClients?: readonly RetainedClientPair[];
 		drainMilliseconds?: number;
 		maximumActiveRootsPerPrincipal?: number;
 		observability?: QuestpieObservability;
@@ -139,7 +115,6 @@ export async function createRuntimeApplication<
 		events: input.events,
 		wallClock: input.now,
 	});
-	const retainedClients = retainClientPairs(input.retainedClients);
 	const validatedBindings = validateRuntimeExecutableBindings(
 		artifacts,
 		input.bindings,
@@ -157,15 +132,10 @@ export async function createRuntimeApplication<
 			(contract) => !contract.identity.startsWith("action:"),
 		),
 	);
-	const networkOperations = new Set(
-		artifacts.wireContract.operations.map(({ identity }) => identity),
-	);
-	const networkActionContracts = new Map(
-		artifacts.wireContract.operations
-			.filter((contract) => contract.identity.startsWith("action:"))
-			.map((contract) => [contract.identity, contract]),
-	);
-	if (networkActionContracts.size > 0 && !input.program.invokeAction)
+	const networkActionCount = artifacts.httpContract.operations.filter(
+		(contract) => contract.identity.startsWith("action:"),
+	).length;
+	if (networkActionCount > 0 && !input.program.invokeAction)
 		throw new TypeError("Runtime network Action executor is unavailable");
 	await input.program.verifyReadiness?.(artifacts);
 	try {
@@ -491,6 +461,97 @@ export async function createRuntimeApplication<
 		executeRoot,
 		now: nowMilliseconds,
 	});
+	const canonicalPost = createCanonicalPostHttp<
+		ContextInputOf<Context>,
+		OperationView
+	>({
+		application: artifacts.runtimeBuild.application,
+		clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
+		httpContractDigest: artifacts.httpContract.digest,
+		maximumRequestBytes: artifacts.httpContract.limits.requestBytes,
+		maximumResponseBytes: artifacts.httpContract.limits.responseBytes,
+		contextCodec: input.program.context.input as never,
+		operations: artifacts.httpContract.operations,
+		prepare: operationEngine.prepare,
+		resolvePrincipal: async (request) =>
+			input.program.resolvePrincipal(request),
+		executeMutation: ({
+			principal: caller,
+			context,
+			operation,
+			callId,
+			signal,
+			deadline,
+		}) =>
+			executeRoot(
+				{
+					principal: caller,
+					context,
+					signal,
+					deadline,
+					observationEntry: "fetch",
+				},
+				({ invoke }) => invoke(operation, callId),
+			),
+		executeAction: ({
+			principal: caller,
+			context,
+			identity,
+			operationInput,
+			effectKey,
+			callId,
+			signal,
+			timeoutMilliseconds,
+			deadline,
+		}) =>
+			executeRoot(
+				{
+					principal: caller,
+					context,
+					signal,
+					deadline,
+					observationEntry: "fetch",
+				},
+				async ({ invoke, view }) => {
+					const operations: RuntimeOperations = Object.freeze({
+						invoke: (
+							nestedIdentity: string,
+							nestedInput: unknown,
+							options?: Readonly<{
+								callId?: string;
+								signal?: AbortSignal;
+								deadline?: number;
+							}>,
+						) => {
+							const nested = operationEngine.prepare(
+								nestedIdentity,
+								nestedInput,
+							);
+							if (nested.binding.kind === "mutation") {
+								const nestedCallId = options?.callId ?? crypto.randomUUID();
+								if (!isOperationCallId(nestedCallId))
+									throw new OperationFailure("PROTOCOL_UNSUPPORTED");
+								return invoke(nested, nestedCallId, options);
+							}
+							callSequence += 1;
+							return invoke(nested, `action:${callSequence}`, options);
+						},
+					});
+					return input.program.invokeAction!({
+						identity,
+						input: operationInput,
+						effectKey,
+						callId,
+						...(timeoutMilliseconds === undefined
+							? {}
+							: { timeoutMilliseconds }),
+						execution: await view.execution(),
+						operations,
+					});
+				},
+			),
+		now: nowMilliseconds,
+	});
 	const fetch = async (request: Request): Promise<Response> => {
 		if (realtime) {
 			const response = await realtime.fetch(request);
@@ -498,222 +559,9 @@ export async function createRuntimeApplication<
 		}
 		const canonicalQueryResponse = await canonicalQuery.fetch(request);
 		if (canonicalQueryResponse) return canonicalQueryResponse;
-		if (new URL(request.url).pathname !== operationPath)
-			return operationWireResponse(rejectionFrame("NOT_FOUND"), 404);
-		if (request.method !== "POST")
-			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 405);
-		if (request.headers.get("content-type") !== operationMediaType)
-			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 415);
-		const body = await readBoundedRequestBody(
-			request,
-			artifacts.wireContract.limits.requestBytes,
-		);
-		if (body.kind === "tooLarge")
-			return operationWireResponse(rejectionFrame("RESOURCE_LIMIT"), 413);
-		if (body.kind === "invalid")
-			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 400);
-		let rawFrame: unknown;
-		try {
-			rawFrame = JSON.parse(body.text);
-		} catch {
-			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 400);
-		}
-		const frame = decodeOperationWireRequest(rawFrame);
-		if (!frame)
-			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 400);
-		if (frame.application !== artifacts.runtimeBuild.application)
-			return operationWireResponse(rejectionFrame("APPLICATION_MISMATCH"), 409);
-		const current =
-			frame.clientContractDigest ===
-				artifacts.runtimeBuild.clientContractDigest &&
-			frame.wireDigest === artifacts.wireContract.digest;
-		const currentV2 =
-			artifacts.wireContract.version === 3 &&
-			frame.clientContractDigest ===
-				artifacts.wireContract.compatibility.clientContractDigest &&
-			frame.wireDigest === artifacts.wireContract.compatibility.wireV2Digest;
-		const currentV1 =
-			artifacts.wireContract.version !== 1 &&
-			frame.clientContractDigest ===
-				artifacts.wireContract.compatibility.clientContractDigest &&
-			frame.wireDigest === artifacts.wireContract.compatibility.wireV1Digest;
-		const retainedLegacy =
-			!current &&
-			!currentV2 &&
-			(currentV1 ||
-				matchesRetainedClientPair(
-					retainedClients,
-					frame.clientContractDigest,
-					frame.wireDigest,
-				));
-		if (!current && !currentV2 && !retainedLegacy)
-			return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
-		const actionRequest = frame.operation.startsWith("action:");
-		if (actionRequest && (!current || artifacts.wireContract.version !== 3))
-			return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
-		if (
-			(actionRequest && !Object.hasOwn(frame, "effectKey")) ||
-			(!actionRequest && Object.hasOwn(frame, "effectKey"))
-		)
-			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 400);
-		if (retainedLegacy) {
-			const binding = queryBindings.find(
-				(candidate) => candidate.identity === frame.operation,
-			);
-			if (binding?.kind !== "query")
-				return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
-		}
-		if (!networkOperations.has(frame.operation))
-			return operationWireResponse(
-				failureFrame(frame, "NOT_FOUND"),
-				operationFailureStatus("NOT_FOUND"),
-			);
-		let prepared: PreparedOperation<OperationView> | undefined;
-		const actionContract = actionRequest
-			? networkActionContracts.get(frame.operation)
-			: undefined;
-		let contextInput: ContextInputOf<Context>;
-		try {
-			if (actionRequest) {
-				if (!actionContract) throw new OperationFailure("NOT_FOUND");
-			} else prepared = operationEngine.prepare(frame.operation, frame.input);
-			contextInput = decodeRuntimeCodec<ContextInputOf<Context>>(
-				input.program.context.input as never,
-				frame.context,
-				"$context",
-			);
-		} catch (error) {
-			const failure =
-				error instanceof OperationFailure
-					? error
-					: error instanceof RuntimeCodecError
-						? new OperationFailure("PROTOCOL_UNSUPPORTED")
-						: new OperationFailure("INTERNAL");
-			return operationWireResponse(
-				failureFrame(frame, failure.code, failure.retryable),
-				operationFailureStatus(failure.code),
-			);
-		}
-		if (state !== "ready")
-			return operationWireResponse(
-				failureFrame(frame, "RUNTIME_UNAVAILABLE", true),
-				503,
-			);
-		let resolvedPrincipal: Principal | null;
-		try {
-			resolvedPrincipal = await input.program.resolvePrincipal(request);
-		} catch (error) {
-			if (request.signal.aborted) throw request.signal.reason;
-			if (error instanceof OperationFailure)
-				return operationWireResponse(
-					failureFrame(frame, error.code, error.retryable),
-					operationFailureStatus(error.code),
-				);
-			return operationWireResponse(failureFrame(frame, "INTERNAL"), 500);
-		}
-		if (!resolvedPrincipal || !principal.is(resolvedPrincipal))
-			return operationWireResponse(failureFrame(frame, "NOT_FOUND"), 404);
-		try {
-			const payload = await executeRoot(
-				{
-					principal: resolvedPrincipal,
-					context: contextInput,
-					signal: request.signal,
-					deadline:
-						actionRequest || frame.timeoutMilliseconds === null
-							? undefined
-							: nowMilliseconds() + frame.timeoutMilliseconds,
-					observationEntry: "fetch",
-				},
-				async ({ invoke, view }) => {
-					if (!actionRequest) return invoke(prepared!, frame.callId);
-					const operations: RuntimeOperations = Object.freeze({
-						invoke: (
-							identity: string,
-							operationInput: unknown,
-							options?: Readonly<{
-								callId?: string;
-								signal?: AbortSignal;
-								deadline?: number;
-							}>,
-						) => {
-							const nested = operationEngine.prepare(identity, operationInput);
-							if (nested.binding.kind === "mutation") {
-								const callId = options?.callId ?? crypto.randomUUID();
-								if (!isOperationCallId(callId))
-									throw new OperationFailure("PROTOCOL_UNSUPPORTED");
-								return invoke(nested, callId, options);
-							}
-							callSequence += 1;
-							return invoke(nested, `action:${callSequence}`, options);
-						},
-					});
-					return input.program.invokeAction!({
-						identity: frame.operation,
-						input: frame.input,
-						effectKey: frame.effectKey!,
-						callId: frame.callId,
-						...(frame.timeoutMilliseconds === null
-							? {}
-							: { timeoutMilliseconds: frame.timeoutMilliseconds }),
-						execution: await view.execution(),
-						operations,
-					});
-				},
-			);
-			const framed = resultFrame(
-				frame,
-				encodeRuntimeCodec((actionContract ?? prepared!).output, payload),
-			);
-			const bytes = JSON.stringify(framed);
-			if (
-				Buffer.byteLength(bytes) > artifacts.wireContract.limits.responseBytes
-			)
-				return operationWireResponse(
-					failureFrame(frame, "RESOURCE_LIMIT", true),
-					500,
-				);
-			return operationWireResponse(framed, 200);
-		} catch (error) {
-			if (error instanceof CommittedResultUnavailable)
-				return operationWireResponse(
-					committedResultUnavailableFrame(frame, error),
-					500,
-				);
-			if (request.signal.aborted) throw request.signal.reason;
-			if (isOperationAbort(error)) throw error;
-			let operationError: unknown = error;
-			if (error instanceof DeclaredOperationError) {
-				try {
-					const declared = encodeDeclaredOperationError(
-						(actionContract
-							? { declaredErrors: actionContract.declaredErrors }
-							: prepared!) as PreparedOperation<OperationView>,
-						error,
-					);
-					return operationWireResponse(
-						declaredErrorFrame(frame, declared),
-						declared.status,
-					);
-				} catch (caught) {
-					operationError = caught;
-				}
-			}
-			const normalized = normalizeOperationError(operationError);
-			if (normalized instanceof CommittedResultUnavailable)
-				return operationWireResponse(
-					committedResultUnavailableFrame(frame, normalized),
-					500,
-				);
-			const failure =
-				normalized instanceof OperationFailure
-					? normalized
-					: new OperationFailure("INTERNAL");
-			return operationWireResponse(
-				failureFrame(frame, failure.code, failure.retryable),
-				operationFailureStatus(failure.code),
-			);
-		}
+		const canonicalPostResponse = await canonicalPost.fetch(request);
+		if (canonicalPostResponse) return canonicalPostResponse;
+		return new Response(null, { status: 404 });
 	};
 
 	const close = (shutdown: Readonly<{ deadlineAt: number }>): Promise<void> => {
@@ -793,7 +641,11 @@ export async function createRuntimeApplication<
 		workerExecution,
 		observeRoute,
 		observeUnmatchedFetch,
-		fetch: observeApplicationFetch(observation, operationPath, fetch),
+		fetch: observeApplicationFetch(
+			observation,
+			artifacts.httpContract.operations,
+			fetch,
+		),
 		route,
 		close,
 	});

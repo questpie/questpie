@@ -255,7 +255,7 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 	input: Readonly<{
 		application: string;
 		clientContractDigest: string;
-		wireDigest: string;
+		httpContractDigest: string;
 		maximumResponseBytes: number;
 		contextCodec: RuntimeCodec;
 		operations: readonly RuntimeOperationContract[];
@@ -331,7 +331,7 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 					compatibility.some((value) => value !== null) &&
 					(compatibility[0] !== input.application ||
 						compatibility[1] !== input.clientContractDigest ||
-						compatibility[2] !== input.wireDigest)
+						compatibility[2] !== input.httpContractDigest)
 				)
 					protocol();
 				if (
@@ -428,7 +428,7 @@ type CanonicalQueryRootExecutor<ContextInput, View> = <Result>(
 /** Binds the canonical Query adapter to one verified Runtime artifact/root owner. */
 export function createCanonicalQueryApplicationHttp<ContextInput, View>(
 	input: Readonly<{
-		artifacts: Pick<RuntimeArtifactsV1, "runtimeBuild" | "wireContract">;
+		artifacts: Pick<RuntimeArtifactsV1, "httpContract" | "runtimeBuild">;
 		contextCodec: RuntimeCodec;
 		prepare(identity: string, value: unknown): PreparedOperation<View>;
 		resolvePrincipal(
@@ -441,10 +441,10 @@ export function createCanonicalQueryApplicationHttp<ContextInput, View>(
 	return createCanonicalQueryHttp<ContextInput, View>({
 		application: input.artifacts.runtimeBuild.application,
 		clientContractDigest: input.artifacts.runtimeBuild.clientContractDigest,
-		wireDigest: input.artifacts.wireContract.digest,
-		maximumResponseBytes: input.artifacts.wireContract.limits.responseBytes,
+		httpContractDigest: input.artifacts.httpContract.digest,
+		maximumResponseBytes: input.artifacts.httpContract.limits.responseBytes,
 		contextCodec: input.contextCodec,
-		operations: input.artifacts.wireContract.operations,
+		operations: input.artifacts.httpContract.operations,
 		prepare: input.prepare,
 		resolvePrincipal: async (request) => input.resolvePrincipal(request),
 		execute: ({

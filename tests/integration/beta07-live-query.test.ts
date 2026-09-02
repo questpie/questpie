@@ -66,19 +66,14 @@ const resources = [
 	resource("query", "reports.unsafeRaw"),
 	resource("mutation", "message.publish"),
 ];
-const operationWireDigest = "2".repeat(64);
+const operationHttpContractDigest = "2".repeat(64);
 const clientContractDigest = "1".repeat(64);
 
-test("freezes the sibling realtime wire without changing Operation Wire v2", () => {
-	const operationWireBefore = Object.freeze({
-		format: "questpie.operation-wire",
-		version: 2,
-		digest: operationWireDigest,
-	});
+test("binds the sibling realtime wire to the canonical HTTP contract", () => {
 	const realtime = projectRealtimeWireContract({
 		application: "application:collaboration",
 		clientContractDigest,
-		operationWireDigest,
+		operationHttpContractDigest,
 		resources,
 		watchableQueries: ["query:messages.page"],
 	});
@@ -91,7 +86,7 @@ test("freezes the sibling realtime wire without changing Operation Wire v2", () 
 		commandMediaType: "application/vnd.questpie.realtime+json;version=1",
 		streamMediaType: "text/event-stream",
 		protocol: { name: "questpie.realtime", version: 1 },
-		operationWireDigest,
+		operationHttpContractDigest,
 		clientContractDigest,
 		watchableQueries: [
 			{
@@ -174,12 +169,7 @@ test("freezes the sibling realtime wire without changing Operation Wire v2", () 
 		},
 		resumeTokenVisibility: "generatedClientOnly",
 		acknowledgement: "afterCompleteResultAccepted",
-		digest: "227d54621d64215e0bd7274d03fe56f6ba152c0923a4851e6d61bcd82c068461",
-	});
-	expect(operationWireBefore).toEqual({
-		format: "questpie.operation-wire",
-		version: 2,
-		digest: operationWireDigest,
+		digest: "96353f66fff54f5b2e2c2dea254318a5bb6597c53fc24db853a7bf5e71ea6259",
 	});
 });
 
@@ -187,13 +177,11 @@ test("adds watch only to the same compiler-proven Query method", () => {
 	const source = renderClientContract(resources, {
 		application: "application:collaboration",
 		clientContractDigest,
-		wireDigest: operationWireDigest,
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
+		httpContractDigest: operationHttpContractDigest,
 		realtime: projectRealtimeWireContract({
 			application: "application:collaboration",
 			clientContractDigest,
-			operationWireDigest,
+			operationHttpContractDigest,
 			resources,
 			watchableQueries: ["query:messages.page"],
 		}),
@@ -216,16 +204,14 @@ test("multiplexes private resume acknowledgements behind the public watch method
 	const realtime = projectRealtimeWireContract({
 		application: "application:collaboration",
 		clientContractDigest,
-		operationWireDigest,
+		operationHttpContractDigest,
 		resources,
 		watchableQueries: ["query:messages.page"],
 	});
 	const source = renderClientContract(resources, {
 		application: "application:collaboration",
 		clientContractDigest,
-		wireDigest: operationWireDigest,
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
+		httpContractDigest: operationHttpContractDigest,
 		realtime,
 	});
 	const directory = await mkdtemp(join(tmpdir(), "questpie-beta07-client-"));

@@ -166,11 +166,14 @@ test("mechanically binds every executable adapter projection fact to the compile
 			return { kind: kindName[definition.kind], name: definition.name };
 		}),
 	).toEqual(
-		canonical.artifact.spanGraph.map(({ kind, name }) => ({
+		canonical.artifact.spanGraph.map(({ kind, name, scope }) => ({
 			kind,
 			name: name
 				.replace("{METHOD} {matched route template}", "GET /tickets/:ticketId")
-				.replace("{METHOD}", "_OTHER")
+				.replace(
+					"{METHOD}",
+					scope === "generated_operation_fetch" ? "POST" : "_OTHER",
+				)
 				.replace("{UPPERCASE SQL verb}", "UPDATE")
 				.replace(
 					"{Resource identity}",
@@ -644,7 +647,7 @@ test("keeps the complete accepted span graph closed and runtime spanless", async
 				),
 		).toEqual(
 			[
-				{ kind: SERVER, name: "POST /_questpie/operation" },
+				{ kind: SERVER, name: "POST /_questpie/{kind}/{name}" },
 				{ kind: SERVER, name: "GET /tickets/:ticketId" },
 				{ kind: SERVER, name: "_OTHER" },
 				{ kind: INTERNAL, name: "questpie execution" },

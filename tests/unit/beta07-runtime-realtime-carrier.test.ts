@@ -16,7 +16,7 @@ import type { PostgresRealtimeWatch } from "../../packages/runtime/src/live-quer
 
 const application = "application:collaboration";
 const clientContractDigest = "1".repeat(64);
-const operationWireDigest = "2".repeat(64);
+const operationHttpContractDigest = "2".repeat(64);
 const context = { companyId: "company:one" };
 const queryInput = { after: null, channelId: "channel:one", first: 20 };
 const observedPlan = Object.freeze({
@@ -30,7 +30,7 @@ const observedPlan = Object.freeze({
 const projected = projectRealtimeWireContract({
 	application,
 	clientContractDigest,
-	operationWireDigest,
+	operationHttpContractDigest,
 	resources: [
 		{
 			identity: "query:messages.page",

@@ -1,5 +1,6 @@
 import { canonicalBytes, compareAscii } from "../canonical";
 import type { NormalizedResource } from "../types";
+import { renderClientPostHttp } from "./client-post-http";
 import { renderClientQueryHttp } from "./client-query-http";
 import { renderClientQueryResource } from "./client-query-resource";
 import { renderClientRealtime } from "./client-realtime";
@@ -58,9 +59,7 @@ export function renderClientContract(
 	input: Readonly<{
 		application: string;
 		clientContractDigest: string;
-		wireDigest: string;
-		path: string;
-		mediaType: string;
+		httpContractDigest: string;
 		contextCodec?: unknown;
 		realtime?: RealtimeWireContractV1;
 	}>,
@@ -152,7 +151,6 @@ export function renderClientContract(
 			),
 		]),
 	);
-	const mutationOperations = mutations.map((resource) => resource.identity);
 	const actionOperations = actions.map((resource) => resource.identity);
 	const queryOperations = queries.map((resource) => resource.identity);
 	const { watchTypes, realtimeTypes, realtimeScope } = renderClientRealtime({
@@ -206,6 +204,8 @@ export interface GeneratedClient {
 	withContext(input: AppContextInput): GeneratedClientScope;
 }
 
+type FetchTransport = (request: Request) => Promise<Response>;
+
 export class CommittedResultUnavailable extends Error {
 	readonly name = "CommittedResultUnavailable" as const;
 	readonly code = "COMMITTED_RESULT_UNAVAILABLE" as const;
@@ -238,12 +238,7 @@ const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
 const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
 const contextCodec: WireRecord = ${canonicalBytes(input.contextCodec ?? { kind: "object", properties: {} }).trim()};
 const queryOperations = new Set<string>(${canonicalBytes(queryOperations).trim()});
-const mutationOperations = new Set<string>(${canonicalBytes(mutationOperations).trim()});
 const actionOperations = new Set<string>(${canonicalBytes(actionOperations).trim()});
-const failureCodes = new Set([
-	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "COMMITTED_RESULT_UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL",
-	"NOT_FOUND", "PROTOCOL_UNSUPPORTED", "RESOURCE_LIMIT", "RUNTIME_UNAVAILABLE",
-]);
 
 class ProtocolFailure extends Error {
 	constructor() { super("PROTOCOL_UNSUPPORTED"); }
@@ -457,12 +452,6 @@ function decode(codecValue: unknown, value: unknown): unknown {
 function encode(codecValue: unknown, value: unknown): unknown {
 	return transform(codecValue, value, "encode");
 }
-function verifyCorrelation(frame: WireRecord, operation: string, callId: string): void {
-	const protocol = wireRecord(frame.protocol);
-	exactKeys(protocol, ["name", "version"]);
-	if (protocol.name !== "questpie.operation" || protocol.version !== 1 || frame.operation !== operation || frame.callId !== callId)
-		protocolFailure();
-}
 function immutableContext(input: AppContextInput): AppContextInput {
 	const context = structuredClone(input);
 	const pending: object[] = [context];
@@ -475,89 +464,29 @@ function immutableContext(input: AppContextInput): AppContextInput {
 	return context;
 }
 ${renderClientQueryHttp(input)}
+${renderClientPostHttp(input)}
 
 export function createClient(input: Readonly<{
 	readonly baseUrl: string;
 	readonly fetch?: typeof globalThis.fetch;
 }>): GeneratedClient {
-	const transport = input.fetch ?? globalThis.fetch;
+	const transport: FetchTransport = input.fetch ?? ((request) => globalThis.fetch(request));
 	const invoke = async <Result>(context: AppContextInput, operation: string, operationInput: unknown, options: CallOptions | ActionCallOptions = {}): Promise<Result> => {
 		const callId = options.callId ?? crypto.randomUUID();
 		if (!isCallIdentity(callId)) protocolFailure();
 		const action = actionOperations.has(operation);
-		if (action) {
-			const optionKeys = Object.keys(options).sort();
-			if (!optionKeys.includes("effectKey") || optionKeys.some((key) => !["callId", "effectKey", "signal", "timeoutMilliseconds"].includes(key))) protocolFailure();
-			if (!isCallIdentity((options as ActionCallOptions).effectKey)) protocolFailure();
-			if (options.timeoutMilliseconds !== undefined && (!Number.isSafeInteger(options.timeoutMilliseconds) || options.timeoutMilliseconds <= 0)) protocolFailure();
-		}
-		if (options.signal?.aborted) throw options.signal.reason;
 		if (queryOperations.has(operation))
 			return invokeCanonicalQuery<Result>({ transport, baseUrl: input.baseUrl, context, operation, operationInput, options, callId });
-		const encodedInput = encode(inputCodecs[operation], operationInput);
-		let request: Request;
-		try {
-			request = new Request(new URL(${JSON.stringify(input.path)}, input.baseUrl), {
-				method: "POST",
-				headers: { "content-type": ${JSON.stringify(input.mediaType)} },
-				body: JSON.stringify({ protocol: { name: "questpie.operation", version: 1 }, application: ${JSON.stringify(input.application)}, clientContractDigest: ${JSON.stringify(input.clientContractDigest)}, wireDigest: ${JSON.stringify(input.wireDigest)}, operation, callId, context, input: encodedInput, timeoutMilliseconds: action ? options.timeoutMilliseconds ?? null : options.timeoutMilliseconds ?? 5_000, ...(action ? { effectKey: (options as ActionCallOptions).effectKey } : {}) }),
-				...(options.signal === undefined ? {} : { signal: options.signal }),
-			});
-		} catch {
-			protocolFailure();
-		}
-		let response: Response;
-		let frame: WireRecord;
-		try {
-			response = await transport(request);
-			if (response.headers.get("content-type") !== ${JSON.stringify(input.mediaType)}) protocolFailure();
-			frame = wireRecord(await response.json());
-		} catch (error) {
-			if (action) throw new ActionOutcomeAmbiguous(callId);
-			throw error;
-		}
-		try {
-		if (frame.kind === "result") {
-			exactKeys(frame, ["callId", "kind", "operation", "payload", "protocol"]);
-			verifyCorrelation(frame, operation, callId);
-			return decode(outputCodecs[operation], frame.payload) as Result;
-		}
-		if (frame.kind === "failure") {
-			const rejection = Object.keys(frame).length === 2;
-			exactKeys(frame, rejection ? ["error", "kind"] : ["callId", "error", "kind", "operation", "protocol"]);
-			if (!rejection) verifyCorrelation(frame, operation, callId);
-			const detail = wireRecord(frame.error);
-			if (detail.code === "COMMITTED_RESULT_UNAVAILABLE") {
-				if (rejection) protocolFailure();
-				exactKeys(detail, ["code", "retryable", "transactionId"]);
-				if (!mutationOperations.has(operation) || detail.retryable !== true || response.status !== 500 || !isTransactionIdentity(detail.transactionId)) protocolFailure();
-				throw new CommittedResultUnavailable(callId, detail.transactionId);
-			}
-			exactKeys(detail, ["code", "retryable"]);
-			if (typeof detail.code !== "string" || !failureCodes.has(detail.code) || typeof detail.retryable !== "boolean") protocolFailure();
-			throw publicError(detail);
-		}
-		if (frame.kind === "declaredError") {
-			exactKeys(frame, ["callId", "error", "kind", "operation", "protocol"]);
-			verifyCorrelation(frame, operation, callId);
-			const detail = wireRecord(frame.error);
-			exactKeys(detail, ["code", "payload", "status"]);
-			if (typeof detail.code !== "string" || typeof detail.status !== "number") protocolFailure();
-			const allowed = declaredErrorContracts[operation];
-			if (!Array.isArray(allowed)) protocolFailure();
-			const contract = allowed.map(wireRecord).find((candidate) => candidate.code === detail.code);
-			if (!contract || detail.status !== contract.status || response.status !== contract.status) protocolFailure();
-			const payload = contract.payload === null
-				? detail.payload === null ? null : protocolFailure()
-				: decode(contract.payload, detail.payload);
-			throw publicError({ code: detail.code, status: detail.status, payload });
-		}
-		if (action) throw new ActionOutcomeAmbiguous(callId);
-		return protocolFailure();
-		} catch (error) {
-			if (action && error instanceof ProtocolFailure) throw new ActionOutcomeAmbiguous(callId);
-			throw error;
-		}
+		return invokeCanonicalPost<Result>({
+			transport,
+			baseUrl: input.baseUrl,
+			context,
+			operation,
+			operationInput,
+			options,
+			callId,
+			action,
+		});
 	};
 	const scope = (next: AppContextInput): GeneratedClientScope => {
 		const context = immutableContext(next);

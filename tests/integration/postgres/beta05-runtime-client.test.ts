@@ -34,12 +34,15 @@ postgresTest(
 				generated.generatedRoot,
 				"runtime-build.json",
 			);
-			const wirePath = join(generated.generatedRoot, "wire-contract.json");
+			const httpPath = join(
+				generated.generatedRoot,
+				"operation-http-contract.json",
+			);
 			const checksumsPath = join(
 				generated.generatedRoot,
 				"internal/checksums.json",
 			);
-			const wireBytes = await readFile(wirePath, "utf8");
+			const httpBytes = await readFile(httpPath, "utf8");
 			const checksumsBytes = await readFile(checksumsPath, "utf8");
 			const mismatched = JSON.parse(runtimeBuildBytes);
 			mismatched.schemaFingerprint = "0".repeat(64);
@@ -98,101 +101,29 @@ postgresTest(
 				writeFile(checksumsPath, checksumsBytes),
 			]);
 
-			const { digest: _wireDigest, ...unsignedWire } = JSON.parse(wireBytes);
-			const {
-				actionEffectIdentity: _actionEffectIdentity,
-				actionFailureDetails: _actionFailureDetails,
-				actionFailures: _actionFailures,
-				actionLimitsProjection: _actionLimitsProjection,
-				actionOutcomeAmbiguous: _actionOutcomeAmbiguous,
-				actionRequestKeys: _actionRequestKeys,
-				effectKey: _effectKey,
-				failureDetails: _failureDetails,
-				resultKinds: _resultKinds,
-				callIdentity: _callIdentity,
-				transactionIdentity: _transactionIdentity,
-				committedResultUnavailable: _committedResultUnavailable,
-				compatibility: originalCompatibility,
-				operations: wireOperations,
-				postDispatchResourceLimit: _postDispatchResourceLimit,
-				preExecutionRejection: _preExecutionRejection,
-				...sharedWire
-			} = unsignedWire;
-			const retainedOperations = wireOperations.filter(
-				(operation: Readonly<{ identity: string }>) =>
-					!operation.identity.startsWith("action:"),
-			);
-			const forgedV1Sibling = {
-				...sharedWire,
-				version: 1,
+			const { digest: _httpDigest, ...unsignedHttp } = JSON.parse(httpBytes);
+			const forgedUnsignedHttp = {
+				...unsignedHttp,
 				application: "application:forged",
-				operations: retainedOperations,
-				failures: unsignedWire.failures.filter(
-					(code: string) => code !== "COMMITTED_RESULT_UNAVAILABLE",
-				),
 			};
-			const forgedV1Digest = artifactDigest(
-				"questpie-operation-wire-v1",
-				forgedV1Sibling,
-			);
-			const forgedUnsignedV2 = { ...unsignedWire };
-			for (const key of [
-				"actionEffectIdentity",
-				"actionFailureDetails",
-				"actionFailures",
-				"actionLimitsProjection",
-				"actionOutcomeAmbiguous",
-				"actionRequestKeys",
-				"effectKey",
-				"postDispatchResourceLimit",
-				"preExecutionRejection",
-			])
-				delete forgedUnsignedV2[key];
-			Object.assign(forgedUnsignedV2, {
-				version: 2,
-				application: "application:forged",
-				operations: retainedOperations,
-				compatibility: {
-					clientContractDigest: originalCompatibility.clientContractDigest,
-					wireV1Digest: forgedV1Digest,
-					wireV1Source: originalCompatibility.wireV1Source,
-					wireV1MutationExecution:
-						originalCompatibility.wireV1MutationExecution,
-					wireV1QueryExecution: originalCompatibility.wireV1QueryExecution,
-					wireV1RejectionCode: originalCompatibility.wireV1RejectionCode,
-				},
-			});
-			const forgedV2Digest = artifactDigest(
-				"questpie-operation-wire-v2",
-				forgedUnsignedV2,
-			);
-			const forgedUnsignedWire = {
-				...unsignedWire,
-				application: "application:forged",
-				compatibility: {
-					...originalCompatibility,
-					wireV1Digest: forgedV1Digest,
-					wireV2Digest: forgedV2Digest,
-				},
-			};
-			const forgedWire = {
-				...forgedUnsignedWire,
+			const forgedHttp = {
+				...forgedUnsignedHttp,
 				digest: artifactDigest(
-					"questpie-operation-wire-v3",
-					forgedUnsignedWire,
+					"questpie-operation-http-v1",
+					forgedUnsignedHttp,
 				),
 			};
-			const forgedWireBytes = `${JSON.stringify(forgedWire)}\n`;
+			const forgedHttpBytes = `${JSON.stringify(forgedHttp)}\n`;
 			const { digest: _runtimeBuildDigest, ...unsignedRuntimeBuild } =
 				JSON.parse(runtimeBuildBytes);
 			const forgedUnsignedRuntimeBuild = {
 				...unsignedRuntimeBuild,
 				application: "application:forged",
-				wireDigest: forgedWire.digest,
+				operationHttpContractDigest: forgedHttp.digest,
 				inventory: unsignedRuntimeBuild.inventory.map(
 					(item: Readonly<{ path: string; digest: string }>) =>
-						item.path === "wire-contract.json"
-							? { ...item, digest: contentDigest(forgedWireBytes) }
+						item.path === "operation-http-contract.json"
+							? { ...item, digest: contentDigest(forgedHttpBytes) }
 							: item,
 				),
 			};
@@ -207,14 +138,14 @@ postgresTest(
 			const checksums = JSON.parse(checksumsBytes);
 			checksums.files = checksums.files.map(
 				(item: Readonly<{ path: string; digest: string }>) =>
-					item.path === "wire-contract.json"
-						? { ...item, digest: contentDigest(forgedWireBytes) }
+					item.path === "operation-http-contract.json"
+						? { ...item, digest: contentDigest(forgedHttpBytes) }
 						: item.path === "runtime-build.json"
 							? { ...item, digest: contentDigest(forgedRuntimeBuildBytes) }
 							: item,
 			);
 			await Promise.all([
-				writeFile(wirePath, forgedWireBytes),
+				writeFile(httpPath, forgedHttpBytes),
 				writeFile(runtimeBuildPath, forgedRuntimeBuildBytes),
 				writeFile(checksumsPath, `${JSON.stringify(checksums)}\n`),
 			]);
@@ -239,7 +170,7 @@ postgresTest(
 				"Runtime executable Application Identity does not match",
 			);
 			await Promise.all([
-				writeFile(wirePath, wireBytes),
+				writeFile(httpPath, httpBytes),
 				writeFile(runtimeBuildPath, runtimeBuildBytes),
 				writeFile(checksumsPath, checksumsBytes),
 			]);
@@ -378,32 +309,22 @@ postgresTest(
 					},
 				);
 				const runtimeBuild = JSON.parse(runtimeBuildBytes);
-				const wire = JSON.parse(
-					await readFile(
-						join(generated.generatedRoot, "wire-contract.json"),
-						"utf8",
-					),
-				);
+				const callId = crypto.randomUUID();
 				const rawRequest = new Request(
-					"http://runtime.test/_questpie/operation",
+					`http://runtime.test/_questpie/query/messages.page?after=~null&channelId=${encodeURIComponent(input.channelId)}&first=${input.first}`,
 					{
-						method: "POST",
 						headers: {
-							"content-type": wire.mediaType,
 							cookie:
 								"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+							"Questpie-Application": runtimeBuild.application,
+							"Questpie-Call-Id": encodeURIComponent(callId),
+							"Questpie-Client-Contract": runtimeBuild.clientContractDigest,
+							"Questpie-Context": Buffer.from(JSON.stringify(context)).toString(
+								"base64url",
+							),
+							"Questpie-Timeout-Milliseconds": "5000",
+							"Questpie-Wire-Digest": runtimeBuild.operationHttpContractDigest,
 						},
-						body: JSON.stringify({
-							application: runtimeBuild.application,
-							callId: crypto.randomUUID(),
-							clientContractDigest: runtimeBuild.clientContractDigest,
-							context,
-							input,
-							operation: "query:messages.page",
-							protocol: wire.protocol,
-							timeoutMilliseconds: 5_000,
-							wireDigest: runtimeBuild.wireDigest,
-						}),
 					},
 				);
 				const rawResponse = await application.fetch(
@@ -411,10 +332,10 @@ postgresTest(
 				);
 				expect(rawResponse.status, await rawResponse.clone().text()).toBe(200);
 				const rawFrame = (await rawResponse.json()) as Readonly<{
-					kind: string;
-					payload: unknown;
+					callId: string;
+					result: unknown;
 				}>;
-				expect(rawFrame.kind).toBe("result");
+				expect(rawFrame.callId).toBe(callId);
 
 				let clientFetches = 0;
 				const client = generated.client.createClient({

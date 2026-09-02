@@ -389,15 +389,26 @@ async function observeApplicationHttpFetch(
 
 export function observeApplicationFetch(
 	observation: ObservationKernel | null,
-	operationPath: string,
+	operations: readonly Readonly<{ identity: string }>[],
 	execute: (request: Request) => Promise<Response>,
 ): (request: Request) => Promise<Response> {
+	const generatedRequests = new Set(
+		operations.flatMap(({ identity }) => {
+			const separator = identity.indexOf(":");
+			const kind = identity.slice(0, separator);
+			const name = identity.slice(separator + 1);
+			if (kind === "query") return [`GET\0/_questpie/query/${name}`];
+			if (kind === "mutation") return [`POST\0/_questpie/mutation/${name}`];
+			if (kind === "action") return [`POST\0/_questpie/action/${name}`];
+			return [];
+		}),
+	);
 	return (request) =>
 		observeApplicationHttpFetch(
 			observation,
 			request,
 			(http) =>
-				http.method === "POST" && http.url.pathname === operationPath
+				generatedRequests.has(`${http.method}\0${http.url.pathname}`)
 					? "generated_operation"
 					: "unmatched",
 			execute,

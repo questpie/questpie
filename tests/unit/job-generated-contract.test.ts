@@ -126,9 +126,7 @@ test("does not project Job acceptance into the browser client", () => {
 	const client = renderClientContract(resources, {
 		application: "application:test",
 		clientContractDigest: "1".repeat(64),
-		wireDigest: "2".repeat(64),
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
+		httpContractDigest: "2".repeat(64),
 	});
 
 	expect(client).not.toContain("reports.companyDigest");

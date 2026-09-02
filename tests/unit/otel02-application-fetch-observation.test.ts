@@ -21,6 +21,12 @@ const TRACE: NeutralTraceContextV1 = {
 	version: 1,
 };
 
+const OPERATIONS = [
+	{ identity: "query:messages.page" },
+	{ identity: "mutation:messages.publish" },
+	{ identity: "action:reports.export" },
+] as const;
+
 test("owns exact Fetch propagation and retains its scope through body EOF", async () => {
 	const extracted: unknown[] = [];
 	const starts: ObservationStartV1[] = [];
@@ -58,24 +64,20 @@ test("owns exact Fetch propagation and retains its scope through body EOF", asyn
 	});
 	let bodyController!: ReadableStreamDefaultController<Uint8Array>;
 	let work = 0;
-	const fetch = observeApplicationFetch(
-		observation,
-		"/_questpie/operation",
-		async () => {
-			work += 1;
-			if (work > 1) return new Response("ordinary result", { status: 202 });
-			return new Response(
-				new ReadableStream<Uint8Array>({
-					start(controller) {
-						bodyController = controller;
-					},
-				}),
-				{ status: 201 },
-			);
-		},
-	);
+	const fetch = observeApplicationFetch(observation, OPERATIONS, async () => {
+		work += 1;
+		if (work > 1) return new Response("ordinary result", { status: 202 });
+		return new Response(
+			new ReadableStream<Uint8Array>({
+				start(controller) {
+					bodyController = controller;
+				},
+			}),
+			{ status: 201 },
+		);
+	});
 	const response = await fetch(
-		new Request("https://runtime.test/_questpie/operation", {
+		new Request("https://runtime.test/_questpie/mutation/messages.publish", {
 			method: "POST",
 			headers: {
 				baggage: "must-not-cross",
@@ -114,7 +116,7 @@ test("owns exact Fetch propagation and retains its scope through body EOF", asyn
 	expect(JSON.stringify(events).includes("must-not-cross")).toBe(false);
 
 	const fault = await fetch(
-		new Request("http://runtime.test/_questpie/operation", {
+		new Request("http://runtime.test/_questpie/mutation/messages.publish", {
 			headers: { traceparent: "fault" },
 			method: "POST",
 		}),
@@ -143,7 +145,7 @@ test("owns exact Fetch propagation and retains its scope through body EOF", asyn
 		});
 	}
 	const restarted = await fetch(
-		new Request("https://runtime.test/_questpie/operation", {
+		new Request("https://runtime.test/_questpie/mutation/messages.publish", {
 			headers: { traceparent: "restart", tracestate: "must-drop" },
 			method: "POST",
 		}),
@@ -155,7 +157,9 @@ test("owns exact Fetch propagation and retains its scope through body EOF", asyn
 	expect(JSON.stringify(starts.at(-1))).not.toContain("must-drop");
 	expect(work).toBe(5);
 	const wrongMethod = await fetch(
-		new Request("https://runtime.test/_questpie/operation", { method: "GET" }),
+		new Request("https://runtime.test/_questpie/mutation/messages.publish", {
+			method: "GET",
+		}),
 	);
 	expect(await wrongMethod.text()).toBe("ordinary result");
 	expect(starts.at(-1)).toMatchObject({
@@ -191,15 +195,11 @@ test("ends pre-Response Fetch failures without inventing an HTTP status", async 
 		runtimeBuildDigest: "a".repeat(64),
 	});
 	let failure: "deadline" | "framework" = "framework";
-	const fetch = observeApplicationFetch(
-		observation,
-		"/_questpie/operation",
-		async () => {
-			if (failure === "deadline")
-				throw new OperationFailure("DEADLINE_EXCEEDED", true);
-			throw new Error("before response");
-		},
-	);
+	const fetch = observeApplicationFetch(observation, OPERATIONS, async () => {
+		if (failure === "deadline")
+			throw new OperationFailure("DEADLINE_EXCEEDED", true);
+		throw new Error("before response");
+	});
 	await expect(
 		fetch(new Request("https://runtime.test/private")),
 	).rejects.toThrow("before response");
@@ -271,18 +271,16 @@ test("keeps the Fetch adapter context active while the child Execution begins", 
 		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
 		runtimeBuildDigest: "a".repeat(64),
 	});
-	const fetch = observeApplicationFetch(
-		observation,
-		"/_questpie/operation",
-		async () => {
-			const execution = beginApplicationExecution(observation, "fetch", "user");
-			if (execution === null) throw new Error("expected observed Execution");
-			execution.scope.end({ kind: "execution", outcome: "ok" });
-			return new Response(null, { status: 204 });
-		},
-	);
+	const fetch = observeApplicationFetch(observation, OPERATIONS, async () => {
+		const execution = beginApplicationExecution(observation, "fetch", "user");
+		if (execution === null) throw new Error("expected observed Execution");
+		execution.scope.end({ kind: "execution", outcome: "ok" });
+		return new Response(null, { status: 204 });
+	});
 	expect(
-		await fetch(new Request("https://runtime.test/_questpie/operation")),
+		await fetch(
+			new Request("https://runtime.test/_questpie/query/messages.page"),
+		),
 	).toMatchObject({ status: 204 });
 	expect(began).toHaveLength(2);
 	expect(began[0]).toMatchObject({
@@ -315,16 +313,12 @@ test("preserves an already-created response when its request is already aborted"
 		runtimeBuildDigest: "a".repeat(64),
 	});
 	const abort = new AbortController();
-	const fetch = observeApplicationFetch(
-		observation,
-		"/_questpie/operation",
-		async () => {
-			abort.abort("caller disconnected");
-			return new Response("known result", { status: 202 });
-		},
-	);
+	const fetch = observeApplicationFetch(observation, OPERATIONS, async () => {
+		abort.abort("caller disconnected");
+		return new Response("known result", { status: 202 });
+	});
 	const response = await fetch(
-		new Request("https://runtime.test/_questpie/operation", {
+		new Request("https://runtime.test/_questpie/query/messages.page", {
 			signal: abort.signal,
 		}),
 	);

@@ -5,12 +5,10 @@ import { codec, defineContext, defineService, principal } from "questpie";
 import { createOfficialQuestpieObservability } from "questpie/internal/observability";
 
 import { projectObservationSignalProjection } from "../../packages/compiler/src/observation";
-import { projectOperationWireV3 } from "../../packages/compiler/src/runtime/operation-wire-v3";
 import {
 	createRuntimeApplication,
 	type ExecutionEventV2,
 } from "../../packages/runtime/src";
-import { OperationFailure } from "../../packages/runtime/src/operation";
 import {
 	createRuntimeActionExecutor,
 	type RuntimeActionBinding,
@@ -19,6 +17,7 @@ import { createApplicationObservation } from "../../packages/runtime/src/applica
 import { runObservedDurableAttempt } from "../../packages/runtime/src/durable";
 import type { LiveQueryObservation } from "../../packages/runtime/src/live-query";
 import type { ObservationAdapterV1 } from "../../packages/runtime/src/observation";
+import { OperationFailure } from "../../packages/runtime/src/operation";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
@@ -96,31 +95,59 @@ function runtimeArtifacts(
 			return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
 		}),
 	};
-	const unsignedWire = {
-		format: "questpie.operation-wire",
+	const mutationOperations = additionalSlots.flatMap((raw) => {
+		const slot = raw as Readonly<{ identity?: unknown; kind?: unknown }>;
+		return slot.kind === "mutation" && typeof slot.identity === "string"
+			? [
+					{
+						identity: slot.identity,
+						input: { kind: "text" as const },
+						output: { kind: "text" as const },
+						declaredErrors: {},
+					},
+				]
+			: [];
+	});
+	const inferredActionIdentities = additionalSlots.flatMap((raw) => {
+		const slot = raw as Readonly<{ identity?: unknown; kind?: unknown }>;
+		return slot.kind === "action" && typeof slot.identity === "string"
+			? [slot.identity]
+			: [];
+	});
+	const actionOperations = (
+		actionContractIdentities ?? inferredActionIdentities
+	).map((identity) => ({
+		identity,
+		input: {
+			kind: "object" as const,
+			properties: { message: { kind: "text" as const } },
+		},
+		output: {
+			kind: "object" as const,
+			properties: { receipt: { kind: "text" as const } },
+		},
+		declaredErrors: {},
+		admission: "authenticated" as const,
+		limits: {
+			inputBytes: 1_024,
+			resultBytes: 1_024,
+			durationMilliseconds: 1_000,
+		},
+	}));
+	const unsignedHttp = {
+		format: "questpie.operation-http",
 		version: 1,
 		application: "application:collaboration",
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
-		protocol: { name: "questpie.operation", version: 1 },
-		requestKeys: [
-			"application",
-			"callId",
-			"clientContractDigest",
-			"context",
-			"input",
-			"operation",
-			"protocol",
-			"timeoutMilliseconds",
-			"wireDigest",
-		],
-		responseKeys: {
-			declaredError: ["callId", "error", "kind", "operation", "protocol"],
-			result: ["callId", "kind", "operation", "payload", "protocol"],
-			failure: ["callId", "error", "kind", "operation", "protocol"],
-			rejection: ["error", "kind"],
-		},
 		operations: [
+			...actionOperations.map(
+				({ declaredErrors, identity, input, output }) => ({
+					declaredErrors,
+					identity,
+					input,
+					output,
+				}),
+			),
+			...mutationOperations,
 			{
 				identity: "query:messages.page",
 				input: {
@@ -133,10 +160,17 @@ function runtimeArtifacts(
 				output: { kind: "object", properties: { count: { kind: "integer" } } },
 				declaredErrors: {},
 			},
-		],
+		].sort((left, right) =>
+			left.identity < right.identity
+				? -1
+				: left.identity > right.identity
+					? 1
+					: 0,
+		),
 		failures: [
 			"APPLICATION_MISMATCH",
 			"CLIENT_OUTDATED",
+			"COMMITTED_RESULT_UNAVAILABLE",
 			"DEADLINE_EXCEEDED",
 			"INTERNAL",
 			"NOT_FOUND",
@@ -149,46 +183,30 @@ function runtimeArtifacts(
 		mutationAutomaticRetry: false,
 		clientContractDigest: sha("7"),
 	} as const;
-	const wireContract = {
-		...unsignedWire,
-		digest: digest("questpie-operation-wire-v1", unsignedWire),
+	const httpContract = {
+		...unsignedHttp,
+		digest: digest("questpie-operation-http-v1", unsignedHttp),
 	};
-	const inferredActionIdentities = additionalSlots.flatMap((raw) => {
-		const slot = raw as Readonly<{ identity?: unknown; kind?: unknown }>;
-		return slot.kind === "action" && typeof slot.identity === "string"
-			? [slot.identity]
-			: [];
-	});
-	const actionOperations = (
-		actionContractIdentities ?? inferredActionIdentities
-	).map((identity) => ({
-		identity,
-		input: {
-			kind: "object",
-			properties: { message: { kind: "text" } },
-		},
-		output: {
-			kind: "object",
-			properties: { receipt: { kind: "text" } },
-		},
-		declaredErrors: {},
-		admission: "authenticated",
-		limits: {
-			inputBytes: 1_024,
-			resultBytes: 1_024,
-			durationMilliseconds: 1_000,
-		},
-	}));
 	const operationContracts = {
 		format: "questpie.operation-contracts",
 		version: 1,
-		operations: [...actionOperations, ...unsignedWire.operations].sort(
-			(left, right) =>
-				left.identity < right.identity
-					? -1
-					: left.identity > right.identity
-						? 1
-						: 0,
+		operations: [
+			...actionOperations,
+			...unsignedHttp.operations
+				.map((operation) =>
+					operation.identity.startsWith("action:")
+						? null
+						: operation.identity.startsWith("mutation:")
+							? { ...operation, admission: "authenticated" as const }
+							: operation,
+				)
+				.filter((operation) => operation !== null),
+		].sort((left, right) =>
+			left.identity < right.identity
+				? -1
+				: left.identity > right.identity
+					? 1
+					: 0,
 		),
 	};
 	const unsignedContextBootstrapPlans = {
@@ -241,7 +259,7 @@ function runtimeArtifacts(
 		"query-projection.json": "{}\n",
 		"runtime-executables.json": `${JSON.stringify(runtimeExecutables)}\n`,
 		"schema-projection.json": "{}\n",
-		"wire-contract.json": `${JSON.stringify(wireContract)}\n`,
+		"operation-http-contract.json": `${JSON.stringify(httpContract)}\n`,
 	};
 	const compiler = {
 		version: "4.0.0-beta.1",
@@ -279,7 +297,7 @@ function runtimeArtifacts(
 		),
 		manifestDigest: fileDigest(artifactFiles["manifest.json"]),
 		appContractDigest: fileDigest(artifactFiles["app.ts"]),
-		clientContractDigest: unsignedWire.clientContractDigest,
+		clientContractDigest: unsignedHttp.clientContractDigest,
 		packageInventoryDigest: fileDigest(
 			artifactFiles["internal/package-inventories.json"],
 		),
@@ -309,7 +327,7 @@ function runtimeArtifacts(
 			operationContracts,
 		),
 		runtimeGraphDigest,
-		wireDigest: wireContract.digest,
+		operationHttpContractDigest: httpContract.digest,
 		executableSlots: slots.map((slot) => `${slot.identity}#${slot.slot}`),
 		slots,
 		later: {
@@ -318,16 +336,18 @@ function runtimeArtifacts(
 			durableCompatibilityDigest: null,
 			reactionDigest: null,
 		},
-		inventory: Object.entries(artifactFiles).map(([path, bytes]) => ({
-			path,
-			digest: fileDigest(bytes),
-		})),
+		inventory: Object.entries(artifactFiles)
+			.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+			.map(([path, bytes]) => ({
+				path,
+				digest: fileDigest(bytes),
+			})),
 	};
 	return {
 		artifactFiles,
 		runtimeExecutables,
 		operationContracts,
-		wireContract,
+		httpContract,
 		runtimeBuild: {
 			...runtimeBuildWithoutDigest,
 			digest: digest("questpie-runtime-build-v1", runtimeBuildWithoutDigest),
@@ -340,150 +360,9 @@ function runtimeArtifactEnvelope(value: ReturnType<typeof runtimeArtifacts>) {
 		runtimeBuild: value.runtimeBuild,
 		runtimeExecutables: value.runtimeExecutables,
 		operationContracts: value.operationContracts,
-		wireContract: value.wireContract,
+		httpContract: value.httpContract,
 	};
 }
-
-function runtimeArtifactsV2(
-	additionalSlots: readonly unknown[] = [],
-	actionContractIdentities?: readonly string[],
-) {
-	const original = runtimeArtifacts(additionalSlots, actionContractIdentities);
-	const { digest: _wireDigest, ...wireV1 } = original.wireContract;
-	const wireV2WithoutDigest = {
-		...wireV1,
-		version: 2,
-		resultKinds: ["declaredError", "failure", "result"],
-		failureDetails: {
-			ordinary: ["code", "retryable"],
-			committedResultUnavailable: ["code", "retryable", "transactionId"],
-		},
-		callIdentity: {
-			kind: "text",
-			minimumUnicodeScalars: 1,
-			maximumUnicodeScalars: 256,
-			maximumUtf8Bytes: 1_024,
-			normalization: "NFC",
-			normalizationBehavior: "rejectNotRewrite",
-			loneSurrogates: "forbidden",
-			nullScalar: "forbidden",
-			uuidRequired: false,
-			runtimeDefaultWhenAbsent: "crypto.randomUUID",
-			equality: "exactUtf8AfterValidation",
-		},
-		transactionIdentity: {
-			kind: "postgresXid8Text",
-			canonicalPattern: "^[1-9][0-9]{0,19}$",
-			maximum: "18446744073709551615",
-			clientInterpretation: "opaque",
-		},
-		committedResultUnavailable: {
-			classification: "frameworkTransactionOutcome",
-			httpStatus: 500,
-			retryable: true,
-			transactionOutcome: "committed",
-			automaticRetry: false,
-			recovery: "replayExactMutationWithSameCallIdentity",
-			frameCallIdSource: "acceptedRequest",
-			transactionIdSource: "committedReceipt",
-			causeDisclosure: "forbidden",
-		},
-		compatibility: {
-			clientContractDigest: wireV1.clientContractDigest,
-			wireV1Digest: digest("questpie-operation-wire-v1", wireV1),
-			wireV1Source: "sameApplicationClientContractAndOperations",
-			wireV1MutationExecution: "rejectBeforeContextAndOperation",
-			wireV1QueryExecution: "allowed",
-			wireV1RejectionCode: "CLIENT_OUTDATED",
-		},
-		failures: [
-			"APPLICATION_MISMATCH",
-			"CLIENT_OUTDATED",
-			"COMMITTED_RESULT_UNAVAILABLE",
-			"DEADLINE_EXCEEDED",
-			"INTERNAL",
-			"NOT_FOUND",
-			"PROTOCOL_UNSUPPORTED",
-			"RESOURCE_LIMIT",
-			"RUNTIME_UNAVAILABLE",
-		],
-	};
-	const wireContract = {
-		...wireV2WithoutDigest,
-		digest: digest("questpie-operation-wire-v2", wireV2WithoutDigest),
-	};
-	const wireBytes = `${JSON.stringify(wireContract)}\n`;
-	const { digest: _buildDigest, ...runtimeBuildWithoutDigest } =
-		original.runtimeBuild;
-	const reboundBuild = {
-		...runtimeBuildWithoutDigest,
-		wireDigest: wireContract.digest,
-		inventory: runtimeBuildWithoutDigest.inventory.map((item) =>
-			item.path === "wire-contract.json"
-				? { ...item, digest: fileDigest(wireBytes) }
-				: item,
-		),
-	};
-	return {
-		...original,
-		artifactFiles: {
-			...original.artifactFiles,
-			"wire-contract.json": wireBytes,
-		},
-		runtimeBuild: {
-			...reboundBuild,
-			digest: digest("questpie-runtime-build-v1", reboundBuild),
-		},
-		wireContract,
-	};
-}
-
-function runtimeArtifactsV3(
-	additionalSlots: readonly unknown[],
-	actionContractIdentities: readonly string[],
-) {
-	const original = runtimeArtifactsV2(
-		additionalSlots,
-		actionContractIdentities,
-	);
-	const actionOperations = original.operationContracts.operations
-		.filter((operation) => operation.identity.startsWith("action:"))
-		.map(({ declaredErrors, identity, input, output }) => ({
-			declaredErrors,
-			identity,
-			input,
-			output,
-		}));
-	const wireContract = projectOperationWireV3({
-		retainedWireV2: original.wireContract,
-		actionOperations,
-	});
-	const wireBytes = `${JSON.stringify(wireContract)}\n`;
-	const { digest: _buildDigest, ...runtimeBuildWithoutDigest } =
-		original.runtimeBuild;
-	const reboundBuild = {
-		...runtimeBuildWithoutDigest,
-		wireDigest: wireContract.digest,
-		inventory: runtimeBuildWithoutDigest.inventory.map((item) =>
-			item.path === "wire-contract.json"
-				? { ...item, digest: fileDigest(wireBytes) }
-				: item,
-		),
-	};
-	return {
-		...original,
-		artifactFiles: {
-			...original.artifactFiles,
-			"wire-contract.json": wireBytes,
-		},
-		runtimeBuild: {
-			...reboundBuild,
-			digest: digest("questpie-runtime-build-v1", reboundBuild),
-		},
-		wireContract,
-	};
-}
-
 function queryExecutable<View>(
 	execute: (
 		input: Readonly<{ input: unknown; ctx: View }>,
@@ -506,13 +385,13 @@ function serverExportsFor(bindings: readonly unknown[]) {
 		bindings.map((raw) => {
 			const binding = raw as Readonly<{
 				bundleExport: string;
-				kind: "context" | "query" | "service";
+				kind: "context" | "mutation" | "query" | "service";
 				slot: "create" | "dispose" | "handler" | "resolve";
 				execute?: unknown;
 				definition: Readonly<Record<string, unknown>>;
 			}>;
 			const implementation =
-				binding.kind === "query"
+				binding.kind === "query" || binding.kind === "mutation"
 					? binding.execute
 					: binding.kind === "context"
 						? binding.definition.resolve
@@ -656,24 +535,24 @@ test("binds Runtime Build Application Identity to the executable bundle", async 
 		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
 	});
 	const original = runtimeArtifacts();
-	const { digest: _wireDigest, ...unsignedWire } = original.wireContract;
-	const changedUnsignedWire = {
-		...unsignedWire,
+	const { digest: _httpDigest, ...unsignedHttp } = original.httpContract;
+	const changedUnsignedHttp = {
+		...unsignedHttp,
 		application: "application:forged",
 	};
-	const wireContract = {
-		...changedUnsignedWire,
-		digest: digest("questpie-operation-wire-v1", changedUnsignedWire),
+	const httpContract = {
+		...changedUnsignedHttp,
+		digest: digest("questpie-operation-http-v1", changedUnsignedHttp),
 	};
-	const wireBytes = `${JSON.stringify(wireContract)}\n`;
+	const httpBytes = `${JSON.stringify(httpContract)}\n`;
 	const { digest: _buildDigest, ...unsignedBuild } = original.runtimeBuild;
 	const changedUnsignedBuild = {
 		...unsignedBuild,
 		application: "application:forged",
-		wireDigest: wireContract.digest,
+		operationHttpContractDigest: httpContract.digest,
 		inventory: unsignedBuild.inventory.map((item) =>
-			item.path === "wire-contract.json"
-				? { ...item, digest: fileDigest(wireBytes) }
+			item.path === "operation-http-contract.json"
+				? { ...item, digest: fileDigest(httpBytes) }
 				: item,
 		),
 	};
@@ -685,10 +564,10 @@ test("binds Runtime Build Application Identity to the executable bundle", async 
 		...original,
 		artifactFiles: {
 			...original.artifactFiles,
-			"wire-contract.json": wireBytes,
+			"operation-http-contract.json": httpBytes,
 		},
 		runtimeBuild,
-		wireContract,
+		httpContract,
 	};
 	const bindings = [
 		{
@@ -1406,7 +1285,7 @@ test("carries one issued Execution privately through direct and network Action",
 		runtimeGraphDigest: sha("c"),
 		bundleExport: "action_delivery_publish_handler",
 	};
-	const artifacts = runtimeArtifactsV3([actionSlot], [action.identity]);
+	const artifacts = runtimeArtifacts([actionSlot], [action.identity]);
 	const events: ExecutionEventV2[] = [];
 	const executableAction = {
 		...actionSlot,
@@ -1414,9 +1293,9 @@ test("carries one issued Execution privately through direct and network Action",
 		definition: { name: "delivery.publish", handler: action.execute },
 	};
 	const app = await createRuntimeApplication({
-		artifacts: runtimeArtifactEnvelope(artifacts as never),
+		artifacts: runtimeArtifactEnvelope(artifacts),
 		artifactFiles: artifacts.artifactFiles,
-		...executableBindings(artifacts as never, [
+		...executableBindings(artifacts, [
 			{
 				identity: "context:app.context",
 				kind: "context" as const,
@@ -1492,33 +1371,33 @@ test("carries one issued Execution privately through direct and network Action",
 	const user = principal.user({
 		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
 	});
-	const request = new Request("http://runtime.test/_questpie/operation", {
-		method: "POST",
-		headers: {
-			"content-type": "application/vnd.questpie.operation+json;version=1",
-		},
-		body: JSON.stringify({
-			application: artifacts.runtimeBuild.application,
-			callId: "call:network-action",
-			clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
-			context: {
-				companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+	const request = new Request(
+		"http://runtime.test/_questpie/action/delivery.publish",
+		{
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				"Effect-Key": "delivery-network-1",
+				"Questpie-Application": artifacts.runtimeBuild.application,
+				"Questpie-Call-Id": "call%3Anetwork-action",
+				"Questpie-Client-Contract": artifacts.runtimeBuild.clientContractDigest,
+				"Questpie-Timeout-Milliseconds": "1000",
+				"Questpie-Wire-Digest": artifacts.httpContract.digest,
 			},
-			effectKey: "delivery-network-1",
-			input: { message: "hello" },
-			operation: action.identity,
-			protocol: { name: "questpie.operation", version: 1 },
-			timeoutMilliseconds: 1_000,
-			wireDigest: artifacts.wireContract.digest,
-		}),
-	});
+			body: JSON.stringify({
+				context: {
+					companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+				},
+				input: { message: "hello" },
+			}),
+		},
+	);
 	bindIngressPrincipal(request, user);
 	const response = await app.fetch(request);
 	expect(response.status).toBe(200);
-	expect(await response.json()).toMatchObject({
-		kind: "result",
-		operation: action.identity,
-		payload: { receipt: "sent" },
+	expect(await response.json()).toEqual({
+		callId: "call:network-action",
+		result: { receipt: "sent" },
 	});
 	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
 		["scope.started", "fetch"],
@@ -1716,7 +1595,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 	expect(failedLifecycle).toEqual(["start", "drain"]);
 });
 
-test("sanitizes unknown operation errors identically for direct and wire calls", async () => {
+test("sanitizes unknown operation errors identically for direct and canonical network calls", async () => {
 	const context = defineContext({
 		name: "app.context",
 		input: codec.object({ companyId: codec.uuid() }),
@@ -1766,30 +1645,27 @@ test("sanitizes unknown operation errors identically for direct and wire calls",
 		expect(String(error)).not.toContain("duplicate key");
 	});
 
-	const request = new Request("http://runtime.test/_questpie/operation", {
-		method: "POST",
-		headers: {
-			"content-type": "application/vnd.questpie.operation+json;version=1",
+	const request = new Request(
+		"http://runtime.test/_questpie/query/messages.page?first=2",
+		{
+			headers: {
+				"Questpie-Application": artifacts.runtimeBuild.application,
+				"Questpie-Call-Id": "network-call",
+				"Questpie-Client-Contract": artifacts.runtimeBuild.clientContractDigest,
+				"Questpie-Context": Buffer.from(JSON.stringify(contextInput)).toString(
+					"base64url",
+				),
+				"Questpie-Wire-Digest": artifacts.httpContract.digest,
+			},
 		},
-		body: JSON.stringify({
-			application: artifacts.runtimeBuild.application,
-			callId: "wire-call",
-			clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
-			context: contextInput,
-			input: { first: 2 },
-			operation: "query:messages.page",
-			protocol: { name: "questpie.operation", version: 1 },
-			timeoutMilliseconds: null,
-			wireDigest: artifacts.wireContract.digest,
-		}),
-	});
+	);
 	bindIngressPrincipal(request, user);
 	const response = await app.fetch(request);
 	const responseText = await response.text();
 	expect(response.status).toBe(500);
-	expect(JSON.parse(responseText)).toMatchObject({
-		kind: "failure",
-		error: { code: "INTERNAL" },
+	expect(JSON.parse(responseText)).toEqual({
+		callId: "network-call",
+		error: { code: "INTERNAL", retryable: false },
 	});
 	expect(responseText).not.toContain("duplicate key");
 	await app.close({ deadlineAt: Date.now() + 2_000 });
@@ -1857,7 +1733,7 @@ test("runs one canonical Query GET through the existing Operation executor", asy
 					"base64url",
 				),
 				"Questpie-Timeout-Milliseconds": "5000",
-				"Questpie-Wire-Digest": artifacts.wireContract.digest,
+				"Questpie-Wire-Digest": artifacts.httpContract.digest,
 			},
 		},
 	);
@@ -1891,7 +1767,7 @@ test("runs one canonical Query GET through the existing Operation executor", asy
 		"Questpie-Context": Buffer.from(JSON.stringify(contextInput)).toString(
 			"base64url",
 		),
-		"Questpie-Wire-Digest": artifacts.wireContract.digest,
+		"Questpie-Wire-Digest": artifacts.httpContract.digest,
 	};
 	for (const hostile of [
 		"http://runtime.test/_questpie/query/messages.page?first=2&first=2",
@@ -1929,7 +1805,124 @@ test("runs one canonical Query GET through the existing Operation executor", asy
 		{ headers },
 	);
 	expect((await app.fetch(credentialBeforeDecode)).status).toBe(401);
+	const removedOperationRoute = await app.fetch(
+		new Request("http://runtime.test/_questpie/operation", {
+			method: "POST",
+		}),
+	);
+	expect(removedOperationRoute.status).toBe(404);
+	expect(removedOperationRoute.headers.get("content-type")).toBeNull();
 	expect(handlerCalls).toBe(3);
+	await app.close({ deadlineAt: Date.now() + 2_000 });
+});
+
+test("runs canonical Mutation POST and replay through the existing Mutation executor", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const mutationSlot = {
+		identity: "mutation:messages.publish",
+		kind: "mutation" as const,
+		slot: "handler" as const,
+		origin: {
+			path: "src/messages-publish.ts",
+			exportName: "messagesPublish",
+			packageId: null,
+		},
+		sourceDigest: sha("a"),
+		contractDigest: sha("b"),
+		runtimeGraphDigest: sha("c"),
+		bundleExport: "mutation_messages_publish_handler",
+	};
+	const definition = {
+		name: "messages.publish",
+		handler: () => {
+			throw new Error("the Runtime Mutation executor owns invocation");
+		},
+	};
+	const mutationBinding = {
+		identity: mutationSlot.identity,
+		kind: mutationSlot.kind,
+		slot: mutationSlot.slot,
+		runtimeGraphDigest: mutationSlot.runtimeGraphDigest,
+		bundleExport: mutationSlot.bundleExport,
+		execute: definition.handler,
+		definition,
+	};
+	const contextBinding = {
+		identity: "context:app.context",
+		kind: "context" as const,
+		slot: "resolve" as const,
+		runtimeGraphDigest: sha("3"),
+		bundleExport: "context_app_context_resolve",
+		definition: context,
+	};
+	const artifacts = runtimeArtifacts([mutationSlot]);
+	const receipts = new Map<string, string>();
+	let mutationExecutions = 0;
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts, [
+			contextBinding,
+			queryExecutable(() => ({ count: 1 })),
+			mutationBinding,
+		]),
+		program: {
+			services: [],
+			context,
+			bootstrap: () => ({ get: async () => null }),
+			project: ({ facts }) => ({ signal: facts.signal }),
+			projectMutation: () => async (operation, callId) => {
+				let value = receipts.get(callId);
+				if (value === undefined) {
+					mutationExecutions += 1;
+					value = `stored:${String(operation.input)}`;
+					receipts.set(callId, value);
+				}
+				return { committed: true, value };
+			},
+			resolvePrincipal: async () => principal.anonymous(),
+		},
+	});
+	const contextInput = {
+		companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+	};
+	expect(
+		await app.execution(
+			{ principal: principal.anonymous(), context: contextInput },
+			(operations) =>
+				operations.invoke("mutation:messages.publish", "hello", {
+					callId: "replay-key",
+				}),
+		),
+	).toBe("stored:hello");
+	const send = () =>
+		app.fetch(
+			new Request("http://runtime.test/_questpie/mutation/messages.publish", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json; Charset=UTF-8",
+					"Idempotency-Key": "replay-key",
+					"Questpie-Application": artifacts.runtimeBuild.application,
+					"Questpie-Client-Contract":
+						artifacts.runtimeBuild.clientContractDigest,
+					"Questpie-Wire-Digest": artifacts.httpContract.digest,
+				},
+				body: JSON.stringify({ context: contextInput, input: "hello" }),
+			}),
+		);
+	for (let replay = 0; replay < 2; replay += 1) {
+		const response = await send();
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			callId: "replay-key",
+			result: "stored:hello",
+		});
+	}
+	expect(mutationExecutions).toBe(1);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
@@ -2004,6 +1997,7 @@ test("rejects missing, duplicate, stale, wrong-kind and cross-build Action bindi
 		project: ({ facts }: { facts: { signal: AbortSignal } }) => ({
 			signal: facts.signal,
 		}),
+		invokeAction: async () => null,
 		resolvePrincipal: async () => principal.anonymous(),
 	};
 	const accepted = artifacts();
@@ -2234,310 +2228,6 @@ test("pairs the exact Context and Service exports before readiness", async () =>
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
-test("uses one engine for direct and Fetch and rejects hostile wire before disclosure", async () => {
-	let resolves = 0;
-	let bootstrapReads = 0;
-	let handlerCalls = 0;
-	let principalResolutions = 0;
-	let principalFailure = false;
-	const events: unknown[] = [];
-	const context = defineContext({
-		name: "app.context",
-		input: codec.object({ companyId: codec.uuid() }),
-		resolve: ({ input }) => {
-			resolves += 1;
-			return { tenant: { id: input.companyId }, values: {} };
-		},
-	});
-	const user = principal.user({
-		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
-	});
-	const artifacts = runtimeArtifacts();
-	const bindings = [
-		{
-			identity: "context:app.context",
-			kind: "context" as const,
-			slot: "resolve" as const,
-			runtimeGraphDigest: sha("3"),
-			bundleExport: "context_app_context_resolve",
-			definition: context,
-		},
-		queryExecutable(({ input }) => {
-			handlerCalls += 1;
-			return { count: (input as Readonly<{ first: number }>).first };
-		}),
-	];
-	const app = await createRuntimeApplication({
-		artifacts: runtimeArtifactEnvelope(artifacts),
-		artifactFiles: artifacts.artifactFiles,
-		...executableBindings(artifacts, bindings),
-		program: {
-			services: [],
-			context,
-			bootstrap: () => ({
-				get: async () => {
-					bootstrapReads += 1;
-					return null;
-				},
-			}),
-			project: ({ facts }) => ({ signal: facts.signal }),
-			resolvePrincipal: async (request) => {
-				principalResolutions += 1;
-				if (principalFailure) throw new Error("credential detail");
-				return readIngressPrincipal(request);
-			},
-		},
-		events: (event) => events.push(event),
-		now: () => new Date("2026-08-15T16:00:00.000Z"),
-	});
-	const baseFrame = {
-		application: artifacts.runtimeBuild.application,
-		callId: "call:1",
-		clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
-		context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
-		input: { first: 2 },
-		operation: "query:messages.page",
-		protocol: { name: "questpie.operation", version: 1 },
-		timeoutMilliseconds: null,
-		wireDigest: artifacts.wireContract.digest,
-	} as const;
-	const send = (frame: unknown) => {
-		const request = new Request("http://runtime.test/_questpie/operation", {
-			method: "POST",
-			headers: {
-				"content-type": "application/vnd.questpie.operation+json;version=1",
-			},
-			body: JSON.stringify(frame),
-		});
-		bindIngressPrincipal(request, user);
-		return app.fetch(request);
-	};
-	let bodyCancelled = false;
-	const oversizedBody = new ReadableStream<Uint8Array>({
-		start(controller) {
-			controller.enqueue(new Uint8Array(600_000));
-			controller.enqueue(new Uint8Array(600_000));
-		},
-		cancel() {
-			bodyCancelled = true;
-		},
-	});
-	const oversized = await app.fetch(
-		new Request("http://runtime.test/_questpie/operation", {
-			method: "POST",
-			headers: {
-				"content-type": "application/vnd.questpie.operation+json;version=1",
-			},
-			body: oversizedBody,
-			duplex: "half",
-		} as RequestInit & { duplex: "half" }),
-	);
-	expect(await oversized.json()).toMatchObject({
-		kind: "failure",
-		error: { code: "RESOURCE_LIMIT" },
-	});
-	expect(bodyCancelled).toBe(true);
-
-	for (const [frame, code] of [
-		[{ ...baseFrame, clientContractDigest: sha("0") }, "CLIENT_OUTDATED"],
-		[{ ...baseFrame, operation: "query:unknown" }, "NOT_FOUND"],
-		[{ ...baseFrame, input: { first: "2" } }, "PROTOCOL_UNSUPPORTED"],
-		[
-			{ ...baseFrame, input: { first: 2, at: "2026-99-15T16:00:00.000Z" } },
-			"PROTOCOL_UNSUPPORTED",
-		],
-		[
-			{ ...baseFrame, context: { ...baseFrame.context, extra: true } },
-			"PROTOCOL_UNSUPPORTED",
-		],
-	] as const) {
-		const hostile = await send(frame);
-		expect((await hostile.json()) as unknown).toMatchObject({
-			kind: "failure",
-			error: { code },
-		});
-	}
-	expect({
-		bootstrapReads,
-		handlerCalls,
-		principalResolutions,
-		resolves,
-	}).toEqual({
-		bootstrapReads: 0,
-		handlerCalls: 0,
-		principalResolutions: 0,
-		resolves: 0,
-	});
-
-	events.length = 0;
-	const network = await send(baseFrame);
-	expect(network.status).toBe(200);
-	expect((await network.json()) as unknown).toMatchObject({
-		kind: "result",
-		operation: "query:messages.page",
-		payload: { count: 2 },
-	});
-	const direct = await app.execution(
-		{ principal: user, context: baseFrame.context },
-		(operations) => operations.invoke("query:messages.page", { first: 2 }),
-	);
-	expect(direct).toEqual({ count: 2 });
-	expect({
-		bootstrapReads,
-		handlerCalls,
-		principalResolutions,
-		resolves,
-	}).toEqual({
-		bootstrapReads: 0,
-		handlerCalls: 2,
-		principalResolutions: 1,
-		resolves: 2,
-	});
-	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
-		["scope.started", "fetch"],
-		["scope.started", "execution"],
-		["scope.event", "execution"],
-		["scope.started", "query"],
-		["scope.ended", "query"],
-		["scope.ended", "execution"],
-		["scope.ended", "fetch"],
-		["scope.started", "execution"],
-		["scope.event", "execution"],
-		["scope.started", "query"],
-		["scope.ended", "query"],
-		["scope.ended", "execution"],
-	]);
-
-	events.length = 0;
-	principalFailure = true;
-	const failedPrincipal = await send({ ...baseFrame, callId: "call:2" });
-	expect((await failedPrincipal.json()) as unknown).toMatchObject({
-		kind: "failure",
-		error: { code: "INTERNAL" },
-	});
-	expect(handlerCalls).toBe(2);
-	await app.close({ deadlineAt: Date.now() + 2_000 });
-	const eventBytes = JSON.stringify(events);
-	expect(eventBytes).not.toContain(baseFrame.context.companyId);
-	expect(eventBytes).not.toContain('"input"');
-	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
-		["scope.started", "fetch"],
-		["scope.ended", "fetch"],
-		["scope.ended", "runtime"],
-	]);
-	expect(events.every(({ executionId }) => executionId === null)).toBe(true);
-});
-
-test("executes a retained v1 Query only for its exact deployment-owned digest pair", async () => {
-	let bootstrapReads = 0;
-	let contextResolves = 0;
-	let handlerCalls = 0;
-	const context = defineContext({
-		name: "app.context",
-		input: codec.object({ companyId: codec.uuid() }),
-		resolve: ({ input }) => {
-			contextResolves += 1;
-			return { tenant: { id: input.companyId }, values: {} };
-		},
-	});
-	const artifacts = runtimeArtifactsV2();
-	const retainedClient = {
-		clientContractDigest: sha("9"),
-		wireDigest: sha("8"),
-	};
-	const bindings = [
-		{
-			identity: "context:app.context",
-			kind: "context" as const,
-			slot: "resolve" as const,
-			runtimeGraphDigest: sha("3"),
-			bundleExport: "context_app_context_resolve",
-			definition: context,
-		},
-		queryExecutable(({ input }) => {
-			handlerCalls += 1;
-			return { count: (input as Readonly<{ first: number }>).first };
-		}),
-	];
-	const app = await createRuntimeApplication({
-		artifacts: runtimeArtifactEnvelope(artifacts as never),
-		artifactFiles: artifacts.artifactFiles,
-		...executableBindings(artifacts as never, bindings),
-		retainedClients: [retainedClient],
-		program: {
-			services: [],
-			context,
-			bootstrap: () => ({
-				get: async () => {
-					bootstrapReads += 1;
-					return null;
-				},
-			}),
-			project: ({ facts }) => ({ signal: facts.signal }),
-			resolvePrincipal: async () => principal.anonymous(),
-		},
-	});
-	const baseFrame = {
-		application: artifacts.runtimeBuild.application,
-		callId: "retained:exact-pair",
-		clientContractDigest: retainedClient.clientContractDigest,
-		context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
-		input: { first: 2 },
-		operation: "query:messages.page",
-		protocol: { name: "questpie.operation", version: 1 },
-		timeoutMilliseconds: 5_000,
-		wireDigest: retainedClient.wireDigest,
-	};
-	const send = (frame: unknown) =>
-		app.fetch(
-			new Request("http://runtime.test/_questpie/operation", {
-				method: "POST",
-				headers: {
-					"content-type": "application/vnd.questpie.operation+json;version=1",
-				},
-				body: JSON.stringify(frame),
-			}),
-		);
-
-	try {
-		for (const mismatched of [
-			{
-				...baseFrame,
-				clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
-			},
-			{ ...baseFrame, wireDigest: artifacts.runtimeBuild.wireDigest },
-		]) {
-			const response = await send(mismatched);
-			expect(response.status).toBe(409);
-			expect(await response.json()).toEqual({
-				kind: "failure",
-				error: { code: "CLIENT_OUTDATED", retryable: false },
-			});
-		}
-		expect({ bootstrapReads, contextResolves, handlerCalls }).toEqual({
-			bootstrapReads: 0,
-			contextResolves: 0,
-			handlerCalls: 0,
-		});
-
-		const response = await send(baseFrame);
-		expect(response.status).toBe(200);
-		expect(await response.json()).toMatchObject({
-			kind: "result",
-			callId: baseFrame.callId,
-			operation: baseFrame.operation,
-			payload: { count: 2 },
-		});
-		expect({ bootstrapReads, contextResolves, handlerCalls }).toEqual({
-			bootstrapReads: 0,
-			contextResolves: 1,
-			handlerCalls: 1,
-		});
-	} finally {
-		await app.close({ deadlineAt: Date.now() + 2_000 });
-	}
-});
-
 async function createHoldingRuntime(
 	input: Readonly<{
 		coordinatorDeadlines?: number[];
@@ -2651,28 +2341,30 @@ test("separates runtime deadlines from Fetch disconnect cancellation", async () 
 	).rejects.toThrow("DEADLINE_EXCEEDED");
 
 	const disconnect = new AbortController();
-	const request = new Request("http://runtime.test/_questpie/operation", {
-		method: "POST",
-		headers: {
-			"content-type": "application/vnd.questpie.operation+json;version=1",
+	const request = new Request(
+		"http://runtime.test/_questpie/query/messages.page?first=1",
+		{
+			headers: {
+				"Questpie-Application": artifacts.runtimeBuild.application,
+				"Questpie-Call-Id": "call%3Adisconnect",
+				"Questpie-Client-Contract": artifacts.runtimeBuild.clientContractDigest,
+				"Questpie-Context": Buffer.from(JSON.stringify(context)).toString(
+					"base64url",
+				),
+				"Questpie-Wire-Digest": artifacts.httpContract.digest,
+			},
+			signal: disconnect.signal,
 		},
-		body: JSON.stringify({
-			application: artifacts.runtimeBuild.application,
-			callId: "call:disconnect",
-			clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
-			context,
-			input: { first: 1 },
-			operation: "query:messages.page",
-			protocol: { name: "questpie.operation", version: 1 },
-			timeoutMilliseconds: null,
-			wireDigest: artifacts.wireContract.digest,
-		}),
-		signal: disconnect.signal,
-	});
+	);
 	const pending = app.fetch(request);
 	while (releases.length < 2) await Bun.sleep(0);
 	disconnect.abort();
-	await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+	const response = await pending;
+	expect(response.status).toBe(408);
+	expect(await response.json()).toEqual({
+		callId: "call:disconnect",
+		error: { code: "DEADLINE_EXCEEDED", retryable: true },
+	});
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 

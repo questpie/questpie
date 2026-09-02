@@ -418,7 +418,7 @@ async function loadRuntimeArtifacts() {
 			runtimeBuild,
 			runtimeExecutables: JSON.parse(artifactFiles["runtime-executables.json"]),
 			operationContracts: JSON.parse(artifactFiles["operation-contracts.json"]),
-			wireContract: JSON.parse(artifactFiles["wire-contract.json"]),
+			httpContract: JSON.parse(artifactFiles["operation-http-contract.json"]),
 		},
 		artifactFiles,
 	};

@@ -255,24 +255,17 @@ export function verifyRuntimeArtifactFiles(
 		) !== build.operationContractsDigest
 	)
 		fail("operation-contracts.json semantic digest does not match");
-	const rawWire = record(
-		parseJsonFile("wire-contract.json"),
-		"wire-contract.json",
+	const rawHttp = record(
+		parseJsonFile("operation-http-contract.json"),
+		"operation-http-contract.json",
 	);
-	const { digest: rawWireDigest, ...rawWireUnsigned } = rawWire;
-	const wireVersion = rawWire.version;
+	const { digest: rawHttpDigest, ...rawHttpUnsigned } = rawHttp;
 	if (
-		rawWireDigest !== build.wireDigest ||
-		artifactDigest(
-			wireVersion === 3
-				? "questpie-operation-wire-v3"
-				: wireVersion === 2
-					? "questpie-operation-wire-v2"
-					: "questpie-operation-wire-v1",
-			rawWireUnsigned,
-		) !== build.wireDigest
+		rawHttpDigest !== build.operationHttpContractDigest ||
+		artifactDigest("questpie-operation-http-v1", rawHttpUnsigned) !==
+			build.operationHttpContractDigest
 	)
-		fail("wire-contract.json semantic digest does not match");
+		fail("operation-http-contract.json semantic digest does not match");
 	if (
 		build.later.reactionDigest !== null &&
 		artifactDigest(
