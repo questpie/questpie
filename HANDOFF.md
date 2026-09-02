@@ -817,11 +817,13 @@ byte-identical release dry-runs pass.
    direction, or create a parallel write kernel.
 2. ADR-0032 accepts one bounded inverse child list through overloaded
    `comments.list({ first, orderBy, select })`, while root
-   `tickets.list({ parameters, page, ... })` remains disjoint. Implement the
-   accepted slice blockers-first through INV-01 to INV-06 in
-   `docs/v4/implementation/inverse-tomany-projection/README.md`, using the
-   existing relational compiler/Runtime kernel; do not restore `window`, add a
-   second plural list, or create a parallel query kernel.
+   `tickets.list({ parameters, page, ... })` remains disjoint. INV-01 through
+   INV-04 are complete. INV-05 is integrated with focused unit, type, direct,
+   Fetch, generated-client, watch, and PostgreSQL hostile evidence; its
+   independent review and INV-06 release closure remain. Continue from
+   `docs/v4/implementation/inverse-tomany-projection/README.md` using the
+   existing relational compiler/Runtime kernel; do not restore `window`, add
+   a second plural list, or create a parallel query kernel.
 3. Keep Team Support Desk as the golden beginner/DX consumer and Collaboration
    as the hostile authority/Live consumer. Migrate progressively and delete
    `comments.page` only after the new `tickets.detail` path has PostgreSQL and

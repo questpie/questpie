@@ -1,6 +1,8 @@
 # Bounded inverse `toMany` implementation map
 
-- Status: planned; implementation not started
+- Status: INV-01 through INV-04 complete; INV-05 integrated with focused and
+  PostgreSQL evidence; independent INV-05 review and INV-06 release closure
+  pending
 - Date: 2026-09-01
 - Classification: Kernel implementation of Accepted ADR-0032 plus Product
   projection through the reference consumers
