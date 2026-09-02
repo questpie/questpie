@@ -1003,7 +1003,11 @@ VALUES ($1, $2, $3, $4, $5)`,
 							timeoutMilliseconds: 10,
 						},
 					),
-				).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED" });
+				).rejects.toMatchObject({
+					code: "ACTION_OUTCOME_AMBIGUOUS",
+					payload: { callId: "delivery-network-timeout" },
+					retryable: false,
+				});
 				expect(transportCalls).toBe(10);
 
 				await expect(
@@ -1823,7 +1827,7 @@ WHERE runs.application_name = 'application:collaboration' AND runs.run_id = $1`,
 				expect(staleTrace.outcomes).toContainEqual(
 					expect.objectContaining({
 						attemptNumber: 1,
-						failureCode: "HANDLER_FAILED",
+						failureCode: null,
 						outcome: "fenced",
 						runId: staleRun.runId,
 					}),
