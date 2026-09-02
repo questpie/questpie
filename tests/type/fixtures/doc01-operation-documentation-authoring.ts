@@ -13,7 +13,12 @@ const output = codec.object({ id: codec.uuid(), status: codec.text() });
 
 const exact = {
 	summary: "Close an open ticket",
-	examples: [{ input: { id: "ticket-id" }, output: { id: "ticket-id", status: "closed" } }],
+	examples: [
+		{
+			input: { id: "ticket-id" },
+			output: { id: "ticket-id", status: "closed" },
+		},
+	],
 } as const satisfies OperationDescription<
 	{ readonly id: string },
 	{ readonly id: string; readonly status: string }
@@ -50,12 +55,36 @@ const ticketPolicy = definePolicy(tickets, { name: "tickets.default" });
 defineCollectionOperations(tickets, {
 	name: "tickets",
 	policy: ticketPolicy,
-	list: { data: { kind: "dataQuery" } as never, describe: { summary: "List tickets" } },
-	get: { select: { id: true }, describe: { summary: "Get a ticket" } },
+	list: {
+		data: { kind: "dataQuery" } as never,
+		describe: { summary: "List tickets" },
+	},
+	get: {
+		select: { id: true },
+		describe: {
+			summary: "Get a ticket",
+			examples: [
+				{ input: { key: { id: "ticket-id" } }, output: { id: "ticket-id" } },
+				{
+					// @ts-expect-error Collection get examples infer the primary key.
+					input: { key: { ticketId: "ticket-id" } },
+				},
+			],
+		},
+	},
 	create: {
 		input: ["id", "status"],
 		select: { id: true, status: true },
-		describe: { summary: "Create a ticket" },
+		describe: {
+			summary: "Create a ticket",
+			// @ts-expect-error required create Fields remain required in examples.
+			examples: [
+				{ input: { input: { id: "ticket-id", status: "open" } } },
+				{
+					input: { input: { id: "ticket-id" } },
+				},
+			],
+		},
 	},
 	update: {
 		input: ["status"],

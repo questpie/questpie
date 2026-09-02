@@ -108,6 +108,12 @@ const ticketDetailCodec = codec.object({
 export const ticketDetail = defineQuery({
 	name: "tickets.detail",
 	network: true,
+	describe: {
+		summary: "Fetch one visible support ticket",
+		description:
+			"Returns the ticket only when the current principal may see it.",
+		examples: [{ input: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131" } }],
+	},
 	input: codec.object({ id: codec.uuid() }),
 	output: codec.nullable(ticketDetailCodec),
 	handler: async ({ input, ctx }) => {

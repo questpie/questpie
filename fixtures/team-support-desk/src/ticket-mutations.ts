@@ -166,6 +166,18 @@ export const assignTicket = defineMutation({
 export const closeTicket = defineMutation({
 	name: "ticket.close",
 	network: true,
+	describe: {
+		summary: "Close an open support ticket",
+		description:
+			"Transitions one visible open ticket and returns its committed state.",
+		examples: [
+			{
+				input: {
+					ticketId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131",
+				},
+			},
+		],
+	},
 	input: codec.object({ ticketId: codec.uuid() }),
 	output: ticketResultCodec,
 	policy: policy.authenticated(),

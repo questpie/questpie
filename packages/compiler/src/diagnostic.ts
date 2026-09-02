@@ -17,6 +17,7 @@ export type CompositionDiagnosticCode =
 	| "QP-COMPOSE-024"
 	| "QP-COMPOSE-026"
 	| "QP-COMPOSE-027"
+	| "QP-COMPOSE-030"
 	| "QP-DATA-003"
 	| "QP-DATA-005"
 	| "QP-DATA-008"
@@ -173,6 +174,7 @@ const diagnosticClassesByCode = {
 		"invalidIssueMapping",
 		"missingIssueMapping",
 	],
+	"QP-COMPOSE-030": ["invalidDocumentation"],
 	"QP-DATA-003": ["invalidRelationReference"],
 	"QP-DATA-005": ["invalidOperator"],
 	"QP-DATA-008": ["orderFieldNotSelected"],

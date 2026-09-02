@@ -7,6 +7,18 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 	name: "tickets",
 	policy: ticketPolicy,
 	get: {
+		describe: {
+			summary: "Get one ticket through the Collection kernel",
+			description:
+				"Uses the same Policy-aware generated read available to named Operations.",
+			examples: [
+				{
+					input: {
+						key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131" },
+					},
+				},
+			],
+		},
 		select: {
 			id: true,
 			organizationId: true,

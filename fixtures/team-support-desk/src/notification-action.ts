@@ -57,6 +57,18 @@ export const notificationProvider = defineService({
 export const sendTicketSummary = defineAction({
 	name: "notification.sendTicketSummary",
 	network: true,
+	describe: {
+		summary: "Send a ticket summary notification",
+		description:
+			"Requests one externally delivered summary with an idempotent effect identity.",
+		examples: [
+			{
+				input: {
+					ticketId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131",
+				},
+			},
+		],
+	},
 	input: codec.object({ ticketId: codec.uuid() }),
 	output: codec.object({
 		effectId: codec.uuid(),

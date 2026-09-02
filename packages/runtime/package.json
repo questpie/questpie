@@ -5,6 +5,7 @@
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts",
+		"./codec": "./src/codec/index.ts",
 		"./bundle-core": "./src/bundle-core.ts",
 		"./bundle-core-types": "./src/bundle-core-types.d.ts",
 		"./bundle-realtime": "./src/bundle-realtime.ts"

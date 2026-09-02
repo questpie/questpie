@@ -9,7 +9,10 @@ export {
 	projectCollectionOperationAdapters,
 } from "./kernel";
 export { projectCollectionOperationResourceMetadata } from "./operation-resource";
-export { projectCollectionOperationWriteResources } from "./operation-write-resource";
+export {
+	projectCollectionOperationCodecs,
+	projectCollectionOperationWriteResources,
+} from "./operation-write-resource";
 export type {
 	CollectionOperationAdaptersV1,
 	CollectionOperationProgramsV1,

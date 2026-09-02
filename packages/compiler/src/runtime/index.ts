@@ -508,7 +508,9 @@ export function projectRuntimeBuild(
 	const inventory = Object.entries(input.files)
 		.filter(
 			([path]) =>
-				path !== "runtime-build.json" && path !== "internal/checksums.json",
+				path !== "runtime-build.json" &&
+				path !== "internal/checksums.json" &&
+				path !== "operation-documentation.json",
 		)
 		.map(([path, bytes]) => ({ path, digest: contentDigest(bytes) }))
 		.sort((left, right) => compareAscii(left.path, right.path));

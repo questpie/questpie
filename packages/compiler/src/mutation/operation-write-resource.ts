@@ -6,6 +6,7 @@ import {
 import { normalizeBoundPolicy } from "../relational";
 import type { NormalizedResource } from "../types";
 import type { CollectionOperationProgramsV1 } from "./operation-set-contract";
+import type { CollectionOperationProgramV1 } from "./operation-set-contract";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 type CodecValue = CollectionFieldCodecProjection;
@@ -104,6 +105,111 @@ function objectCodec(
 	return render(root, []);
 }
 
+function operationCodecs(
+	program: CollectionOperationProgramV1,
+	policy: ReturnType<typeof normalizeBoundPolicy>["program"],
+	fields: readonly FieldFact[],
+): Readonly<{ input: CodecValue; output: CodecValue }> | null {
+	if (program.member === "list") return null;
+	const requiredCaller = new Set(
+		program.requiredCallerInputFields.map(pathKey),
+	);
+	const caller = objectCodec(
+		program.callerInputFields,
+		fields,
+		new Set(
+			program.callerInputFields
+				.filter((path) => !requiredCaller.has(pathKey(path)))
+				.map(pathKey),
+		),
+	);
+	const selectedOptional = new Set(
+		(policy.fields?.selectedOutput ?? [])
+			.map(({ path }) => path)
+			.filter((path) =>
+				program.selectedFieldPaths.some(
+					(candidate) => pathKey(candidate) === pathKey(path),
+				),
+			)
+			.map(pathKey),
+	);
+	const selected = objectCodec(
+		program.selectedFieldPaths,
+		fields,
+		selectedOptional,
+	);
+	const output =
+		program.outputCardinality === "optionalOne"
+			? Object.freeze({ kind: "nullable" as const, codec: selected })
+			: selected;
+	if (program.member === "get" || program.member === "delete")
+		return Object.freeze({
+			input: Object.freeze({
+				kind: "object" as const,
+				properties: Object.freeze({
+					key: objectCodec(program.keyFields, fields, new Set()),
+				}),
+			}),
+			output,
+		});
+	const properties: Record<string, CodecValue> = {};
+	if (program.member === "create") properties.input = caller;
+	else {
+		properties.key = objectCodec(program.keyFields, fields, new Set());
+		properties.expected = Object.freeze({
+			kind: "optional",
+			codec: objectCodec(
+				fields.map(({ path }) => path),
+				fields,
+				new Set(fields.map(({ path }) => pathKey(path))),
+			),
+		});
+		properties.patch = Object.freeze({ kind: "optional", codec: caller });
+	}
+	return Object.freeze({
+		input: Object.freeze({
+			kind: "object" as const,
+			properties: Object.freeze(properties),
+		}),
+		output,
+	});
+}
+
+export function projectCollectionOperationCodecs(
+	input: Readonly<{
+		programs: CollectionOperationProgramsV1;
+		resources: readonly NormalizedResource[];
+		data: unknown;
+	}>,
+): ReadonlyMap<string, Readonly<{ input: CodecValue; output: CodecValue }>> {
+	const policies = new Map(
+		input.resources
+			.filter((resource) => resource.kind === "policy")
+			.map((resource) => {
+				const program = normalizeBoundPolicy(resource.value).program;
+				return [program.identity, program] as const;
+			}),
+	);
+	const result = new Map<
+		string,
+		Readonly<{ input: CodecValue; output: CodecValue }>
+	>();
+	for (const program of input.programs.operations) {
+		const policy = policies.get(program.policy);
+		if (!policy)
+			throw new TypeError(
+				`${program.identity} has no matching Collection Policy`,
+			);
+		const codecs = operationCodecs(
+			program,
+			policy,
+			fieldFacts(input.data, program.target),
+		);
+		if (codecs) result.set(program.identity, codecs);
+	}
+	return result;
+}
+
 /** Materializes Operation Set writes as ordinary framework-bound Mutations. */
 export function projectCollectionOperationWriteResources(
 	input: Readonly<{
@@ -125,6 +231,11 @@ export function projectCollectionOperationWriteResources(
 				return [program.identity, program] as const;
 			}),
 	);
+	const codecsByIdentity = projectCollectionOperationCodecs({
+		programs: input.programs,
+		resources: input.resources,
+		data: input.data,
+	});
 	const result: NormalizedResource[] = [];
 	for (const set of input.sets.sets) {
 		const setOrigin = input.origins.find(
@@ -153,48 +264,8 @@ export function projectCollectionOperationWriteResources(
 			const operationPolicy = policy?.operations[program.member];
 			if (!operationPolicy)
 				throw new TypeError(`${identity} has no matching Collection Policy`);
-			const fields = fieldFacts(input.data, program.target);
-			const requiredCaller = new Set(
-				program.requiredCallerInputFields.map(pathKey),
-			);
-			const caller = objectCodec(
-				program.callerInputFields,
-				fields,
-				new Set(
-					program.callerInputFields
-						.filter((path) => !requiredCaller.has(pathKey(path)))
-						.map(pathKey),
-				),
-			);
-			const properties: Record<string, CodecValue> = {};
-			if (program.member === "create") properties.input = caller;
-			else {
-				properties.key = objectCodec(program.keyFields, fields, new Set());
-				properties.expected = Object.freeze({
-					kind: "optional",
-					codec: objectCodec(
-						fields.map(({ path }) => path),
-						fields,
-						new Set(fields.map(({ path }) => pathKey(path))),
-					),
-				});
-				properties.patch = Object.freeze({ kind: "optional", codec: caller });
-			}
-			const selectedOptional = new Set(
-				(policy?.fields?.selectedOutput ?? [])
-					.map(({ path }) => path)
-					.filter((path) =>
-						program.selectedFieldPaths.some(
-							(candidate) => pathKey(candidate) === pathKey(path),
-						),
-					)
-					.map(pathKey),
-			);
-			const selected = objectCodec(
-				program.selectedFieldPaths,
-				fields,
-				selectedOptional,
-			);
+			const codecs = codecsByIdentity.get(identity);
+			if (!codecs) throw new TypeError(`missing ${identity} Operation codecs`);
 			const declaredErrors = Object.freeze(
 				Object.fromEntries(
 					((child.errors ?? []) as readonly unknown[]).map((candidate) => {
@@ -219,14 +290,8 @@ export function projectCollectionOperationWriteResources(
 					kind: "mutation",
 					name: identity.slice("mutation:".length),
 					contract: Object.freeze({
-						input: Object.freeze({
-							kind: "object",
-							properties: Object.freeze(properties),
-						}),
-						output:
-							program.outputCardinality === "optionalOne"
-								? Object.freeze({ kind: "nullable", codec: selected })
-								: selected,
+						input: codecs.input,
+						output: codecs.output,
 						declaredErrors,
 						issueMappings: Object.freeze({
 							...record(child.issueMappings ?? {}, `${identity} issueMappings`),

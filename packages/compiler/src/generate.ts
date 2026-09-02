@@ -499,7 +499,7 @@ export function renderAppContract(
 		resources,
 		mutationContract,
 	);
-	return `import type { Authority, Codec, CollectionIssueValue, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, DurableRetryDefinition, DurableRunAsDefinition, OperationErrorFactories, OperationErrorMap, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
+	return `import type { Authority, Codec, CollectionIssueValue, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, DurableRetryDefinition, DurableRunAsDefinition, OperationDescription, OperationErrorFactories, OperationErrorMap, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
 
@@ -591,7 +591,7 @@ type QueryDefinitionBase<Name extends keyof GeneratedQueries> = Readonly<{
 	readonly kind: "query";
 	readonly identity: \`query:\${Name & string}\`;
 	readonly name: Name;
-	readonly network: boolean;
+	readonly network: boolean; readonly describe?: OperationDescription<GeneratedQueries[Name]["input"], GeneratedQueries[Name]["output"]>;
 }>;
 
 type QueryHandler<Name extends keyof GeneratedQueries> = (input: Readonly<{
@@ -610,12 +610,12 @@ export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 		name: Name;
 		network?: boolean;
 		input: Codec<GeneratedQueries[Name]["input"]>;
-		output: Codec<GeneratedQueries[Name]["output"]>;
+		output: Codec<GeneratedQueries[Name]["output"]>; describe?: OperationDescription<GeneratedQueries[Name]["input"], GeneratedQueries[Name]["output"]>;
 		handler(input: Readonly<{
 			input: GeneratedQueries[Name]["input"];
 			ctx: QueryContext;
 		}>): GeneratedQueries[Name]["handlerOutput"] | Promise<GeneratedQueries[Name]["handlerOutput"]>;
-	}> | Readonly<{ name: Name; network?: boolean; query: unknown }>,
+	}> | Readonly<{ name: Name; network?: boolean; query: unknown; describe?: OperationDescription<GeneratedQueries[Name]["input"], GeneratedQueries[Name]["output"]> }>,
 ) => QueryDefinition<Name>;
 
 type EmptyDefinitionFactory = (definition: never) => never;
@@ -761,7 +761,7 @@ export function renderPackageContract(
 		.filter((name) => name !== "defineQuery")
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
-	return `import type { Codec, ServiceInstance } from "questpie";
+	return `import type { Codec, OperationDescription, ServiceInstance } from "questpie";
 import type * as PackageDefinitions from ${JSON.stringify(`${packageName}/questpie`)};
 
 export interface ReadCollection<Row, Key> {
@@ -784,7 +784,7 @@ export type PackageQueryFactory = <const Name extends keyof PackageQueries>(
 	definition: Readonly<{
 		name: Name;
 		input: Codec<PackageQueries[Name]["input"]>;
-		output: Codec<PackageQueries[Name]["output"]>;
+		output: Codec<PackageQueries[Name]["output"]>; describe?: OperationDescription<PackageQueries[Name]["input"], PackageQueries[Name]["output"]>;
 		handler(input: Readonly<{
 			input: PackageQueries[Name]["input"];
 			ctx: Readonly<{ data: PackageData; signal: AbortSignal }>;

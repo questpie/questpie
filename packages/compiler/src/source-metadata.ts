@@ -86,7 +86,7 @@ function resolveObjectLiteral(
 }
 
 const directSections = new Set(
-	"list get create update delete issueMappings".split(" "),
+	"list get create update delete describe issueMappings".split(" "),
 );
 const nestedSections = "|fields|issues|constraints|indexes|relations|";
 
@@ -124,6 +124,20 @@ export async function directExportMetadata(
 				const acceptanceSpans: Array<SourceSpan | null> = [];
 				const lifecycleSources: Record<string, LifecycleSource> = {};
 				if (ts.isCallExpression(declaration.initializer)) {
+					const factoryName = ts.isIdentifier(
+						declaration.initializer.expression,
+					)
+						? declaration.initializer.expression.text
+						: null;
+					const operationDefinition =
+						factoryName !== null &&
+						[
+							"defineQuery",
+							"defineMutation",
+							"defineAction",
+							"defineCollectionOperations",
+						].includes(factoryName);
+					const operationSet = factoryName === "defineCollectionOperations";
 					const [first, second] = declaration.initializer.arguments;
 					const definition =
 						first && ts.isObjectLiteralExpression(first)
@@ -135,8 +149,27 @@ export async function directExportMetadata(
 						for (const property of definition.properties) {
 							if (!ts.isPropertyAssignment(property)) continue;
 							const section = propertyName(property.name);
-							if (section && directSections.has(section))
+							if (
+								section &&
+								(directSections.has(section) || operationDefinition)
+							)
 								memberSpans[section] = sourceSpan(source, property);
+							if (section && operationSet) {
+								const operationMember = resolveObjectLiteral(
+									property.initializer,
+									initializers,
+								);
+								if (operationMember)
+									for (const member of operationMember.properties) {
+										if (!ts.isPropertyAssignment(member)) continue;
+										const name = propertyName(member.name);
+										if (name)
+											memberSpans[`${section}.${name}`] = sourceSpan(
+												source,
+												member,
+											);
+									}
+							}
 							const nestedKind =
 								section && nestedSections.includes(`|${section}|`)
 									? section === "indexes"

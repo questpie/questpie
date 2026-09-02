@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 import { CompilerDiagnosticError } from "../../packages/compiler/src/diagnostic";
 import {
@@ -93,6 +94,9 @@ describe("DOC-01 Operation Documentation compiler primitive", () => {
 		});
 		expect(empty.bytes.endsWith("\n")).toBe(true);
 		expect(empty.digest).toHaveLength(64);
+		expect(empty.digest).not.toBe(
+			createHash("sha256").update(empty.bytes).digest("hex"),
+		);
 
 		const query = source({
 			identity: "query:tickets.detail",
@@ -117,6 +121,11 @@ describe("DOC-01 Operation Documentation compiler primitive", () => {
 			"mutation:tickets.close",
 			"query:tickets.detail",
 		]);
+		expect(
+			compileOperationDocumentation([
+				described({ summary: "Close a currently open ticket" }),
+			]).digest,
+		).not.toBe(compileOperationDocumentation([source()]).digest);
 	});
 
 	test("covers Query, Mutation, Action, and all five Collection members", () => {
@@ -200,10 +209,21 @@ describe("DOC-01 Operation Documentation compiler primitive", () => {
 		} catch (error) {
 			expect(error).toBeInstanceOf(CompilerDiagnosticError);
 			expect(String(error)).not.toContain("do-not-disclose");
-			expect(JSON.stringify((error as CompilerDiagnosticError).details)).not.toContain(
-				"do-not-disclose",
-			);
+			expect(
+				JSON.stringify((error as CompilerDiagnosticError).details),
+			).not.toContain("do-not-disclose");
 		}
+		diagnostic(
+			() =>
+				compileOperationDocumentation([
+					described({
+						summary: "Close ticket",
+						examples: [{ input: { id }, output: { id, status: 42 } }],
+					}),
+				]),
+			"exampleCodecMismatch",
+			["describe", "examples", "0", "output"],
+		);
 	});
 
 	test("rejects runtime-minted cursors, unknown members, and oversized examples", () => {
@@ -211,6 +231,8 @@ describe("DOC-01 Operation Documentation compiler primitive", () => {
 			() =>
 				compileOperationDocumentation([
 					source({
+						identity: "query:tickets.page",
+						kind: "query",
 						input: { kind: "cursor" },
 						definition: {
 							name: "tickets.page",
