@@ -1259,6 +1259,13 @@ test("runs one canonical Query GET through the existing Operation executor", asy
 		{ headers },
 	);
 	expect((await app.fetch(credentialBeforeDecode)).status).toBe(401);
+	const removedOperationRoute = await app.fetch(
+		new Request("http://runtime.test/_questpie/operation", {
+			method: "POST",
+		}),
+	);
+	expect(removedOperationRoute.status).toBe(404);
+	expect(removedOperationRoute.headers.get("content-type")).toBeNull();
 	expect(handlerCalls).toBe(3);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
