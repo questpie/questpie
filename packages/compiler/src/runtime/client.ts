@@ -206,6 +206,8 @@ export interface GeneratedClient {
 	withContext(input: AppContextInput): GeneratedClientScope;
 }
 
+type FetchTransport = (request: Request) => Promise<Response>;
+
 export class CommittedResultUnavailable extends Error {
 	readonly name = "CommittedResultUnavailable" as const;
 	readonly code = "COMMITTED_RESULT_UNAVAILABLE" as const;
@@ -480,7 +482,7 @@ export function createClient(input: Readonly<{
 	readonly baseUrl: string;
 	readonly fetch?: typeof globalThis.fetch;
 }>): GeneratedClient {
-	const transport: typeof globalThis.fetch =
+	const transport: FetchTransport =
 		input.fetch ?? ((request) => globalThis.fetch(request));
 	const invoke = async <Result>(context: AppContextInput, operation: string, operationInput: unknown, options: CallOptions | ActionCallOptions = {}): Promise<Result> => {
 		const callId = options.callId ?? crypto.randomUUID();

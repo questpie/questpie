@@ -74,7 +74,7 @@ function identityHeader(value: string): string {
 	return encodeURIComponent(value);
 }
 async function invokeCanonicalQuery<Result>(input: Readonly<{
-	transport: typeof globalThis.fetch;
+	transport: FetchTransport;
 	baseUrl: string;
 	context: AppContextInput;
 	operation: string;
