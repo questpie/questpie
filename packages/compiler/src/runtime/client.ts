@@ -480,7 +480,8 @@ export function createClient(input: Readonly<{
 	readonly baseUrl: string;
 	readonly fetch?: typeof globalThis.fetch;
 }>): GeneratedClient {
-	const transport = input.fetch ?? globalThis.fetch.bind(globalThis);
+	const transport: FetchTransport =
+		input.fetch ?? ((request) => globalThis.fetch(request));
 	const invoke = async <Result>(context: AppContextInput, operation: string, operationInput: unknown, options: CallOptions | ActionCallOptions = {}): Promise<Result> => {
 		const callId = options.callId ?? crypto.randomUUID();
 		if (!isCallIdentity(callId)) protocolFailure();
