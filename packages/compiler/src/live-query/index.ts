@@ -243,6 +243,16 @@ function structuralSlots(
 			},
 		),
 	);
+	const defaultPolicies = new Map<string, JsonRecord>();
+	for (const program of policies.values()) {
+		if (program.attachment === undefined) continue;
+		const attachment = record(program.attachment, "Policy attachment");
+		if (attachment.kind !== "default") continue;
+		const target = String(program.target);
+		if (defaultPolicies.has(target))
+			throw new TypeError(`Collection ${target} has several default Policies`);
+		defaultPolicies.set(target, program);
+	}
 	const relations = new Map<string, JsonRecord>();
 	for (const collection of records(
 		input.dataProjection.collections,
@@ -267,23 +277,54 @@ function structuralSlots(
 			String(template.from),
 			...observed.collections,
 		]);
-		const relationIdentitySet = new Set<string>();
-		collectSelectionRelations(template.select, relationIdentitySet);
-		const relationIdentities = [...relationIdentitySet].sort(compareAscii);
-		for (const identity of relationIdentities) {
-			const relation = relations.get(identity);
-			if (!relation)
-				throw new TypeError(`Query references unknown ${identity}`);
-			collectionSet.add(String(relation.target));
+		let relatedPolicy = false;
+		let relatedTenant = false;
+		const relationSet = new Set<string>();
+		if (template.version === 2) {
+			const visit = (selection: readonly JsonRecord[]): void => {
+				for (const selected of selection) {
+					if (selected.kind === "field") continue;
+					const identity = String(selected.relation);
+					const relation = relations.get(identity);
+					if (!relation)
+						throw new TypeError(`Query references unknown ${identity}`);
+					const target =
+						selected.kind === "inverseList"
+							? String(selected.source)
+							: String(relation.target);
+					relationSet.add(identity);
+					collectionSet.add(target);
+					const targetPolicy = defaultPolicies.get(target);
+					if (!targetPolicy)
+						throw new TypeError(`Collection ${target} has no default Policy`);
+					const targetObserved = policyObservation(targetPolicy);
+					relatedPolicy = true;
+					relatedTenant = relatedTenant || targetObserved.tenant;
+					for (const collection of targetObserved.collections)
+						collectionSet.add(collection);
+					visit(records(selected.select, "nested Query selection"));
+				}
+			};
+			visit(records(template.select, "Query selection"));
+		} else {
+			collectSelectionRelations(template.select, relationSet);
+			for (const identity of relationSet) {
+				const relation = relations.get(identity);
+				if (!relation)
+					throw new TypeError(`Query references unknown ${identity}`);
+				collectionSet.add(String(relation.target));
+			}
 		}
+		const relationIdentities = [...relationSet].sort(compareAscii);
 		const tokens = ["collectionRange"];
 		if (records(template.order ?? [], "Query order").length > 0)
 			tokens.push("orderingBoundary");
 		if (template.page) tokens.push("pageSentinel");
-		if (observed.collections.length > 0) tokens.push("policyEvidencePoint");
+		if (observed.collections.length > 0 || relatedPolicy)
+			tokens.push("policyEvidencePoint");
 		if (relationIdentities.length > 0)
 			tokens.push("relationEndpoint", "relationMiss");
-		if (observed.tenant) tokens.push("tenantPartition");
+		if (observed.tenant || relatedTenant) tokens.push("tenantPartition");
 		return {
 			kind: "structuralQuery",
 			templateDigest: String(query.digest),
