@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { CompilerDiagnosticError } from "../../packages/compiler/src/diagnostic";
 import {
@@ -275,5 +277,52 @@ describe("DOC-01 Operation Documentation compiler primitive", () => {
 			"exampleLimitExceeded",
 			["describe", "examples"],
 		);
+	});
+
+	test("rejects authored compiler metadata and keeps one public mutation seam", () => {
+		diagnostic(
+			() =>
+				compileOperationDocumentation([
+					described(
+						{ summary: "Close ticket" },
+						{ definition: { ...source().definition, __questpie: {} } },
+					),
+				]),
+			"unexpectedOperationMember",
+			["mutation:tickets.close", "__questpie"],
+		);
+		diagnostic(
+			() =>
+				compileOperationDocumentation([
+					source({
+						identity: "action:tickets.close",
+						kind: "action",
+						definition: {
+							name: "tickets.close",
+							policy: {},
+							errors: {},
+							limits: {},
+							handler: () => undefined,
+							describe: { summary: "Close ticket" },
+							executableSlots: ["handler"],
+						},
+					}),
+				]),
+			"unexpectedOperationMember",
+			["action:tickets.close", "executableSlots"],
+		);
+
+		const implementation = readFileSync(
+			resolve(
+				import.meta.dir,
+				"../../packages/compiler/src/operation-documentation.ts",
+			),
+			"utf8",
+		);
+		expect(implementation).toContain('from "./mutation"');
+		expect(implementation).not.toContain(
+			'from "./mutation/operation-write-resource"',
+		);
+		expect(implementation).not.toContain("invalidOperationDocumentation");
 	});
 });

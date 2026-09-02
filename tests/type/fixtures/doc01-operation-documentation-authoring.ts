@@ -58,6 +58,8 @@ defineCollectionOperations(tickets, {
 	list: {
 		data: { kind: "dataQuery" } as never,
 		describe: { summary: "List tickets" },
+		// @ts-expect-error Collection list documentation members are closed.
+		descriptin: true,
 	},
 	get: {
 		select: { id: true },
@@ -71,6 +73,8 @@ defineCollectionOperations(tickets, {
 				},
 			],
 		},
+		// @ts-expect-error Collection get documentation members are closed.
+		descriptin: true,
 	},
 	create: {
 		input: ["id", "status"],
@@ -85,14 +89,20 @@ defineCollectionOperations(tickets, {
 				},
 			],
 		},
+		// @ts-expect-error Collection create documentation members are closed.
+		descriptin: true,
 	},
 	update: {
 		input: ["status"],
 		select: { id: true, status: true },
 		describe: { summary: "Update a ticket" },
+		// @ts-expect-error Collection update documentation members are closed.
+		descriptin: true,
 	},
 	delete: {
 		select: { id: true },
 		describe: { summary: "Delete a ticket" },
+		// @ts-expect-error Collection delete documentation members are closed.
+		descriptin: true,
 	},
 });

@@ -8,6 +8,8 @@ import {
 	CompilerDiagnosticError,
 } from "@questpie/compiler";
 
+import { digest } from "../../packages/compiler/src/canonical";
+
 setDefaultTimeout(90_000);
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
@@ -114,6 +116,9 @@ describe("DOC-01 compiler integration", () => {
 				({ path }: { path: string }) => path === "operation-documentation.json",
 			),
 		).toBe(true);
+		const startup = compilation.generatedFiles["internal/application.js"] ?? "";
+		expect(startup).toContain("runtimeBuild.inventory.map");
+		expect(startup).not.toContain("operation-documentation.json");
 	});
 
 	test("keeps client, wire, schema, fingerprint, and migrations independent", async () => {
@@ -243,6 +248,88 @@ export const auditEntry = defineQuery({
 			origin: { module: "src/questpie.ts" },
 			path: ["describe", "summary"],
 		});
+	});
+
+	test("emits identical application and Package bytes while installed-only prose is inert", async () => {
+		const definition = `
+import { codec } from "questpie";
+import { defineQuery } from "#questpie/app";
+
+export const parity = defineQuery({
+	name: "docs.parity",
+	input: codec.object({ id: codec.uuid() }),
+	output: codec.object({ id: codec.uuid() }),
+	describe: { summary: "Fetch one parity record", examples: [{ input: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131" } }] },
+	handler: ({ input }) => input,
+});
+`;
+		const applicationRoot = await fixtureCopy(
+			collaboration,
+			"application-parity",
+		);
+		await writeFile(
+			join(applicationRoot, "src/documentation-parity.ts"),
+			definition,
+		);
+		const application = await compileApplication({ applicationRoot });
+
+		const packageRoot = await fixtureCopy(collaboration, "package-byte-parity");
+		const packageSource = join(packageRoot, "packages/audit/src/questpie.ts");
+		await writeFile(
+			packageSource,
+			`${await readFile(packageSource, "utf8")}\n${definition.replace('from "#questpie/app"', 'from "#questpie/package"')}`,
+		);
+		const inventory = await expectDiagnostic(
+			() => compileApplication({ applicationRoot: packageRoot }),
+			"QP-COMPOSE-008",
+		);
+		const configPath = join(packageRoot, "questpie.json");
+		const configuration = JSON.parse(await readFile(configPath, "utf8"));
+		configuration.packages["@questpie/collaboration-audit"].inventoryDigest =
+			inventory.details.actual;
+		await writeFile(configPath, JSON.stringify(configuration, null, 2));
+		const activatedPackage = await compileApplication({
+			applicationRoot: packageRoot,
+		});
+		const applicationBytes =
+			application.generatedFiles["operation-documentation.json"] ?? "";
+		const packageBytes =
+			activatedPackage.generatedFiles["operation-documentation.json"] ?? "";
+		expect(packageBytes).toBe(applicationBytes);
+		expect(
+			digest("questpie-operation-documentation-v1", JSON.parse(packageBytes)),
+		).toBe(
+			digest(
+				"questpie-operation-documentation-v1",
+				JSON.parse(applicationBytes),
+			),
+		);
+
+		const installedRoot = await fixtureCopy(
+			collaboration,
+			"installed-only-inert",
+		);
+		const inertRoot = join(installedRoot, "packages/inert-documentation");
+		await cp(join(installedRoot, "packages/audit"), inertRoot, {
+			recursive: true,
+		});
+		const inertPackagePath = join(inertRoot, "package.json");
+		const inertPackage = JSON.parse(await readFile(inertPackagePath, "utf8"));
+		inertPackage.name = "@questpie/inert-documentation";
+		await writeFile(inertPackagePath, JSON.stringify(inertPackage, null, 2));
+		await writeFile(
+			join(inertRoot, "src/questpie.ts"),
+			`${definition.replace('from "#questpie/app"', 'from "#questpie/package"').replace("Fetch one parity record", " invalid installed prose")}`,
+		);
+		const baseline = await compileApplication({
+			applicationRoot: collaboration,
+		});
+		const installedOnly = await compileApplication({
+			applicationRoot: installedRoot,
+		});
+		expect(installedOnly.generatedFiles["operation-documentation.json"]).toBe(
+			baseline.generatedFiles["operation-documentation.json"],
+		);
 	});
 
 	test("reports the exact Origin of an unknown Collection member", async () => {
