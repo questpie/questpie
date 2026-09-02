@@ -106,6 +106,7 @@ test("canonical POST maps typed credential outcomes without disclosure", async (
 test("canonical POST deadline spans awaited phases and releases its signal owners", async () => {
 	const delayed = () => new Promise<void>((resolve) => setTimeout(resolve, 15));
 	for (const phase of ["credentials", "body", "executor"] as const) {
+		let credentialObservedAbort = false;
 		const request =
 			phase === "body"
 				? new Request(
@@ -138,8 +139,18 @@ test("canonical POST deadline spans awaited phases and releases its signal owner
 						"Questpie-Timeout-Milliseconds": "5",
 					});
 		const response = await canonicalPostTransport({
-			resolvePrincipal: async () => {
-				if (phase === "credentials") await delayed();
+			resolvePrincipal: async (_request, signal?: AbortSignal) => {
+				if (phase === "credentials") {
+					await Promise.race([
+						new Promise<void>((resolve) =>
+							signal?.addEventListener("abort", () => resolve(), {
+								once: true,
+							}),
+						),
+						delayed(),
+					]);
+					credentialObservedAbort = signal?.aborted ?? false;
+				}
 				return user;
 			},
 			executeMutation: async () => {
@@ -152,6 +163,7 @@ test("canonical POST deadline spans awaited phases and releases its signal owner
 			callId: `deadline-${phase}`,
 			error: { code: "DEADLINE_EXCEEDED", retryable: true },
 		});
+		if (phase === "credentials") expect(credentialObservedAbort).toBe(true);
 	}
 
 	const requestController = new AbortController();
