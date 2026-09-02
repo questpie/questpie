@@ -507,11 +507,9 @@ postgresTest(
 						);
 						if (response.status >= 400) {
 							const frame = (await response.clone().json()) as Readonly<{
-								kind?: unknown;
 								error?: unknown;
 							}>;
 							if (
-								(frame.kind === "declaredError" || frame.kind === "failure") &&
 								frame.error &&
 								typeof frame.error === "object" &&
 								"code" in frame.error
@@ -630,7 +628,9 @@ VALUES ($1, $2, $3, $4, $5)`,
 					}
 					const clientBytes = assertChannelUnavailable(clientError);
 					expect(clientBytes).toBe(directBytes);
-					expect(wireErrorBytes.get("CHANNEL_UNAVAILABLE")).toBe(directBytes);
+					expect(wireErrorBytes.get("CHANNEL_UNAVAILABLE")).toBe(
+						'{"code":"CHANNEL_UNAVAILABLE","payload":null}',
+					);
 				}
 				for (const secret of [
 					"collection:messages",
@@ -816,7 +816,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 				const clientLifecycleErrorBytes = ownErrorBytes(clientLifecycleError);
 				expect(clientLifecycleErrorBytes).toBe(directLifecycleErrorBytes);
 				expect(wireErrorBytes.get("PUBLICATION_REJECTED")).toBe(
-					directLifecycleErrorBytes,
+					'{"code":"PUBLICATION_REJECTED","payload":null}',
 				);
 				for (const secret of [
 					"collection:messageEvents",
@@ -951,7 +951,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 					disposals: 2,
 					receipt: `delivery:${effectId}`,
 				});
-				expect(transportCalls).toBe(5);
+				expect(transportCalls).toBe(7);
 				const maximumTimeoutEffectKey = "provider-maximum-timeout";
 				const directMaximumTimeout = await invokeDelivery(
 					{ effectKey: "domain-direct-maximum", message: "delivery-maximum" },
@@ -974,7 +974,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 				expect(networkMaximumTimeout.receipt).toBe(
 					directMaximumTimeout.receipt,
 				);
-				expect(transportCalls).toBe(6);
+				expect(transportCalls).toBe(8);
 				await expect(
 					networkClient.actions["delivery.publish"](
 						{
@@ -1004,7 +1004,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 						},
 					),
 				).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED" });
-				expect(transportCalls).toBe(8);
+				expect(transportCalls).toBe(10);
 
 				await expect(
 					invokeDelivery(
