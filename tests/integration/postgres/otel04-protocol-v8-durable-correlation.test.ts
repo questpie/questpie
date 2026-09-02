@@ -435,83 +435,75 @@ afterAll(async () => {
 	await sql?.close();
 });
 
-describe.skipIf(!sql)("OTEL-04 protocol-v8 Durable correlation", () => {
-	test.serial(
-		"cuts over only through the exact public CLI acknowledgement",
-		async () => {
-			const session = await sql!.reserve();
-			try {
-				const build = Bun.spawnSync(["bun", "run", "build"], {
-					cwd: resolve(repositoryRoot, "packages/questpie"),
+describe.skipIf(!sql).serial("OTEL-04 protocol-v8 Durable correlation", () => {
+	test("cuts over only through the exact public CLI acknowledgement", async () => {
+		const session = await sql!.reserve();
+		try {
+			const build = Bun.spawnSync(["bun", "run", "build"], {
+				cwd: resolve(repositoryRoot, "packages/questpie"),
+				stdout: "pipe",
+				stderr: "pipe",
+			});
+			expect(
+				build.exitCode,
+				build.stdout.toString() + build.stderr.toString(),
+			).toBe(0);
+			await installV7(session);
+			const invoke = (flag: string) =>
+				Bun.spawnSync(["bun", cli, "migration", "apply", flag], {
+					cwd: fixtureRoot,
+					env: { ...process.env, DATABASE_URL: postgresUrl() },
 					stdout: "pipe",
 					stderr: "pipe",
 				});
-				expect(
-					build.exitCode,
-					build.stdout.toString() + build.stderr.toString(),
-				).toBe(0);
-				await installV7(session);
-				const invoke = (flag: string) =>
-					Bun.spawnSync(["bun", cli, "migration", "apply", flag], {
-						cwd: fixtureRoot,
-						env: { ...process.env, DATABASE_URL: postgresUrl() },
-						stdout: "pipe",
-						stderr: "pipe",
-					});
-				const historical = invoke("--allow-non-rolling-protocol-v7");
-				expect(historical.exitCode).not.toBe(0);
-				await verifyInternalProtocolV7(session);
-				const accepted = invoke("--allow-non-rolling-protocol-v8");
-				expect(
-					accepted.exitCode,
-					accepted.stdout.toString() + accepted.stderr.toString(),
-				).toBe(0);
-				await verifyInternalProtocolV8(session);
-			} finally {
-				await session.unsafe("DROP SCHEMA IF EXISTS team_support_desk CASCADE");
-				session.release();
-			}
-		},
-		120_000,
-	);
+			const historical = invoke("--allow-non-rolling-protocol-v7");
+			expect(historical.exitCode).not.toBe(0);
+			await verifyInternalProtocolV7(session);
+			const accepted = invoke("--allow-non-rolling-protocol-v8");
+			expect(
+				accepted.exitCode,
+				accepted.stdout.toString() + accepted.stderr.toString(),
+			).toBe(0);
+			await verifyInternalProtocolV8(session);
+		} finally {
+			await session.unsafe("DROP SCHEMA IF EXISTS team_support_desk CASCADE");
+			session.release();
+		}
+	}, 120_000);
 
-	test.serial(
-		"cuts over the exact 21-table catalog and refuses both mixed directions",
-		async () => {
-			const session = await sql!.reserve();
-			const second = new SQL({ max: 1 });
-			try {
-				await installV7(session);
-				await expect(
-					ensureInternalProtocolV8(
-						session,
-						await databaseName(session),
-						await backendPid(session),
-						control,
-					),
-				).rejects.toMatchObject({
-					code: "QP-SCHEMA-020",
-					diagnosticClass: "destructiveAcknowledgementRequired",
-				});
-				await upgradeV8(session);
-				await verifyInternalProtocolV8(session);
-				await verifyInternalProtocolV8(second);
-				await expect(verifyInternalProtocolV7(session)).rejects.toMatchObject({
-					code: "QP-SCHEMA-023",
-				});
-				const [protocol] = await session<
-					{ version: number; checksum: string }[]
-				>`
+	test("cuts over the exact 21-table catalog and refuses both mixed directions", async () => {
+		const session = await sql!.reserve();
+		const second = new SQL({ max: 1 });
+		try {
+			await installV7(session);
+			await expect(
+				ensureInternalProtocolV8(
+					session,
+					await databaseName(session),
+					await backendPid(session),
+					control,
+				),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-020",
+				diagnosticClass: "destructiveAcknowledgementRequired",
+			});
+			await upgradeV8(session);
+			await verifyInternalProtocolV8(session);
+			await verifyInternalProtocolV8(second);
+			await expect(verifyInternalProtocolV7(session)).rejects.toMatchObject({
+				code: "QP-SCHEMA-023",
+			});
+			const [protocol] = await session<{ version: number; checksum: string }[]>`
 				select version, checksum from questpie_internal.protocol where singleton
 			`;
-				expect(protocol).toEqual({
-					version: 8,
-					checksum: internalProtocolV8Checksum,
-				});
-				expect(internalProtocolV8Catalog.tables).toHaveLength(21);
-				const [live] = await session<
-					{ tables: number; traceColumns: number; constraint: number }[]
-				>`
+			expect(protocol).toEqual({
+				version: 8,
+				checksum: internalProtocolV8Checksum,
+			});
+			expect(internalProtocolV8Catalog.tables).toHaveLength(21);
+			const [live] = await session<
+				{ tables: number; traceColumns: number; constraint: number }[]
+			>`
 				select
 				  (select count(*)::int from pg_catalog.pg_class c
 				   join pg_catalog.pg_namespace n on n.oid = c.relnamespace
@@ -523,113 +515,103 @@ describe.skipIf(!sql)("OTEL-04 protocol-v8 Durable correlation", () => {
 				   where connamespace = 'questpie_internal'::regnamespace
 				     and conname = 'durable_run_trace_context_complete') as constraint
 			`;
-				expect(live).toEqual({ tables: 21, traceColumns: 3, constraint: 1 });
-			} finally {
-				await second.close();
-				session.release();
-			}
-		},
-		120_000,
-	);
+			expect(live).toEqual({ tables: 21, traceColumns: 3, constraint: 1 });
+		} finally {
+			await second.close();
+			session.release();
+		}
+	}, 120_000);
 
-	test.serial(
-		"retains first Job and Reaction context across duplicate and rollback",
-		async () => {
-			const session = await sql!.reserve();
-			const database = runtimeDatabase();
+	test("retains first Job and Reaction context across duplicate and rollback", async () => {
+		const session = await sql!.reserve();
+		const database = runtimeDatabase();
+		try {
+			await upgradeV8(session);
+			const firstJob = trace(1);
+			const jobReceipt = await acceptJob(database, {
+				acceptedTrace: firstJob,
+				idempotencyKey: "job:first",
+			});
+			await acceptJob(database, {
+				acceptedTrace: trace(3),
+				idempotencyKey: "job:first",
+			});
+			expect(await storedTrace(session, jobReceipt.runId)).toEqual(
+				traceHex(firstJob),
+			);
+
+			const reactionDispatch = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6211";
+			const reactionRun = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6212";
+			const firstReaction = trace(5);
+			expect(
+				await insertReactionRun(database, {
+					dispatchId: reactionDispatch,
+					runId: reactionRun,
+					acceptedTrace: firstReaction,
+				}),
+			).toBe(1);
+			expect(
+				await insertReactionRun(database, {
+					dispatchId: reactionDispatch,
+					runId: reactionRun,
+					acceptedTrace: trace(7),
+					insertDispatch: false,
+				}),
+			).toBe(0);
+			expect(await storedTrace(session, reactionRun)).toEqual(
+				traceHex(firstReaction),
+			);
+
+			let rolledBackRun: string | undefined;
 			try {
-				await upgradeV8(session);
-				const firstJob = trace(1);
-				const jobReceipt = await acceptJob(database, {
-					acceptedTrace: firstJob,
-					idempotencyKey: "job:first",
-				});
 				await acceptJob(database, {
-					acceptedTrace: trace(3),
-					idempotencyKey: "job:first",
+					acceptedTrace: trace(9),
+					idempotencyKey: "job:rollback",
+					rollback: true,
 				});
-				expect(await storedTrace(session, jobReceipt.runId)).toEqual(
-					traceHex(firstJob),
-				);
-
-				const reactionDispatch = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6211";
-				const reactionRun = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6212";
-				const firstReaction = trace(5);
-				expect(
-					await insertReactionRun(database, {
-						dispatchId: reactionDispatch,
-						runId: reactionRun,
-						acceptedTrace: firstReaction,
-					}),
-				).toBe(1);
-				expect(
-					await insertReactionRun(database, {
-						dispatchId: reactionDispatch,
-						runId: reactionRun,
-						acceptedTrace: trace(7),
-						insertDispatch: false,
-					}),
-				).toBe(0);
-				expect(await storedTrace(session, reactionRun)).toEqual(
-					traceHex(firstReaction),
-				);
-
-				let rolledBackRun: string | undefined;
-				try {
-					await acceptJob(database, {
-						acceptedTrace: trace(9),
-						idempotencyKey: "job:rollback",
-						rollback: true,
-					});
-				} catch (error) {
-					const match =
-						error instanceof Error
-							? /^rollback:([0-9a-f-]{36})$/u.exec(error.message)
-							: null;
-					rolledBackRun = match?.[1];
-				}
-				expect(rolledBackRun).toBeDefined();
-				if (!rolledBackRun)
-					throw new TypeError(
-						"rolled-back Durable Run identity is unavailable",
-					);
-				expect(await storedTrace(session, rolledBackRun)).toBeNull();
-
-				for (const hostile of hostileTraceUpdates)
-					await expect(
-						database.transaction({
-							mode: { isolation: "readCommitted", access: "readWrite" },
-							use: async (transaction) => {
-								await mark(transaction);
-								await transaction.execute(hostile, jobReceipt.runId);
-							},
-						}),
-					).rejects.toMatchObject({ code: "constraint", phase: "statement" });
-				expect(await storedTrace(session, jobReceipt.runId)).toEqual(
-					traceHex(firstJob),
-				);
-			} finally {
-				await database.close({ deadlineAt: Date.now() + 5_000 });
-				session.release();
+			} catch (error) {
+				const match =
+					error instanceof Error
+						? /^rollback:([0-9a-f-]{36})$/u.exec(error.message)
+						: null;
+				rolledBackRun = match?.[1];
 			}
-		},
-		120_000,
-	);
+			expect(rolledBackRun).toBeDefined();
+			if (!rolledBackRun)
+				throw new TypeError("rolled-back Durable Run identity is unavailable");
+			expect(await storedTrace(session, rolledBackRun)).toBeNull();
 
-	test.serial(
-		"preserves null old rows and one link across retry, reclaim, prune, and complete-row restore",
-		async () => {
-			const session = await sql!.reserve();
-			const firstDatabase = runtimeDatabase();
-			const secondDatabase = runtimeDatabase();
-			try {
-				await installV7(session);
-				const oldDispatch = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6221";
-				const oldRun = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6222";
-				await session.begin(async (transaction) => {
-					await transaction`select set_config('questpie.durable_kernel', 'on', true)`;
-					await transaction.unsafe(
-						`INSERT INTO questpie_internal.durable_dispatches
+			for (const hostile of hostileTraceUpdates)
+				await expect(
+					database.transaction({
+						mode: { isolation: "readCommitted", access: "readWrite" },
+						use: async (transaction) => {
+							await mark(transaction);
+							await transaction.execute(hostile, jobReceipt.runId);
+						},
+					}),
+				).rejects.toMatchObject({ code: "constraint", phase: "statement" });
+			expect(await storedTrace(session, jobReceipt.runId)).toEqual(
+				traceHex(firstJob),
+			);
+		} finally {
+			await database.close({ deadlineAt: Date.now() + 5_000 });
+			session.release();
+		}
+	}, 120_000);
+
+	test("preserves null old rows and one link across retry, reclaim, prune, and complete-row restore", async () => {
+		const session = await sql!.reserve();
+		const firstDatabase = runtimeDatabase();
+		const secondDatabase = runtimeDatabase();
+		try {
+			await installV7(session);
+			const oldDispatch = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6221";
+			const oldRun = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6222";
+			await session.begin(async (transaction) => {
+				await transaction`select set_config('questpie.durable_kernel', 'on', true)`;
+				await transaction.unsafe(
+					`INSERT INTO questpie_internal.durable_dispatches
   (application_name, tenant_id, source_operation, principal_kind, principal_id,
    call_id, dispatch_slot, record_id, resource_kind, resource_identity,
    input_digest, payload_bytes, transaction_id, recorded_at, state)
@@ -637,10 +619,10 @@ VALUES ($1, $2, 'mutation:legacy', 'user', $3, 'call:legacy', 'created',
         $4::uuid, 'reaction', 'reaction:reports.created', $5,
         convert_to('{"report":"legacy"}', 'UTF8'), pg_current_xact_id(),
         transaction_timestamp(), 'accepted')`,
-						[application, tenantId, principalId, oldDispatch, "d".repeat(64)],
-					);
-					await transaction.unsafe(
-						`INSERT INTO questpie_internal.durable_runs
+					[application, tenantId, principalId, oldDispatch, "d".repeat(64)],
+				);
+				await transaction.unsafe(
+					`INSERT INTO questpie_internal.durable_runs
   (application_name, run_id, dispatch_id, resource_identity, semantic_version,
    tenant_id, principal_kind, principal_id, run_as, context_input_bytes,
    payload_bytes, retry_bytes, runtime_build_digest, executable_digest,
@@ -653,183 +635,178 @@ VALUES ($1, $2::uuid, $3::uuid, 'reaction:reports.created', 1, $4, 'user', $5,
         $6, $7, 'mutationDispatch', 'call:legacy', 'call:legacy', 'ready', 0,
         transaction_timestamp(), transaction_timestamp() + interval '1 day',
         false, 1, false, transaction_timestamp())`,
-						[
-							application,
-							oldRun,
-							oldDispatch,
-							tenantId,
-							principalId,
-							runtimeBuildDigest,
-							executableDigest,
-						],
-					);
-				});
-				await upgradeV8(session);
-				expect(await storedTrace(session, oldRun)).toEqual({
-					traceId: null,
-					spanId: null,
-					flags: null,
-				});
+					[
+						application,
+						oldRun,
+						oldDispatch,
+						tenantId,
+						principalId,
+						runtimeBuildDigest,
+						executableDigest,
+					],
+				);
+			});
+			await upgradeV8(session);
+			expect(await storedTrace(session, oldRun)).toEqual({
+				traceId: null,
+				spanId: null,
+				flags: null,
+			});
 
-				const linked = trace(11);
-				const receipt = await acceptJob(firstDatabase, {
-					acceptedTrace: linked,
-					idempotencyKey: "job:reclaim",
-				});
-				const firstClaim = createPostgresDatabaseDurableClaim({
-					database: firstDatabase,
-					application,
-					reactions,
-					jobs,
-					randomUUID: (() => {
-						const values = [
-							"018f5f6e-5f2c-7b41-a854-3d9a6b6b6231",
-							"018f5f6e-5f2c-7b41-a854-3d9a6b6b6232",
-							"018f5f6e-5f2c-7b41-a854-3d9a6b6b6235",
-							"018f5f6e-5f2c-7b41-a854-3d9a6b6b6236",
-						];
-						return () => values.shift()!;
-					})(),
-				});
-				const first = await firstClaim({
-					runId: receipt.runId,
-					workerId: "worker:v8-a",
-					leaseMilliseconds: 1_000,
-				});
-				if (first.status !== "claimed")
-					throw new TypeError("first claim failed");
-				expect(traceHex(first.claim.acceptanceTrace)).toEqual(traceHex(linked));
-				await session.begin(async (transaction) => {
-					await transaction`select set_config('questpie.durable_kernel', 'on', true)`;
-					await transaction`
+			const linked = trace(11);
+			const receipt = await acceptJob(firstDatabase, {
+				acceptedTrace: linked,
+				idempotencyKey: "job:reclaim",
+			});
+			const firstClaim = createPostgresDatabaseDurableClaim({
+				database: firstDatabase,
+				application,
+				reactions,
+				jobs,
+				randomUUID: (() => {
+					const values = [
+						"018f5f6e-5f2c-7b41-a854-3d9a6b6b6231",
+						"018f5f6e-5f2c-7b41-a854-3d9a6b6b6232",
+						"018f5f6e-5f2c-7b41-a854-3d9a6b6b6235",
+						"018f5f6e-5f2c-7b41-a854-3d9a6b6b6236",
+					];
+					return () => values.shift()!;
+				})(),
+			});
+			const first = await firstClaim({
+				runId: receipt.runId,
+				workerId: "worker:v8-a",
+				leaseMilliseconds: 1_000,
+			});
+			if (first.status !== "claimed") throw new TypeError("first claim failed");
+			expect(traceHex(first.claim.acceptanceTrace)).toEqual(traceHex(linked));
+			await session.begin(async (transaction) => {
+				await transaction`select set_config('questpie.durable_kernel', 'on', true)`;
+				await transaction`
 					update questpie_internal.durable_runs
 					set lease_expires_at = transaction_timestamp() - interval '1 second'
 					where application_name = ${application} and run_id = ${receipt.runId}::uuid
 				`;
-				});
-				const secondClaim = createPostgresDatabaseDurableClaim({
-					database: secondDatabase,
-					application,
-					reactions,
-					jobs,
-					randomUUID: (() => {
-						const values = [
-							"018f5f6e-5f2c-7b41-a854-3d9a6b6b6233",
-							"018f5f6e-5f2c-7b41-a854-3d9a6b6b6234",
-							"018f5f6e-5f2c-7b41-a854-3d9a6b6b6237",
-							"018f5f6e-5f2c-7b41-a854-3d9a6b6b6238",
-						];
-						return () => values.shift()!;
-					})(),
-				});
-				const second = await secondClaim({
-					runId: receipt.runId,
-					workerId: "worker:v8-b",
-					leaseMilliseconds: 1_000,
-				});
-				if (second.status !== "claimed") throw new TypeError("reclaim failed");
-				expect(second.claim.attemptNumber).toBe(2);
-				expect(second.claim.attemptId).not.toBe(first.claim.attemptId);
-				expect(traceHex(second.claim.acceptanceTrace)).toEqual(
-					traceHex(linked),
-				);
+			});
+			const secondClaim = createPostgresDatabaseDurableClaim({
+				database: secondDatabase,
+				application,
+				reactions,
+				jobs,
+				randomUUID: (() => {
+					const values = [
+						"018f5f6e-5f2c-7b41-a854-3d9a6b6b6233",
+						"018f5f6e-5f2c-7b41-a854-3d9a6b6b6234",
+						"018f5f6e-5f2c-7b41-a854-3d9a6b6b6237",
+						"018f5f6e-5f2c-7b41-a854-3d9a6b6b6238",
+					];
+					return () => values.shift()!;
+				})(),
+			});
+			const second = await secondClaim({
+				runId: receipt.runId,
+				workerId: "worker:v8-b",
+				leaseMilliseconds: 1_000,
+			});
+			if (second.status !== "claimed") throw new TypeError("reclaim failed");
+			expect(second.claim.attemptNumber).toBe(2);
+			expect(second.claim.attemptId).not.toBe(first.claim.attemptId);
+			expect(traceHex(second.claim.acceptanceTrace)).toEqual(traceHex(linked));
 
-				const retryReceipt = await acceptJob(firstDatabase, {
-					acceptedTrace: linked,
-					idempotencyKey: "job:retry",
-				});
-				const retryClaim = await firstClaim({
-					runId: retryReceipt.runId,
-					workerId: "worker:v8-retry-a",
-					leaseMilliseconds: 1_000,
-				});
-				if (retryClaim.status !== "claimed")
-					throw new TypeError("retry first claim failed");
-				const terminal = createPostgresDatabaseDurableTerminal({
-					database: firstDatabase,
-					application,
-					random: () => 0,
-				});
-				expect(
-					await terminal.fail(retryClaim.claim, { code: "HANDLER_FAILED" }),
-				).toMatchObject({ status: "applied", state: "delayed" });
-				const retrySecondClaim = await secondClaim({
-					runId: retryReceipt.runId,
-					workerId: "worker:v8-retry-b",
-					leaseMilliseconds: 1_000,
-				});
-				if (retrySecondClaim.status !== "claimed")
-					throw new TypeError("retry second claim failed");
-				expect(retrySecondClaim.claim.attemptNumber).toBe(2);
-				expect(traceHex(retrySecondClaim.claim.acceptanceTrace)).toEqual(
-					traceHex(linked),
-				);
+			const retryReceipt = await acceptJob(firstDatabase, {
+				acceptedTrace: linked,
+				idempotencyKey: "job:retry",
+			});
+			const retryClaim = await firstClaim({
+				runId: retryReceipt.runId,
+				workerId: "worker:v8-retry-a",
+				leaseMilliseconds: 1_000,
+			});
+			if (retryClaim.status !== "claimed")
+				throw new TypeError("retry first claim failed");
+			const terminal = createPostgresDatabaseDurableTerminal({
+				database: firstDatabase,
+				application,
+				random: () => 0,
+			});
+			expect(
+				await terminal.fail(retryClaim.claim, { code: "HANDLER_FAILED" }),
+			).toMatchObject({ status: "applied", state: "delayed" });
+			const retrySecondClaim = await secondClaim({
+				runId: retryReceipt.runId,
+				workerId: "worker:v8-retry-b",
+				leaseMilliseconds: 1_000,
+			});
+			if (retrySecondClaim.status !== "claimed")
+				throw new TypeError("retry second claim failed");
+			expect(retrySecondClaim.claim.attemptNumber).toBe(2);
+			expect(traceHex(retrySecondClaim.claim.acceptanceTrace)).toEqual(
+				traceHex(linked),
+			);
 
-				const starts: ObservationStartV1[] = [];
-				const observed = observation(null, starts).beginExecution({
-					entry: "worker",
-					kind: "execution",
-					principalKind: "user",
-					trace: { kind: "root" },
-				});
-				if (!observed) throw new TypeError("worker observation is unavailable");
-				const outcome = {
-					runId: receipt.runId,
+			const starts: ObservationStartV1[] = [];
+			const observed = observation(null, starts).beginExecution({
+				entry: "worker",
+				kind: "execution",
+				principalKind: "user",
+				trace: { kind: "root" },
+			});
+			if (!observed) throw new TypeError("worker observation is unavailable");
+			const outcome = {
+				runId: receipt.runId,
+				resource: second.claim.resource,
+				attemptNumber: 2,
+				failureCode: null,
+				outcome: "succeeded",
+			} as const satisfies DurableWorkerOutcome;
+			await runObservedDurableAttempt({
+				observation: observed.observation,
+				request: {
+					acceptanceTrace: second.claim.acceptanceTrace,
+					capability: "job",
+					attemptId: second.claim.attemptId,
+					attemptNumber: second.claim.attemptNumber,
+					queueDelayMilliseconds: second.claim.queueDelayMilliseconds,
+					contextInput: {},
+					dispatchId: second.claim.dispatchId,
+					principal: second.claim.principal,
 					resource: second.claim.resource,
-					attemptNumber: 2,
-					failureCode: null,
-					outcome: "succeeded",
-				} as const satisfies DurableWorkerOutcome;
-				await runObservedDurableAttempt({
-					observation: observed.observation,
-					request: {
-						acceptanceTrace: second.claim.acceptanceTrace,
-						capability: "job",
-						attemptId: second.claim.attemptId,
-						attemptNumber: second.claim.attemptNumber,
-						queueDelayMilliseconds: second.claim.queueDelayMilliseconds,
-						contextInput: {},
-						dispatchId: second.claim.dispatchId,
-						principal: second.claim.principal,
-						resource: second.claim.resource,
-						runId: second.claim.runId,
-						signal: new AbortController().signal,
-					},
-					use: async () => outcome,
-				});
-				expect(starts.find(({ kind }) => kind === "job.attempt")).toMatchObject(
-					{
-						trace: { kind: "root-with-links", links: [linked] },
-					},
-				);
+					runId: second.claim.runId,
+					signal: new AbortController().signal,
+				},
+				use: async () => outcome,
+			});
+			expect(starts.find(({ kind }) => kind === "job.attempt")).toMatchObject({
+				trace: { kind: "root-with-links", links: [linked] },
+			});
 
-				const before = await storedTrace(session, receipt.runId);
-				expect(before).not.toBeNull();
-				await session.begin(async (transaction) => {
-					await transaction`select set_config('questpie.durable_kernel', 'on', true)`;
-					await transaction`
+			const before = await storedTrace(session, receipt.runId);
+			expect(before).not.toBeNull();
+			await session.begin(async (transaction) => {
+				await transaction`select set_config('questpie.durable_kernel', 'on', true)`;
+				await transaction`
 					delete from questpie_internal.durable_attempts
 					where application_name = ${application} and run_id = ${receipt.runId}::uuid
 				`;
-				});
-				expect(await storedTrace(session, receipt.runId)).toEqual(before);
+			});
+			expect(await storedTrace(session, receipt.runId)).toEqual(before);
 
-				const backupReceipt = await acceptJob(firstDatabase, {
-					acceptedTrace: linked,
-					idempotencyKey: "job:backup",
-				});
-				const [backup] = await session<{ dispatchId: string; row: string }[]>`
+			const backupReceipt = await acceptJob(firstDatabase, {
+				acceptedTrace: linked,
+				idempotencyKey: "job:backup",
+			});
+			const [backup] = await session<{ dispatchId: string; row: string }[]>`
 				select dispatch_id::text as "dispatchId", row_to_json(r)::text as row
 				from questpie_internal.durable_runs r
 				where application_name = ${application}
 				  and run_id = ${backupReceipt.runId}::uuid
 			`;
-				if (!backup) throw new TypeError("Durable Run backup is unavailable");
-				const restoredDispatch = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6241";
-				const restoredRun = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6242";
-				await session.begin(async (transaction) => {
-					await transaction`select set_config('questpie.durable_kernel', 'on', true)`;
-					await transaction`
+			if (!backup) throw new TypeError("Durable Run backup is unavailable");
+			const restoredDispatch = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6241";
+			const restoredRun = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6242";
+			await session.begin(async (transaction) => {
+				await transaction`select set_config('questpie.durable_kernel', 'on', true)`;
+				await transaction`
 					insert into questpie_internal.durable_dispatches
 					  (application_name, tenant_id, source_operation, principal_kind,
 					   principal_id, call_id, dispatch_slot, record_id, resource_kind,
@@ -843,7 +820,7 @@ VALUES ($1, $2::uuid, $3::uuid, 'reaction:reports.created', 1, $4, 'user', $5,
 					where application_name = ${application}
 					  and record_id = ${backup.dispatchId}::uuid
 				`;
-					await transaction`INSERT INTO questpie_internal.durable_runs
+				await transaction`INSERT INTO questpie_internal.durable_runs
 SELECT (jsonb_populate_record(
   NULL::questpie_internal.durable_runs,
 	(${backup.row}::jsonb #>> '{}')::jsonb || jsonb_build_object(
@@ -851,28 +828,24 @@ SELECT (jsonb_populate_record(
 		'dispatch_id', ${restoredDispatch}::text
 	)
 )).*`;
-				});
-				const [restoredBackup] = await session<{ row: string }[]>`
+			});
+			const [restoredBackup] = await session<{ row: string }[]>`
 				select row_to_json(r)::text as row
 				from questpie_internal.durable_runs r
 				where application_name = ${application} and run_id = ${restoredRun}::uuid
 			`;
-				if (!restoredBackup)
-					throw new TypeError("restored Durable Run is unavailable");
-				expect(JSON.parse(restoredBackup.row)).toEqual({
-					...(JSON.parse(backup.row) as Record<string, unknown>),
-					run_id: restoredRun,
-					dispatch_id: restoredDispatch,
-				});
-				expect(await storedTrace(session, restoredRun)).toEqual(
-					traceHex(linked),
-				);
-			} finally {
-				await firstDatabase.close({ deadlineAt: Date.now() + 5_000 });
-				await secondDatabase.close({ deadlineAt: Date.now() + 5_000 });
-				session.release();
-			}
-		},
-		120_000,
-	);
+			if (!restoredBackup)
+				throw new TypeError("restored Durable Run is unavailable");
+			expect(JSON.parse(restoredBackup.row)).toEqual({
+				...(JSON.parse(backup.row) as Record<string, unknown>),
+				run_id: restoredRun,
+				dispatch_id: restoredDispatch,
+			});
+			expect(await storedTrace(session, restoredRun)).toEqual(traceHex(linked));
+		} finally {
+			await firstDatabase.close({ deadlineAt: Date.now() + 5_000 });
+			await secondDatabase.close({ deadlineAt: Date.now() + 5_000 });
+			session.release();
+		}
+	}, 120_000);
 });
