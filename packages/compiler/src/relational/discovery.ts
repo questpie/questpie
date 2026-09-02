@@ -20,11 +20,6 @@ const fieldCodec = (field) => {
   if (field.scalar === "timestamp") return { kind: "timestamp", withTimezone: field.options?.withTimezone === true };
   return { kind: field.scalar };
 };
-const queryParameterCodec = (codec) => {
-  if (codec.kind === "text") return { kind: "text", minLength: codec.minLength ?? null, maxLength: codec.maxLength ?? null, collation: "questpie.binary" };
-  if (codec.kind === "integer") return { kind: "integer", minimum: codec.minimum ?? null, maximum: codec.maximum ?? null };
-  return { kind: codec.kind };
-};
 const operationFieldCodec = (field) => {
   const codec = field.scalar === "timestamp" ? { kind: "timestamp" } : { kind: field.scalar };
   return field.nullable === true ? { kind: "nullable", codec } : codec;
@@ -356,17 +351,27 @@ function compileDataQuery(value) {
 	}
     return invalid();
   };
+  const parameterCodec = (parameter) => {
+    let codec = parameter.parameterKind === "list"
+      ? { kind: "array", items: parameter.itemCodec ?? { kind: parameter.itemKind }, maximum: parameter.maximumItems }
+      : parameter.parameterKind === "cursor"
+        ? { kind: "cursor" }
+        : parameter.codec ?? { kind: parameter.parameterKind, ...(parameter.minimum === undefined ? {} : { minimum: parameter.minimum }), ...(parameter.maximum === undefined ? {} : { maximum: parameter.maximum }) };
+    return parameter.nullable === true ? { kind: "nullable", codec } : codec;
+  };
+  const relationalParameterCodec = (parameter) => {
+    const operationCodec = parameterCodec(parameter);
+    const requiredCodec = operationCodec.kind === "nullable" ? operationCodec.codec : operationCodec;
+    const scalarCodec = requiredCodec.kind === "array" ? requiredCodec.items : requiredCodec;
+    return fieldCodec({ scalar: scalarCodec.kind, options: scalarCodec });
+  };
   const parameters = Object.entries(template.parameters).map(([name, parameter]) => {
     if (parameter.parameterKind === "cursor") return { kind: "cursor", name, nullable: true };
     if (parameter.parameterKind === "list") {
-      const codec = queryParameterCodec(parameter.itemCodec ?? { kind: parameter.itemKind });
+      const codec = relationalParameterCodec(parameter);
       return { kind: "list", name, codec, maximumItems: parameter.maximumItems, nullable: parameter.nullable === true, semantics: "set" };
     }
-    const codec = queryParameterCodec(parameter.codec ?? {
-      kind: parameter.parameterKind,
-      minimum: parameter.minimum,
-      maximum: parameter.maximum,
-    });
+    const codec = relationalParameterCodec(parameter);
     return { kind: "scalar", name, codec, nullable: parameter.nullable === true };
   });
   const selection = template.select({ fields, relations });
@@ -385,14 +390,6 @@ function compileDataQuery(value) {
     filter: template.where === null ? null : queryExpression(template.where({ fields, parameters: template.parameters })),
     order: order.map(({ field, direction, nulls }) => ({ field, direction, nulls })),
     page: { kind: "forwardCursor", first: parameterOperand(page.first), after: parameterOperand(page.after), uniqueConstraint: collectionIdentity(collection) + "/constraint:" + unique.name },
-  };
-  const parameterCodec = (parameter) => {
-    let codec = parameter.parameterKind === "list"
-      ? { kind: "array", items: parameter.itemCodec ?? { kind: parameter.itemKind }, maximum: parameter.maximumItems }
-      : parameter.parameterKind === "cursor"
-        ? { kind: "cursor" }
-        : parameter.codec ?? { kind: parameter.parameterKind, ...(parameter.minimum === undefined ? {} : { minimum: parameter.minimum }), ...(parameter.maximum === undefined ? {} : { maximum: parameter.maximum }) };
-    return parameter.nullable === true ? { kind: "nullable", codec } : codec;
   };
   const fieldForIdentity = (identity) => {
     for (const candidate of relationalCollections.values())

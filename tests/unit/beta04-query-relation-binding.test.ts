@@ -90,17 +90,15 @@ test("marks a conditionally disclosed nested Field optional in the Operation cod
 \t\tupdate:`,
 			),
 		);
-		for (const relativePath of ["src/tickets/queries.ts"]) {
-			const path = join(temporary, relativePath);
-			const querySource = await readFile(path, "utf8");
-			await writeFile(
-				path,
-				querySource.replaceAll(
-					"role: codec.text()",
-					"role: codec.optional(codec.text())",
-				),
-			);
-		}
+		const queryPath = join(temporary, "src/tickets/queries.ts");
+		const querySource = await readFile(queryPath, "utf8");
+		await writeFile(
+			queryPath,
+			querySource.replaceAll(
+				"role: codec.text()",
+				"role: codec.optional(codec.text())",
+			),
+		);
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
 		});
