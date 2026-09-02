@@ -849,11 +849,24 @@ WHERE call_id = ${editCallId}`;
 					const response = await app.fetch(new Request(request, { headers }));
 					if (response.status === 422) {
 						const frame = (await response.clone().json()) as Readonly<{
-							kind?: unknown;
+							callId?: unknown;
 							error?: unknown;
 						}>;
-						if (frame.kind === "declaredError")
-							lifecycleWireErrorBytes = JSON.stringify(frame.error);
+						if (
+							typeof frame.callId === "string" &&
+							typeof frame.error === "object" &&
+							frame.error !== null
+						) {
+							const error = frame.error as Readonly<{
+								code?: unknown;
+								payload?: unknown;
+							}>;
+							lifecycleWireErrorBytes = JSON.stringify({
+								code: error.code,
+								status: response.status,
+								payload: error.payload,
+							});
+						}
 					}
 					return response;
 				},
