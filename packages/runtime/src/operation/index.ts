@@ -51,8 +51,6 @@ export class DeclaredOperationError extends Error {
 }
 
 export type OperationFailureCode =
-	| "APPLICATION_MISMATCH"
-	| "CLIENT_OUTDATED"
 	| "DEADLINE_EXCEEDED"
 	| "INTERNAL"
 	| "NOT_FOUND"
@@ -66,7 +64,6 @@ export function operationFailureStatus(
 	if (code === "COMMITTED_RESULT_UNAVAILABLE") return 500;
 	if (code === "NOT_FOUND") return 404;
 	if (code === "PROTOCOL_UNSUPPORTED") return 400;
-	if (code === "APPLICATION_MISMATCH" || code === "CLIENT_OUTDATED") return 409;
 	if (code === "DEADLINE_EXCEEDED") return 408;
 	if (code === "RESOURCE_LIMIT") return 429;
 	if (code === "RUNTIME_UNAVAILABLE") return 503;

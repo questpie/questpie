@@ -1,7 +1,6 @@
 import { canonicalBytes, compareAscii } from "../canonical";
 import type { NormalizedResource } from "../types";
-import { renderClientPostHttp } from "./client-post-http";
-import { renderClientQueryHttp } from "./client-query-http";
+import { renderClientHttp } from "./client-http";
 import { renderClientRealtime } from "./client-realtime";
 import type { RealtimeWireContractV1 } from "./realtime-wire";
 
@@ -459,8 +458,7 @@ function immutableContext(input: AppContextInput): AppContextInput {
 	}
 	return context;
 }
-${renderClientQueryHttp(input)}
-${renderClientPostHttp(input)}
+${renderClientHttp(input)}
 
 export function createClient(input: Readonly<{
 	readonly baseUrl: string;

@@ -7,7 +7,6 @@ import {
 	createRuntimeApplication,
 	type ExecutionEventV1,
 } from "../../packages/runtime/src";
-import { OperationFailure } from "../../packages/runtime/src/operation";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
@@ -119,8 +118,6 @@ function runtimeArtifacts(
 					: 0,
 		),
 		failures: [
-			"APPLICATION_MISMATCH",
-			"CLIENT_OUTDATED",
 			"COMMITTED_RESULT_UNAVAILABLE",
 			"DEADLINE_EXCEEDED",
 			"INTERNAL",
@@ -128,6 +125,7 @@ function runtimeArtifacts(
 			"PROTOCOL_UNSUPPORTED",
 			"RESOURCE_LIMIT",
 			"RUNTIME_UNAVAILABLE",
+			"UNAUTHENTICATED",
 		],
 		limits: { requestBytes: 1_048_576, responseBytes: 1_048_576 },
 		principalSource: "ingressOutsideBody",
@@ -1062,7 +1060,7 @@ test("runs one canonical Query GET through the existing Operation executor", asy
 		queryExecutable(({ input }) => {
 			handlerCalls += 1;
 			const first = (input as Readonly<{ first: number }>).first;
-			if (first === 3) throw new OperationFailure("CLIENT_OUTDATED", true);
+			if (first === 3) throw new Error("private failure");
 			return { count: first };
 		}),
 	];

@@ -5,19 +5,14 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { renderClientContract } from "../../packages/compiler/src/runtime/client";
-
-const contextCodec = {
-	kind: "object",
-	properties: { tenantId: { kind: "uuid" } },
-} as const;
-const inputCodec = {
-	kind: "object",
-	properties: { value: { kind: "text", maxLength: 32 } },
-} as const;
-const outputCodec = {
-	kind: "object",
-	properties: { ok: { kind: "boolean" } },
-} as const;
+import {
+	http02ActionIdentity,
+	http02Context,
+	http02ContextCodec,
+	http02InputCodec,
+	http02MutationIdentity,
+	http02OutputCodec,
+} from "../support/http02-contract";
 
 test("generated Mutation and Action use exact canonical POST endpoints", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-http02-client-"));
@@ -31,24 +26,24 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 			renderClientContract(
 				[
 					{
-						identity: "mutation:messages.publish",
+						identity: http02MutationIdentity,
 						kind: "mutation",
 						name: "messages.publish",
 						contract: {
 							exposure: "network",
-							input: inputCodec,
-							output: outputCodec,
+							input: http02InputCodec,
+							output: http02OutputCodec,
 							declaredErrors: {},
 						},
 					},
 					{
-						identity: "action:delivery.send",
+						identity: http02ActionIdentity,
 						kind: "action",
 						name: "delivery.send",
 						contract: {
 							exposure: "network",
-							input: inputCodec,
-							output: outputCodec,
+							input: http02InputCodec,
+							output: http02OutputCodec,
 							declaredErrors: {},
 						},
 					},
@@ -57,7 +52,7 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
 					httpContractDigest: "2".repeat(64),
-					contextCodec,
+					contextCodec: http02ContextCodec,
 				},
 			),
 		);
@@ -114,7 +109,7 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 					);
 				},
 			})
-			.withContext({ tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" });
+			.withContext(http02Context);
 
 		await expect(
 			client.mutations["messages.publish"]!(
@@ -155,7 +150,7 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 			expect(request.method).toBe("POST");
 			expect(request.headers.get("content-type")).toBe("application/json");
 			expect(await request.clone().json()).toEqual({
-				context: { tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+				context: http02Context,
 				input: expect.objectContaining({ value: expect.any(String) }),
 			});
 		}

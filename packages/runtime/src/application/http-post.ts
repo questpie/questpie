@@ -11,70 +11,30 @@ import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
 	encodeDeclaredOperationError,
-	isOperationCallId,
 	OperationFailure,
 	type PreparedOperation,
 	readBoundedRequestBody,
 	type RuntimeOperationContract,
 } from "../operation";
+import {
+	decodeHttpIdentity as decodeIdentity,
+	decodeHttpTimeout as decodeTimeout,
+	exactHttpKeys as exactKeys,
+	httpFailure,
+	httpJsonResponse as response,
+	httpProtocolFailure as protocol,
+	httpRecord as record,
+	readHttpHeader as header,
+} from "./http-carrier";
 
-const JSON_MEDIA_TYPE = "application/json; charset=utf-8";
 const MUTATION_PREFIX = "/_questpie/mutation/";
 const ACTION_PREFIX = "/_questpie/action/";
-
-type RecordValue = Readonly<Record<string, unknown>>;
-
-function protocol(): never {
-	throw new OperationFailure("PROTOCOL_UNSUPPORTED");
-}
-
-function record(value: unknown): RecordValue {
-	if (!value || typeof value !== "object" || Array.isArray(value)) protocol();
-	return value as RecordValue;
-}
-
-function exactKeys(value: RecordValue, expected: readonly string[]): void {
-	const actual = Object.keys(value).sort();
-	const sorted = [...expected].sort();
-	if (
-		actual.length !== sorted.length ||
-		actual.some((key, index) => key !== sorted[index])
-	)
-		protocol();
-}
 
 function contentType(value: string | null): boolean {
 	return (
 		value !== null &&
 		/^application\/json(?:\s*;\s*charset\s*=\s*utf-8)?$/iu.test(value)
 	);
-}
-
-function header(request: Request, name: string): string | null {
-	const value = request.headers.get(name);
-	if (value?.includes(",")) protocol();
-	return value;
-}
-
-function decodeIdentity(value: string): string {
-	if (value.includes("+") || /%(?![0-9A-F]{2})/u.test(value)) protocol();
-	let decoded: string;
-	try {
-		decoded = decodeURIComponent(value);
-	} catch {
-		return protocol();
-	}
-	if (encodeURIComponent(decoded) !== value || !isOperationCallId(decoded))
-		protocol();
-	return decoded;
-}
-
-function decodeTimeout(value: string | null): number | undefined {
-	if (value === null) return undefined;
-	if (!/^[1-9][0-9]*$/u.test(value)) protocol();
-	const parsed = Number(value);
-	if (!Number.isSafeInteger(parsed)) protocol();
-	return parsed;
 }
 
 function parseJsonWithoutDuplicateKeys(source: string): unknown {
@@ -159,55 +119,8 @@ function parseJsonWithoutDuplicateKeys(source: string): unknown {
 	return JSON.parse(source) as unknown;
 }
 
-function canonicalFailureCode(code: string): string {
-	return [
-		"DEADLINE_EXCEEDED",
-		"INTERNAL",
-		"NOT_FOUND",
-		"PROTOCOL_UNSUPPORTED",
-		"RESOURCE_LIMIT",
-		"RUNTIME_UNAVAILABLE",
-		"UNAUTHENTICATED",
-	].includes(code)
-		? code
-		: "INTERNAL";
-}
-
-function failureStatus(code: string): number {
-	if (code === "UNAUTHENTICATED") return 401;
-	if (code === "NOT_FOUND") return 404;
-	if (code === "DEADLINE_EXCEEDED") return 408;
-	if (code === "RESOURCE_LIMIT") return 429;
-	if (code === "RUNTIME_UNAVAILABLE") return 503;
-	if (code === "PROTOCOL_UNSUPPORTED") return 400;
-	return 500;
-}
-
-function response(body: unknown, status: number): Response {
-	return new Response(JSON.stringify(body), {
-		status,
-		headers: { "content-type": JSON_MEDIA_TYPE },
-	});
-}
-
 function failure(code: string, callId?: string, retryable?: boolean): Response {
-	const canonicalCode = canonicalFailureCode(code);
-	return response(
-		{
-			...(callId === undefined ? {} : { callId }),
-			error: {
-				code: canonicalCode,
-				retryable:
-					retryable ??
-					[
-						"DEADLINE_EXCEEDED",
-						"RESOURCE_LIMIT",
-						"RUNTIME_UNAVAILABLE",
-					].includes(canonicalCode),
-			},
-		},
-		failureStatus(canonicalCode),
-	);
+	return httpFailure(code, { callId, retryable });
 }
 
 export function createCanonicalPostHttp<ContextInput, View>(

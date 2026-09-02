@@ -9,26 +9,22 @@ import {
 import {
 	DeclaredOperationError,
 	encodeDeclaredOperationError,
-	isOperationCallId,
 	OperationFailure,
 	type PreparedOperation,
 	type RuntimeOperationContract,
 } from "../operation";
+import {
+	decodeHttpIdentity as decodeIdentity,
+	decodeHttpTimeout as decodeTimeout,
+	httpFailure,
+	httpJsonResponse,
+	httpProtocolFailure as protocol,
+	httpRecord as record,
+	readHttpHeader as header,
+} from "./http-carrier";
 
 const QUERY_PREFIX = "/_questpie/query/";
-const JSON_MEDIA_TYPE = "application/json; charset=utf-8";
 const QUERY_CACHE_CONTROL = "private, no-store";
-
-type RecordValue = Readonly<Record<string, unknown>>;
-
-function protocol(): never {
-	throw new OperationFailure("PROTOCOL_UNSUPPORTED");
-}
-
-function record(value: unknown): RecordValue {
-	if (!value || typeof value !== "object" || Array.isArray(value)) protocol();
-	return value as RecordValue;
-}
 
 function unwrap(codec: RuntimeCodec): RuntimeCodec {
 	return codec.kind === "optional" || codec.kind === "nullable"
@@ -153,33 +149,6 @@ function decodeQuery(codec: RuntimeCodec, source: string): unknown {
 	return decoded;
 }
 
-function header(request: Request, name: string): string | null {
-	const value = request.headers.get(name);
-	if (value?.includes(",")) protocol();
-	return value;
-}
-
-function decodeIdentity(value: string): string {
-	if (value.includes("+") || /%(?![0-9A-F]{2})/u.test(value)) protocol();
-	let decoded: string;
-	try {
-		decoded = decodeURIComponent(value);
-	} catch {
-		return protocol();
-	}
-	if (encodeURIComponent(decoded) !== value || !isOperationCallId(decoded))
-		protocol();
-	return decoded;
-}
-
-function decodeTimeout(value: string | null): number | undefined {
-	if (value === null) return undefined;
-	if (!/^[1-9][0-9]*$/u.test(value)) protocol();
-	const parsed = Number(value);
-	if (!Number.isSafeInteger(parsed)) protocol();
-	return parsed;
-}
-
 function decodeContext(codec: RuntimeCodec, value: string | null): unknown {
 	if (value === null) return decodeRuntimeCodec(codec, {});
 	if (!/^[A-Za-z0-9_-]+$/u.test(value)) protocol();
@@ -199,55 +168,11 @@ function decodeContext(codec: RuntimeCodec, value: string | null): unknown {
 }
 
 function queryResponse(body: unknown, status: number): Response {
-	return new Response(JSON.stringify(body), {
-		status,
-		headers: {
-			"cache-control": QUERY_CACHE_CONTROL,
-			"content-type": JSON_MEDIA_TYPE,
-		},
-	});
-}
-
-function failureStatus(code: string): number {
-	if (code === "UNAUTHENTICATED") return 401;
-	if (code === "NOT_FOUND") return 404;
-	if (code === "DEADLINE_EXCEEDED") return 408;
-	if (code === "RESOURCE_LIMIT") return 429;
-	if (code === "RUNTIME_UNAVAILABLE") return 503;
-	if (code === "PROTOCOL_UNSUPPORTED") return 400;
-	return 500;
-}
-
-function canonicalFailureCode(code: string): string {
-	return [
-		"DEADLINE_EXCEEDED",
-		"INTERNAL",
-		"NOT_FOUND",
-		"PROTOCOL_UNSUPPORTED",
-		"RESOURCE_LIMIT",
-		"RUNTIME_UNAVAILABLE",
-		"UNAUTHENTICATED",
-	].includes(code)
-		? code
-		: "INTERNAL";
+	return httpJsonResponse(body, status, QUERY_CACHE_CONTROL);
 }
 
 function failure(code: string, callId?: string): Response {
-	const canonicalCode = canonicalFailureCode(code);
-	return queryResponse(
-		{
-			...(callId === undefined ? {} : { callId }),
-			error: {
-				code: canonicalCode,
-				retryable: [
-					"DEADLINE_EXCEEDED",
-					"RESOURCE_LIMIT",
-					"RUNTIME_UNAVAILABLE",
-				].includes(canonicalCode),
-			},
-		},
-		failureStatus(canonicalCode),
-	);
+	return httpFailure(code, { cacheControl: QUERY_CACHE_CONTROL, callId });
 }
 
 export function createCanonicalQueryHttp<ContextInput, View>(

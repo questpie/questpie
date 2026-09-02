@@ -1,0 +1,66 @@
+/** Renders the shared canonical HTTP response decoder for generated clients. */
+export function renderClientHttpResponse(): string {
+	return String.raw`
+const canonicalFailures: WireRecord = Object.freeze({
+	DEADLINE_EXCEEDED: Object.freeze({ status: 408, retryable: true }),
+	INTERNAL: Object.freeze({ status: 500, retryable: false }),
+	NOT_FOUND: Object.freeze({ status: 404, retryable: false }),
+	PROTOCOL_UNSUPPORTED: Object.freeze({ status: 400, retryable: false }),
+	RESOURCE_LIMIT: Object.freeze({ status: 429, retryable: true }),
+	RUNTIME_UNAVAILABLE: Object.freeze({ status: 503, retryable: true }),
+	UNAUTHENTICATED: Object.freeze({ status: 401, retryable: false }),
+});
+function decodeCanonicalHttpResponse<Result>(input: Readonly<{
+	response: Response;
+	frame: WireRecord;
+	operation: string;
+	callId: string;
+	kind: "query" | "mutation" | "action";
+}>): Result {
+	if (Object.hasOwn(input.frame, "result")) {
+		exactKeys(input.frame, ["callId", "result"]);
+		if (input.response.status !== 200 || input.frame.callId !== input.callId) return protocolFailure();
+		return decode(outputCodecs[input.operation], input.frame.result) as Result;
+	}
+	const correlated = Object.hasOwn(input.frame, "callId");
+	if (correlated) {
+		exactKeys(input.frame, ["callId", "error"]);
+		if (input.frame.callId !== input.callId) return protocolFailure();
+	} else exactKeys(input.frame, ["error"]);
+	const detail = wireRecord(input.frame.error);
+	if (detail.code === "COMMITTED_RESULT_UNAVAILABLE") {
+		if (input.kind !== "mutation" || !correlated) return protocolFailure();
+		exactKeys(detail, ["code", "retryable", "transactionId"]);
+		if (detail.retryable !== true || input.response.status !== 500 || !isTransactionIdentity(detail.transactionId)) return protocolFailure();
+		throw new CommittedResultUnavailable(input.callId, detail.transactionId);
+	}
+	if (detail.code === "ACTION_OUTCOME_AMBIGUOUS") {
+		if (input.kind !== "action" || !correlated) return protocolFailure();
+		exactKeys(detail, ["code", "retryable"]);
+		if (detail.retryable !== false || input.response.status !== 500) return protocolFailure();
+		throw new ActionOutcomeAmbiguous(input.callId);
+	}
+	if (detail.code === "RESOURCE_LIMIT" && input.kind === "action" && correlated) {
+		exactKeys(detail, ["code", "retryable"]);
+		if (detail.retryable !== false || input.response.status !== 429) return protocolFailure();
+		throw publicError(detail);
+	}
+	if (Object.hasOwn(detail, "payload")) {
+		if (!correlated) return protocolFailure();
+		exactKeys(detail, ["code", "payload"]);
+		if (typeof detail.code !== "string") return protocolFailure();
+		const allowedErrors = declaredErrorContracts[input.operation];
+		if (!Array.isArray(allowedErrors)) return protocolFailure();
+		const contract = allowedErrors.map(wireRecord).find((candidate) => candidate.code === detail.code);
+		if (!contract || input.response.status !== contract.status) return protocolFailure();
+		const payload = contract.payload === null ? detail.payload === null ? null : protocolFailure() : decode(contract.payload, detail.payload);
+		throw publicError({ code: detail.code, status: contract.status, payload });
+	}
+	exactKeys(detail, ["code", "retryable"]);
+	if (typeof detail.code !== "string" || typeof detail.retryable !== "boolean") return protocolFailure();
+	const failureContract = wireRecord(canonicalFailures[detail.code]);
+	if (input.response.status !== failureContract.status || detail.retryable !== failureContract.retryable) return protocolFailure();
+	throw publicError(detail);
+}
+`;
+}

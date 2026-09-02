@@ -315,8 +315,6 @@ function decodeHttpContract(value: unknown): OperationHttpContractV1 {
 	if (
 		JSON.stringify(http.failures) !==
 		JSON.stringify([
-			"APPLICATION_MISMATCH",
-			"CLIENT_OUTDATED",
 			"COMMITTED_RESULT_UNAVAILABLE",
 			"DEADLINE_EXCEEDED",
 			"INTERNAL",
@@ -324,6 +322,7 @@ function decodeHttpContract(value: unknown): OperationHttpContractV1 {
 			"PROTOCOL_UNSUPPORTED",
 			"RESOURCE_LIMIT",
 			"RUNTIME_UNAVAILABLE",
+			"UNAUTHENTICATED",
 		])
 	)
 		fail("operation HTTP failures are invalid");

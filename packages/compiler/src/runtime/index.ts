@@ -312,8 +312,6 @@ export function projectRuntimeContract(
 		application,
 		operations,
 		failures: [
-			"APPLICATION_MISMATCH",
-			"CLIENT_OUTDATED",
 			"COMMITTED_RESULT_UNAVAILABLE",
 			"DEADLINE_EXCEEDED",
 			"INTERNAL",
@@ -321,6 +319,7 @@ export function projectRuntimeContract(
 			"PROTOCOL_UNSUPPORTED",
 			"RESOURCE_LIMIT",
 			"RUNTIME_UNAVAILABLE",
+			"UNAUTHENTICATED",
 		],
 		limits: { requestBytes: 1_048_576, responseBytes: 1_048_576 },
 		principalSource: "ingressOutsideBody",

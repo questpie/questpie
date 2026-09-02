@@ -5,39 +5,32 @@ import { principal } from "questpie";
 import { RuntimeActionPostHandlerResourceLimit } from "../../packages/runtime/src/action";
 import { createCanonicalPostHttp } from "../../packages/runtime/src/application/http-post";
 import { CommittedResultUnavailable } from "../../packages/runtime/src/operation";
+import {
+	http02ActionIdentity,
+	http02Context as context,
+	http02ContextCodec,
+	http02InputCodec,
+	http02MutationIdentity,
+	http02OutputCodec,
+} from "../support/http02-contract";
 
-const contextCodec = {
-	kind: "object",
-	properties: { tenantId: { kind: "uuid" } },
-} as const;
-const valueCodec = {
-	kind: "object",
-	properties: { value: { kind: "text", maxLength: 32 } },
-} as const;
-const outputCodec = {
-	kind: "object",
-	properties: { ok: { kind: "boolean" } },
-} as const;
 const operations = [
 	{
-		identity: "mutation:messages.publish",
-		input: valueCodec,
-		output: outputCodec,
+		identity: http02MutationIdentity,
+		input: http02InputCodec,
+		output: http02OutputCodec,
 		declaredErrors: [],
 	},
 	{
-		identity: "action:delivery.send",
-		input: valueCodec,
-		output: outputCodec,
+		identity: http02ActionIdentity,
+		input: http02InputCodec,
+		output: http02OutputCodec,
 		declaredErrors: [],
 	},
 ] as const;
 const user = principal.user({
 	id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
 });
-const context = {
-	tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
-};
 
 function post(
 	path: string,
@@ -60,14 +53,14 @@ test("canonical POST decodes after credentials and preserves kind identities", a
 		httpContractDigest: "2".repeat(64),
 		maximumRequestBytes: 4096,
 		maximumResponseBytes: 4096,
-		contextCodec: contextCodec as never,
+		contextCodec: http02ContextCodec as never,
 		operations: operations as never,
 		prepare: (identity, value) =>
 			({
 				declaredErrors: [],
 				input: value,
-				inputCodec: valueCodec,
-				output: outputCodec,
+				inputCodec: http02InputCodec,
+				output: http02OutputCodec,
 				binding: { identity, kind: "mutation" },
 			}) as never,
 		resolvePrincipal: async () => (authenticated ? user : null),
