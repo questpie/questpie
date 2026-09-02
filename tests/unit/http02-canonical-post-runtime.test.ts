@@ -5,9 +5,9 @@ import { principal } from "questpie";
 import { RuntimeActionPostHandlerResourceLimit } from "../../packages/runtime/src/action";
 import { createCanonicalPostHttp } from "../../packages/runtime/src/application/http-post";
 import {
-	canonicalOperationFailures,
 	CommittedResultUnavailable,
-	operationFailureStatus,
+	DeclaredOperationError,
+	OperationFailure,
 } from "../../packages/runtime/src/operation";
 import {
 	http02ActionIdentity,
@@ -36,22 +36,6 @@ const user = principal.user({
 	id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
 });
 
-test("one canonical ordinary failure catalogue owns HTTP status and retryability", () => {
-	expect(canonicalOperationFailures).toEqual({
-		DEADLINE_EXCEEDED: { retryable: true, status: 408 },
-		INTERNAL: { retryable: false, status: 500 },
-		NOT_FOUND: { retryable: false, status: 404 },
-		PROTOCOL_UNSUPPORTED: { retryable: false, status: 400 },
-		RESOURCE_LIMIT: { retryable: true, status: 429 },
-		RUNTIME_UNAVAILABLE: { retryable: true, status: 503 },
-		UNAUTHENTICATED: { retryable: false, status: 401 },
-	});
-	expect(operationFailureStatus("UNAUTHENTICATED")).toBe(401);
-	expect(Object.isFrozen(canonicalOperationFailures)).toBe(true);
-	for (const contract of Object.values(canonicalOperationFailures))
-		expect(Object.isFrozen(contract)).toBe(true);
-});
-
 function post(
 	path: string,
 	headers: Readonly<Record<string, string>>,
@@ -63,6 +47,202 @@ function post(
 		body,
 	});
 }
+
+function canonicalPostTransport(
+	overrides: Partial<Parameters<typeof createCanonicalPostHttp>[0]> = {},
+) {
+	return createCanonicalPostHttp({
+		application: "application:test",
+		clientContractDigest: "1".repeat(64),
+		httpContractDigest: "2".repeat(64),
+		maximumRequestBytes: 4096,
+		maximumResponseBytes: 4096,
+		contextCodec: http02ContextCodec as never,
+		operations: operations as never,
+		prepare: (identity, value) =>
+			({
+				declaredErrors: [],
+				input: value,
+				inputCodec: http02InputCodec,
+				output: http02OutputCodec,
+				binding: { identity, kind: "mutation" },
+			}) as never,
+		resolvePrincipal: async () => user,
+		executeMutation: async () => ({ ok: true }),
+		executeAction: async () => ({ ok: true }),
+		now: () => Date.now(),
+		...overrides,
+	} as never);
+}
+
+test("canonical POST maps typed credential outcomes without disclosure", async () => {
+	for (const [error, status, code, retryable] of [
+		[new OperationFailure("UNAUTHENTICATED"), 401, "UNAUTHENTICATED", false],
+		[
+			new OperationFailure("CREDENTIALS_UNAVAILABLE" as never, true),
+			503,
+			"RUNTIME_UNAVAILABLE",
+			true,
+		],
+		[new Error("credential secret"), 500, "INTERNAL", false],
+	] as const) {
+		const response = await canonicalPostTransport({
+			resolvePrincipal: async () => {
+				throw error;
+			},
+		}).fetch(
+			post("/_questpie/mutation/messages.publish", {
+				"Idempotency-Key": "credential-call",
+			}),
+		);
+		expect(response?.status).toBe(status);
+		expect(await response?.json()).toEqual({
+			callId: "credential-call",
+			error: { code, retryable },
+		});
+	}
+});
+
+test("canonical POST deadline spans awaited phases and releases its signal owners", async () => {
+	const delayed = () => new Promise<void>((resolve) => setTimeout(resolve, 15));
+	for (const phase of ["credentials", "body", "executor"] as const) {
+		const request =
+			phase === "body"
+				? new Request(
+						"https://runtime.test/_questpie/mutation/messages.publish",
+						{
+							method: "POST",
+							headers: {
+								"content-type": "application/json",
+								"Idempotency-Key": `deadline-${phase}`,
+								"Questpie-Timeout-Milliseconds": "5",
+							},
+							body: new ReadableStream<Uint8Array>({
+								async start(controller) {
+									await delayed();
+									controller.enqueue(
+										new TextEncoder().encode(
+											JSON.stringify({
+												context,
+												input: { value: "accepted" },
+											}),
+										),
+									);
+									controller.close();
+								},
+							}),
+						},
+					)
+				: post("/_questpie/mutation/messages.publish", {
+						"Idempotency-Key": `deadline-${phase}`,
+						"Questpie-Timeout-Milliseconds": "5",
+					});
+		const response = await canonicalPostTransport({
+			resolvePrincipal: async () => {
+				if (phase === "credentials") await delayed();
+				return user;
+			},
+			executeMutation: async () => {
+				if (phase === "executor") await delayed();
+				return { ok: true };
+			},
+		}).fetch(request);
+		expect(response?.status).toBe(408);
+		expect(await response?.json()).toMatchObject({
+			callId: `deadline-${phase}`,
+			error: { code: "DEADLINE_EXCEEDED", retryable: true },
+		});
+	}
+
+	const requestController = new AbortController();
+	let executionSignal: AbortSignal | undefined;
+	const completed = await canonicalPostTransport({
+		executeMutation: async ({ signal }) => {
+			executionSignal = signal;
+			return { ok: true };
+		},
+	}).fetch(
+		new Request(
+			post("/_questpie/mutation/messages.publish", {
+				"Idempotency-Key": "cleanup",
+				"Questpie-Timeout-Milliseconds": "10",
+			}),
+			{ signal: requestController.signal },
+		),
+	);
+	expect(completed?.status).toBe(200);
+	requestController.abort();
+	await delayed();
+	expect(executionSignal?.aborted).toBe(false);
+});
+
+test("canonical POST preserves executor-owned Mutation receipt replay", async () => {
+	const receipts = new Map<
+		string,
+		{ bytes: string; result: { ok: boolean } }
+	>();
+	let writes = 0;
+	const declaredErrors = [
+		{
+			code: "IDEMPOTENCY_CONFLICT",
+			status: 409,
+			payload: {
+				kind: "object",
+				properties: { callId: { kind: "text", maxLength: 256 } },
+			},
+		},
+	] as const;
+	const transport = canonicalPostTransport({
+		operations: [{ ...operations[0], declaredErrors }, operations[1]] as never,
+		prepare: (identity, value) =>
+			({
+				declaredErrors,
+				input: value,
+				inputCodec: http02InputCodec,
+				output: http02OutputCodec,
+				binding: { identity, kind: "mutation" },
+			}) as never,
+		executeMutation: async ({ callId, operation }) => {
+			const bytes = JSON.stringify(operation.input);
+			const receipt = receipts.get(callId);
+			if (receipt && receipt.bytes !== bytes)
+				throw new DeclaredOperationError("IDEMPOTENCY_CONFLICT", 409, {
+					callId,
+				});
+			if (receipt) return receipt.result;
+			writes += 1;
+			const result = { ok: true };
+			receipts.set(callId, { bytes, result });
+			return result;
+		},
+	});
+	const invoke = (value: string) =>
+		transport.fetch(
+			post(
+				"/_questpie/mutation/messages.publish",
+				{ "Idempotency-Key": "receipt-call" },
+				JSON.stringify({ context, input: { value } }),
+			),
+		);
+
+	for (const response of [await invoke("first"), await invoke("first")]) {
+		expect(response?.status).toBe(200);
+		expect(await response?.json()).toEqual({
+			callId: "receipt-call",
+			result: { ok: true },
+		});
+	}
+	expect(writes).toBe(1);
+	const conflict = await invoke("changed");
+	expect(conflict?.status).toBe(409);
+	expect(await conflict?.json()).toEqual({
+		callId: "receipt-call",
+		error: {
+			code: "IDEMPOTENCY_CONFLICT",
+			payload: { callId: "receipt-call" },
+		},
+	});
+});
 
 test("canonical POST decodes after credentials and preserves kind identities", async () => {
 	const executions: unknown[] = [];
