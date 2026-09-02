@@ -15,7 +15,7 @@ const traceConstraint = [
 	"durable_runs",
 	"durable_run_trace_context_complete",
 	"c",
-	"CHECK (trace_id IS NULL AND span_id IS NULL AND trace_flags IS NULL OR octet_length(trace_id) = 16 AND trace_id <> decode(repeat('00'::text, 16), 'hex'::text) AND octet_length(span_id) = 8 AND span_id <> decode(repeat('00'::text, 8), 'hex'::text) AND trace_flags >= 0 AND trace_flags <= 255)",
+	"CHECK (trace_id IS NULL AND span_id IS NULL AND trace_flags IS NULL OR trace_id IS NOT NULL AND octet_length(trace_id) = 16 AND trace_id <> decode(repeat('00'::text, 16), 'hex'::text) AND span_id IS NOT NULL AND octet_length(span_id) = 8 AND span_id <> decode(repeat('00'::text, 8), 'hex'::text) AND trace_flags IS NOT NULL AND trace_flags >= 0 AND trace_flags <= 255)",
 ] as const;
 
 function insertAfterTable<Row extends readonly unknown[]>(

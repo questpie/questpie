@@ -12,7 +12,7 @@ import {
 
 test("pins protocol v8 to the accepted three-column catalog delta", () => {
 	expect(internalProtocolV8Checksum).toBe(
-		"ca445aa536ec27041cc50ee2aa98daed4518cc86e633f1e04bb62bc180956c79",
+		"aaa61de44f277d1c6671f6de5ea791ca02d39a42407aff71659b378373e024d5",
 	);
 	expect(internalProtocolV8Catalog.tables).toHaveLength(21);
 	expect(internalProtocolV8Catalog.tables).toEqual(
