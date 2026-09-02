@@ -107,7 +107,8 @@ allowlist, one private scoped observation kernel, one optional exact-peer
 official OpenTelemetry adapter, and the non-rolling protocol-v8 durable
 trace-link cutover. Observation remains lossy and non-authoritative; the
 decision adds no authored telemetry capability, public event callback, general
-provider SPI, audit truth, or implementation status.
+provider SPI, audit truth, or implementation status. ADR-0035 later supersedes
+only ADR-0033's then-current two-package release cardinality.
 ADR-0034 narrowly repairs two incomplete ADR-0033 private-interface clauses.
 Adapter extraction returns the complete continue/restart ingress trace plan,
 and Fetch/Route terminals use an exact numeric-or-null response-status union so
@@ -119,7 +120,9 @@ Queries, keeps canonical Query Resource identity and bounded lifetime inside one
 immutable generated Context scope, and accepts an optional exact-peer React
 `useSyncExternalStore` adapter. It adds no fallback poller, Mutation
 invalidation, global provider, second client cache, or polymorphic Relation
-kernel.
+kernel. Together with ADR-0033, it makes the current beta publishable set exactly
+`questpie`, `@questpie/react`, and `@questpie/opentelemetry`; the OpenTelemetry
+release requirement is unchanged.
 ADR-0036 replaces the polymorphic Operation RPC endpoint with one
 compiler-derived endpoint per network Query, Mutation, and Action. Generated
 clients and optional OpenAPI 3.1 use the same Resource identities, codecs,

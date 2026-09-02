@@ -240,6 +240,12 @@ wire authority; ADR-0019's exact exports and absence of a generic event
 transport; ADR-0022's Resource Identity; and ADR-0027's tracer-led Product
 delivery.
 
+Because this decision postdates ADR-0033, it supersedes only ADR-0033's
+then-current release-cardinality wording: `@questpie/react` is the third public
+package alongside `questpie` and `@questpie/opentelemetry`. The current beta
+publishable set is exactly those three packages. ADR-0033's requirement to ship
+and verify the optional exact-peer OpenTelemetry adapter remains unchanged.
+
 It does not supersede Query execution, Operation Wire, Policy, Context,
 credentials, Mutation, transaction, Change Ledger, server cache, or Runtime
 capability ownership.

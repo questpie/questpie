@@ -264,7 +264,7 @@ Acceptance:
   receivers, listeners/ports, temporary installs, and generated tracer output
   are removed in `finally` on success and deliberate failure.
 
-## OTEL-08 — Publish docs and close the two-package release
+## OTEL-08 — Publish docs and close the three-package release
 
 Blocked by: OTEL-07.
 
@@ -277,11 +277,14 @@ Delete the unsupported 4,096-event queue, 30-day telemetry-retention, and
 
 Acceptance:
 
-- the release manifest enumerates exactly `questpie@4.0.0-beta.1` and
-  `@questpie/opentelemetry@4.0.0-beta.1`; the adapter peer on `questpie` is the
-  exact same version, missing/mismatch fails, and no third package appears;
-- both tarballs pack twice byte-identically and install together into one clean
-  relocated consumer; core also passes its standalone isolation contract;
+- the release manifest enumerates exactly `questpie@4.0.0-beta.1`,
+  `@questpie/react@4.0.0-beta.1`, and
+  `@questpie/opentelemetry@4.0.0-beta.1`; both optional-package peers on
+  `questpie` are that exact version, the React peer matches ADR-0035, a missing
+  or mismatched package fails, and no fourth public package appears;
+- all three tarballs pack twice byte-identically and install together into one
+  clean relocated consumer for import/build verification; core also passes its
+  standalone isolation contract without either optional package;
 - the complete registered PostgreSQL 17 lane includes fresh v8, live v7-to-v8
   cutover, 21-table catalog/completeness, both refusal directions, durable
   hostiles, two instances, and backup/restore;
@@ -296,6 +299,13 @@ Acceptance:
   exists;
 - every resource is cleaned, the worktree is clean, and `git diff --check`
   passes. No push, tag, publish, or deploy occurs.
+
+ADR-0035 supersedes only ADR-0033's original two-package count. The checked
+two-entry release manifest and two-profile release script that predate this
+ticket are not OTEL-08 closure evidence. OTEL-08 must update the explicit
+release profiles, generated artifact manifest, archive/declaration checks, and
+clean-consumer proof atomically after OTEL-07. This correction does not mark
+OTEL-08 complete and does not weaken the required OpenTelemetry package.
 
 ## Test-first rules
 

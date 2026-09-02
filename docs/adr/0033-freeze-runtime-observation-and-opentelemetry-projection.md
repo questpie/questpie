@@ -190,13 +190,16 @@ The exact adapter options, supported `OTEL_*` subset, bounds, missing-package
 diagnostic, close behavior, and peer compatibility are frozen by `BOUNDARY.md`.
 `questpie.json` stores no endpoint or credential.
 
-`@questpie/opentelemetry` is an ordinary second published package. It owns the
+`@questpie/opentelemetry` is an ordinary optional published package. At this
+decision's acceptance it was the second public package. It owns the
 OpenTelemetry API/SDK dependency graph, semantic-convention mapping, Resource,
 sampler, processors, exporters, queue, propagation, flush, and shutdown. This
 is an additive public release decision: the beta release guide, package
 manifest, release dry-run, clean-install contract, and repository codebase
 routing gain one optional adapter artifact. It does not supersede an Accepted
-ADR package clause. Core `questpie` retains no OpenTelemetry dependency.
+ADR package clause. ADR-0035 later adds the optional public `@questpie/react`
+package and supersedes only this decision's then-current package-count
+assumption. Core `questpie` retains no OpenTelemetry dependency.
 
 ### W3C propagation and trust
 
@@ -317,12 +320,14 @@ nondisclosure, hostile adapters, duplicate acceptance, rollback, old rows,
 retry/reclaim sibling links, fencing, two Runtime instances, and identical
 PostgreSQL/public outcomes with and without telemetry.
 
-A loopback OTLP tracer packs and installs both public packages, validates OTel
+A loopback OTLP tracer packs and installs the current public package set:
+`questpie`, `@questpie/react`, and `@questpie/opentelemetry`. It validates OTel
 Resource facts, fails invalid explicit startup config before readiness, cuts
 the receiver during work, and proves close ordering plus bounded flush. Release
-requires deterministic package archives, isolated install/import/build,
-declaration digests, strict dependency checks, PostgreSQL 17, Firefox,
-`quality:release`, docs build, and independent Standards and Spec review.
+requires deterministic archives for all three packages, isolated
+install/import/build, declaration digests, strict dependency checks,
+PostgreSQL 17, Firefox, `quality:release`, docs build, and independent Standards
+and Spec review.
 
 ## Acceptance evidence
 
@@ -339,7 +344,7 @@ It binds packet digest
   once. They cannot make Policy or business behavior depend on telemetry.
 - Runtime owners expose semantic lifecycle facts once; Envelope and OTel cannot
   drift into parallel truth models.
-- A second public package and a new internal protocol increase release and
+- An additional public package and a new internal protocol increase release and
   compatibility work. That cost buys dependency isolation and durable async
   correlation.
 - Exact arbitrary Call Identity correlation is intentionally lost from
@@ -370,6 +375,14 @@ post-commit outcomes; ADR-0013 and ADR-0026 durable identity, acceptance,
 attempt, retry, and fencing semantics; ADR-0017 multi-instance authority; and
 ADR-0031 lifecycle ownership. PostgreSQL and canonical artifacts remain durable
 truth. Studio remains deferred by ADR-0024.
+
+ADR-0035 postdates this decision and supersedes only its release-cardinality
+wording. References here to a "second" package, "both" public packages, or no
+third package describe the state at ADR-0033 acceptance, not the current release
+set. The current beta publishable set is exactly `questpie`,
+`@questpie/react`, and `@questpie/opentelemetry`. This correction does not alter
+the observation kernel, adapter boundary, exact-peer requirement, or any signal
+semantics accepted here.
 
 ## Rejected alternatives
 

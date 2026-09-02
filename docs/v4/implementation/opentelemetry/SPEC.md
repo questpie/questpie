@@ -205,6 +205,20 @@ instances use the same exact catalog.
 - Core has no OpenTelemetry dependency. A missing or version-mismatched package
   fails explicitly; there is no fallback adapter or silent downgrade.
 
+The release inventory is one closed set, not package discovery: exactly
+`questpie@4.0.0-beta.1`, `@questpie/react@4.0.0-beta.1`, and
+`@questpie/opentelemetry@4.0.0-beta.1`. Both optional packages require exact
+peer `questpie: 4.0.0-beta.1`; React keeps its separately accepted React peer.
+The release lane rejects a missing or fourth public package, version or peer
+drift, and undeclared archive bytes. It packs each of the three archives twice
+and requires byte-identical results, installs all three in one clean relocated
+consumer for import/build verification, and repeats core's standalone
+isolation proof without either optional package.
+
+This three-package inventory is the later ADR-0035 projection over ADR-0033's
+original two-package state. It changes no OpenTelemetry runtime, protocol,
+signal, dependency-isolation, or exact-peer semantics.
+
 ## Replacement and deletion
 
 The vertical replaces `ExecutionEventV1` and the private emitter atomically.
@@ -231,9 +245,9 @@ retry/reclaim, restore, and multiple Runtime instances.
 
 Public docs land only after those tracers pass. Final closure requires focused
 type and unit tests, direct/network/browser parity, hostile and PostgreSQL 17
-lanes, docs build, `quality:release`, deterministic isolated package dry-runs,
-declaration and archive digests, independent Standards and Spec reviews,
-resource cleanup, and `git diff --check`.
+lanes, docs build, `quality:release`, deterministic isolated dry-runs for the
+exact three-package inventory, declaration and archive digests, independent
+Standards and Spec reviews, resource cleanup, and `git diff --check`.
 
 ## Non-goals
 

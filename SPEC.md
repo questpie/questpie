@@ -395,6 +395,17 @@ may consume the same kernel projection. The adapter is exact-peer with
 handle. It adds no handler capability, public event callback, general provider
 SPI, or OpenTelemetry dependency to core.
 
+The current beta publishable set is exactly `questpie`, `@questpie/react`, and
+`@questpie/opentelemetry`. All three advance at one release version. Both
+optional packages declare that exact `questpie` version as a peer;
+`@questpie/react` additionally declares its accepted React peer range. Release
+verification rejects a missing, extra, private-as-public, or version-mismatched
+package, packs every archive twice byte-identically, installs all three into one
+clean relocated consumer, and separately proves that core installs, imports,
+and builds without either optional package. Explicit OpenTelemetry setup never
+falls back or silently downgrades when its package or peer is absent or
+incompatible.
+
 At owned Fetch/Route ingress, the optional adapter returns one complete closed
 trace plan: `remote-parent` with validated context and bounded `tracestate` for
 continue, `root-with-links` with exactly one validated context and no
