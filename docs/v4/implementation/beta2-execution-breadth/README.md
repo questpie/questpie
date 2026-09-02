@@ -38,7 +38,8 @@ EB-00 accepted authority (done)
   -> EB-09 generated client projection (EB-02, EB-03)
        -> HTTP-01 canonical Query GET tracer
             -> HTTP-02 canonical Mutation/Action tracer + old-route deletion
-                 -> HTTP-03 complete OpenAPI/explain projection
+                 -> DOC-01 Operation Documentation authoring/artifact
+                      -> HTTP-03/DOC-02 complete OpenAPI/JSDoc/explain projection
                       -> HTTP-04 reference-consumer and hostile closure
   -> EB-10 collaboration end-to-end guide/fixture (EB-02 through EB-09)
 ```
@@ -299,23 +300,26 @@ private client transport, retained-pair routing, and compatibility fixtures in
 one atomic change. Hostile tests must prove the old path is absent rather than
 redirected or translated.
 
-## HTTP-03 — Emit the complete OpenAPI and explain projection
+## HTTP-03 / DOC-02 — Emit OpenAPI, JSDoc, and explain once
 
-Blocked by: HTTP-01 and HTTP-02.
+Blocked by: HTTP-01, HTTP-02, and DOC-01.
 
 Start red from one application containing Query, Mutation, Action, direct-only
-Operation, and raw Route. With `projections.openapi: true`, emit one complete,
-deterministic OpenAPI 3.1 document from the same canonical endpoint and codec
-artifacts used at Runtime. Cover parameters, request bodies, results, declared
-errors, the fixed applicable framework failures, nullability, bounds, inferred
-namespace tags, operation IDs, omissions with Origins, stale deletion, and
-`questpie explain`. Reject unknown configuration and operation-ID/path
-collisions. No OpenAPI-specific schema, prose, path, security, handler, or
-fallback authoring enters production.
+Operation, raw Route, and accepted Operation Documentation. With
+`projections.openapi: true`, emit one complete deterministic OpenAPI 3.1
+document from the canonical endpoint, codec, and documentation artifacts used
+by the generated contract. Cover parameters, request bodies, results, declared
+errors, fixed framework failures, nullability, bounds, inferred namespace tags,
+operation IDs, summary/description/examples, omissions with Origins, digest
+pins, target escaping, stale deletion, generated JSDoc, and `questpie explain`.
+Reject unknown configuration and operation-ID/path collisions. No
+OpenAPI-specific schema/prose, custom group, path, security, handler, or
+fallback authoring enters production. This is `DOC-02`; do not build an earlier
+metadata-free HTTP-03 generator that this slice must replace.
 
 ## HTTP-04 — Close reference consumers and network hostiles
 
-Blocked by: HTTP-01 through HTTP-03.
+Blocked by: HTTP-01, HTTP-02, DOC-01, and HTTP-03/DOC-02.
 
 Move Team Support Desk generated calls to the canonical endpoints and make
 Collaboration the authority/nondisclosure hostile consumer. Prove PostgreSQL 17
