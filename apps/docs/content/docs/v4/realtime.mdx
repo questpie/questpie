@@ -198,9 +198,9 @@ application authorization model. See
 ## Stay within realtime limits
 
 One dependency token records one observed read boundary. One retained Resume
-Token records one available continuation. The default limits are:
+Token records one available continuation. The beta protocol fixes these limits:
 
-| Limit                                |                 Default |
+| Limit                                |                   Bound |
 | ------------------------------------ | ----------------------: |
 | active watches per Principal         |                      64 |
 | dependency tokens per dependency set |                     256 |
@@ -210,6 +210,11 @@ Token records one available continuation. The default limits are:
 | unreconciled ledger lag              |        30 s (30,000 ms) |
 | retained Resume Tokens per Principal |                     128 |
 | retained Resume Token age            |    24 h (86,400,000 ms) |
+
+A watch slot belongs to one Principal across the compatible deployment, not to
+one Runtime instance or to the deployment as a whole. Different Principals do
+not consume one another's 64 slots, and adding Runtime instances does not reset
+or multiply a Principal's bound.
 
 QUESTPIE coalesces frequent changes into the latest complete authorized result.
 A result over its cap fails with `RESOURCE_LIMIT`; QUESTPIE does not truncate

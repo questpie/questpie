@@ -23,7 +23,7 @@ import {
 	upgradeProtocolV8,
 } from "./kernel";
 
-if (!process.env.PGHOST) throw new Error("PGHOST is required");
+const postgresDescribe = process.env.PGHOST ? describe : describe.skip;
 const pool = new Pool({
 	host: process.env.PGHOST,
 	port: Number(process.env.PGPORT ?? "5432"),
@@ -63,19 +63,19 @@ const acceptance = (
 	};
 };
 
-beforeAll(async () => {
-	const version = await pool.query<{ server_version_num: string }>(
-		"SHOW server_version_num",
-	);
-	expect(version.rows[0]?.server_version_num).toMatch(/^17\d{4}$/);
-	await installProtocolV7(pool, schema);
-});
-afterAll(async () => {
-	await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
-	await pool.end();
-});
+postgresDescribe("protocol-v8 durable trace-link candidate", () => {
+	beforeAll(async () => {
+		const version = await pool.query<{ server_version_num: string }>(
+			"SHOW server_version_num",
+		);
+		expect(version.rows[0]?.server_version_num).toMatch(/^17\d{4}$/);
+		await installProtocolV7(pool, schema);
+	});
+	afterAll(async () => {
+		await pool.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);
+		await pool.end();
+	});
 
-describe("protocol-v8 durable trace-link candidate", () => {
 	test("pins production v7 and an exact three-column-only v8 catalog delta", () => {
 		expect(internalProtocolV7Catalog.tables).toHaveLength(21);
 		expect(internalProtocolV7Checksum).toMatch(/^[0-9a-f]{64}$/);
