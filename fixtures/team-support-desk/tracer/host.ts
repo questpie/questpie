@@ -74,18 +74,20 @@ const databaseUrl =
 	(() => {
 		throw new TypeError("DATABASE_URL is required");
 	})();
-const [html, styles, scalarHtml, openApi, browserBuild] = await Promise.all([
-	readFile(resolve(import.meta.dir, "index.html"), "utf8"),
-	readFile(resolve(import.meta.dir, "styles.css"), "utf8"),
-	readFile(resolve(import.meta.dir, "scalar.html"), "utf8"),
-	readFile(resolve(root, ".questpie/generated/openapi.json"), "utf8"),
-	Bun.build({
-		entrypoints: [resolve(import.meta.dir, "browser/main.tsx")],
-		format: "esm",
-		minify: true,
-		target: "browser",
-	}),
-]);
+const [html, styles, scalarHtml, scalarConfiguration, openApi, browserBuild] =
+	await Promise.all([
+		readFile(resolve(import.meta.dir, "index.html"), "utf8"),
+		readFile(resolve(import.meta.dir, "styles.css"), "utf8"),
+		readFile(resolve(import.meta.dir, "scalar.html"), "utf8"),
+		readFile(resolve(import.meta.dir, "scalar-configuration.js"), "utf8"),
+		readFile(resolve(root, ".questpie/generated/openapi.json"), "utf8"),
+		Bun.build({
+			entrypoints: [resolve(import.meta.dir, "browser/main.tsx")],
+			format: "esm",
+			minify: true,
+			target: "browser",
+		}),
+	]);
 if (!browserBuild.success)
 	throw new Error(browserBuild.logs.map(({ message }) => message).join("\n"));
 if (browserBuild.outputs.length !== 1)
@@ -140,6 +142,8 @@ const server = Bun.serve({
 			return response(browserJavaScript, "text/javascript; charset=utf-8");
 		if (url.pathname === "/api-reference" && request.method === "GET")
 			return response(scalarHtml, "text/html; charset=utf-8");
+		if (url.pathname === "/scalar-configuration.js" && request.method === "GET")
+			return response(scalarConfiguration, "text/javascript; charset=utf-8");
 		if (url.pathname === "/openapi.json" && request.method === "GET")
 			return response(openApi, "application/json; charset=utf-8");
 		if (url.pathname === "/__team_support/report") {

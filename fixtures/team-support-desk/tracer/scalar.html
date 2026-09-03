@@ -8,46 +8,14 @@
 	<body>
 		<div id="app"></div>
 		<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.67.0"></script>
-		<script>
+		<script type="module">
+			import { createScalarConfiguration } from "/scalar-configuration.js";
+
 			void (async () => {
 				const document = await fetch("/openapi.json").then((response) =>
 					response.json(),
 				);
-				const hiddenCompatibilityHeaderNames = new Set([
-					"Questpie-Application",
-					"Questpie-Client-Contract",
-					"Questpie-Wire-Digest",
-				]);
-				const hiddenCompatibilityHeaders = new Map();
-				for (const pathItem of Object.values(document.paths)) {
-					for (const operation of Object.values(pathItem)) {
-						if (!Array.isArray(operation.parameters)) continue;
-						for (const parameter of operation.parameters) {
-							if (!hiddenCompatibilityHeaderNames.has(parameter.name)) continue;
-							hiddenCompatibilityHeaders.set(
-								parameter.name,
-								parameter.schema.default,
-							);
-						}
-					}
-				}
-				const displayDocument = structuredClone(document);
-				for (const pathItem of Object.values(displayDocument.paths)) {
-					for (const operation of Object.values(pathItem)) {
-						if (!Array.isArray(operation.parameters)) continue;
-						operation.parameters = operation.parameters.filter((parameter) => {
-							return !hiddenCompatibilityHeaders.has(parameter.name);
-						});
-					}
-				}
-				Scalar.createApiReference("#app", {
-					content: displayDocument,
-					onBeforeRequest: ({ requestBuilder }) => {
-						for (const [name, value] of hiddenCompatibilityHeaders) {
-							requestBuilder.headers.set(name, value);
-						}
-					},
-				});
+				Scalar.createApiReference("#app", createScalarConfiguration(document));
 			})();
 		</script>
 	</body>
