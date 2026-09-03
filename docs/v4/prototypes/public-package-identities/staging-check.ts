@@ -9,6 +9,7 @@ const read = (path: string): string =>
 type Projection = Readonly<{
 	status: string;
 	decision: string;
+	candidateDocuments: readonly string[];
 	acceptedProjection: readonly string[];
 	breakingImplementation: readonly string[];
 	frozenEvidence: readonly string[];
@@ -45,6 +46,7 @@ expect(read("packages/opentelemetry/package.json")).toContain(
 expect(existsSync(resolve(import.meta.dir, "REVIEW.json"))).toBe(false);
 
 for (const paths of [
+	projection.candidateDocuments,
 	projection.acceptedProjection,
 	projection.breakingImplementation,
 ]) {
@@ -71,6 +73,7 @@ const trackedOldNameFiles = (oldNameScan.stdout?.toString() ?? "")
 	.split("\n")
 	.map((line) => line.replace(/^HEAD:/, ""));
 const accounted = new Set([
+	...projection.candidateDocuments,
 	...projection.acceptedProjection,
 	...projection.breakingImplementation,
 ]);

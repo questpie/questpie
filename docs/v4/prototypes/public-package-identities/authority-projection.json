@@ -2,6 +2,14 @@
 	"format": "questpie.package-identity-projection.v1",
 	"status": "proposed",
 	"decision": "docs/adr/0042-freeze-public-package-identities.md",
+	"candidateDocuments": [
+		"docs/adr/0042-freeze-public-package-identities.md",
+		"docs/v4/implementation/public-package-identities/SPEC.md",
+		"docs/v4/implementation/public-package-identities/TICKETS.md",
+		"docs/v4/prototypes/public-package-identities/README.md",
+		"docs/v4/prototypes/public-package-identities/package-identities.test.ts",
+		"docs/v4/prototypes/public-package-identities/staging-check.ts"
+	],
 	"acceptedProjection": [
 		".agents/skills/questpie-v4/references/codebase.md",
 		"SPEC.md",
