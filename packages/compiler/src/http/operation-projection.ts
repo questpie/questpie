@@ -526,8 +526,15 @@ function headerParameter(
 	name: string,
 	required: boolean,
 	schema: JsonSchema = { type: "string" },
+	description?: string,
 ): JsonRecord {
-	return { name, in: "header", required, schema };
+	return {
+		name,
+		in: "header",
+		required,
+		...(description === undefined ? {} : { description }),
+		schema,
+	};
 }
 
 function contextAcceptsEmpty(codec: unknown): boolean {
@@ -543,35 +550,95 @@ function carrierHeaders(
 	kind: "action" | "mutation" | "query",
 	contextCodec: unknown,
 ): JsonRecord[] {
+	const acceptsEmptyContext = contextAcceptsEmpty(contextCodec);
 	return [
 		...(kind === "query"
 			? [
 					headerParameter(
 						"Questpie-Context",
-						!contextAcceptsEmpty(contextCodec),
+						!acceptsEmptyContext,
 						{
 							type: "string",
+							...(acceptsEmptyContext ? { default: "e30" } : {}),
 							pattern: "^[A-Za-z0-9_-]+$",
 							maxLength: 87_382,
 							"x-questpie-decoded-schema": projectCodec(contextCodec),
 							"x-questpie-http-encoding": "canonical-json-base64url",
 						},
+						"Generated clients encode this header. It is unpadded base64url over canonical Context JSON; the default is present only when the Context codec accepts {}.",
 					),
 				]
 			: kind === "mutation"
-				? [headerParameter("Idempotency-Key", true)]
-				: [headerParameter("Effect-Key", true)]),
-		...(kind === "mutation"
-			? []
-			: [headerParameter("Questpie-Call-Id", false)]),
-		headerParameter("Questpie-Timeout-Milliseconds", false, {
-			type: "integer",
-			minimum: 1,
-		}),
-		headerParameter("Questpie-Application", false),
-		headerParameter("Questpie-Client-Contract", false),
-		headerParameter("Questpie-Wire-Digest", false),
+				? [
+						headerParameter(
+							"Idempotency-Key",
+							true,
+							undefined,
+							"Stable caller identity for safe Mutation receipt replay. Reusing it with different canonical input fails with IDEMPOTENCY_CONFLICT.",
+						),
+					]
+				: [
+						headerParameter(
+							"Effect-Key",
+							true,
+							undefined,
+							"Stable caller identity for an external Action effect and its explicit outcome ambiguity.",
+						),
+					]),
 	].sort((left, right) => compareAscii(String(left.name), String(right.name)));
+}
+
+function commonCarrierParameters(
+	compatibility: Readonly<{
+		application: string;
+		clientContractDigest: string;
+		wireDigest: string;
+	}>,
+): JsonRecord {
+	return {
+		"Questpie-Application": headerParameter(
+			"Questpie-Application",
+			false,
+			{
+				type: "string",
+				const: compatibility.application,
+				default: compatibility.application,
+			},
+			"Generated application compatibility identity.",
+		),
+		"Questpie-Call-Id": headerParameter(
+			"Questpie-Call-Id",
+			false,
+			undefined,
+			"Optional caller correlation identity; generated clients create one when omitted.",
+		),
+		"Questpie-Client-Contract": headerParameter(
+			"Questpie-Client-Contract",
+			false,
+			{
+				type: "string",
+				const: compatibility.clientContractDigest,
+				default: compatibility.clientContractDigest,
+			},
+			"Generated client compatibility identity.",
+		),
+		"Questpie-Timeout-Milliseconds": headerParameter(
+			"Questpie-Timeout-Milliseconds",
+			false,
+			{ type: "integer", minimum: 1 },
+			"Optional positive end-to-end operation deadline in milliseconds.",
+		),
+		"Questpie-Wire-Digest": headerParameter(
+			"Questpie-Wire-Digest",
+			false,
+			{
+				type: "string",
+				const: compatibility.wireDigest,
+				default: compatibility.wireDigest,
+			},
+			"Canonical HTTP wire compatibility identity.",
+		),
+	};
 }
 
 function openApiOperation(
@@ -768,7 +835,14 @@ export function projectOperationProjection(
 			"x-questpie-operation-http-digest": input.httpContract.digest,
 		},
 		paths,
-		components: { schemas: frameworkSchemas(input.httpContract.failures) },
+		components: {
+			parameters: commonCarrierParameters({
+				application: input.httpContract.application,
+				clientContractDigest: input.httpContract.clientContractDigest,
+				wireDigest: input.httpContract.digest,
+			}),
+			schemas: frameworkSchemas(input.httpContract.failures),
+		},
 	};
 	return {
 		openapi,

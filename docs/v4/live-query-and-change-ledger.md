@@ -117,9 +117,9 @@ normalized Query/input identity, wire version, and retained generation. HMAC
 tamper, binding mismatch, eviction, and time expiry yield a fresh authorized
 reset. A reset replaces client state with a complete Query result.
 
-Accepted default limits are:
+The beta protocol fixes these limits:
 
-| Budget                        |       Default |
+| Budget                        |         Bound |
 | ----------------------------- | ------------: |
 | active watches per Principal  |            64 |
 | dependency tokens per plan    |           256 |

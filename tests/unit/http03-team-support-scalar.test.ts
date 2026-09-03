@@ -31,7 +31,10 @@ test("renders the Team Support Desk OpenAPI projection through Scalar", async ()
 			"utf8",
 		);
 		expect(scalar).toContain("@scalar/api-reference@1.67.0");
-		expect(scalar).toContain('url: "/openapi.json"');
+		expect(scalar).toContain('fetch("/openapi.json")');
+		expect(scalar).toContain("onBeforeRequest");
+		expect(scalar).toContain('"Questpie-Application"');
+		expect(scalar).not.toContain(openapi.info.version);
 		const host = await readFile(join(directory, "tracer/host.ts"), "utf8");
 		expect(host).toContain('url.pathname === "/api-reference"');
 		expect(host).toContain('url.pathname === "/openapi.json"');

@@ -211,10 +211,11 @@ Token records one available continuation. The beta protocol fixes these limits:
 | retained Resume Tokens per Principal |                     128 |
 | retained Resume Token age            |    24 h (86,400,000 ms) |
 
-A watch slot belongs to one Principal across the compatible deployment, not to
-one Runtime instance or to the deployment as a whole. Different Principals do
-not consume one another's 64 slots, and adding Runtime instances does not reset
-or multiply a Principal's bound.
+A watch slot belongs to one Principal within one exact application and
+deployment digest, not to one Runtime instance or to the deployment as a
+whole. Different Principals do not consume one another's 64 slots, and adding
+Runtime instances does not reset or multiply a Principal's bound. During a
+rolling change, a distinct deployment digest has its own slot scope.
 
 QUESTPIE coalesces frequent changes into the latest complete authorized result.
 A result over its cap fails with `RESOURCE_LIMIT`; QUESTPIE does not truncate

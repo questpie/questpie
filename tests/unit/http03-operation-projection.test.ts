@@ -239,6 +239,7 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 		);
 		expect(contextParameter.schema).toMatchObject({
 			type: "string",
+			default: "e30",
 			pattern: "^[A-Za-z0-9_-]+$",
 			"x-questpie-decoded-schema": expect.objectContaining({ type: "object" }),
 			"x-questpie-http-encoding": "canonical-json-base64url",
@@ -262,8 +263,31 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 				in: "header",
 				name: "Questpie-Context",
 				required: true,
+				schema: expect.not.objectContaining({ default: expect.anything() }),
 			}),
 		);
+		for (const [name, value] of [
+			["Questpie-Application", httpContract.application],
+			["Questpie-Client-Contract", httpContract.clientContractDigest],
+			["Questpie-Wire-Digest", httpContract.digest],
+		] as const) {
+			const parameter = first.openapi.components.parameters[name];
+			expect(parameter).toMatchObject({
+				required: false,
+				schema: { const: value, default: value, type: "string" },
+			});
+		}
+		expect(first.openapi.components.parameters).toHaveProperty(
+			"Questpie-Call-Id",
+		);
+		expect(first.openapi.components.parameters).toHaveProperty(
+			"Questpie-Timeout-Milliseconds",
+		);
+		expect(
+			query.parameters.filter(
+				(parameter: { in: string }) => parameter.in === "header",
+			),
+		).toEqual([contextParameter]);
 		expect(query).not.toHaveProperty("requestBody");
 
 		const mutation =

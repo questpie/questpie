@@ -9,9 +9,25 @@
 		<div id="app"></div>
 		<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.67.0"></script>
 		<script>
-			Scalar.createApiReference("#app", {
-				url: "/openapi.json",
-			});
+			void (async () => {
+				const document = await fetch("/openapi.json").then((response) =>
+					response.json(),
+				);
+				const compatibilityHeaders = [
+					"Questpie-Application",
+					"Questpie-Client-Contract",
+					"Questpie-Wire-Digest",
+				];
+				Scalar.createApiReference("#app", {
+					content: document,
+					onBeforeRequest: ({ requestBuilder }) => {
+						for (const name of compatibilityHeaders) {
+							const value = document.components.parameters[name].schema.default;
+							requestBuilder.headers.set(name, value);
+						}
+					},
+				});
+			})();
 		</script>
 	</body>
 </html>
