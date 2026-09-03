@@ -158,10 +158,19 @@ function full(): void {
 		"bun",
 		"test",
 		"--timeout=15000",
-		"--max-concurrency=1",
+		"--max-concurrency=8",
 		"--path-ignore-patterns=**/collection-lifecycle-boundary/operation-transaction/check.test.ts",
+		"--path-ignore-patterns=**/discriminated-value-packed.test.ts",
+		"--path-ignore-patterns=**/inverse-docs-packed.test.ts",
+		"--path-ignore-patterns=**/qri04-react-package.test.ts",
 		"--path-ignore-patterns=**/query-resource-react.test.tsx",
 	]);
+	for (const packedTest of [
+		"tests/integration/discriminated-value-packed.test.ts",
+		"tests/integration/inverse-docs-packed.test.ts",
+		"tests/integration/qri04-react-package.test.ts",
+	])
+		run(["bun", "test", packedTest]);
 	run(
 		["bun", "test", "tracer/browser/query-resource-react.test.tsx"],
 		resolve("fixtures/team-support-desk"),
