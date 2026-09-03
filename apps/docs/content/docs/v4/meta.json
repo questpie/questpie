@@ -16,6 +16,7 @@
 		"services",
 		"operation-http-and-openapi",
 		"beta1-release",
-		"runtime-and-studio"
+		"runtime-and-studio",
+		"opentelemetry"
 	]
 }

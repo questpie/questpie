@@ -191,12 +191,15 @@ retirement of an older build.
 
 ## Inspect the Execution Envelope
 
-Every Runtime event carries one closed Execution Envelope. It correlates safe
-application, deployment artifact, Origin, Operation, Operation Call, Policy,
-transaction, change, dispatch, run, attempt, effect, subscription, migration,
-Seed, error, and audit identities. It does not contain a credential, database
-URL, raw payload, relational Policy evidence, serialized Context, Service
-state, secret, or stack trace.
+Every Runtime event carries one closed Execution Envelope. It contains the
+application identity, exact Runtime Build digest, opaque Runtime Instance,
+Execution, and event identities, the Principal kind, ordinary Authority class,
+Runtime timestamp, and optional neutral trace context. Closed links can name an
+artifact, Operation, PostgreSQL transaction, Dispatch, Durable Run, Physical
+Attempt, or Effect. The Envelope never contains Principal or Tenant identity,
+raw Call Identity, credentials, database URLs, request or response payloads,
+Context, Policy identity or evidence, Service state, SQL text or parameters,
+provider payloads, exception messages, or stack traces.
 
 ## Run maintenance commands
 
@@ -214,16 +217,15 @@ artifact viewer.
 
 ## Stay within Runtime limits
 
-| Limit                                |      Default |
-| ------------------------------------ | -----------: |
-| active root Executions per Principal |           64 |
-| request body                         |        1 MiB |
-| response body                        |        1 MiB |
-| Runtime event                        |       64 KiB |
-| events per Execution                 |        2,048 |
-| telemetry exporter queue             | 4,096 events |
-| startup deadline                     |   30 seconds |
-| drain deadline                       |   30 seconds |
+| Limit                                |    Default |
+| ------------------------------------ | ---------: |
+| active root Executions per Principal |         64 |
+| request body                         |      1 MiB |
+| response body                        |      1 MiB |
+| Runtime event                        |     64 KiB |
+| events per Execution                 |      2,048 |
+| startup deadline                     | 30 seconds |
+| drain deadline                       | 30 seconds |
 
 A limit fails with `RESOURCE_LIMIT`. Runtime unavailability fails with
 `RUNTIME_UNAVAILABLE`. Both are explicit and retryable when no ambiguous
@@ -231,10 +233,14 @@ Mutation result exists.
 
 ## Understand retention and backpressure
 
-Audit events are retained for 365 days. Telemetry is retained for 30 days.
-Durable events follow the retention of their owning durable state. Telemetry
-loss is explicit. When the 4,096-event exporter queue is full, backpressure can
-drop telemetry; it cannot drop or roll back a business commit.
+QUESTPIE promises no telemetry retention period. The OpenTelemetry SDK owns
+finite buffering and export attempts; the Collector or backend owns retention.
+When the BatchSpanProcessor queue is full, it drops new finished spans instead
+of delaying application work. Audit retention is separately owned and has no
+framework-defined duration. Durable events follow the retention of their owning
+durable state.
+
+[Configure the optional OpenTelemetry adapter](./opentelemetry).
 
 ## Keep one PostgreSQL and Policy boundary
 
