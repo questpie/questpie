@@ -16,6 +16,7 @@ import {
 	renderMutationFactory,
 	type MutationGeneratedContractV1,
 } from "./mutation";
+import { renderQueryDeclarations, renderQueryOperations } from "./query";
 import {
 	renderDurableDeclarations,
 	renderReactionDeclarations,
@@ -355,35 +356,6 @@ export interface GeneratedCollectionLifecycles {
 export type CollectionLifecycle<Name extends keyof GeneratedCollectionLifecycles> = GeneratedCollectionLifecycles[Name];`;
 }
 
-function renderQueries(
-	resources: readonly NormalizedResource[],
-	documentation: Readonly<Record<string, string>> = {},
-): string {
-	return resources
-		.filter((resource) => resource.kind === "query")
-		.map((resource) => {
-			const contract = resource.contract;
-			const jsdoc = documentation[resource.identity];
-			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; }>;`;
-		})
-		.join("\n\t");
-}
-
-function renderQueryOperations(
-	resources: readonly NormalizedResource[],
-): string {
-	return renderServerOperationType(
-		"Query",
-		resources
-			.filter((resource) => resource.kind === "query")
-			.map((resource) => ({
-				name: resource.name,
-				origin: resource.origin,
-				value: `(input: ${renderCodecType(resource.contract.input)}) => Promise<${renderCodecType(resource.contract.output)}>`,
-			})),
-	);
-}
-
 const factoryNames = [] as const;
 
 export function renderAppContract(
@@ -528,7 +500,7 @@ export interface GeneratedMutationDataByName {
 ${collectionLifecycleDeclarations}
 
 export interface GeneratedQueries {
-	${renderQueries(resources, documentation)}
+	${renderQueryDeclarations(resources, documentation)}
 }
 
 ${renderMutationDeclarations(resources, documentation)}
@@ -779,7 +751,7 @@ export interface PackageData {
 }
 
 export interface PackageQueries {
-	${renderQueries(resources, documentation)}
+	${renderQueryDeclarations(resources, documentation)}
 }
 
 export type PackageServices = Readonly<{
