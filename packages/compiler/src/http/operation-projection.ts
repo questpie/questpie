@@ -1,8 +1,13 @@
 import { decodeRuntimeCodec } from "@questpie/runtime/codec";
 
-import { canonicalBytes, compareAscii, digest } from "../canonical";
+import { canonicalBytes, compareAscii } from "../canonical";
 import { normalizeCodecContract } from "../codec";
-import { CompilerDiagnosticError } from "../diagnostic";
+import {
+	type DocumentationEntry,
+	projectOperationMetadata,
+} from "./operation-metadata";
+
+export { projectOperationJsDoc } from "./operation-metadata";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 type JsonSchema = Readonly<Record<string, unknown>>;
@@ -12,13 +17,6 @@ type OperationContract = Readonly<{
 	input: unknown;
 	output: unknown;
 	declaredErrors: unknown;
-}>;
-
-type DocumentationEntry = Readonly<{
-	identity: string;
-	summary: string;
-	description?: string;
-	examples?: readonly Readonly<{ input: unknown; output?: unknown }>[];
 }>;
 
 export interface OperationProjectionInput {
@@ -214,56 +212,6 @@ function projectNormalizedCodec(codec: JsonRecord): JsonSchema {
 
 function projectCodec(value: unknown): JsonSchema {
 	return projectNormalizedCodec(normalizedCodec(value));
-}
-
-function documentationEntries(input: {
-	readonly documentationBytes: string;
-	readonly documentationDigest: string;
-}): DocumentationEntry[] {
-	const artifact = record(JSON.parse(input.documentationBytes));
-	if (
-		artifact.format !== "questpie.operation-documentation" ||
-		artifact.version !== 1 ||
-		!Array.isArray(artifact.operations) ||
-		digest("questpie-operation-documentation-v1", artifact) !==
-			input.documentationDigest
-	)
-		return invalid("operation documentation digest mismatch");
-	return (artifact.operations as DocumentationEntry[]).toSorted((left, right) =>
-		compareAscii(left.identity, right.identity),
-	);
-}
-
-export function projectOperationJsDoc(input: {
-	readonly documentationBytes: string;
-	readonly documentationDigest: string;
-}): Readonly<Record<string, string>> {
-	return Object.fromEntries(
-		documentationEntries(input).map((entry) => [
-			entry.identity,
-			renderJsDoc(entry),
-		]),
-	);
-}
-
-function escapeJsDoc(value: string): string {
-	return value
-		.replaceAll("*/", "*\\/")
-		.replaceAll("\u2028", "\\u2028")
-		.replaceAll("\u2029", "\\u2029");
-}
-
-function renderJsDoc(entry: DocumentationEntry): string {
-	const lines = [
-		entry.summary,
-		...(entry.description ? ["", entry.description] : []),
-	]
-		.flatMap((line) => escapeJsDoc(line).split("\n"))
-		.map((line) => {
-			const inert = line.replace(/^(\s*)@/u, "$1\\@");
-			return inert.length === 0 ? " *" : " * " + inert;
-		});
-	return ["/**", ...lines, " */"].join("\n");
 }
 
 function operationKind(identity: string): "action" | "mutation" | "query" {
@@ -780,79 +728,20 @@ function frameworkSchemas(failures: readonly string[]): JsonRecord {
 	};
 }
 
-function projectionExplanation(
-	input: OperationProjectionInput,
-	networkIdentities: ReadonlySet<string>,
-): JsonRecord & Readonly<{ operations: readonly JsonRecord[] }> {
-	const direct = new Set(
-		input.operationContracts.operations.map(({ identity }) => identity),
-	);
-	const operations = input.originMap.resources
-		.filter(
-			({ identity }) => direct.has(identity) || identity.startsWith("route:"),
-		)
-		.map(({ identity, establishedAt }) =>
-			networkIdentities.has(identity)
-				? {
-						identity,
-						disposition: "included",
-						origin: establishedAt,
-					}
-				: {
-						identity,
-						disposition: "omitted",
-						reason: identity.startsWith("route:")
-							? "rawRouteUnsupported"
-							: "directOnly",
-						origin: establishedAt,
-					},
-		)
-		.sort((left, right) =>
-			compareAscii(String(left.identity), String(right.identity)),
-		);
-	return {
-		format: "questpie.operation-projection-explain",
-		version: 1,
-		documentationDigest: input.documentationDigest,
-		httpContractDigest: input.httpContract.digest,
-		operations,
-	};
-}
-
 export function projectOperationProjection(
 	input: OperationProjectionInput,
 ): OperationProjection {
-	const documentation = documentationEntries(input);
-	const documentationByIdentity = new Map(
-		documentation.map((entry) => [entry.identity, entry]),
-	);
 	const network = [...input.httpContract.operations].sort((left, right) =>
 		compareAscii(left.identity, right.identity),
 	);
-	const byName = new Map<string, OperationContract>();
-	for (const operation of network) {
-		const name = operationName(operation.identity);
-		const existing = byName.get(name);
-		if (existing) {
-			const origins = [existing.identity, operation.identity].map(
-				(identity) =>
-					input.originMap.resources.find(
-						(resource) => resource.identity === identity,
-					)?.establishedAt ?? { identity },
-			);
-			throw new CompilerDiagnosticError(
-				"QP-COMPOSE-029",
-				"httpProjectionCollision",
-				`${existing.identity} and ${operation.identity} share OpenAPI operationId ${name}`,
-				{
-					reason: "openApiOperationIdCollision",
-					rewrite: "rename one Operation; OpenAPI never suffixes identities",
-					origins,
-				},
-			);
-		}
-		byName.set(name, operation);
-	}
+	const metadata = projectOperationMetadata({
+		documentationBytes: input.documentationBytes,
+		documentationDigest: input.documentationDigest,
+		httpContractDigest: input.httpContract.digest,
+		operationContracts: input.operationContracts.operations,
+		networkOperations: network,
+		origins: input.originMap.resources,
+	});
 	const paths = Object.fromEntries(
 		network.map((operation) => {
 			const kind = operationKind(operation.identity);
@@ -862,7 +751,7 @@ export function projectOperationProjection(
 				{
 					[kind === "query" ? "get" : "post"]: openApiOperation(
 						operation,
-						documentationByIdentity.get(operation.identity),
+						metadata.documentationByIdentity.get(operation.identity),
 						input.applicationName,
 						input.contextCodec,
 					),
@@ -881,16 +770,11 @@ export function projectOperationProjection(
 		paths,
 		components: { schemas: frameworkSchemas(input.httpContract.failures) },
 	};
-	const explain = projectionExplanation(
-		input,
-		new Set(network.map(({ identity }) => identity)),
-	);
-	const jsdoc = projectOperationJsDoc(input);
 	return {
 		openapi,
 		openapiBytes: canonicalBytes(openapi),
-		explain,
-		explainBytes: canonicalBytes(explain),
-		jsdoc,
+		explain: metadata.explain,
+		explainBytes: canonicalBytes(metadata.explain),
+		jsdoc: metadata.jsdoc,
 	};
 }
