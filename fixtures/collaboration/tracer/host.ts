@@ -66,19 +66,20 @@ const observability = createOfficialQuestpieObservability(() => ({
 	version: 1,
 	extract: () => null,
 	begin: (start: Readonly<Record<string, unknown>>) => {
-		const inverseRecompute =
+		const inverseOperation =
 			start.kind === "query" &&
-			start.entry === "watch_recompute" &&
 			start.resourceIdentity === "query:channels.detail";
-		if (inverseRecompute) inspectInverseObservation(start);
+		const inverseRecompute =
+			inverseOperation && start.entry === "watch_recompute";
+		if (inverseOperation) inspectInverseObservation(start);
 		return {
 			context: null,
 			run: async <Result>(use: () => Result | Promise<Result>) => await use(),
 			event: (event: unknown) => {
-				if (inverseRecompute) inspectInverseObservation(event);
+				if (inverseOperation) inspectInverseObservation(event);
 			},
 			end: (end: Readonly<{ outcome: string }>) => {
-				if (inverseRecompute) inspectInverseObservation(end);
+				if (inverseOperation) inspectInverseObservation(end);
 				if (inverseRecompute && end.outcome === "framework_error")
 					inverseRuntimeEvidence.failedRecomputations += 1;
 			},
