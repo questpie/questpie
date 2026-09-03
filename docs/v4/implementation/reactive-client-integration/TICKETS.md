@@ -1,5 +1,9 @@
 # Reactive client integration tracer tickets
 
+- Status: QRI-01 through QRI-05 complete; the production Query Resource,
+  reference consumers, React projection, deletion, documentation, and release
+  evidence are closed
+
 These tickets implement Accepted ADR-0035 in dependency order. Each ticket is
 an independently verifiable vertical slice. Agents start with the first
 unblocked ticket and preserve one generated client and one Live Query kernel.
@@ -16,20 +20,20 @@ lifetime contract. Do not add authoring metadata or a second transport.
 
 ### Acceptance criteria
 
-- [ ] Tests fail first for `.observe` presence/absence, exact inferred output,
+- [x] Tests fail first for `.observe` presence/absence, exact inferred output,
       canonical input cloning, same-scope identity, cross-scope isolation,
       stable callables, independent subscription tokens, stale generations,
       complete replacement, reconnect retention, terminal recovery, 128-entry
       LRU behavior, retained eviction, and subscriber-fault containment.
-- [ ] Compiler output derives every member from existing watchability, Query
+- [x] Compiler output derives every member from existing watchability, Query
       identity, codecs, and Context scope; no duplicated parameter, description,
       key, invalidation, OpenAPI, MCP, or React definition is authored.
-- [ ] A packed generated client observes one real loopback watch while a
+- [x] A packed generated client observes one real loopback watch while a
       one-shot-only Query has no `.observe` in types or runtime output.
-- [ ] Terminal failures and diagnostics disclose only closed codes; no fallback
+- [x] Terminal failures and diagnostics disclose only closed codes; no fallback
       poller, one-shot call, retry loop, global cache, compatibility path, or
       second realtime kernel exists.
-- [ ] Focused compiler/client tests, strict type tests, package isolation,
+- [x] Focused compiler/client tests, strict type tests, package isolation,
       architecture, format/lint, and `git diff --check` pass.
 
 ### Blocked by
@@ -48,15 +52,15 @@ Query transport.
 
 ### Acceptance criteria
 
-- [ ] Byte-equal Context in different scopes never shares; replacing the Auth
+- [x] Byte-equal Context in different scopes never shares; replacing the Auth
       lifetime removes the old scope from the rendered application path.
-- [ ] Authority reset replaces complete output and authorization failure clears
+- [x] Authority reset replaces complete output and authorization failure clears
       it without Policy, credential, input, result, endpoint, or stack detail.
-- [ ] Committed Change Ledger work publishes after fresh recomputation;
+- [x] Committed Change Ledger work publishes after fresh recomputation;
       rollback and zero-row work publish nothing.
-- [ ] Retained evicted handles cannot restart or delete replacements; duplicate
+- [x] Retained evicted handles cannot restart or delete replacements; duplicate
       callbacks remain independent; one subscriber fault cannot affect peers.
-- [ ] Last unsubscribe and browser cancellation stop owned watch/reconnect work;
+- [x] Last unsubscribe and browser cancellation stop owned watch/reconnect work;
       PostgreSQL containers, ports, hosts, and browser resources are cleaned.
 
 ### Blocked by
@@ -75,16 +79,16 @@ immutable iterative scope with no callback or disposal protocol.
 
 ### Acceptance criteria
 
-- [ ] Queue and detail screens render pending, ready, reconnecting, reset, and
+- [x] Queue and detail screens render pending, ready, reconnecting, reset, and
       terminal states from Query Resource snapshots.
-- [ ] Mutations do not write or invalidate client state; committed watched
+- [x] Mutations do not write or invalidate client state; committed watched
       Queries update through the Change Ledger and one-shot refresh remains
       explicit where still required.
-- [ ] The named duplicated guards, state records, late-delivery code, and refresh
+- [x] The named duplicated guards, state records, late-delivery code, and refresh
       fan-out are deleted rather than hidden behind adapters.
-- [ ] PostgreSQL 17 and Firefox pass the beginner journey with exact generated
+- [x] PostgreSQL 17 and Firefox pass the beginner journey with exact generated
       types and no manual application request/response contract.
-- [ ] No callback-form Context API, `using`, `dispose`, global provider,
+- [x] No callback-form Context API, `using`, `dispose`, global provider,
       application cache, fallback, or compatibility Resource is introduced.
 
 ### Blocked by
@@ -102,16 +106,16 @@ tracer without moving identity or cache ownership into React.
 
 ### Acceptance criteria
 
-- [ ] The hook calls exact
+- [x] The hook calls exact
       `useSyncExternalStore(resource.subscribe, resource.getSnapshot)` and
       preserves the generated Query output union without caller generics.
-- [ ] Strict Mode subscribe/unsubscribe/resubscribe opens no concurrent watches
+- [x] Strict Mode subscribe/unsubscribe/resubscribe opens no concurrent watches
       and stops each final generation once.
-- [ ] Package exports only the hook, pins exact QUESTPIE and React peer bounds,
+- [x] Package exports only the hook, pins exact QUESTPIE and React peer bounds,
       and passes packed-install mismatch and package-isolation tests.
-- [ ] Core `questpie`, generated clients, and applications without the adapter
+- [x] Core `questpie`, generated clients, and applications without the adapter
       contain no React import.
-- [ ] The package contains no cache, transport, Context, credential, retry,
+- [x] The package contains no cache, transport, Context, credential, retry,
       invalidation, ReactDOM, TanStack, OpenTelemetry, SSR, Suspense, hydration,
       provider, fallback, or generated-application dependency.
 
@@ -131,18 +135,18 @@ evidence, and close the complete release-sensitive vertical.
 
 ### Acceptance criteria
 
-- [ ] Public examples use iterative `const api = client.withContext(ctx)` and
+- [x] Public examples use iterative `const api = client.withContext(ctx)` and
       inferred generated input/output; they repeat no Query parameters or
       projection metadata and claim no Context disposal semantics.
-- [ ] The discriminated reference recipe imports the exact three ADR-0037
+- [x] The discriminated reference recipe imports the exact three ADR-0037
       helpers and makes no Relation, codec, SQL, Policy, or Runtime
       polymorphism claim; QRI adds no duplicate implementation or alias.
-- [ ] Prototype runtime/test duplication and every obsolete fixture path named
+- [x] Prototype runtime/test duplication and every obsolete fixture path named
       in the ADR deletion ledger are removed with no compatibility fallback.
-- [ ] Relevant PostgreSQL 17/browser tracers, package isolation, workspace
+- [x] Relevant PostgreSQL 17/browser tracers, package isolation, workspace
       types, docs types/build, architecture, `quality:release`, and two release
       dry-runs pass with clean resource cleanup.
-- [ ] Independent Standards and Spec reviews pass and `git diff --check` is
+- [x] Independent Standards and Spec reviews pass and `git diff --check` is
       clean before coherent closure commits.
 
 ### Blocked by

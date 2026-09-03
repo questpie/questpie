@@ -1,6 +1,6 @@
 # Reactive client integration implementation specification
 
-- Status: Ready from Accepted ADR-0035
+- Status: implemented and closed from Accepted ADR-0035
 - Classification: Product projection under ADR-0027
 - Authority: ADR-0012, ADR-0014, ADR-0019, ADR-0022, ADR-0027, and ADR-0035
 - Delivery: tracer-led, test-first, no formal proof lane
