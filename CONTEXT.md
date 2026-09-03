@@ -574,6 +574,18 @@ application-specific generated skill.
 
 Do not use: OpenAPI metadata, MCP metadata, codec description.
 
+### Projection Explanation
+
+A compiler-owned artifact that records which Resources a Contract Projection
+includes or omits and preserves their Origins. The local OpenAPI candidate is
+`operation-projection-explain.json`; `questpie explain projection openapi
+--json` verifies its generated checksum and semantic digest cross-pins and
+prints its canonical bytes unchanged.
+
+A Projection Explanation is not a CLI-built summary, source inspection,
+Runtime observation, database query, Policy trace, or disclosure of Operation
+Documentation values.
+
 ### OpenAPI Projection
 
 The optional deterministic OpenAPI 3.1 Contract Projection of canonical

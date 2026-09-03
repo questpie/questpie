@@ -45,6 +45,11 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 37. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
 38. [Freeze projection-neutral Operation documentation](./0040-freeze-projection-neutral-operation-documentation.md)
 
+## Proposed
+
+- [Slice the beta.2 DX release](./0039-slice-the-beta-two-dx-release.md)
+- [Freeze local OpenAPI projection explanation](./0041-freeze-local-openapi-projection-explanation.md)
+
 ## Open decisions
 
 The schema lifecycle, static composition, foundational data/structural Query,
@@ -139,6 +144,11 @@ relocation-stable documentation artifact and independent digest shared by
 generated projections. It adds no codec or Field prose, projection-specific
 authoring, Runtime authority, executable example, compatibility alias, or
 application-specific generated skill.
+ADR-0041 proposes one exact local JSON command for the compiler-owned OpenAPI
+projection explanation. It would print the existing canonical explanation
+artifact unchanged after complete checksum and cross-pin verification, without
+source evaluation, Runtime or database access, a CLI-owned envelope, or a
+broader Resource/operational explain surface.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path

@@ -201,9 +201,12 @@ Resource Set, or continue after a mismatch.
 ## Origins and explanation
 
 The Origin Map records each executable Definition, handler, and Operation Set
-member. `questpie explain --json` joins that map with canonical executable
-projections, generated-member metadata, and the matched Runtime Build. Explain
-does not execute source or infer identity from bundle text.
+member. Generated projection explanations may join that map with canonical
+compiler artifacts, generated-member metadata, and a matched Runtime Build.
+They do not execute source or infer identity from bundle text. The broad
+Resource and operational `questpie explain --json` interface is deferred;
+ADR-0041 proposes only the local OpenAPI projection subject over existing
+compiled artifacts.
 
 Reverse discovery order and absolute checkout relocation preserve semantic,
 generated, Origin, and Runtime Build bytes. A logical source move preserves

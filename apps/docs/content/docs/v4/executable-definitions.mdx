@@ -148,9 +148,10 @@ The generated loader binds slots statically. It refuses startup when a binding
 is missing, duplicated, stale, the wrong Resource kind, or belongs to another
 build. Runtime does not scan source, merge Definitions, or repair a mismatch.
 
-Use `questpie explain --json` to join Resource identity, Owner, Origin,
-generated members, output source, slot digest, and Runtime Build identity. The
-command reads compiled artifacts. It does not execute application source.
+`questpie build` records Resource identity and Origin in `origin-map.json` and
+pairs executable slots with `runtime-build.json`. These generated artifacts do
+not execute application source when you inspect them. QUESTPIE does not
+currently publish a broad Resource or operational `explain` command.
 
 [Inspect the generated App Contract and artifacts](./definition-composition#use-generated-output).
 

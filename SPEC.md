@@ -502,6 +502,18 @@ Documentation never grants exposure, Authority, Policy, a handler, or Runtime
 capability and never changes Client Contract, Operation Wire, Schema
 Projection, or Schema Fingerprint identity.
 
+The local OpenAPI projection explanation has one exact candidate invocation:
+`questpie explain projection openapi --json`. It verifies the last complete
+generated checksum set, Operation Documentation digest, Operation HTTP digest,
+and matched Runtime Build cross-pin, then writes the compiler-owned canonical
+`operation-projection-explain.json` bytes unchanged. The CLI does not filter or
+reconstruct the artifact, compile source, execute a Definition, start Runtime,
+or connect to a database. The artifact lists included network Operations and
+omitted direct-only Operations and raw Routes with their Origins. It contains
+neither documentation values nor Policy, credential, handler, request, SQL, or
+Runtime evidence. Broader Resource and operational explanation are not part of
+this candidate.
+
 ## 12. Hosting and Cloud
 
 The open product includes the compiler, standalone Runtime, migrations, Change

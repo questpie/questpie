@@ -795,6 +795,16 @@ disclosure/exposure parity, and request-time Runtime absence. The planned
 public `skills/questpie` skill stays a separate portable framework skill, not
 an application-generated projection.
 
+ADR-0041 is Proposed to resolve the remaining explain authority ambiguity. Its
+only candidate command is
+`questpie explain projection openapi --json`. The CLI would verify the complete
+generated checksums plus Operation Documentation, Operation HTTP, and Runtime
+Build cross-pins, then print the compiler-owned
+`operation-projection-explain.json` canonical bytes unchanged. It would not
+compile or inspect source, start Runtime, connect to PostgreSQL, filter the
+artifact, or create another JSON envelope. Broader Resource and operational
+explanation remain deferred. No implementation or acceptance review has run.
+
 ADR-0037 is Accepted as a Product projection under ADR-0027 after independent
 Standards and Spec PASS. `questpie` exports only `DiscriminatedValue`,
 `DiscriminatedReference`, and `matchDiscriminated` for ordinary TypeScript
@@ -851,17 +861,22 @@ byte-identical release dry-runs pass.
    stale deletion, and do not add codec/Field prose, projection-specific
    registries, Runtime reads, fallback behavior, or application-generated
    skills.
-9. ADR-0033 and its focused ADR-0034 correction are Accepted. OTEL-01 through
-   OTEL-06 are complete through `0a37ee993`; `2c4a0b98d` closes that handoff.
-   Continue with OTEL-07's reference browser and hostile tracers, then OTEL-08's
-   public guide and release closure. OTEL-07 must rebind generated-Fetch
-   classification from the retained `operationPath` POST baseline to the
-   canonical HTTP binding artifact only after HTTP-02 lands; this integration
-   does not pre-merge that in-progress artifact. Do not restore a v7/v8 Runtime
-   compatibility path, add a second observation kernel, or publish the
-   `apps/docs` install guide before OTEL-07 passes and OTEL-08 closes release
-   evidence.
-10. Do not reopen the reference application by adding Cron, Collection triggers,
+9. Do not implement the proposed ADR-0041 CLI until the focused candidate is
+   accepted. `EXPLAIN-01` may expose only the exact local OpenAPI JSON command
+   and unchanged compiler artifact; it cannot add a broad explain surface,
+   source/Runtime/database execution, filtering, wrapper, compatibility path,
+   or fallback.
+10. ADR-0033 and its focused ADR-0034 correction are Accepted. OTEL-01 through
+    OTEL-06 are complete through `0a37ee993`; `2c4a0b98d` closes that handoff.
+    Continue with OTEL-07's reference browser and hostile tracers, then OTEL-08's
+    public guide and release closure. OTEL-07 must rebind generated-Fetch
+    classification from the retained `operationPath` POST baseline to the
+    canonical HTTP binding artifact only after HTTP-02 lands; this integration
+    does not pre-merge that in-progress artifact. Do not restore a v7/v8 Runtime
+    compatibility path, add a second observation kernel, or publish the
+    `apps/docs` install guide before OTEL-07 passes and OTEL-08 closes release
+    evidence.
+11. Do not reopen the reference application by adding Cron, Collection triggers,
     checkpoints, generic browser control or workflow orchestration without new
     product authority.
-11. Do not push, tag or publish without explicit authority.
+12. Do not push, tag or publish without explicit authority.

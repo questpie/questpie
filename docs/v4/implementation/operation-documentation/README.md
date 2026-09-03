@@ -122,9 +122,10 @@ Acceptance:
 - generated JSDoc originates only from the documentation artifact, preserves
   exact Definition typing, and contains no executable or authority-bearing
   annotation;
-- the existing `questpie explain --json` path gains one compiler-owned
-  documentation record; this slice adds no CLI verb, and the red tracer freezes
-  its exact record shape before implementation;
+- the compiler emits one `operation-projection-explain.json` record with the
+  Operation Documentation and HTTP contract digests; the separate CLI surface
+  remains blocked on ADR-0041 and cannot add a wrapper or reinterpret these
+  bytes;
 - explain inclusion/omission exactly matches generation, reports direct-only
   Operations as omitted with Origin, and discloses no rejected values, Policy
   evidence, Context, credentials, handlers, SQL, or PostgreSQL detail;
@@ -146,6 +147,26 @@ Acceptance:
   docs type/build, `quality:release`, two byte-identical release dry-runs,
   independent Standards/Spec/docs reviews, cleanup, and `git diff --check`
   pass.
+
+## EXPLAIN-01 — Expose the verified local OpenAPI explanation
+
+Blocked by: acceptance of ADR-0041.
+
+The proposed Product slice adds only
+`questpie explain projection openapi --json`. It reads the last complete
+generated directory, verifies the full checksum manifest, recomputes the
+Operation Documentation and Operation HTTP digests, cross-pins the HTTP digest
+through the matched Runtime Build, and writes the existing canonical
+`operation-projection-explain.json` bytes unchanged.
+
+Acceptance must pin exact success stdout, empty success stderr, all failure
+status and stderr families, zero partial stdout, included and omitted Origins,
+nondisclosure, relocation, packed-package use, and the absence of source,
+compiler, generated application, Runtime, network, and database execution.
+Resource, Runtime-event, execution, transaction, subscription, Durable Run,
+MCP, skill, remote, and human-form explanation remain deferred. No CLI-owned
+JSON envelope, filtering, compatibility invocation, rebuild option, fallback,
+or alternate artifact reader is allowed.
 
 ## Test-first and deletion rules
 
