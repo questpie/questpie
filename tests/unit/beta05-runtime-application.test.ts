@@ -2600,10 +2600,13 @@ async function createHoldingRuntime(
 					const signal = (ctx as Readonly<{ signal: AbortSignal }>).signal;
 					const release = () => resolve({ count: 1 });
 					releases.push(release);
-					if (!input.ignoreAbort)
-						signal.addEventListener("abort", () => reject(signal.reason), {
-							once: true,
-						});
+					if (!input.ignoreAbort) {
+						if (signal.aborted) reject(signal.reason);
+						else
+							signal.addEventListener("abort", () => reject(signal.reason), {
+								once: true,
+							});
+					}
 				}),
 		),
 	];
@@ -2693,8 +2696,9 @@ test("separates runtime deadlines from Fetch disconnect cancellation", async () 
 			signal: disconnect.signal,
 		},
 	);
+	const releaseCountBeforeFetch = releases.length;
 	const pending = app.fetch(request);
-	while (releases.length < 2) await Bun.sleep(0);
+	while (releases.length <= releaseCountBeforeFetch) await Bun.sleep(0);
 	disconnect.abort();
 	const response = await pending;
 	expect(response.status).toBe(408);
