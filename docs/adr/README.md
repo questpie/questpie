@@ -44,12 +44,12 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 36. [Freeze canonical Operation HTTP and OpenAPI projection](./0036-freeze-canonical-operation-http-and-openapi-projection.md)
 37. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
 38. [Freeze projection-neutral Operation documentation](./0040-freeze-projection-neutral-operation-documentation.md)
+39. [Freeze public package identities](./0042-freeze-public-package-identities.md)
 
 ## Proposed
 
 - [Slice the beta.2 DX release](./0039-slice-the-beta-two-dx-release.md)
 - [Freeze local OpenAPI projection explanation](./0041-freeze-local-openapi-projection-explanation.md)
-- [Freeze public package identities](./0042-freeze-public-package-identities.md)
 
 ## Open decisions
 
@@ -126,9 +126,9 @@ Queries, keeps canonical Query Resource identity and bounded lifetime inside one
 immutable generated Context scope, and accepts an optional exact-peer React
 `useSyncExternalStore` adapter. It adds no fallback poller, Mutation
 invalidation, global provider, second client cache, or polymorphic Relation
-kernel. Together with ADR-0033, it makes the current beta publishable set exactly
-`questpie`, `@questpie/react`, and `@questpie/opentelemetry`; the OpenTelemetry
-release requirement is unchanged.
+kernel. ADR-0042 supersedes only its package placement: the adapter now ships as
+the `questpie/react` subpath while the React projection semantics remain
+unchanged.
 ADR-0036 replaces the polymorphic Operation RPC endpoint with one
 compiler-derived endpoint per network Query, Mutation, and Action. Generated
 clients and optional OpenAPI 3.1 use the same Resource identities, codecs,
@@ -150,6 +150,10 @@ projection explanation. It would print the existing canonical explanation
 artifact unchanged after complete checksum and cross-pin verification, without
 source evaluation, Runtime or database access, a CLI-owned envelope, or a
 broader Resource/operational explain surface.
+ADR-0042 replaces the scoped React and OpenTelemetry package placement with
+exactly two public npm packages: `questpie`, including `questpie/react`, and
+`questpie-opentelemetry`. It deletes the old identities without aliases or
+fallback resolution while preserving both accepted projection kernels.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path

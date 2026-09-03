@@ -124,16 +124,16 @@ state or prevent peer notification.
 
 ## Use the optional React adapter
 
-Install the adapter beside the exact matching QUESTPIE release and React 19:
+Install QUESTPIE with its compatible optional React 19 peer:
 
 ```sh
-bun add @questpie/react react
+bun add questpie@4.0.0-beta.2 react@^19.2.0
 ```
 
-The package exports one hook:
+The `questpie/react` subpath exports one hook:
 
 ```tsx title="web/AppointmentCalendar.tsx"
-import { useQueryResource } from "@questpie/react";
+import { useQueryResource } from "questpie/react";
 
 import { createBarbershopApi } from "./barbershop-api";
 

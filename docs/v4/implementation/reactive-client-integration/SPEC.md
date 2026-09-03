@@ -15,8 +15,8 @@ metadata, or React configuration.
 
 The generated framework-neutral Query Resource owns canonical identity,
 bounded snapshot lifetime, and one shared accepted watch. The optional
-`@questpie/react` package projects that resource with one hook and owns no
-client or cache behavior.
+`questpie/react` export subpath projects that resource with one hook and owns
+no client or cache behavior.
 
 ## Existing facts are the only inputs
 
@@ -104,8 +104,8 @@ shared `AbortSignal`, timeout, or cancellation authority.
 
 ## Optional React projection
 
-`@questpie/react` `4.0.0-beta.1` has exact peer `questpie: 4.0.0-beta.1` and
-React peer `react: ^19.2.0`. It exports only:
+`questpie@4.0.0-beta.2` exports `./react` and declares
+`react: ^19.2.0` as an optional peer. The subpath exports only:
 
 ```ts
 useQueryResource<Output>(
@@ -115,7 +115,7 @@ useQueryResource<Output>(
 
 The implementation is exactly
 `useSyncExternalStore(resource.subscribe, resource.getSnapshot)`. Stable
-resource callables require no binding wrapper. The package has no ReactDOM,
+resource callables require no binding wrapper. The subpath has no ReactDOM,
 compiler, Runtime, PostgreSQL, generated application, TanStack, OpenTelemetry,
 SSR, hydration, Suspense, transition, server-component, provider, cache,
 transport, retry, invalidation, or fallback owner.

@@ -12,10 +12,10 @@ and Actions.
 ## Enable the official adapter
 
 Install the optional adapter beside the exact matching `questpie` version. For
-the first beta, install both packages together:
+beta.2, install both packages together:
 
 ```sh
-bun add questpie@4.0.0-beta.1 @questpie/opentelemetry@4.0.0-beta.1
+bun add questpie@4.0.0-beta.2 questpie-opentelemetry@4.0.0-beta.2
 ```
 
 The adapter has an exact `questpie` peer dependency. Upgrade both packages to
@@ -29,7 +29,7 @@ Barbershop appointment Query directly and closes the App before it closes the
 adapter:
 
 ```ts title="scripts/list-appointments.ts"
-import { createOpenTelemetry } from "@questpie/opentelemetry";
+import { createOpenTelemetry } from "questpie-opentelemetry";
 import { createApp } from "#questpie/app";
 
 export async function listAppointments(input: {
@@ -106,7 +106,7 @@ closes telemetry. The same 30-second adapter bound applies. An App or Runtime
 close failure remains primary even if export, flush, or shutdown also fails.
 
 `questpie start --telemetry=opentelemetry` performs the same explicit setup for
-the CLI host and resolves `@questpie/opentelemetry` from the application root.
+the CLI host and resolves `questpie-opentelemetry` from the application root.
 Without the flag, QUESTPIE does not load the adapter or start exporter work. A
 missing package, missing `createOpenTelemetry` export, or incompatible neutral
 interface fails before readiness with `QP-START-004 telemetryUnavailable`. An

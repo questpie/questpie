@@ -268,6 +268,14 @@ capability ownership.
   duplicate tests are deleted. The ADR and ordinary repository history retain
   the decision and review evidence.
 
+ADR-0042 supersedes only the npm package spelling and placement, peer metadata,
+and package-cardinality and archive clauses. The React projection now ships as
+`questpie/react`; React `^19.2.0` is an optional peer of `questpie`, whose root
+and non-React subpaths remain React-free. Every Query Resource identity,
+lifetime, cancellation, retry, disclosure, and `useSyncExternalStore` clause
+remains Accepted unchanged. The scoped spellings above are historical, not
+compatibility aliases or fallback resolution candidates.
+
 ## Rejected alternatives
 
 - A React-owned cache, transport, retry loop, or generated-client replacement.

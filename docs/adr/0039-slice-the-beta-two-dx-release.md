@@ -22,14 +22,14 @@ The next connected prerelease is `4.0.0-beta.2`. Beta.1 remains immutable
 history. Beta.2 contains only the rows in the candidate scope table at
 [`docs/v4/beta2-release-scope.md`](../v4/beta2-release-scope.md).
 
-Three public packages ship at the exact same version:
+Two public packages ship at the exact same version:
 
 - `questpie` owns structural authoring, the compiler, generated application and
-  clients, Runtime kernels, and CLI;
-- `@questpie/react` is an exact peer that projects Query Resource through
-  `useSyncExternalStore` and owns no cache, transport, retry, invalidation,
-  provider, SSR, Suspense, hydration, or fallback behavior;
-- `@questpie/opentelemetry` is an exact peer that projects the Runtime
+  clients, Runtime kernels, CLI, and the optional `questpie/react` subpath. The
+  subpath projects Query Resource through `useSyncExternalStore` and owns no
+  cache, transport, retry, invalidation, provider, SSR, Suspense, hydration, or
+  fallback behavior;
+- `questpie-opentelemetry` is an exact peer that projects the Runtime
   observation contract through the official OpenTelemetry SDK and owns no
   application authority or durable truth.
 
@@ -78,10 +78,11 @@ Beta.2 is release-ready only when:
 3. Team Support Desk passes as the beginner browser consumer and Collaboration
    passes its authority, nondisclosure, lifecycle, inverse, realtime,
    OpenTelemetry, HTTP, and MCP hostiles on PostgreSQL 17;
-4. `questpie`, `@questpie/react`, and `@questpie/opentelemetry` use exact
-   `4.0.0-beta.2` peer relationships, pack twice byte-identically, install
-   together in a relocated clean consumer, and fail closed on missing or
-   mismatched peers;
+4. `questpie` and `questpie-opentelemetry` use exact `4.0.0-beta.2`
+   release/peer relationships, `questpie` declares React `^19.2.0` as an
+   optional peer, both archives pack twice byte-identically, install together
+   in a relocated clean consumer, and fail closed on missing or mismatched
+   required peers;
 5. the public skill validates in its distribution directory, follows no
    repository-internal pointer, uses only released syntax, and its referenced
    examples compile against the packed packages;

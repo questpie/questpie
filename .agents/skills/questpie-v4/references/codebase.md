@@ -6,12 +6,13 @@ private implementation by product domain, not by generic technical layer.
 ## Topology
 
 - Keep `questpie` as the sole application authoring/Runtime package and its
-  explicit public barrel. Compiler, Runtime, and testkit packages remain
-  private implementation modules.
-- ADR-0033 accepts one optional exact-peer package,
-  `@questpie/opentelemetry`, as a narrow exception. Applications still author
-  and run through `questpie`, and the integration implements the core-owned
-  opaque observation handle. This is not a generic integration-package rule.
+  explicit public barrel, including the optional `questpie/react` subpath.
+  Compiler, Runtime, and testkit packages remain private implementation
+  modules.
+- Keep `questpie-opentelemetry` as the one optional exact-peer package.
+  Applications still author and run through `questpie`, and the integration
+  implements the core-owned opaque observation handle. This is not a generic
+  integration-package rule, and the `questpie-` prefix conveys no trust.
 - Group compiler implementation under domain folders such as `composition/`,
   `schema/`, and `seed/`.
 - Give each domain one internal seam at `<domain>/index.ts`. Cross-domain imports

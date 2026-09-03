@@ -710,7 +710,7 @@ successful end and never uses a fabricated numeric status.
 
 ### Official Observability Adapter
 
-The optional exact-peer `@questpie/opentelemetry` package that implements the
+The optional exact-peer `questpie-opentelemetry` package that implements the
 core-owned opaque observability handle and projects closed Runtime observation
 facts into OpenTelemetry. It is host configuration, not a Definition, Service,
 Context capability, public event callback, general provider SPI, authorization

@@ -1,7 +1,9 @@
 # OpenTelemetry implementation queue
 
-- Status: OTEL-01 through OTEL-08 complete; the exact three-package release
-  candidate is closed without publishing
+- Status: OTEL-01 through OTEL-08 complete; the historical beta.1
+  three-package release candidate closed without publishing. The current
+  beta.2 projection has exactly two npm packages: `questpie`, including
+  `questpie/react`, and `questpie-opentelemetry`.
 - Spec: [`SPEC.md`](./SPEC.md)
 - Authority: Accepted ADR-0033 and ADR-0034 with their verified replacement reviews
 - Delivery rule: every ticket starts red and lands a narrow runnable tracer
@@ -175,7 +177,7 @@ Blocked by: OTEL-03.
 Red test:
 
 - a clean isolated consumer cannot install exact-peer `questpie` plus
-  `@questpie/opentelemetry`, create the opaque handle, and obtain the exact
+  `questpie-opentelemetry`, create the opaque handle, and obtain the exact
   `SIGNALS.md` spans and metrics from an in-memory/OTLP exporter;
 - invalid supported configuration, structural forgeries, unknown members,
   sampler combinations, queue bounds, and dependency/version drift do not
@@ -276,7 +278,7 @@ repairs are integrated through `eccb437ff`. The complete combined PostgreSQL
 substitute for OTEL-08's aggregate package, documentation, release, review, or
 cleanup evidence.
 
-## OTEL-08 — Publish docs and close the three-package release
+## OTEL-08 — Publish docs and close the release
 
 Blocked by: OTEL-07.
 
@@ -288,21 +290,23 @@ Delete the unsupported 4,096-event queue, 30-day telemetry-retention, and
 365-day audit-retention claims. Do not add unrelated React bindings.
 
 The public guide, routing, and runtime-page corrections were integrated at
-`9a495f0c3`. Aggregate closure now also includes the exact three-package
-manifest, clean isolated installs, byte-identical dry-runs, packed embedded and
-CLI tracers, PostgreSQL 17/browser evidence, `quality:release`, and independent
-Standards and Spec/deletion PASS. No package was published.
+`9a495f0c3`. The historical beta.1 aggregate closure included its exact
+three-package manifest, clean isolated installs, byte-identical dry-runs,
+packed embedded and CLI tracers, PostgreSQL 17/browser evidence,
+`quality:release`, and independent Standards and Spec/deletion PASS. No package
+was published. The current beta.2 projection changes only the package identity,
+React placement, and release cardinality covered below.
 
 Acceptance:
 
-- the release manifest enumerates exactly `questpie@4.0.0-beta.1`,
-  `@questpie/react@4.0.0-beta.1`, and
-  `@questpie/opentelemetry@4.0.0-beta.1`; both optional-package peers on
-  `questpie` are that exact version, the React peer matches ADR-0035, a missing
-  or mismatched package fails, and no fourth public package appears;
-- all three tarballs pack twice byte-identically and install together into one
-  clean relocated consumer for import/build verification; core also passes its
-  standalone isolation contract without either optional package;
+- the release manifest enumerates exactly `questpie@4.0.0-beta.2` and
+  `questpie-opentelemetry@4.0.0-beta.2`; the adapter exact-peers that
+  `questpie` version, `questpie` declares the ADR-0035 React peer as optional,
+  and a missing, mismatched, obsolete, or extra public package fails;
+- both tarballs pack twice byte-identically and install together into one clean
+  relocated consumer that imports `questpie`, `questpie/react`, and
+  `questpie-opentelemetry`; core also passes its standalone isolation contract
+  without React or OpenTelemetry;
 - the complete registered PostgreSQL 17 lane includes fresh v8, live v7-to-v8
   cutover, 21-table catalog/completeness, both refusal directions, durable
   hostiles, two instances, and backup/restore;
@@ -318,12 +322,14 @@ Acceptance:
 - every resource is cleaned, the worktree is clean, and `git diff --check`
   passes. No push, tag, publish, or deploy occurs.
 
-ADR-0035 supersedes only ADR-0033's original two-package count. The checked
-two-entry release manifest and two-profile release script that predate this
-ticket are not OTEL-08 closure evidence. OTEL-08 must update the explicit
+Historically, ADR-0035 superseded ADR-0033's original two-package count for
+beta.1. ADR-0042 now supersedes only that package identity, React placement,
+peer placement, and release-cardinality result. The former three-entry beta.1
+manifest remains historical evidence, not beta.2 release evidence. The current
 release profiles, generated artifact manifest, archive/declaration checks, and
-clean-consumer proof atomically after OTEL-07. This correction does not mark
-OTEL-08 complete and does not weaken the required OpenTelemetry package.
+clean-consumer proof must move atomically to the exact two-package inventory.
+This projection does not weaken the required OpenTelemetry package or any
+OpenTelemetry runtime behavior.
 
 ## Test-first rules
 

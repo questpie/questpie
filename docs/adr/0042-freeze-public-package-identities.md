@@ -1,6 +1,6 @@
 # ADR-0042: Freeze public package identities
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-03
 - Owners: Product architecture, package distribution, release
 
@@ -165,3 +165,12 @@ prototype has already shipped or completed them.
 A committed PASS permits a separate authority projection followed by the
 breaking implementation vertical and its independent Standards and Spec
 reviews. PASS does not authorize push, tag, publish, or deploy.
+
+The pinned Opus transport returned two terminal `NO_RESULT` timeouts without a
+review artifact. At the human owner's direction, an independent three-axis
+Codex high-reasoning panel reviewed the replacement candidate, initially
+blocked authority and deletion-inventory omissions, and returned PASS on all
+three axes after the focused repairs. The transparent record is
+`docs/v4/prototypes/public-package-identities/CODEX-PANEL-REVIEW.json`; it does
+not claim to be protocol-v2 or an Opus result and creates no fallback transport
+precedent in the repository wrapper.

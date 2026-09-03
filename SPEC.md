@@ -389,20 +389,21 @@ Service state, SQL text or parameters, provider payloads, exception messages,
 stacks, and arbitrary attributes are absent. The Runtime assigns every identity
 and semantic outcome; an adapter cannot add Envelope facts.
 
-CLI, Studio, tests, and the official optional `@questpie/opentelemetry` adapter
+CLI, Studio, tests, and the official optional `questpie-opentelemetry` adapter
 may consume the same kernel projection. The adapter is exact-peer with
 `questpie`; generated Apps accept only the core-owned opaque observability
 handle. It adds no handler capability, public event callback, general provider
 SPI, or OpenTelemetry dependency to core.
 
-The current beta publishable set is exactly `questpie`, `@questpie/react`, and
-`@questpie/opentelemetry`. All three advance at one release version. Both
-optional packages declare that exact `questpie` version as a peer;
-`@questpie/react` additionally declares its accepted React peer range. Release
+The current beta publishable set is exactly `questpie` and
+`questpie-opentelemetry`. Both advance at one release version, and the
+OpenTelemetry package declares that exact `questpie` version as a peer.
+`questpie` exports `questpie/react` and declares its accepted React range as an
+optional peer. Release
 verification rejects a missing, extra, private-as-public, or version-mismatched
-package, packs every archive twice byte-identically, installs all three into one
+package, packs every archive twice byte-identically, installs both into one
 clean relocated consumer, and separately proves that core installs, imports,
-and builds without either optional package. Explicit OpenTelemetry setup never
+and builds without either optional integration. Explicit OpenTelemetry setup never
 falls back or silently downgrades when its package or peer is absent or
 incompatible.
 
@@ -666,7 +667,7 @@ durable Reaction delivery, atomic multi-Query publication, persistent offline
 resume, or a production Runtime.
 
 ADR-0035 accepts the generated framework-neutral Query Resource projection and
-the optional exact-peer `@questpie/react` adapter. Query Resource identity stays
+the optional `questpie/react` adapter. Query Resource identity stays
 inside one immutable generated Context scope; React owns only
 `useSyncExternalStore` subscription. Mutation results do not update or
 invalidate resources directly. ADR-0037 exports `DiscriminatedValue`,

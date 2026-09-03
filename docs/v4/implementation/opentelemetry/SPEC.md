@@ -32,7 +32,7 @@ projections. Runtime domain owners cross this seam; handler wrappers do not.
 
 The generated host interface exposes only the core-owned opaque
 `QuestpieObservability` handle. The built-in null adapter and official
-`@questpie/opentelemetry` adapter are the two concrete adapters at the private
+`questpie-opentelemetry` adapter are the two concrete adapters at the private
 neutral seam. There is no callback SPI, provider registry, handler capability,
 Definition, Service, Context member, compiler Package, ambient global, or
 generic integration-package rule.
@@ -48,7 +48,7 @@ generic integration-package rule.
 | scope lifetime, ordering, active context, limits, diagnostics     | private Runtime observation module              |
 | start/end timing and semantic outcome                             | existing Runtime domain owner                   |
 | opaque host type and optional generated input                     | `questpie` and generated App Contract           |
-| W3C extraction, SDK objects, signals, buffering, export, shutdown | `@questpie/opentelemetry`                       |
+| W3C extraction, SDK objects, signals, buffering, export, shutdown | `questpie-opentelemetry`                        |
 | durable first-acceptance trace facts                              | existing Job/Reaction acceptance transaction    |
 | protocol-v8 catalog, migration, readiness, cutover                | compiler/PostgreSQL Runtime owners              |
 | CLI package resolution and nested cleanup                         | `questpie start`                                |
@@ -198,7 +198,7 @@ instances use the same exact catalog.
 - Generated `CreateAppInput` gains optional `observability` and imports the
   type only from `questpie`. Generated application and browser client code has
   no OpenTelemetry import or context handling.
-- `@questpie/opentelemetry` is optional, exact-peer with `questpie`, and owns
+- `questpie-opentelemetry` is optional, exact-peer with `questpie`, and owns
   its OpenTelemetry dependencies, exact options, supported environment subset,
   Semantic Conventions 1.44.0 mapping, resources, processors, exporters,
   propagation, buffering, diagnostics, and bounded close.
@@ -206,18 +206,20 @@ instances use the same exact catalog.
   fails explicitly; there is no fallback adapter or silent downgrade.
 
 The release inventory is one closed set, not package discovery: exactly
-`questpie@4.0.0-beta.1`, `@questpie/react@4.0.0-beta.1`, and
-`@questpie/opentelemetry@4.0.0-beta.1`. Both optional packages require exact
-peer `questpie: 4.0.0-beta.1`; React keeps its separately accepted React peer.
-The release lane rejects a missing or fourth public package, version or peer
-drift, and undeclared archive bytes. It packs each of the three archives twice
-and requires byte-identical results, installs all three in one clean relocated
-consumer for import/build verification, and repeats core's standalone
-isolation proof without either optional package.
+`questpie@4.0.0-beta.2` and `questpie-opentelemetry@4.0.0-beta.2`.
+`questpie-opentelemetry` exact-peers `questpie: 4.0.0-beta.2`; `questpie`
+exports `./react` and declares `react: ^19.2.0` as an optional peer. The release
+lane rejects a missing, extra, obsolete, version-drifted, peer-drifted, or
+undeclared archive. It packs both archives twice and requires byte-identical
+results, installs both in one clean relocated consumer that imports
+`questpie`, `questpie/react`, and `questpie-opentelemetry`, and repeats core's
+standalone isolation proof without React or OpenTelemetry.
 
-This three-package inventory is the later ADR-0035 projection over ADR-0033's
-original two-package state. It changes no OpenTelemetry runtime, protocol,
-signal, dependency-isolation, or exact-peer semantics.
+The historical beta.1 release used three packages after ADR-0035 superseded
+ADR-0033's original two-package state. ADR-0042 replaces only those package
+identities, React and peer placement, and release-cardinality clauses. It
+changes no OpenTelemetry runtime, protocol, signal, dependency-isolation, or
+exact-peer semantics.
 
 ## Replacement and deletion
 
@@ -246,7 +248,7 @@ retry/reclaim, restore, and multiple Runtime instances.
 Public docs land only after those tracers pass. Final closure requires focused
 type and unit tests, direct/network/browser parity, hostile and PostgreSQL 17
 lanes, docs build, `quality:release`, deterministic isolated dry-runs for the
-exact three-package inventory, declaration and archive digests, independent
+exact two-package inventory, declaration and archive digests, independent
 Standards and Spec reviews, resource cleanup, and `git diff --check`.
 
 ## Non-goals

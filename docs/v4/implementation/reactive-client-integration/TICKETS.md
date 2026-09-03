@@ -95,14 +95,15 @@ immutable iterative scope with no callback or disposal protocol.
 
 - QRI-01
 
-## QRI-04 — Ship the exact-peer React projection
+## QRI-04 — Ship the React subpath projection
 
 ### What to build
 
-Create the optional `@questpie/react` package with one inferred
-`useQueryResource` hook over the production framework-neutral resource. Carry
-it through a real React 19 Team Support Desk screen and Strict Mode lifetime
-tracer without moving identity or cache ownership into React.
+Add the optional `questpie/react` export subpath to `questpie` with one inferred
+`useQueryResource` hook over the production framework-neutral resource. Declare
+React 19 as an optional peer of `questpie`, then carry the subpath through a
+real Team Support Desk screen and Strict Mode lifetime tracer without moving
+identity or cache ownership into React.
 
 ### Acceptance criteria
 
@@ -111,11 +112,12 @@ tracer without moving identity or cache ownership into React.
       preserves the generated Query output union without caller generics.
 - [x] Strict Mode subscribe/unsubscribe/resubscribe opens no concurrent watches
       and stops each final generation once.
-- [x] Package exports only the hook, pins exact QUESTPIE and React peer bounds,
-      and passes packed-install mismatch and package-isolation tests.
-- [x] Core `questpie`, generated clients, and applications without the adapter
-      contain no React import.
-- [x] The package contains no cache, transport, Context, credential, retry,
+- [x] The `questpie/react` subpath exports only the hook, pins the accepted
+      React peer bound, and passes packed-install mismatch and package-isolation
+      tests.
+- [x] The `questpie` root, generated clients, and applications that do not
+      import the subpath contain no React import.
+- [x] The subpath contains no cache, transport, Context, credential, retry,
       invalidation, ReactDOM, TanStack, OpenTelemetry, SSR, Suspense, hydration,
       provider, fallback, or generated-application dependency.
 
@@ -158,6 +160,6 @@ evidence, and close the complete release-sensitive vertical.
 ```text
 QRI-01 Query Resource core
   ├─> QRI-02 Collaboration hostile tracer ─┐
-  └─> QRI-03 Team Support Desk deletion ──┴─> QRI-04 React adapter
+  └─> QRI-03 Team Support Desk deletion ──┴─> QRI-04 React subpath
                                                 └─> QRI-05 release closure
 ```

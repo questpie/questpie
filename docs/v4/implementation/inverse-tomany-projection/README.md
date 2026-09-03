@@ -217,10 +217,12 @@ Blocked by: INV-01 through INV-05.
 
 Status: complete. Team Support Desk and Collaboration pass their PostgreSQL 17
 and browser/Live Query tracers. Public docs and packed examples compile, the
-three public packages pack byte-identically, `quality:release` passes, and the
-final independent Standards and Spec/deletion reviews report PASS. The old
-comments request path, executable proof copy, aliases, and fallback behavior
-are absent.
+historical beta.1 set of three public packages packed byte-identically,
+`quality:release` passed, and the final independent Standards and Spec/deletion
+reviews reported PASS. The current beta.2 release gate replaces that
+release-only fact with exactly two npm packages: `questpie`, including
+`questpie/react`, and `questpie-opentelemetry`. The old comments request path,
+executable proof copy, aliases, and fallback behavior remain absent.
 
 Reconcile the already published guide with final generated declarations and
 fixture evidence. Cover the simple ticket/comments example, why the nested

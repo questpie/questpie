@@ -636,7 +636,7 @@ ADR-0033 is Accepted after the manifest-bound replacement candidate
 committed at `17ee8898af956c838b3f62b8a34cccd23e365b92`. The accepted boundary
 freezes one private Runtime observation kernel, Execution Envelope v2, exact
 signal artifacts, protocol-v8 first-acceptance durable trace links, and the
-optional exact-peer `@questpie/opentelemetry` integration. It adds no authored
+optional exact-peer `questpie-opentelemetry` integration. It adds no authored
 telemetry capability or generic provider matrix.
 
 ADR-0034 is Accepted after focused candidate
@@ -767,7 +767,7 @@ subscribers share one accepted watch; terminal failure and eviction require a
 fresh observation. The scope has no disposal protocol and must remain an
 ordinary iterative `const api = client.withContext(ctx)` value.
 
-The optional exact-peer `@questpie/react` package owns only
+The optional `questpie/react` subpath owns only
 `useQueryResource` over `useSyncExternalStore`. It adds no cache, transport,
 retry, Mutation invalidation, global provider, SSR, Suspense, hydration, or
 fallback behavior. Team Support Desk owns deletion of handwritten request
@@ -850,9 +850,12 @@ byte-identical release dry-runs pass.
    reimplement lifecycle, restore callback-based Operation Set normalization,
    or create a second Collection/CRUD kernel. Start the next vertical from its
    own accepted authority.
-5. ADR-0035 Query Resource and `@questpie/react` are closed, and the executable
+5. ADR-0035 Query Resource and `questpie/react` are closed, and the executable
    prototype is deleted. Do not retain a compatibility Resource, callback
    Context scope, global cache, fallback poller, or second realtime kernel.
+   ADR-0042 now places that adapter at `questpie/react` and the official
+   observation adapter at `questpie-opentelemetry`; beta.2 has exactly two npm
+   packages and no scoped-name compatibility path.
 6. ADR-0036 canonical Operation HTTP and OpenAPI are closed. The canonical
    document declares every applicable carrier. Team Support Desk's Scalar
    display hides only the compatibility trio and injects its exact generated

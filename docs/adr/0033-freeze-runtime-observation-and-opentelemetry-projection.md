@@ -384,6 +384,14 @@ set. The current beta publishable set is exactly `questpie`,
 the observation kernel, adapter boundary, exact-peer requirement, or any signal
 semantics accepted here.
 
+ADR-0042 further supersedes only the npm package spelling and placement, peer
+metadata, CLI resolution specifier, and package-cardinality and archive clauses.
+The current official adapter is `questpie-opentelemetry`, and the release
+contains exactly it plus `questpie`. Every observation, opaque-handle, SDK,
+startup, failure, propagation, durable-link, flush, shutdown, and nondisclosure
+clause remains Accepted unchanged. The scoped spellings above are historical,
+not compatibility aliases or fallback resolution candidates.
+
 ## Rejected alternatives
 
 - Exposing the existing void event sink as the public observation interface.
