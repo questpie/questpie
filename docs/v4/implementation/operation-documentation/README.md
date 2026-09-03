@@ -1,6 +1,7 @@
 # Operation Documentation implementation map
 
-- Status: ready for implementation
+- Status: DOC-01 and DOC-02 complete; Operation Documentation, OpenAPI, JSDoc,
+  explain inventory, Scalar reference, and release evidence are closed
 - Date: 2026-09-02
 - Classification: compiler Kernel implementation plus Product projections
 - Primary consumer: `fixtures/team-support-desk`

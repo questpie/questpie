@@ -687,9 +687,10 @@ Desk supplies the zero-author-instrumentation browser graph, Collaboration
 supplies hostile parity, and the complete PostgreSQL 17/Firefox tracer passed
 twice consecutively with 329 assertions in 18.15 seconds and 17.87 seconds.
 The public OpenTelemetry guide and runtime-page corrections are integrated at
-`9a495f0c3`. OTEL-08 remains open for aggregate package, documentation,
-release, review, and cleanup evidence; neither beta.2 acceptance nor
-publishability is implied. `questpie` remains the sole application
+`9a495f0c3`. OTEL-08 is now closed with exact three-package manifests,
+isolated packed embedded/CLI evidence, PostgreSQL 17/browser tracers,
+byte-identical dry-runs, `quality:release`, and independent Standards and
+Spec/deletion PASS. Nothing was published. `questpie` remains the sole application
 authoring/Runtime package; compiler, Runtime, and testkit packages remain
 private. The
 historical workbench at `docs/v4/research/observability-2026/WORKBENCH.md`
@@ -795,8 +796,9 @@ codec-typed non-executable examples. The compiler owns one relocation-stable
 documentation artifact and independent digest; documentation grants no
 exposure, Authority, Policy, handler, or Runtime capability. `DOC-01` owns
 production compiler/artifact/package parity and digest-independence evidence.
-`DOC-02` owns OpenAPI/MCP/JSDoc/explain projection, target escaping,
-disclosure/exposure parity, and request-time Runtime absence. The planned
+`DOC-02` owns OpenAPI/JSDoc/explain projection, target escaping,
+disclosure/exposure parity, and request-time Runtime absence and is complete.
+MCP consumption remains excluded while ADR-0038 is Proposed. The planned
 public `skills/questpie` skill stays a separate portable framework skill, not
 an application-generated projection.
 
@@ -830,15 +832,11 @@ byte-identical release dry-runs pass.
    status. ADR-0030 provenance/trusted values and ADR-0031 lifecycle/issue
    mapping are closed; do not recreate their proof, re-grill settled lifecycle
    direction, or create a parallel write kernel.
-2. ADR-0032 accepts one bounded inverse child list through overloaded
+2. ADR-0032 and INV-01 through INV-06 are closed. The accepted surface remains one bounded inverse child list through overloaded
    `comments.list({ first, orderBy, select })`, while root
-   `tickets.list({ parameters, page, ... })` remains disjoint. INV-01 through
-   INV-04 are complete. INV-05 is integrated with focused unit, type, direct,
-   Fetch, generated-client, watch, and PostgreSQL hostile evidence; its
-   independent review and INV-06 release closure remain. Continue from
-   `docs/v4/implementation/inverse-tomany-projection/README.md` using the
-   existing relational compiler/Runtime kernel; do not restore `window`, add
-   a second plural list, or create a parallel query kernel.
+   `tickets.list({ parameters, page, ... })` remains disjoint. Preserve the
+   existing relational compiler/Runtime kernel; do not restore `window`, add a
+   second plural list, or create a parallel query kernel.
 3. Keep Team Support Desk as the golden beginner/DX consumer and Collaboration
    as the hostile authority/Live consumer. Migrate progressively and delete
    `comments.page` only after the new `tickets.detail` path has PostgreSQL and
@@ -848,37 +846,31 @@ byte-identical release dry-runs pass.
    reimplement lifecycle, restore callback-based Operation Set normalization,
    or create a second Collection/CRUD kernel. Start the next vertical from its
    own accepted authority.
-5. Implement ADR-0035 only from its tracer ticket ledger: framework-neutral
-   Query Resource core first, then fixture deletion/hostiles, then the optional
-   React adapter and public-doc verification. Delete the executable prototype
-   after production parity; do not retain a compatibility Resource, callback
+5. ADR-0035 Query Resource and `@questpie/react` are closed, and the executable
+   prototype is deleted. Do not retain a compatibility Resource, callback
    Context scope, global cache, fallback poller, or second realtime kernel.
-6. Implement ADR-0036 as one replacement tracer: compiler artifact and
-   diagnostics, Runtime adapter, generated client, direct/network parity,
-   OpenAPI/explain, PostgreSQL/browser hostiles, then atomic deletion of the
-   polymorphic RPC path. Keep metadata and MCP outside this implementation
-   slice and retain no fallback.
+6. ADR-0036 canonical Operation HTTP and OpenAPI are closed. The canonical
+   document declares every applicable carrier. Team Support Desk's Scalar
+   display hides only the compatibility trio and injects its exact generated
+   defaults through one tested configuration seam; Call ID, timeout, Context,
+   and operation-specific inputs stay visible. The polymorphic RPC path is
+   deleted with no fallback.
 7. ADR-0037 is closed. Preserve the exact three-helper boundary and do not add
    a codec variant, polymorphic Relation, generated descriptor, registry, or
    compatibility alias.
-8. Implement ADR-0040 only through `DOC-01` and `DOC-02`; keep one Operation
-   `describe` owner and one documentation artifact, prove target escaping and
-   stale deletion, and do not add codec/Field prose, projection-specific
-   registries, Runtime reads, fallback behavior, or application-generated
-   skills.
+8. ADR-0040 DOC-01 and DOC-02 are closed. Keep one Operation `describe` owner
+   and one documentation artifact; do not add codec/Field prose,
+   projection-specific registries, Runtime reads, fallback behavior, or
+   application-generated skills.
 9. Do not implement the proposed ADR-0041 CLI until the focused candidate is
    accepted. `EXPLAIN-01` may expose only the exact local OpenAPI JSON command
    and unchanged compiler artifact; it cannot add a broad explain surface,
    source/Runtime/database execution, filtering, wrapper, compatibility path,
    or fallback.
-10. ADR-0033 and its focused ADR-0034 correction are Accepted. OTEL-01 through
-    OTEL-07 are complete through `eccb437ff`, including two consecutive complete
-    PostgreSQL 17/Firefox tracer passes. The public guide is integrated at
-    `9a495f0c3`; continue with only OTEL-08's remaining aggregate package,
-    documentation, release, review, and cleanup evidence. Do not restore a
-    v7/v8 Runtime compatibility path, add a second observation kernel, or treat
-    the integrated guide or OTEL-07 evidence as beta.2 acceptance or
-    publishability.
+10. ADR-0033/0034 and OTEL-01 through OTEL-08 are closed through the exact
+    three-package release candidate. Do not restore a v7/v8 Runtime
+    compatibility path or add a second observation kernel. No publishability
+    is implied without explicit release authority.
 11. Do not reopen the reference application by adding Cron, Collection triggers,
     checkpoints, generic browser control or workflow orchestration without new
     product authority.

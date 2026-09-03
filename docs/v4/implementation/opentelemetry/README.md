@@ -1,7 +1,7 @@
 # OpenTelemetry implementation queue
 
-- Status: OTEL-01 through OTEL-07 complete; OTEL-08 public guide integrated,
-  aggregate release closure pending
+- Status: OTEL-01 through OTEL-08 complete; the exact three-package release
+  candidate is closed without publishing
 - Spec: [`SPEC.md`](./SPEC.md)
 - Authority: Accepted ADR-0033 and ADR-0034 with their verified replacement reviews
 - Delivery rule: every ticket starts red and lands a narrow runnable tracer
@@ -287,10 +287,11 @@ why handlers stay ordinary. Update runtime/release/durable pages and routing.
 Delete the unsupported 4,096-event queue, 30-day telemetry-retention, and
 365-day audit-retention claims. Do not add unrelated React bindings.
 
-The public guide, routing, and runtime-page corrections are integrated at
-`9a495f0c3`. That satisfies the documentation-authoring part of this ticket,
-not OTEL-08 as a whole. The aggregate release gates and fresh independent
-reviews below remain pending.
+The public guide, routing, and runtime-page corrections were integrated at
+`9a495f0c3`. Aggregate closure now also includes the exact three-package
+manifest, clean isolated installs, byte-identical dry-runs, packed embedded and
+CLI tracers, PostgreSQL 17/browser evidence, `quality:release`, and independent
+Standards and Spec/deletion PASS. No package was published.
 
 Acceptance:
 

@@ -1,8 +1,7 @@
 # Bounded inverse `toMany` implementation map
 
-- Status: INV-01 through INV-04 complete; INV-05 integrated with focused and
-  PostgreSQL evidence; independent INV-05 review and INV-06 release closure
-  pending
+- Status: INV-01 through INV-06 complete; bounded inverse projection is closed
+  with reference, hostile, PostgreSQL 17, browser, package, and release evidence
 - Date: 2026-09-01
 - Classification: Kernel implementation of Accepted ADR-0032 plus Product
   projection through the reference consumers
@@ -215,6 +214,13 @@ Acceptance:
 ### INV-06 — Finish public docs, release evidence, and independent review
 
 Blocked by: INV-01 through INV-05.
+
+Status: complete. Team Support Desk and Collaboration pass their PostgreSQL 17
+and browser/Live Query tracers. Public docs and packed examples compile, the
+three public packages pack byte-identically, `quality:release` passes, and the
+final independent Standards and Spec/deletion reviews report PASS. The old
+comments request path, executable proof copy, aliases, and fallback behavior
+are absent.
 
 Reconcile the already published guide with final generated declarations and
 fixture evidence. Cover the simple ticket/comments example, why the nested
