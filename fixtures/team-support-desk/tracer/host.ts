@@ -74,9 +74,11 @@ const databaseUrl =
 	(() => {
 		throw new TypeError("DATABASE_URL is required");
 	})();
-const [html, styles, browserBuild] = await Promise.all([
+const [html, styles, scalarHtml, openApi, browserBuild] = await Promise.all([
 	readFile(resolve(import.meta.dir, "index.html"), "utf8"),
 	readFile(resolve(import.meta.dir, "styles.css"), "utf8"),
+	readFile(resolve(import.meta.dir, "scalar.html"), "utf8"),
+	readFile(resolve(root, ".questpie/generated/openapi.json"), "utf8"),
 	Bun.build({
 		entrypoints: [resolve(import.meta.dir, "browser/main.tsx")],
 		format: "esm",
@@ -136,6 +138,10 @@ const server = Bun.serve({
 			return response(styles, "text/css; charset=utf-8");
 		if (url.pathname === "/desk.js" && request.method === "GET")
 			return response(browserJavaScript, "text/javascript; charset=utf-8");
+		if (url.pathname === "/api-reference" && request.method === "GET")
+			return response(scalarHtml, "text/html; charset=utf-8");
+		if (url.pathname === "/openapi.json" && request.method === "GET")
+			return response(openApi, "application/json; charset=utf-8");
 		if (url.pathname === "/__team_support/report") {
 			if (request.method === "GET")
 				return Response.json({

@@ -82,6 +82,10 @@ The local auth seed creates three public fixture identities:
 These credentials are demo data, not deployable secrets.
 
 The host compiles all React source into one minified `/desk.js` browser bundle.
+It also serves the compiler-generated OpenAPI document at `/openapi.json` and
+an interactive Scalar view at `/api-reference`. Scalar is fixture-only: it
+renders the same checked artifact and does not add a QUESTPIE Runtime route or
+another operation registry.
 Typecheck the fixture from the repository root:
 
 ```sh

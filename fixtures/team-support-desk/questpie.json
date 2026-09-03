@@ -16,5 +16,8 @@
 		"root": "src",
 		"exclude": []
 	},
+	"projections": {
+		"openapi": true
+	},
 	"packages": {}
 }
