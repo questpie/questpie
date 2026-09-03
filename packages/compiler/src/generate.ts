@@ -366,7 +366,8 @@ export function renderAppContract(
 	relational: RelationalGeneratedContractV1,
 	mutationContract: MutationGeneratedContractV1,
 	realtime: boolean,
-	documentation: Readonly<Record<string, string>> = {},
+	documentation: Readonly<Record<string, string>>,
+	documentationDigest: string,
 ): string {
 	const sourceModulePath = (logicalPath: string): string => {
 		const prefix =
@@ -477,6 +478,8 @@ export function renderAppContract(
 		mutationContract,
 	);
 	return `import type { Authority, Codec, CollectionIssueValue, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, DurableRetryDefinition, DurableRunAsDefinition, OperationDescription, OperationErrorFactories, OperationErrorMap, Principal, QuestpieObservability, ServiceInstance, TaggedJsonValue } from "questpie";
+
+export declare const operationDocumentationDigest: ${JSON.stringify(documentationDigest)};
 
 ${renderCoreDataContract(data, schema)}
 

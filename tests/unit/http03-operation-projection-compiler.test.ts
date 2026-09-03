@@ -8,6 +8,8 @@ import {
 	CompilerDiagnosticError,
 } from "@questpie/compiler";
 
+import { digest } from "../../packages/compiler/src/canonical";
+
 setDefaultTimeout(90_000);
 
 const fixture = resolve(import.meta.dir, "../../fixtures/team-support-desk");
@@ -37,10 +39,20 @@ describe("HTTP-03 / DOC-02 compiler ownership", () => {
 	test("projects generated JSDoc independently of OpenAPI selection", async () => {
 		const root = await copyFixture("jsdoc-without-openapi");
 		const compilation = await compileApplication({ applicationRoot: root });
+		const documentation = JSON.parse(
+			compilation.generatedFiles["operation-documentation.json"]!,
+		);
+		const documentationDigest = digest(
+			"questpie-operation-documentation-v1",
+			documentation,
+		);
 
 		expect(compilation.generatedFiles).not.toHaveProperty("openapi.json");
 		expect(compilation.generatedFiles["app.ts"]).toContain(
 			"Fetch one visible support ticket",
+		);
+		expect(compilation.generatedFiles["app.ts"]).toContain(
+			`export declare const operationDocumentationDigest: ${JSON.stringify(documentationDigest)}`,
 		);
 	});
 
@@ -74,6 +86,9 @@ describe("HTTP-03 / DOC-02 compiler ownership", () => {
 		const app = compilation.generatedFiles["app.ts"]!;
 		expect(app).toContain("/**");
 		expect(app).toContain("Fetch one visible support ticket");
+		expect(app).toContain(
+			`export declare const operationDocumentationDigest: ${JSON.stringify(explain.documentationDigest)}`,
+		);
 		expect(app).not.toContain("operation-documentation.json");
 		const runtimeApplication =
 			compilation.generatedFiles["internal/application.js"]!;

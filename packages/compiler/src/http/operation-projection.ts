@@ -259,7 +259,10 @@ function renderJsDoc(entry: DocumentationEntry): string {
 		...(entry.description ? ["", entry.description] : []),
 	]
 		.flatMap((line) => escapeJsDoc(line).split("\n"))
-		.map((line) => (line.length === 0 ? " *" : " * " + line));
+		.map((line) => {
+			const inert = line.replace(/^(\s*)@/u, "$1\\@");
+			return inert.length === 0 ? " *" : " * " + inert;
+		});
 	return ["/**", ...lines, " */"].join("\n");
 }
 
@@ -279,7 +282,81 @@ function operationTag(name: string, applicationName: string): string {
 	return separator < 0 ? applicationName : name.slice(0, separator);
 }
 
-function queryParameters(input: unknown): readonly JsonRecord[] {
+function unwrapCodec(codec: JsonRecord): JsonRecord {
+	return codec.kind === "optional" || codec.kind === "nullable"
+		? unwrapCodec(record(codec.codec))
+		: codec;
+}
+
+function acceptsNull(codec: JsonRecord): boolean {
+	return (
+		codec.kind === "nullable" ||
+		(codec.kind === "optional" && acceptsNull(record(codec.codec)))
+	);
+}
+
+function queryLexicalSchema(codec: JsonRecord): JsonSchema {
+	const decoded = projectNormalizedCodec(codec);
+	const unwrapped = unwrapCodec(codec);
+	let carrier: JsonSchema;
+	if (unwrapped.kind === "boolean")
+		carrier = { type: "string", pattern: "^(?:false|true)$" };
+	else if (unwrapped.kind === "integer")
+		carrier = {
+			type: "string",
+			pattern: "^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$",
+		};
+	else if (unwrapped.kind === "text")
+		carrier = { type: "string", pattern: "^(?:[^~].*|~text:~.*|)$" };
+	else if (
+		["bigint", "numeric", "uuid", "date", "timestamp"].includes(
+			String(unwrapped.kind),
+		)
+	) {
+		const decodedScalar = projectNormalizedCodec(unwrapped);
+		carrier = {
+			type: "string",
+			...(decodedScalar.pattern === undefined
+				? {}
+				: { pattern: decodedScalar.pattern }),
+		};
+	} else if (unwrapped.kind === "cursor") carrier = { type: "string" };
+	else carrier = { type: "string", pattern: "^~json:.+$" };
+	const carrierPattern = String(carrier.pattern ?? ".*").replace(
+		/^\^|\$$/gu,
+		"",
+	);
+	return {
+		...carrier,
+		...(acceptsNull(codec) ? { pattern: `^(?:~null|${carrierPattern})$` } : {}),
+		"x-questpie-decoded-schema": decoded,
+		"x-questpie-http-encoding": "canonical-lexical",
+	};
+}
+
+function queryLexicalValue(codec: JsonRecord, value: unknown): string {
+	if (value === null) return "~null";
+	const kind = unwrapCodec(codec).kind;
+	if (kind === "text") {
+		if (typeof value !== "string") return invalid("invalid Query example");
+		return value.startsWith("~") ? `~text:${value}` : value;
+	}
+	if (kind === "boolean" || kind === "integer") return String(value);
+	if (
+		["bigint", "numeric", "uuid", "date", "timestamp", "cursor"].includes(
+			String(kind),
+		)
+	) {
+		if (typeof value !== "string") return invalid("invalid Query example");
+		return value;
+	}
+	return `~json:${canonicalBytes(value).slice(0, -1)}`;
+}
+
+function queryParameters(
+	input: unknown,
+	entry: DocumentationEntry | undefined,
+): readonly JsonRecord[] {
 	const codec = normalizedCodec(input);
 	if (codec.kind !== "object")
 		return invalid("canonical Query input must be an object");
@@ -287,11 +364,25 @@ function queryParameters(input: unknown): readonly JsonRecord[] {
 		.sort(([left], [right]) => compareAscii(left, right))
 		.map(([name, child]) => {
 			const childCodec = record(child);
+			const examples = entry?.examples?.flatMap((example, index) => {
+				const value = record(example.input)[name];
+				return value === undefined
+					? []
+					: [
+							[
+								"example" + String(index + 1),
+								{ value: queryLexicalValue(childCodec, value) },
+							] as const,
+						];
+			});
 			return {
 				name,
 				in: "query",
 				required: childCodec.kind !== "optional",
-				schema: projectNormalizedCodec(childCodec),
+				schema: queryLexicalSchema(childCodec),
+				...(examples && examples.length > 0
+					? { examples: Object.fromEntries(examples) }
+					: {}),
 			};
 		});
 }
@@ -348,6 +439,29 @@ function declaredErrors(operation: OperationContract): readonly Readonly<{
 		});
 }
 
+const fixedFrameworkFailures = {
+	DEADLINE_EXCEEDED: { status: 408, retryable: true, preCorrelation: true },
+	INTERNAL: { status: 500, retryable: false, preCorrelation: false },
+	NOT_FOUND: { status: 404, retryable: false, preCorrelation: false },
+	PROTOCOL_UNSUPPORTED: { status: 400, retryable: false, preCorrelation: true },
+	RESOURCE_LIMIT: { status: 429, retryable: true, preCorrelation: false },
+	RUNTIME_UNAVAILABLE: { status: 503, retryable: true, preCorrelation: false },
+	UNAUTHENTICATED: { status: 401, retryable: false, preCorrelation: false },
+} as const;
+
+function schemaReference(name: string): JsonSchema {
+	return { $ref: `#/components/schemas/${name}` };
+}
+
+function appendResponseSchema(
+	byStatus: Map<string, JsonSchema[]>,
+	status: number,
+	schema: JsonSchema,
+): void {
+	const key = String(status);
+	byStatus.set(key, [...(byStatus.get(key) ?? []), schema]);
+}
+
 function operationResponses(
 	operation: OperationContract,
 	entry: DocumentationEntry | undefined,
@@ -358,6 +472,27 @@ function operationResponses(
 		const schemas = byStatus.get(status) ?? [];
 		schemas.push(declaredResponseSchema(error.code, error.payload));
 		byStatus.set(status, schemas);
+	}
+	for (const [code, contract] of Object.entries(fixedFrameworkFailures))
+		appendResponseSchema(
+			byStatus,
+			contract.status,
+			schemaReference(`FrameworkFailure_${code}`),
+		);
+	const kind = operationKind(operation.identity);
+	if (kind === "mutation")
+		appendResponseSchema(byStatus, 500, schemaReference("PostCommitAmbiguity"));
+	if (kind === "action") {
+		appendResponseSchema(
+			byStatus,
+			429,
+			schemaReference("ActionPostHandlerResourceLimit"),
+		);
+		appendResponseSchema(
+			byStatus,
+			500,
+			schemaReference("ActionOutcomeAmbiguous"),
+		);
 	}
 	return {
 		"200": {
@@ -400,17 +535,23 @@ function operationResponses(
 		...Object.fromEntries(
 			[...byStatus.entries()]
 				.sort(([left], [right]) => compareAscii(left, right))
-				.map(([status, schemas]) => [
-					status,
-					{
-						description: "Declared Operation error",
-						content: {
-							"application/json": {
-								schema: schemas.length === 1 ? schemas[0] : { oneOf: schemas },
+				.map(([status, schemas]) => {
+					const ordered = schemas.toSorted((left, right) =>
+						compareAscii(canonicalBytes(left), canonicalBytes(right)),
+					);
+					return [
+						status,
+						{
+							description: "Operation error",
+							content: {
+								"application/json": {
+									schema:
+										ordered.length === 1 ? ordered[0] : { oneOf: ordered },
+								},
 							},
 						},
-					},
-				]),
+					] as const;
+				}),
 		),
 	};
 }
@@ -460,6 +601,13 @@ function carrierHeaders(
 					headerParameter(
 						"Questpie-Context",
 						!contextAcceptsEmpty(contextCodec),
+						{
+							type: "string",
+							pattern: "^[A-Za-z0-9_-]+$",
+							maxLength: 87_382,
+							"x-questpie-decoded-schema": projectCodec(contextCodec),
+							"x-questpie-http-encoding": "canonical-json-base64url",
+						},
 					),
 				]
 			: kind === "mutation"
@@ -475,7 +623,7 @@ function carrierHeaders(
 		headerParameter("Questpie-Application", false),
 		headerParameter("Questpie-Client-Contract", false),
 		headerParameter("Questpie-Wire-Digest", false),
-	];
+	].sort((left, right) => compareAscii(String(left.name), String(right.name)));
 }
 
 function openApiOperation(
@@ -495,9 +643,11 @@ function openApiOperation(
 		...(kind === "query"
 			? {
 					parameters: [
-						...queryParameters(operation.input),
+						...queryParameters(operation.input, entry),
 						...carrierHeaders(kind, contextCodec),
-					],
+					].sort((left, right) =>
+						compareAscii(String(left.name), String(right.name)),
+					),
 				}
 			: {
 					parameters: carrierHeaders(kind, contextCodec),
@@ -512,11 +662,9 @@ function openApiOperation(
 										context: projectCodec(contextCodec),
 										input: {
 											...projectCodec(operation.input),
-											...(examples
+											...(entry?.examples
 												? {
-														examples: entry!.examples!.map(
-															({ input }) => input,
-														),
+														examples: entry.examples.map(({ input }) => input),
 													}
 												: {}),
 										},
@@ -532,31 +680,68 @@ function openApiOperation(
 	};
 }
 
-function frameworkSchemas(failures: readonly string[]): JsonRecord {
-	const schemas = Object.fromEntries(
-		[...failures].sort(compareAscii).map((failure) => [
-			"FrameworkFailure_" + failure,
-			{
+function frameworkFailureSchema(
+	code: string,
+	retryable: boolean,
+	correlated: boolean,
+): JsonSchema {
+	return {
+		type: "object",
+		additionalProperties: false,
+		properties: {
+			...(correlated ? { callId: { type: "string" } } : {}),
+			error: {
 				type: "object",
 				additionalProperties: false,
 				properties: {
-					callId: { type: "string" },
-					error: {
-						type: "object",
-						additionalProperties: false,
-						properties: {
-							code: { const: failure },
-							retryable: { type: "boolean" },
-						},
-						required: ["code", "retryable"],
-					},
+					code: { const: code },
+					retryable: { const: retryable },
 				},
-				required: ["error"],
+				required: ["code", "retryable"],
 			},
-		]),
-	);
+		},
+		required: correlated ? ["callId", "error"] : ["error"],
+	};
+}
+
+function frameworkSchemas(failures: readonly string[]): JsonRecord {
+	const actual = [...failures].sort(compareAscii);
+	const expected = [
+		"COMMITTED_RESULT_UNAVAILABLE",
+		...Object.keys(fixedFrameworkFailures),
+	].sort(compareAscii);
+	if (
+		actual.length !== expected.length ||
+		actual.some((failure, index) => failure !== expected[index])
+	)
+		return invalid("invalid framework failures in HTTP artifact");
+	const schemas: Record<string, JsonSchema> = Object.create(null);
+	for (const [code, contract] of Object.entries(fixedFrameworkFailures)) {
+		const correlated = frameworkFailureSchema(code, contract.retryable, true);
+		if (!contract.preCorrelation) {
+			schemas[`FrameworkFailure_${code}`] = correlated;
+			continue;
+		}
+		schemas[`Correlated_${code}`] = correlated;
+		schemas[`PreCorrelation_${code}`] = frameworkFailureSchema(
+			code,
+			contract.retryable,
+			false,
+		);
+		schemas[`FrameworkFailure_${code}`] = {
+			oneOf: [
+				schemaReference(`PreCorrelation_${code}`),
+				schemaReference(`Correlated_${code}`),
+			],
+		};
+	}
 	return {
 		...schemas,
+		ActionPostHandlerResourceLimit: frameworkFailureSchema(
+			"RESOURCE_LIMIT",
+			false,
+			true,
+		),
 		ActionOutcomeAmbiguous: {
 			type: "object",
 			additionalProperties: false,

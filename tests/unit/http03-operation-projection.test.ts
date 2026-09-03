@@ -36,7 +36,7 @@ const documentation = {
 			identity: "mutation:tickets.assign",
 			summary: "Assign a ticket",
 			description:
-				'Keeps */ quotes " and line feeds inert.\nNext.\u2028Third.\u2029Fourth.',
+				'Keeps */ quotes " and line feeds inert.\n@deprecated not a tag.\n  @authority also not a tag.\nNext.\u2028Third.\u2029Fourth.',
 			examples: [
 				{
 					input: { id: uuid, title: "New owner" },
@@ -107,8 +107,6 @@ const httpUnsigned = {
 		(operation) => operation.identity !== "query:health",
 	),
 	failures: [
-		"APPLICATION_MISMATCH",
-		"CLIENT_OUTDATED",
 		"COMMITTED_RESULT_UNAVAILABLE",
 		"DEADLINE_EXCEEDED",
 		"INTERNAL",
@@ -116,6 +114,7 @@ const httpUnsigned = {
 		"PROTOCOL_UNSUPPORTED",
 		"RESOURCE_LIMIT",
 		"RUNTIME_UNAVAILABLE",
+		"UNAUTHENTICATED",
 	],
 	limits: { requestBytes: 1_048_576, responseBytes: 1_048_576 },
 	principalSource: "ingressOutsideBody",
@@ -202,14 +201,51 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 			summary: "Read a ticket",
 			description: "Returns one Policy-visible ticket.",
 		});
-		expect(
-			query.parameters.filter(
-				({ in: location }: { in: string }) => location === "query",
-			),
-		).toEqual([
-			expect.objectContaining({ in: "query", name: "id", required: true }),
-			expect.objectContaining({ in: "query", name: "search", required: false }),
+		const queryInputs = query.parameters.filter(
+			({ in: location }: { in: string }) => location === "query",
+		);
+		expect(queryInputs).toEqual([
+			expect.objectContaining({
+				in: "query",
+				name: "id",
+				required: true,
+				schema: expect.objectContaining({
+					type: "string",
+					pattern:
+						"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+					"x-questpie-decoded-schema": expect.objectContaining({
+						type: "string",
+						format: "uuid",
+					}),
+					"x-questpie-http-encoding": "canonical-lexical",
+				}),
+			}),
+			expect.objectContaining({
+				in: "query",
+				name: "search",
+				required: false,
+				schema: expect.objectContaining({
+					type: "string",
+					"x-questpie-decoded-schema": expect.objectContaining({
+						type: "string",
+						maxLength: 80,
+					}),
+					"x-questpie-http-encoding": "canonical-lexical",
+				}),
+			}),
 		]);
+		const contextParameter = query.parameters.find(
+			(parameter: { name: string }) => parameter.name === "Questpie-Context",
+		);
+		expect(contextParameter.schema).toMatchObject({
+			type: "string",
+			pattern: "^[A-Za-z0-9_-]+$",
+			"x-questpie-decoded-schema": expect.objectContaining({ type: "object" }),
+			"x-questpie-http-encoding": "canonical-json-base64url",
+		});
+		expect(query.parameters.map(({ name }: { name: string }) => name)).toEqual(
+			query.parameters.map(({ name }: { name: string }) => name).toSorted(),
+		);
 		expect(query.parameters).toContainEqual(
 			expect.objectContaining({
 				in: "header",
@@ -253,6 +289,11 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 			}),
 		);
 		expect(
+			mutation.parameters.map(({ name }: { name: string }) => name),
+		).toEqual(
+			mutation.parameters.map(({ name }: { name: string }) => name).toSorted(),
+		);
+		expect(
 			JSON.stringify(mutation.requestBody.content["application/json"].examples),
 		).toContain('"context":{}');
 		expect(
@@ -280,21 +321,12 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 				},
 			},
 		});
-		for (const failure of httpContract.failures)
+		for (const failure of httpContract.failures.filter(
+			(failure) => failure !== "COMMITTED_RESULT_UNAVAILABLE",
+		))
 			expect(first.openapi.components.schemas).toHaveProperty(
 				"FrameworkFailure_" + failure,
 			);
-		expect(
-			first.openapi.components.schemas.FrameworkFailure_INTERNAL,
-		).toMatchObject({
-			type: "object",
-			required: ["error"],
-			properties: {
-				error: expect.objectContaining({
-					required: ["code", "retryable"],
-				}),
-			},
-		});
 		const action = first.openapi.paths["/_questpie/action/exports.run"].post;
 		expect(action.parameters).toContainEqual(
 			expect.objectContaining({
@@ -309,6 +341,104 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 		expect(first.openapi.components.schemas).toHaveProperty(
 			"PostCommitAmbiguity",
 		);
+		expect(
+			mutation.responses["500"].content["application/json"].schema,
+		).toEqual({
+			oneOf: [
+				{ $ref: "#/components/schemas/FrameworkFailure_INTERNAL" },
+				{ $ref: "#/components/schemas/PostCommitAmbiguity" },
+			],
+		});
+		expect(action.responses["500"].content["application/json"].schema).toEqual({
+			oneOf: [
+				{ $ref: "#/components/schemas/ActionOutcomeAmbiguous" },
+				{ $ref: "#/components/schemas/FrameworkFailure_INTERNAL" },
+			],
+		});
+		expect(action.responses["429"].content["application/json"].schema).toEqual({
+			oneOf: [
+				{ $ref: "#/components/schemas/ActionPostHandlerResourceLimit" },
+				{ $ref: "#/components/schemas/FrameworkFailure_RESOURCE_LIMIT" },
+			],
+		});
+		expect(
+			first.openapi.components.schemas.FrameworkFailure_INTERNAL,
+		).toMatchObject({
+			required: ["callId", "error"],
+			properties: {
+				error: {
+					properties: { retryable: { const: false } },
+				},
+			},
+		});
+		expect(
+			first.openapi.components.schemas.FrameworkFailure_PROTOCOL_UNSUPPORTED,
+		).toEqual({
+			oneOf: [
+				{ $ref: "#/components/schemas/PreCorrelation_PROTOCOL_UNSUPPORTED" },
+				{ $ref: "#/components/schemas/Correlated_PROTOCOL_UNSUPPORTED" },
+			],
+		});
+	});
+
+	test("projects input examples independently from an empty Context value", () => {
+		const nonEmptyContext = {
+			kind: "object",
+			properties: { locale: { kind: "text", maxLength: 8 } },
+		} as const;
+		const projected = projectOperationProjection({
+			applicationName: "support",
+			contextCodec: nonEmptyContext,
+			httpContract,
+			operationContracts,
+			documentationBytes:
+				JSON.stringify({
+					...documentation,
+					operations: documentation.operations.map((entry) =>
+						entry.identity === "query:tickets.detail"
+							? {
+									...entry,
+									examples: [{ input: { id: uuid, search: "~owner" } }],
+								}
+							: entry,
+					),
+				}) + "\n",
+			documentationDigest: digest("questpie-operation-documentation-v1", {
+				...documentation,
+				operations: documentation.operations.map((entry) =>
+					entry.identity === "query:tickets.detail"
+						? {
+								...entry,
+								examples: [{ input: { id: uuid, search: "~owner" } }],
+							}
+						: entry,
+				),
+			}),
+			originMap,
+		});
+		const query =
+			projected.openapi.paths["/_questpie/query/tickets.detail"].get;
+		expect(
+			query.parameters.find(({ name }: { name: string }) => name === "id")
+				.examples,
+		).toEqual({
+			example1: { value: uuid },
+		});
+		expect(
+			query.parameters.find(({ name }: { name: string }) => name === "search")
+				.examples,
+		).toEqual({
+			example1: { value: "~text:~owner" },
+		});
+		const mutation =
+			projected.openapi.paths["/_questpie/mutation/tickets.assign"].post;
+		expect(mutation.requestBody.content["application/json"]).not.toHaveProperty(
+			"examples",
+		);
+		expect(
+			mutation.requestBody.content["application/json"].schema.properties.input
+				.examples,
+		).toEqual([{ id: uuid, title: "New owner" }]);
 	});
 
 	test("reports exact inclusion and nondisclosing omissions with Origins", () => {
@@ -362,8 +492,9 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 		expect(assignment).not.toContain("\u2028");
 		expect(assignment).not.toContain("\u2029");
 		expect(assignment.match(/\*\//gu)).toHaveLength(1);
-		expect(assignment).not.toContain("@deprecated");
-		expect(assignment).not.toContain("@authority");
+		expect(assignment).toContain("\\@deprecated not a tag.");
+		expect(assignment).toContain("  \\@authority also not a tag.");
+		expect(assignment).not.toMatch(/^ \*\s+@/gmu);
 	});
 
 	test("rejects cross-kind OpenAPI operationId collisions with both Origins", () => {

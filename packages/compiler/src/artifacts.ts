@@ -483,6 +483,7 @@ export async function createArtifacts(
 			mutationDeclarations,
 			realtimeEnabled,
 			operationJsDoc,
+			operationDocumentation.digest,
 		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(operationResources, {
