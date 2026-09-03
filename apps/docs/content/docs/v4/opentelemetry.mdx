@@ -24,29 +24,61 @@ generated App declaration imports its opaque `QuestpieObservability` input type
 from `questpie`, not from this optional package, so applications without the
 adapter still typecheck.
 
-Then pass it to the generated App:
+Then pass it to the generated App. This complete host-side example runs the
+Barbershop appointment Query directly and closes the App before it closes the
+adapter:
 
-```ts
+```ts title="scripts/list-appointments.ts"
 import { createOpenTelemetry } from "@questpie/opentelemetry";
 import { createApp } from "#questpie/app";
 
-const telemetry = await createOpenTelemetry();
-try {
-	const application = await createApp({
-		postgres,
-		realtime,
-		maintenance,
-		observability: telemetry,
-	});
+export async function listAppointments(input: {
+	connectionUrl: string;
+	directConnectionUrl: string;
+	realtimeHmacKey: Uint8Array;
+	userId: string;
+	shopId: string;
+}) {
+	const telemetry = await createOpenTelemetry();
 	try {
-		// Mount application.fetch or use application.execution normally.
+		const application = await createApp({
+			postgres: {
+				connectionUrl: input.connectionUrl,
+				directConnectionUrl: input.directConnectionUrl,
+			},
+			realtime: { hmacKey: input.realtimeHmacKey },
+			maintenance: { authorize: () => false },
+			observability: telemetry,
+		});
+
+		try {
+			const appointments = await application.execution(
+				{
+					principal: { kind: "user", id: input.userId },
+					context: { shopId: input.shopId },
+					signal: AbortSignal.timeout(5_000),
+				},
+				({ queries }) =>
+					queries["appointments.list"]({
+						after: null,
+						first: 20,
+					}),
+			);
+
+			return appointments;
+		} finally {
+			await application.close();
+		}
 	} finally {
-		await application.close();
+		await telemetry.close();
 	}
-} finally {
-	await telemetry.close();
 }
 ```
+
+`appointments` has the generated output type of `appointments.list`; the
+function returns that decoded Query result without a handwritten response
+type. The same host can serve `application.fetch` instead of calling
+`application.execution`; both paths use the same Runtime observation contract.
 
 `createOpenTelemetry` accepts only three QUESTPIE options:
 
