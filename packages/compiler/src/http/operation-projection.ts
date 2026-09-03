@@ -2,6 +2,7 @@ import { decodeRuntimeCodec } from "@questpie/runtime/codec";
 
 import { canonicalBytes, compareAscii, digest } from "../canonical";
 import { normalizeCodecContract } from "../codec";
+import { CompilerDiagnosticError } from "../diagnostic";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 type JsonSchema = Readonly<Record<string, unknown>>;
@@ -643,6 +644,30 @@ export function projectOperationProjection(
 	const network = [...input.httpContract.operations].sort((left, right) =>
 		compareAscii(left.identity, right.identity),
 	);
+	const byName = new Map<string, OperationContract>();
+	for (const operation of network) {
+		const name = operationName(operation.identity);
+		const existing = byName.get(name);
+		if (existing) {
+			const origins = [existing.identity, operation.identity].map(
+				(identity) =>
+					input.originMap.resources.find(
+						(resource) => resource.identity === identity,
+					)?.establishedAt ?? { identity },
+			);
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-029",
+				"httpProjectionCollision",
+				`${existing.identity} and ${operation.identity} share OpenAPI operationId ${name}`,
+				{
+					reason: "openApiOperationIdCollision",
+					rewrite: "rename one Operation; OpenAPI never suffixes identities",
+					origins,
+				},
+			);
+		}
+		byName.set(name, operation);
+	}
 	const paths = Object.fromEntries(
 		network.map((operation) => {
 			const kind = operationKind(operation.identity);

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { digest } from "../../packages/compiler/src/canonical";
+import { CompilerDiagnosticError } from "../../packages/compiler/src/diagnostic";
 import { projectOperationProjection } from "../../packages/compiler/src/http";
 
 const uuid = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
@@ -363,5 +364,55 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 		expect(assignment.match(/\*\//gu)).toHaveLength(1);
 		expect(assignment).not.toContain("@deprecated");
 		expect(assignment).not.toContain("@authority");
+	});
+
+	test("rejects cross-kind OpenAPI operationId collisions with both Origins", () => {
+		const duplicate = {
+			...operationContracts.operations[3],
+			identity: "query:tickets.assign",
+		};
+		try {
+			projectOperationProjection({
+				applicationName: "support",
+				contextCodec: emptyContextCodec,
+				httpContract: {
+					...httpContract,
+					operations: [...httpContract.operations, duplicate],
+				},
+				operationContracts: {
+					...operationContracts,
+					operations: [...operationContracts.operations, duplicate],
+				},
+				documentationBytes,
+				documentationDigest,
+				originMap: {
+					...originMap,
+					resources: [
+						...originMap.resources,
+						{
+							identity: duplicate.identity,
+							establishedAt: {
+								kind: "export",
+								packageId: null,
+								path: "src/tickets-query.ts",
+								exportName: "assignTicketQuery",
+								span: null,
+								declaredAt: null,
+							},
+						},
+					],
+				},
+			});
+			throw new Error("expected OpenAPI operationId collision");
+		} catch (error) {
+			expect(error).toBeInstanceOf(CompilerDiagnosticError);
+			expect((error as CompilerDiagnosticError).code).toBe("QP-COMPOSE-029");
+			expect((error as CompilerDiagnosticError).details.reason).toBe(
+				"openApiOperationIdCollision",
+			);
+			expect((error as CompilerDiagnosticError).details.origins).toHaveLength(
+				2,
+			);
+		}
 	});
 });
