@@ -77,8 +77,9 @@ export function createRealtimeSession(
 		input.onDispose(session);
 	};
 	const pump = (): boolean => {
-		if (!controller || controller.desiredSize === null) return !disposed;
+		if (!controller) return !disposed;
 		try {
+			if (controller.desiredSize === null) return !disposed;
 			if (inFlightBytes > 0 && controller.desiredSize > 0) inFlightBytes = 0;
 			if (controller.desiredSize <= 0) return true;
 			const next = pending.shift();
