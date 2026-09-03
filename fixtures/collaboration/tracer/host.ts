@@ -36,30 +36,75 @@ const [html, styles, browserBuild] = await Promise.all([
 if (!browserBuild.success)
 	throw new Error(browserBuild.logs.map((entry) => entry.message).join("\n"));
 const browserJavaScript = await browserBuild.outputs[0]!.text();
-const observationForbiddenValues = [
-	"hidden-",
-	"40000000-0000-4000-8000-",
-	"00000000-0000-4000-8000-000000000075",
-	"collaboration.messages",
-	"messages_unavailable",
-	"policyEvidencePoint",
-	'"hiddenCardinality":50',
-	'"hiddenCount":50',
-	'"rowCount":50',
-	"PostgreSQL",
-	"SELECT ",
-	"select ",
-	"selectOrdinal",
-	"forgedOrdinal",
-] as const;
 const inverseRuntimeEvidence = {
 	failedRecomputations: 0,
 	inverseObservationNondisclosure: true,
+	operationRequests: 0,
 };
-function inspectInverseObservation(value: unknown): void {
-	const bytes = JSON.stringify(value);
-	if (observationForbiddenValues.some((secret) => bytes.includes(secret)))
-		inverseRuntimeEvidence.inverseObservationNondisclosure = false;
+function exactKeys(value: unknown, expected: readonly string[]): boolean {
+	return (
+		value !== null &&
+		typeof value === "object" &&
+		!Array.isArray(value) &&
+		JSON.stringify(Object.keys(value).sort()) ===
+			JSON.stringify([...expected].sort())
+	);
+}
+function exactInverseObservationStart(
+	value: Readonly<Record<string, unknown>>,
+): boolean {
+	if (
+		!exactKeys(value, [
+			"entry",
+			"execution",
+			"kind",
+			"principalKind",
+			"resourceIdentity",
+			"trace",
+		]) ||
+		value.kind !== "query" ||
+		value.principalKind !== "user" ||
+		value.resourceIdentity !== "query:channels.detail" ||
+		!new Set(["direct", "fetch", "watch_initial", "watch_recompute"]).has(
+			String(value.entry),
+		) ||
+		!exactKeys(value.trace, ["kind"]) ||
+		(value.trace as Readonly<Record<string, unknown>>).kind !==
+			"active-parent" ||
+		!exactKeys(value.execution, ["executionId", "executionSequence"])
+	)
+		return false;
+	const execution = value.execution as Readonly<Record<string, unknown>>;
+	return (
+		typeof execution.executionSequence === "string" &&
+		/^[1-9][0-9]*$/u.test(execution.executionSequence) &&
+		typeof execution.executionId === "string" &&
+		/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}:execution:[1-9][0-9]*$/u.test(
+			execution.executionId,
+		) &&
+		execution.executionId.endsWith(`:execution:${execution.executionSequence}`)
+	);
+}
+function exactInverseObservationEnd(value: unknown): boolean {
+	if (value === null || typeof value !== "object" || Array.isArray(value))
+		return false;
+	const end = value as Readonly<Record<string, unknown>>;
+	const withError = Object.hasOwn(end, "errorCode");
+	return (
+		exactKeys(
+			end,
+			withError ? ["errorCode", "kind", "outcome"] : ["kind", "outcome"],
+		) &&
+		end.kind === "query" &&
+		new Set([
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+		]).has(String(end.outcome)) &&
+		(!withError || end.errorCode === "INTERNAL")
+	);
 }
 const observability = createOfficialQuestpieObservability(() => ({
 	format: "questpie.runtime-observability",
@@ -71,15 +116,18 @@ const observability = createOfficialQuestpieObservability(() => ({
 			start.resourceIdentity === "query:channels.detail";
 		const inverseRecompute =
 			inverseOperation && start.entry === "watch_recompute";
-		if (inverseOperation) inspectInverseObservation(start);
+		if (inverseOperation && !exactInverseObservationStart(start))
+			inverseRuntimeEvidence.inverseObservationNondisclosure = false;
 		return {
 			context: null,
 			run: async <Result>(use: () => Result | Promise<Result>) => await use(),
-			event: (event: unknown) => {
-				if (inverseOperation) inspectInverseObservation(event);
+			event: () => {
+				if (inverseOperation)
+					inverseRuntimeEvidence.inverseObservationNondisclosure = false;
 			},
 			end: (end: Readonly<{ outcome: string }>) => {
-				if (inverseOperation) inspectInverseObservation(end);
+				if (inverseOperation && !exactInverseObservationEnd(end))
+					inverseRuntimeEvidence.inverseObservationNondisclosure = false;
 				if (inverseRecompute && end.outcome === "framework_error")
 					inverseRuntimeEvidence.failedRecomputations += 1;
 			},
@@ -190,6 +238,11 @@ const server = Bun.serve({
 			completeRecovery();
 			return new Response(null, { status: 204 });
 		}
+		if (
+			request.method === "GET" &&
+			url.pathname === "/_questpie/query/channels.detail"
+		)
+			inverseRuntimeEvidence.operationRequests += 1;
 		return application.fetch(request);
 	},
 });

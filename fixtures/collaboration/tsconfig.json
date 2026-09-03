@@ -9,7 +9,10 @@
 		"paths": {
 			"#questpie/app": ["./.questpie/generated/app.ts"],
 			"#questpie/client": ["./.questpie/generated/client.ts"],
-			"questpie": ["../../packages/questpie/src/index.ts"]
+			"questpie": ["../../packages/questpie/src/index.ts"],
+			"questpie/internal/observability": [
+				"../../packages/questpie/src/internal/observability.ts"
+			]
 		},
 		"skipLibCheck": true,
 		"strict": true,

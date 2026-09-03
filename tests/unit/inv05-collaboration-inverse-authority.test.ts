@@ -101,8 +101,13 @@ test("executes the Collaboration channel detail through the generated Live Query
 	);
 	expect(tracer).toContain('fetch("/__questpie_tracer/complete-recovery")');
 	expect(host).toContain("inverseObservationNondisclosure");
-	expect(host).toContain("observationForbiddenValues");
+	expect(host).toContain("exactInverseObservationStart");
+	expect(host).toContain("exactInverseObservationEnd");
+	expect(host).not.toContain("observationForbiddenValues");
 	expect(postgresTracer).toContain("authorizedEmptyChannelId");
+	expect(postgresTracer).toContain("boundedInverseChannelId");
 	expect(postgresTracer).toContain("inversePublicParity");
+	expect(host).toContain("operationRequests");
+	expect(postgresTracer).toContain("requestsBeforeCancelledWatch");
 	expect(postgresTracer).toContain("inverseObservationNondisclosure");
 });
