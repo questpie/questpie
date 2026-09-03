@@ -8,7 +8,7 @@
 		"clean feat/v4 candidate base": "dce0ebd0a7ce5959cfd31adcc9b8a2a3f791afcd",
 		"directionally approved Deep-DX research": "75a72b6515e87d78a559145f65b21a386ea4de3c",
 		"OpenTelemetry design workbench": "2c4a0b98deed36ee38842fdd9c469c2d85a4624b",
-		"deterministic candidate before refreshed manifest": "e0e5f901cd8b499a7c8228f2bc5c5a408d95a265"
+		"Codex-panel repair candidate before refreshed manifest": "04d266cffe84c3f08068a8eaf1f8ee4a12a8c587"
 	},
 	"authorityDocuments": [
 		{
@@ -79,7 +79,7 @@
 		{
 			"name": "closed projection and deletion inventory",
 			"path": "docs/v4/prototypes/public-package-identities/authority-projection.json",
-			"sha256": "538a9e00649dd4e42c8c062f3b5f1d68e35a317fcb9d5615effcfeea62a239a9"
+			"sha256": "4b0d598d6f4dc67df58607db53060b213c7909846734cf640cd5a123faaa3dbc"
 		},
 		{
 			"name": "package identity executable proof",
@@ -119,7 +119,7 @@
 		{
 			"name": "Proposed-status and completeness staging gate",
 			"path": "docs/v4/prototypes/public-package-identities/staging-check.ts",
-			"sha256": "3ce46e55122ce7f4578b9c4dfadf2b09a2dc2f3a6e3899cded14d13e1910cd2c"
+			"sha256": "0610c087aba4451e8e4f6a76e93d9f54567f3cdc74584d3f624699299313fe68"
 		},
 		{
 			"name": "post-PASS implementation specification",
