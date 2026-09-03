@@ -1,0 +1,46 @@
+{
+	"format": "questpie.human-directed-codex-panel-review.v1",
+	"decision": "docs/adr/0042-freeze-public-package-identities.md",
+	"diffBase": "dce0ebd0a7ce5959cfd31adcc9b8a2a3f791afcd",
+	"reviewedHead": "05b189fc45c5fb6d2fedf5fe7652300ebc28dfdd",
+	"acceptancePacketDigest": "1fe1e03be2f5a40fcf9d67548d6497a342e192e36aa8adcef6591b91e5e2446e",
+	"transportException": {
+		"reason": "The pinned Opus transport returned terminal NO_RESULT timeouts without producing review artifacts. The human owner then directed the agent to try a different review method and continue release closure.",
+		"protocolV2PassClaimed": false,
+		"syntheticOpusRecordCreated": false,
+		"fallbackRepresentedAsOpus": false
+	},
+	"panel": [
+		{
+			"axis": "authority-and-supersession",
+			"model": "gpt-5.6-sol",
+			"effort": "high",
+			"initialVerdict": "BLOCKED",
+			"finding": "The Proposed ADR-index registration was incorrectly classified as a post-acceptance projection.",
+			"replacementVerdict": "PASS"
+		},
+		{
+			"axis": "executable-package-proof",
+			"model": "gpt-5.6-sol",
+			"effort": "high",
+			"initialVerdict": "PASS",
+			"replacementVerdict": "PASS"
+		},
+		{
+			"axis": "release-dx-and-deletion",
+			"model": "gpt-5.6-sol",
+			"effort": "high",
+			"initialVerdict": "BLOCKED",
+			"finding": "The deletion inventory omitted packages/react/tsconfig.json and one active inverse-projection three-package ledger.",
+			"replacementVerdict": "PASS"
+		}
+	],
+	"repairs": [
+		"Separated docs/adr/README.md Proposed registration from post-acceptance authority projection.",
+		"Added every tracked packages/react file to the breaking deletion inventory.",
+		"Added the inverse-toMany implementation ledger to the post-acceptance projection set.",
+		"Re-ran the executable proof, staging, manifest hash verification, manifest dry-run, and diff checks on the replacement head."
+	],
+	"verdict": "PASS",
+	"scope": "Human-directed replacement review for ADR-0042 only. This is not a protocol-v2 Opus record and creates no precedent or fallback transport in the repository acceptance wrapper."
+}
