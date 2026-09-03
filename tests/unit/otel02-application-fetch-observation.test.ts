@@ -355,3 +355,56 @@ test("contains a source cancellation rejection after the response consumer leave
 		{ httpResponseStatusCode: 200, kind: "fetch", outcome: "cancelled" },
 	]);
 });
+
+test("closes an observed response when its source reports transport cancellation", async () => {
+	const ends: unknown[] = [];
+	const response = retainScopeThroughResponse(
+		{
+			end: (end) => ends.push(end),
+			event: () => undefined,
+			run: async (use) => await use(),
+		},
+		new Response(
+			new ReadableStream<Uint8Array>({
+				pull() {
+					throw new DOMException("The connection was closed.", "AbortError");
+				},
+			}),
+			{ status: 200 },
+		),
+	);
+
+	await expect(response.body!.getReader().read()).resolves.toEqual({
+		done: true,
+		value: undefined,
+	});
+	expect(ends).toEqual([
+		{ httpResponseStatusCode: 200, kind: "fetch", outcome: "cancelled" },
+	]);
+});
+
+test("preserves an ordinary observed response source failure", async () => {
+	const ends: unknown[] = [];
+	const response = retainScopeThroughResponse(
+		{
+			end: (end) => ends.push(end),
+			event: () => undefined,
+			run: async (use) => await use(),
+		},
+		new Response(
+			new ReadableStream<Uint8Array>({
+				pull() {
+					throw new Error("source failed");
+				},
+			}),
+			{ status: 200 },
+		),
+	);
+
+	await expect(response.body!.getReader().read()).rejects.toThrow(
+		"source failed",
+	);
+	expect(ends).toEqual([
+		{ httpResponseStatusCode: 200, kind: "fetch", outcome: "framework_error" },
+	]);
+});

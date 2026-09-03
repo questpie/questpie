@@ -1,5 +1,18 @@
 import type { ObservationScope } from "./contract";
 
+function isTransportCancellation(error: unknown): boolean {
+	try {
+		return (
+			typeof error === "object" &&
+			error !== null &&
+			"name" in error &&
+			error.name === "AbortError"
+		);
+	} catch {
+		return false;
+	}
+}
+
 /** Retains an owned HTTP scope through body EOF, source error, consumer cancel, or host abort. */
 export function retainScopeThroughResponse(
 	scope: ObservationScope | null,
@@ -73,6 +86,15 @@ export function retainScopeThroughResponse(
 				}
 				streamController.enqueue(result.value);
 			} catch (error) {
+				if (isTransportCancellation(error)) {
+					finalize("cancelled");
+					try {
+						streamController.close();
+					} catch {
+						/* A disconnected consumer may already be terminal. */
+					}
+					return;
+				}
 				finalize("framework_error");
 				streamController.error(error);
 			}
