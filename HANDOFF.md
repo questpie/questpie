@@ -682,11 +682,16 @@ requires `PGHOST`; the affected acceptance tests and deterministic gates were
 rerun after `eeeefcfaa`. OTEL-04 protocol v8 is complete through `6dff55285`,
 OTEL-05's exact-peer adapter is complete through `5b5cf8404`, and OTEL-06's CLI
 plus loopback OTLP operation is complete through `0a37ee993` after independent
-Standards and Spec PASS. OTEL-07 reference tracers are now unblocked.
-`questpie` remains the sole application authoring/Runtime package; compiler,
-Runtime, and testkit packages remain private. Public `apps/docs` changes are
-structurally blocked until OTEL-07's reference tracers pass, then land with
-release closure in OTEL-08. The
+Standards and Spec PASS. OTEL-07 is complete through `eccb437ff`: Team Support
+Desk supplies the zero-author-instrumentation browser graph, Collaboration
+supplies hostile parity, and the complete PostgreSQL 17/Firefox tracer passed
+twice consecutively with 329 assertions in 18.15 seconds and 17.87 seconds.
+The public OpenTelemetry guide and runtime-page corrections are integrated at
+`9a495f0c3`. OTEL-08 remains open for aggregate package, documentation,
+release, review, and cleanup evidence; neither beta.2 acceptance nor
+publishability is implied. `questpie` remains the sole application
+authoring/Runtime package; compiler, Runtime, and testkit packages remain
+private. The
 historical workbench at `docs/v4/research/observability-2026/WORKBENCH.md`
 remains research, not additional authority.
 
@@ -867,15 +872,13 @@ byte-identical release dry-runs pass.
    source/Runtime/database execution, filtering, wrapper, compatibility path,
    or fallback.
 10. ADR-0033 and its focused ADR-0034 correction are Accepted. OTEL-01 through
-    OTEL-06 are complete through `0a37ee993`; `2c4a0b98d` closes that handoff.
-    Continue with OTEL-07's reference browser and hostile tracers, then OTEL-08's
-    public guide and release closure. OTEL-07 must rebind generated-Fetch
-    classification from the retained `operationPath` POST baseline to the
-    canonical HTTP binding artifact only after HTTP-02 lands; this integration
-    does not pre-merge that in-progress artifact. Do not restore a v7/v8 Runtime
-    compatibility path, add a second observation kernel, or publish the
-    `apps/docs` install guide before OTEL-07 passes and OTEL-08 closes release
-    evidence.
+    OTEL-07 are complete through `eccb437ff`, including two consecutive complete
+    PostgreSQL 17/Firefox tracer passes. The public guide is integrated at
+    `9a495f0c3`; continue with only OTEL-08's remaining aggregate package,
+    documentation, release, review, and cleanup evidence. Do not restore a
+    v7/v8 Runtime compatibility path, add a second observation kernel, or treat
+    the integrated guide or OTEL-07 evidence as beta.2 acceptance or
+    publishability.
 11. Do not reopen the reference application by adding Cron, Collection triggers,
     checkpoints, generic browser control or workflow orchestration without new
     product authority.

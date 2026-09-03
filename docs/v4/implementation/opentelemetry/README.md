@@ -1,6 +1,7 @@
 # OpenTelemetry implementation queue
 
-- Status: OTEL-01 through OTEL-06 complete; OTEL-07 unblocked
+- Status: OTEL-01 through OTEL-07 complete; OTEL-08 public guide integrated,
+  aggregate release closure pending
 - Spec: [`SPEC.md`](./SPEC.md)
 - Authority: Accepted ADR-0033 and ADR-0034 with their verified replacement reviews
 - Delivery rule: every ticket starts red and lands a narrow runnable tracer
@@ -235,6 +236,8 @@ Acceptance:
 
 ## OTEL-07 — Prove reference browser and hostile journeys
 
+Status: complete through `eccb437ff`.
+
 Blocked by: OTEL-04, OTEL-05, and OTEL-06.
 
 Red tracer:
@@ -264,6 +267,15 @@ Acceptance:
   receivers, listeners/ports, temporary installs, and generated tracer output
   are removed in `finally` on success and deliberate failure.
 
+The Team Support Desk reference browser tracer landed at `88e1c05a6`. The
+Collaboration hostile parity slice landed at `bfbdda2be`; the realtime carrier,
+per-binding acknowledgement, closed-controller, and combined-fixture ordering
+repairs are integrated through `eccb437ff`. The complete combined PostgreSQL
+17/Firefox tracer then passed twice consecutively with 329 assertions in
+18.15 seconds and 17.87 seconds. These runs close OTEL-07 only: they do not
+substitute for OTEL-08's aggregate package, documentation, release, review, or
+cleanup evidence.
+
 ## OTEL-08 — Publish docs and close the three-package release
 
 Blocked by: OTEL-07.
@@ -274,6 +286,11 @@ links, disclosure, lossy/non-authoritative behavior, protocol-v8 cutover, and
 why handlers stay ordinary. Update runtime/release/durable pages and routing.
 Delete the unsupported 4,096-event queue, 30-day telemetry-retention, and
 365-day audit-retention claims. Do not add unrelated React bindings.
+
+The public guide, routing, and runtime-page corrections are integrated at
+`9a495f0c3`. That satisfies the documentation-authoring part of this ticket,
+not OTEL-08 as a whole. The aggregate release gates and fresh independent
+reviews below remain pending.
 
 Acceptance:
 
