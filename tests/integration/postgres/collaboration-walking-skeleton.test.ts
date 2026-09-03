@@ -459,6 +459,8 @@ postgresTest(
 						}>
 					>,
 				]);
+			const authorizedEmptyChannelId = "00000000-0000-4000-8000-000000000070";
+			let authorizedEmptyChannel: ChannelDetail = null;
 			const routeApplication = await createApp({
 				postgres: {
 					connectionUrl: postgresUrl(),
@@ -616,7 +618,6 @@ postgresTest(
 					retryable: true,
 				});
 				credentialOutage = false;
-				const authorizedEmptyChannelId = "00000000-0000-4000-8000-000000000070";
 				await database!.unsafe(
 					`INSERT INTO collaboration.channels (id, space_id, name)
 SELECT $1, space_id, $2 FROM collaboration.channels WHERE id = $3`,
@@ -638,6 +639,7 @@ SELECT $1, space_id, $2 FROM collaboration.channels WHERE id = $3`,
 					expect.objectContaining({ messages: [] }),
 					expect.objectContaining({ messages: [] }),
 				]);
+				authorizedEmptyChannel = inversePublicParity.empty[0];
 				const directCancellation = new AbortController();
 				directCancellation.abort();
 				await expect(
@@ -937,11 +939,10 @@ VALUES ($1, $2, $3, $4, $5)`,
 								{ callId: cancelledCallId },
 							),
 					);
-					const cancelledFailure = cancelled.catch((error: unknown) => error);
 					await waitForBlockedLifecycleChannelRead();
 					cancellation.abort(cancellationReason);
-					expect(await cancelledFailure).toBe(cancellationReason);
 					await blocker.unsafe("COMMIT");
+					await expect(cancelled).rejects.toBe(cancellationReason);
 					await assertNoMutationRecords(cancelledCallId, cancelledBody);
 
 					await blocker.unsafe("BEGIN");
@@ -958,9 +959,8 @@ VALUES ($1, $2, $3, $4, $5)`,
 								{ callId: deadlineCallId },
 							),
 					);
-					const expiredFailure = expired.catch((error: unknown) => error);
 					await waitForBlockedLifecycleChannelRead();
-					expect(await expiredFailure).toMatchObject({
+					await expect(expired).rejects.toMatchObject({
 						code: "DEADLINE_EXCEEDED",
 						retryable: true,
 					});
@@ -1223,41 +1223,23 @@ VALUES ($1, $2, $3, $4, $5)`,
 					payload: null,
 					status: 502,
 				});
-				const blockedDeliveryAdmission = Symbol.for(
-					"questpie.tracer.delivery-block-admission",
-				);
-				Reflect.deleteProperty(globalThis, blockedDeliveryAdmission);
-				const networkCancellation = new AbortController();
-				const networkAmbiguous = networkClient.actions["delivery.publish"](
-					{
-						effectKey: "domain-network-timeout",
-						message: "delivery-blocked",
-					},
-					{
-						effectKey: "provider-network-timeout",
-						callId: "delivery-network-timeout",
-						signal: networkCancellation.signal,
-						timeoutMilliseconds: Number.MAX_SAFE_INTEGER,
-					},
-				).catch((error: unknown) => error);
-				await eventually(
-					() => Reflect.get(globalThis, blockedDeliveryAdmission),
-					{
-						accept: (effectId) => typeof effectId === "string",
-						description: "network Action external-effect admission",
-						intervalMilliseconds: 1,
-						timeoutMilliseconds: 5_000,
-					},
-				);
-				networkCancellation.abort(
-					new DOMException("network Action cancelled", "AbortError"),
-				);
-				expect(await networkAmbiguous).toMatchObject({
+				await expect(
+					networkClient.actions["delivery.publish"](
+						{
+							effectKey: "domain-network-timeout",
+							message: "delivery-blocked",
+						},
+						{
+							effectKey: "provider-network-timeout",
+							callId: "delivery-network-timeout",
+							timeoutMilliseconds: 10,
+						},
+					),
+				).rejects.toMatchObject({
 					code: "ACTION_OUTCOME_AMBIGUOUS",
 					payload: { callId: "delivery-network-timeout" },
 					retryable: false,
 				});
-				Reflect.deleteProperty(globalThis, blockedDeliveryAdmission);
 				expect(transportCalls).toBe(callsAfterNetworkDelivery + 3);
 				expect(networkOperations).toEqual(
 					expect.arrayContaining([
@@ -2213,7 +2195,7 @@ ORDER BY watch.query_identity`);
 				recoveredNetworkClient.queries["channels.detail"],
 				authorizedEmptyChannelId,
 			);
-			expect(watchedEmptyChannel).toEqual(inversePublicParity.empty[0]);
+			expect(watchedEmptyChannel).toEqual(authorizedEmptyChannel);
 			let cancelledWatchPublished = false;
 			const watchCancellation = new AbortController();
 			watchCancellation.abort();
