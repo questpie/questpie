@@ -358,10 +358,11 @@ it needs. Readiness fails when those bytes are missing or incompatible. Drain
 stops new claims, then lets current claims finish or their leases expire. A
 deployment cannot silently replace code that a pending run still references.
 
-Protocol v7 is a non-rolling cutover from v6. Stop every v6 Runtime before
-running `questpie migration apply --allow-non-rolling-protocol-v7`. Without that
-explicit acknowledgement, the migration refuses to write. Compatible v7
-Runtime builds may still roll normally after the cutover.
+Protocol v8 is a non-rolling cutover from v7. Stop every v7 Runtime before
+running `questpie migration apply --allow-non-rolling-protocol-v8`. Without that
+explicit acknowledgement, the migration refuses to write. Compatible v8
+Runtime builds may still roll normally after the cutover; mixed v7/v8 Runtimes
+fail readiness before work.
 
 Durable events are append-only. They contain safe correlation identities and
 error codes, not credentials, raw payloads, secrets, or stack traces.
