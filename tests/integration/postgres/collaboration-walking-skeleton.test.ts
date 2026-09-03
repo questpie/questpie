@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1221,6 +1221,138 @@ VALUES ($1, $2, $3, $4, $5)`,
 					pool: { max: 10, total: 0 },
 					listener: "disabled",
 				});
+			}
+
+			const hostileHelper = join(temporary, "otel07-hostile-observability.ts");
+			await writeFile(
+				hostileHelper,
+				`import { createOfficialQuestpieObservability } from "questpie/internal/observability";
+export function createHostileQuestpieObservability(state: { begins: number; eventFaults: number; signals: unknown[] }) {
+	return createOfficialQuestpieObservability(() => ({
+		format: "questpie.runtime-observability", version: 1, extract: () => null,
+		begin(start: unknown) {
+			state.begins += 1; state.signals.push(start);
+			return { context: null,
+				run(use: () => unknown) { return use(); },
+				event(event: unknown) {
+					state.eventFaults += 1; state.signals.push(event);
+					throw new Error("deliberate adapter event fault");
+				},
+				end(end: unknown) { state.signals.push(end); },
+			};
+		},
+	}));
+}
+`,
+			);
+			const { createHostileQuestpieObservability } = (await import(
+				pathToFileURL(hostileHelper).href
+			)) as Readonly<{
+				createHostileQuestpieObservability(state: {
+					begins: number;
+					eventFaults: number;
+					signals: unknown[];
+				}): unknown;
+			}>;
+			const hostileState = {
+				begins: 0,
+				eventFaults: 0,
+				signals: [] as unknown[],
+			};
+			const observability = createHostileQuestpieObservability(hostileState);
+			const observationEnvelopes: unknown[] = [];
+			const hostileApplication = await createApp({
+				postgres: {
+					connectionUrl: postgresUrl(),
+					directConnectionUrl: postgresUrl(),
+				},
+				realtime: { hmacKey: new Uint8Array(32).fill(29) },
+				maintenance: { authorize: () => false },
+				observability,
+				events: (event: unknown) => observationEnvelopes.push(event),
+			});
+			try {
+				const hostileExecution = {
+					principal: principal.user({ id: tracerIds.principal }),
+					context: { companyId: tracerIds.company },
+				};
+				const hostileDirect = await hostileApplication.execution(
+					hostileExecution,
+					({ queries }) => queries.channels.detail({ id: tracerIds.channel }),
+				);
+				expect(hostileDirect).toEqual(initialChannelDetail);
+				const hostileNetwork = createClient({
+					baseUrl: "https://app.test",
+					fetch: (request: Request) => {
+						const headers = new Headers(request.headers);
+						headers.set(
+							"cookie",
+							"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						);
+						return hostileApplication.fetch(new Request(request, { headers }));
+					},
+				}).withContext({ companyId: tracerIds.company });
+				expect(
+					await hostileNetwork.queries["channels.detail"]({
+						id: tracerIds.channel,
+					}),
+				).toEqual(hostileDirect);
+				const disclosureSentinel = "__questpie_hostile_invalid_event__";
+				const hostileCallId = `otel07:hostile:${crypto.randomUUID()}`;
+				let hostileDirectError: unknown;
+				try {
+					await hostileApplication.execution(
+						hostileExecution,
+						({ mutations }) =>
+							mutations.message.publish(
+								{
+									body: disclosureSentinel,
+									channelId: tracerIds.channel,
+								},
+								{ callId: hostileCallId },
+							),
+					);
+				} catch (error) {
+					hostileDirectError = error;
+				}
+				expect(hostileDirectError).toMatchObject({
+					code: "PUBLICATION_REJECTED",
+					payload: null,
+					status: 422,
+				});
+				let hostileNetworkError: unknown;
+				try {
+					await hostileNetwork.mutations["message.publish"](
+						{ body: disclosureSentinel, channelId: tracerIds.channel },
+						{ callId: hostileCallId },
+					);
+				} catch (error) {
+					hostileNetworkError = error;
+				}
+				expect(ownErrorBytes(hostileNetworkError)).toBe(
+					ownErrorBytes(hostileDirectError),
+				);
+				const [hostileRows] = await database!.unsafe<
+					ReadonlyArray<Readonly<{ count: number }>>
+				>(
+					"SELECT count(*)::integer AS count FROM collaboration.messages WHERE body = $1",
+					[disclosureSentinel],
+				);
+				expect(hostileRows?.count).toBe(0);
+				expect(hostileState.begins).toBeGreaterThan(0);
+				expect(hostileState.eventFaults).toBeGreaterThan(0);
+				const observationBytes = JSON.stringify([
+					...hostileState.signals,
+					...observationEnvelopes,
+				]);
+				for (const forbidden of [
+					disclosureSentinel,
+					postgresUrl(),
+					"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+				])
+					expect(observationBytes).not.toContain(forbidden);
+			} finally {
+				await hostileApplication.close();
 			}
 
 			const first = await startHost(temporary, 0, { pauseWorker: true });
