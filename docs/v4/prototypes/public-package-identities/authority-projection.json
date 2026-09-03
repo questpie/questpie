@@ -1,0 +1,60 @@
+{
+	"format": "questpie.package-identity-projection.v1",
+	"status": "proposed",
+	"decision": "docs/adr/0042-freeze-public-package-identities.md",
+	"acceptedProjection": [
+		".agents/skills/questpie-v4/references/codebase.md",
+		"SPEC.md",
+		"CONTEXT.md",
+		"HANDOFF.md",
+		"docs/adr/README.md",
+		"docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
+		"docs/adr/0035-freeze-query-resource-and-react-client-integration.md",
+		"docs/adr/0039-slice-the-beta-two-dx-release.md",
+		"docs/v4/beta2-release-scope.md",
+		"apps/docs/content/docs/v4/opentelemetry.mdx",
+		"apps/docs/content/docs/v4/reactive-query-resources.mdx",
+		"apps/docs/content/docs/v4/semantic-kernels-and-public-surface.mdx",
+		"docs/v4/implementation/opentelemetry/README.md",
+		"docs/v4/implementation/opentelemetry/SPEC.md",
+		"docs/v4/implementation/reactive-client-integration/SPEC.md",
+		"docs/v4/implementation/reactive-client-integration/TICKETS.md"
+	],
+	"breakingImplementation": [
+		"bun.lock",
+		"packages/questpie/package.json",
+		"packages/react/src/index.ts",
+		"packages/opentelemetry/package.json",
+		"packages/react/package.json",
+		"packages/questpie/cli/telemetry.ts",
+		"fixtures/team-support-desk/package.json",
+		"fixtures/team-support-desk/tracer/browser/app.tsx",
+		"fixtures/team-support-desk/tracer/browser/query-resource-react.test.tsx",
+		"fixtures/team-support-desk/tracer/browser/tickets/selected.tsx",
+		"fixtures/team-support-desk/tracer/host.ts",
+		"quality/release/package-artifacts.json",
+		"scripts/package-contract.ts",
+		"scripts/release.ts",
+		"tests/integration/otel05-packed-package-isolation.test.ts",
+		"tests/integration/otel06-packed-cli-telemetry.test.ts",
+		"tests/integration/qri04-react-package.test.ts",
+		"tests/performance/beta12-release.test.ts",
+		"tests/support/beta12-packed-questpie.ts",
+		"tests/type/beta01-generated-contract.test.ts",
+		"tests/unit/beta12-release-contract.test.ts",
+		"tests/unit/otel06-cli-telemetry.test.ts"
+	],
+	"frozenEvidence": [
+		"docs/v4/prototypes/opentelemetry-boundary/",
+		"docs/v4/prototypes/reactive-client-integration/",
+		"docs/v4/research/",
+		"docs/v4/implementation/**/REVIEW*.json"
+	],
+	"rules": [
+		"No acceptedProjection file changes before a committed PASS protocol-v2 PASS record.",
+		"The breakingImplementation set changes only after PASS and starts from red tests.",
+		"packages/react is deleted after questpie/react is green; it never becomes a compatibility package.",
+		"Historical proof and review bytes retain the names they governed.",
+		"An active-surface scan must account for every obsolete scoped package occurrence."
+	]
+}

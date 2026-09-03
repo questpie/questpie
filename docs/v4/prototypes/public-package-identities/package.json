@@ -1,0 +1,8 @@
+{
+	"name": "@questpie/prototype-public-package-identities",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "bun test package-identities.test.ts"
+	}
+}

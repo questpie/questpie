@@ -1,0 +1,11 @@
+{
+	"name": "questpie-opentelemetry",
+	"version": "4.0.0-beta.2",
+	"type": "module",
+	"exports": {
+		".": "./index.js"
+	},
+	"peerDependencies": {
+		"questpie": "4.0.0-beta.2"
+	}
+}
