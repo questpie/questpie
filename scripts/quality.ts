@@ -158,7 +158,7 @@ function full(): void {
 		"bun",
 		"test",
 		"--timeout=15000",
-		"--max-concurrency=8",
+		"--max-concurrency=1",
 		"--path-ignore-patterns=**/collection-lifecycle-boundary/operation-transaction/check.test.ts",
 		"--path-ignore-patterns=**/query-resource-react.test.tsx",
 	]);
