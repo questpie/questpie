@@ -38,7 +38,12 @@ export function controlledRoot(
 	return Object.freeze({
 		controller,
 		get deadlineExpired() {
-			return deadlineExpired;
+			return (
+				deadlineExpired ||
+				(!controller.signal.aborted &&
+					input.deadline !== undefined &&
+					input.now() >= input.deadline)
+			);
 		},
 		dispose() {
 			if (timer !== undefined) clearTimeout(timer);

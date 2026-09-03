@@ -2772,14 +2772,20 @@ test("refuses a late result from a handler that ignores deadline cancellation", 
 			context: {
 				companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
 			},
-			deadline: Date.now() + 1,
+			deadline: Date.now() + 500,
 		},
 		(operations) => operations.invoke("query:messages.page", { first: 1 }),
 	);
+	const settled = pending.then(
+		() => ({ outcome: "resolved" as const, error: undefined }),
+		(error: unknown) => ({ outcome: "rejected" as const, error }),
+	);
 	while (releases.length < 1) await Bun.sleep(0);
-	await Bun.sleep(2);
+	await Bun.sleep(550);
 	releases[0]?.();
-	await expect(pending).rejects.toThrow("DEADLINE_EXCEEDED");
+	const terminal = await settled;
+	expect(terminal.outcome).toBe("rejected");
+	expect(terminal.error).toMatchObject({ code: "DEADLINE_EXCEEDED" });
 	expect(
 		events
 			.filter(
