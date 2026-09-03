@@ -39,12 +39,12 @@ test("admits only one exact explicit OpenTelemetry start flag", () => {
 async function applicationWithAdapter(source: string): Promise<string> {
 	const root = await mkdtemp(join(tmpdir(), "questpie-otel06-loader-"));
 	temporaryRoots.push(root);
-	const packageRoot = join(root, "node_modules/@questpie/opentelemetry");
+	const packageRoot = join(root, "node_modules/questpie-opentelemetry");
 	await mkdir(packageRoot, { recursive: true });
 	await writeFile(
 		join(packageRoot, "package.json"),
 		JSON.stringify({
-			name: "@questpie/opentelemetry",
+			name: "questpie-opentelemetry",
 			type: "module",
 			exports: "./index.js",
 		}),

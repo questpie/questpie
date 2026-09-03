@@ -28,16 +28,13 @@ test("dry-run packs every exact public package and rejects manifest drift", asyn
 	expect(first.exitCode, first.stderr.toString()).toBe(0);
 	expect(first.stdout.toString()).toContain(`questpie@${releaseVersion}`);
 	expect(first.stdout.toString()).toContain(
-		`@questpie/react@${releaseVersion}`,
-	);
-	expect(first.stdout.toString()).toContain(
-		`@questpie/opentelemetry@${releaseVersion}`,
+		`questpie-opentelemetry@${releaseVersion}`,
 	);
 	expect(first.stdout.toString()).toContain("retry-stable");
 	expect(first.stdout.toString()).toContain("packed-build");
 	expect(first.stdout.toString()).toContain("exact-peers");
 	expect(first.stdout.toString()).toContain(
-		"exact-three-package combined-import",
+		"exact-two-package combined-import",
 	);
 
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta12-manifest-"));
@@ -74,7 +71,7 @@ test("dry-run packs every exact public package and rejects manifest drift", asyn
 			),
 		);
 		incompleteManifest.packages = incompleteManifest.packages.filter(
-			(candidate: { name: string }) => candidate.name !== "@questpie/react",
+			(candidate: { name: string }) => candidate.name !== "questpie",
 		);
 		const incomplete = join(temporary, "incomplete-package-artifacts.json");
 		await writeFile(incomplete, `${JSON.stringify(incompleteManifest)}\n`);
@@ -101,7 +98,7 @@ test("dry-run packs every exact public package and rejects manifest drift", asyn
 		missingTelemetryManifest.packages =
 			missingTelemetryManifest.packages.filter(
 				(candidate: { name: string }) =>
-					candidate.name !== "@questpie/opentelemetry",
+					candidate.name !== "questpie-opentelemetry",
 			);
 		const missingTelemetryPath = join(
 			temporary,

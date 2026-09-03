@@ -10,12 +10,15 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
-const packageRoot = resolve(repositoryRoot, "packages/react");
+const packageRoot = resolve(repositoryRoot, "packages/questpie");
 const packageJson = JSON.parse(
 	readFileSync(resolve(packageRoot, "package.json"), "utf8"),
 ) as {
 	version: string;
 	peerDependencies: Readonly<Record<string, string>>;
+	peerDependenciesMeta: Readonly<
+		Record<string, Readonly<{ optional?: boolean }>>
+	>;
 };
 
 function run(command: readonly string[], cwd: string) {
@@ -28,7 +31,7 @@ function run(command: readonly string[], cwd: string) {
 
 function writePeer(
 	root: string,
-	name: "questpie" | "react",
+	name: "react",
 	version: string,
 ): void {
 	const peerRoot = join(root, "node_modules", name);
@@ -39,9 +42,7 @@ function writePeer(
 	);
 	writeFileSync(
 		join(peerRoot, "index.js"),
-		name === "react"
-			? "export const useSyncExternalStore = (subscribe, getSnapshot) => getSnapshot();\n"
-			: "export {};\n",
+		"export const useSyncExternalStore = (subscribe, getSnapshot) => getSnapshot();\n",
 	);
 }
 
@@ -51,7 +52,7 @@ function stageConsumer(
 	reactVersion: string,
 ): void {
 	mkdirSync(root, { recursive: true });
-	const installed = join(root, "node_modules/@questpie/react");
+	const installed = join(root, "node_modules/questpie");
 	mkdirSync(installed, { recursive: true });
 	const extract = run(
 		["tar", "-xzf", tarball, "--strip-components=1", "-C", installed],
@@ -59,7 +60,6 @@ function stageConsumer(
 	);
 	if (extract.exitCode !== 0)
 		throw new Error(extract.stderr.toString() || "package extraction failed");
-	writePeer(root, "questpie", packageJson.version);
 	writePeer(root, "react", reactVersion);
 	writeFileSync(
 		join(root, "package.json"),
@@ -71,7 +71,7 @@ function stageConsumer(
 	);
 }
 
-test("packs an isolated React projection and exposes peer mismatches", () => {
+test("packs React as an optional questpie subpath and exposes peer mismatches", () => {
 	const temporary = mkdtempSync(join(tmpdir(), "questpie-react-package-"));
 	try {
 		const packed = run(
@@ -90,8 +90,8 @@ test("packs an isolated React projection and exposes peer mismatches", () => {
 		const tarball = resolve(temporary, packed.stdout.toString().trim());
 		const listing = run(["tar", "-tzf", tarball], temporary);
 		expect(listing.exitCode).toBe(0);
-		expect(listing.stdout.toString()).toContain("package/dist/index.d.ts");
-		expect(listing.stdout.toString()).toContain("package/dist/index.js");
+		expect(listing.stdout.toString()).toContain("package/dist/react.d.ts");
+		expect(listing.stdout.toString()).toContain("package/dist/react.js");
 		expect(listing.stdout.toString()).not.toContain("package/src/");
 
 		const exactRoot = join(temporary, "exact");
@@ -101,7 +101,7 @@ test("packs an isolated React projection and exposes peer mismatches", () => {
 				[
 					"bun",
 					"-e",
-					'import { useQueryResource } from "@questpie/react"; if (typeof useQueryResource !== "function") process.exit(1)',
+					'import { useQueryResource } from "questpie/react"; if (typeof useQueryResource !== "function") process.exit(1)',
 				],
 				exactRoot,
 			).exitCode,
@@ -111,17 +111,15 @@ test("packs an isolated React projection and exposes peer mismatches", () => {
 		stageConsumer(mismatchRoot, tarball, "18.3.1");
 		const installedPeerRange = JSON.parse(
 			readFileSync(
-				join(mismatchRoot, "node_modules/@questpie/react/package.json"),
+				join(mismatchRoot, "node_modules/questpie/package.json"),
 				"utf8",
 			),
 		).peerDependencies.react;
 		expect(installedPeerRange).toBe("^19.2.0");
 		expect(Bun.semver.satisfies("18.3.1", installedPeerRange)).toBe(false);
-		expect(basename(tarball)).toBe(`questpie-react-${packageJson.version}.tgz`);
-		expect(packageJson.peerDependencies).toEqual({
-			questpie: packageJson.version,
-			react: "^19.2.0",
-		});
+		expect(basename(tarball)).toBe(`questpie-${packageJson.version}.tgz`);
+		expect(packageJson.peerDependencies.react).toBe("^19.2.0");
+		expect(packageJson.peerDependenciesMeta.react).toEqual({ optional: true });
 	} finally {
 		rmSync(temporary, { force: true, recursive: true });
 	}
