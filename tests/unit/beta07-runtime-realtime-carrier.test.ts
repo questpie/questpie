@@ -361,6 +361,45 @@ test("serves ready, complete delivery, acknowledgement, and close frames", async
 	expect((await reader.read()).done).toBe(true);
 });
 
+test("treats a network stream abort as terminal session cleanup", async () => {
+	const value = harness();
+	const server = Bun.serve({
+		port: 0,
+		fetch: async (incoming) =>
+			(await value.carrier.fetch(incoming)) ??
+			new Response(null, { status: 404 }),
+	});
+	try {
+		const cancellation = new AbortController();
+		const response = await fetch(
+			`http://127.0.0.1:${server.port}/_questpie/realtime`,
+			{
+				headers: {
+					accept: projected.streamMediaType,
+					"x-questpie-realtime-scope": "scope:network-abort",
+				},
+				signal: cancellation.signal,
+			},
+		);
+		const reader = response.body?.getReader();
+		if (!reader) throw new Error("missing realtime stream");
+		expect(await nextFrame(reader)).toMatchObject({ kind: "ready" });
+		cancellation.abort(new DOMException("navigation", "AbortError"));
+		await reader
+			.read()
+			.catch(() => ({ done: true as const, value: undefined }));
+		await Bun.sleep(0);
+
+		const replacement = await value.carrier.fetch(
+			request("GET", undefined, "scope:after-network-abort"),
+		);
+		expect(replacement?.status).toBe(200);
+		await value.carrier.drain({ deadlineAt: Date.now() + 2_000 });
+	} finally {
+		server.stop(true);
+	}
+});
+
 test("frames an invalid complete result as an exact failure", async () => {
 	const value = harness(async () => ({ nodes: [{ body: 42 }] }));
 	const response = await value.carrier.fetch(request("GET"));

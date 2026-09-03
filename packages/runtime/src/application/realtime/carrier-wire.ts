@@ -76,20 +76,32 @@ export function createRealtimeSession(
 			);
 		input.onDispose(session);
 	};
-	const pump = () => {
-		if (!controller || controller.desiredSize === null) return;
-		if (inFlightBytes > 0 && controller.desiredSize > 0) inFlightBytes = 0;
-		if (controller.desiredSize <= 0) return;
-		const next = pending.shift();
-		if (next) {
-			pendingBytes -= next.size;
-			inFlightBytes = next.size;
-			controller.enqueue(next.bytes);
-			return;
-		}
-		if (closing) {
-			controller.close();
+	const pump = (): boolean => {
+		if (!controller || controller.desiredSize === null) return !disposed;
+		try {
+			if (inFlightBytes > 0 && controller.desiredSize > 0) inFlightBytes = 0;
+			if (controller.desiredSize <= 0) return true;
+			const next = pending.shift();
+			if (next) {
+				pendingBytes -= next.size;
+				inFlightBytes = next.size;
+				controller.enqueue(next.bytes);
+				return true;
+			}
+			if (closing) {
+				controller.close();
+				dispose();
+			}
+			return !disposed;
+		} catch {
+			// A network carrier may close between its Request abort and the stream's
+			// cancellation callback. That consumer departure is terminal cleanup, not
+			// a process fault and not permission to retain already-admitted frames.
+			pending.length = 0;
+			pendingBytes = 0;
+			inFlightBytes = 0;
 			dispose();
+			return false;
 		}
 	};
 	const append = (frame: RealtimeWireRecord): boolean => {
@@ -99,8 +111,7 @@ export function createRealtimeSession(
 		if (total > input.contract.limits.bufferedBytesPerClient) return false;
 		pending.push({ bytes, size: bytes.byteLength });
 		pendingBytes += bytes.byteLength;
-		pump();
-		return true;
+		return pump();
 	};
 	const close = (reason: string, retryable: boolean) => {
 		if (disposed || closing) return;
