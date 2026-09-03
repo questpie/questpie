@@ -1,5 +1,5 @@
 import type { RuntimeExecutionObservation } from "../observation";
-import { QuestpiePostgresError } from "../postgres";
+import { QuestpiePostgresError } from "../postgres/contract";
 import type {
 	DurableAttemptExecutionRequest,
 	DurableWorkerOutcome,

@@ -6,7 +6,7 @@ import {
 	type PrincipalKind,
 	type RuntimeExecutionObservation,
 } from "../observation";
-import type { PostgresTransactionRunner } from "../postgres";
+import type { PostgresTransactionRunner } from "../postgres/contract";
 
 type AttemptObservationDecision = Readonly<{
 	observation: RuntimeExecutionObservation;

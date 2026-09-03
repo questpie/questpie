@@ -15,7 +15,11 @@ private implementation by product domain, not by generic technical layer.
 - Group compiler implementation under domain folders such as `composition/`,
   `schema/`, and `seed/`.
 - Give each domain one internal seam at `<domain>/index.ts`. Cross-domain imports
-  use that seam; files below it remain private to the domain.
+  use that seam; files below it remain private to the domain. A domain whose
+  main seam necessarily loads an external adapter may additionally expose one
+  side-effect-free `<domain>/contract.ts` seam for types, errors, and brands;
+  cross-domain contract-only imports may use it without pulling adapter code
+  into compiler-controlled evaluation.
 - Place adapters below their owning domain, for example
   `schema/postgres/apply.ts`, instead of creating a provider-layer directory.
 - Add an adapter seam only when two real adapters exist. PostgreSQL is the only

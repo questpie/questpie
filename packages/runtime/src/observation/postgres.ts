@@ -4,7 +4,7 @@ import {
 	type PostgresStatement,
 	type PostgresStatementOperation,
 	type PostgresTransaction,
-} from "../postgres";
+} from "../postgres/contract";
 import type { PrincipalKind, RuntimeExecutionObservation } from "./contract";
 
 const observedTransactionBrand = Symbol("questpie.observation.postgres");
