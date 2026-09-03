@@ -44,7 +44,7 @@ test("compiles one Collection-owned handlerless Query into the generated app and
 			"queries: GeneratedQueryOperations",
 		);
 		expect(compilation.generatedFiles["app.ts"]).toContain(
-			"invocation.ctx.data.run(definition.query as never, invocation.input as never) as never",
+			"(invocation.ctx.data as unknown as Readonly<{ run(plan: unknown, input: unknown): unknown }>).run(",
 		);
 		expect(compilation.generatedFiles["client.ts"]).toContain(
 			'"tickets.queue"',

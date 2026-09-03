@@ -258,6 +258,49 @@ export const tickets = defineCollection({
 });
 ```
 
+Give both Collections an explicit read Policy. This small example admits any
+authenticated Principal; a real application usually adds tenant and membership
+conditions to `rows`.
+
+```ts title="src/data/policies.ts"
+import { definePolicy, expr, policy } from "questpie";
+import { comments } from "./comments";
+import { tickets } from "./tickets";
+
+export const ticketPolicy = definePolicy(tickets, {
+	name: "tickets.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: () => expr.always(),
+	},
+});
+
+export const commentPolicy = definePolicy(comments, {
+	name: "comments.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: () => expr.always(),
+	},
+});
+```
+
+The application Context resolves the required tenant scope for each Operation.
+This small Policy does not filter by tenant yet, but a production Policy can
+use the resolved scope without changing the Query.
+
+```ts title="src/context.ts"
+import { codec, context, defineContext } from "questpie";
+
+export const appContext = defineContext({
+	name: "app.context",
+	input: codec.object({ tenantId: codec.uuid() }),
+	resolve: ({ input }) => ({
+		tenant: context.tenant({ id: input.tenantId }),
+		values: {},
+	}),
+});
+```
+
 Import the child Collection into the Query module. The nested `list` form owns
 the child Field types; it is a structural selection, not another Query or
 network call.
@@ -296,6 +339,30 @@ export const ticketDetailPage = defineQuery({
 	}),
 });
 ```
+
+The generated client infers the complete nested result from that one Query.
+
+```ts title="web/client.ts"
+import { createClient } from "#questpie/client";
+
+const client = createClient({ baseUrl: "https://support.example.com" });
+
+export async function loadTicket(tenantId: string, ticketId: string) {
+	const api = client.withContext({ tenantId });
+	const page = await api.queries["tickets.detailPage"]({
+		ids: [ticketId],
+		first: 1,
+		after: null,
+	});
+	return page.nodes[0] ?? null;
+}
+
+export type TicketDetail = Awaited<ReturnType<typeof loadTicket>>;
+```
+
+`TicketDetail` contains the selected Ticket fields and an exact readonly
+`comments` array. The application writes neither a response interface nor an
+OpenAPI-specific schema.
 
 Root and nested `list` are mutually exclusive overloads. Root `list` requires
 `parameters` and `page` and forbids `first`; nested `list` requires a literal
