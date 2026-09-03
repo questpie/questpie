@@ -85,7 +85,15 @@ The host compiles all React source into one minified `/desk.js` browser bundle.
 It also serves the compiler-generated OpenAPI document at `/openapi.json` and
 an interactive Scalar view at `/api-reference`. Scalar is fixture-only: it
 renders the same checked artifact and does not add a QUESTPIE Runtime route or
-another operation registry.
+another operation registry. Its wrapper reads the compiler-owned compatibility
+values once from `components.parameters` and adds them before a request, so
+every Operation does not repeat five framework headers. Query Context remains
+explicit: sign in through the reference application and supply canonical
+base64url Context for that user's matching `organizationId` and `membershipId`.
+The Scalar placeholder `Value` is not a valid Context and correctly returns
+`PROTOCOL_UNSUPPORTED`; the generated client performs this encoding for normal
+application code.
+
 Typecheck the fixture from the repository root:
 
 ```sh
