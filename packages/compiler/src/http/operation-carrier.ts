@@ -16,11 +16,13 @@ function headerParameter(
 	};
 }
 
-export function projectOperationCarrierHeaders(input: Readonly<{
-	kind: "action" | "mutation" | "query";
-	contextSchema: JsonSchema;
-	contextAcceptsEmpty: boolean;
-}>): JsonRecord[] {
+export function projectOperationCarrierHeaders(
+	input: Readonly<{
+		kind: "action" | "mutation" | "query";
+		contextSchema: JsonSchema;
+		contextAcceptsEmpty: boolean;
+	}>,
+): JsonRecord[] {
 	return input.kind === "query"
 		? [
 				headerParameter(

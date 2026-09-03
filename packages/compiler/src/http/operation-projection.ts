@@ -3,13 +3,13 @@ import { decodeRuntimeCodec } from "@questpie/runtime/codec";
 import { canonicalBytes, compareAscii } from "../canonical";
 import { normalizeCodecContract } from "../codec";
 import {
-	type DocumentationEntry,
-	projectOperationMetadata,
-} from "./operation-metadata";
-import {
 	projectCommonCarrierParameters,
 	projectOperationCarrierHeaders,
 } from "./operation-carrier";
+import {
+	type DocumentationEntry,
+	projectOperationMetadata,
+} from "./operation-metadata";
 
 export { projectOperationJsDoc } from "./operation-metadata";
 

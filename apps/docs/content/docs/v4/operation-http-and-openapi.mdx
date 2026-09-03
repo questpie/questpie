@@ -128,16 +128,16 @@ The compiler projects the exact carrier headers into OpenAPI. Their values and
 descriptions are compiler-owned, so an Operation author does not repeat them in
 documentation metadata.
 
-| Header | Purpose |
-| --- | --- |
-| `Questpie-Application` | Identifies the generated application contract. |
-| `Questpie-Client-Contract` | Pins the generated client input, output, and error contract. |
-| `Questpie-Wire-Digest` | Pins the canonical HTTP wire contract. |
-| `Questpie-Context` | Carries canonical Context input for a Query. Mutation and Action carry Context in their JSON body. |
-| `Questpie-Call-Id` | Correlates a Query or Action call; generated clients create one when the caller does not. |
-| `Questpie-Timeout-Milliseconds` | Applies an optional positive end-to-end deadline. |
-| `Idempotency-Key` | Gives a Mutation stable replay identity. |
-| `Effect-Key` | Gives an external Action effect stable identity while preserving explicit outcome ambiguity. |
+| Header                          | Purpose                                                                                            |
+| ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `Questpie-Application`          | Identifies the generated application contract.                                                     |
+| `Questpie-Client-Contract`      | Pins the generated client input, output, and error contract.                                       |
+| `Questpie-Wire-Digest`          | Pins the canonical HTTP wire contract.                                                             |
+| `Questpie-Context`              | Carries canonical Context input for a Query. Mutation and Action carry Context in their JSON body. |
+| `Questpie-Call-Id`              | Correlates a Query or Action call; generated clients create one when the caller does not.          |
+| `Questpie-Timeout-Milliseconds` | Applies an optional positive end-to-end deadline.                                                  |
+| `Idempotency-Key`               | Gives a Mutation stable replay identity.                                                           |
+| `Effect-Key`                    | Gives an external Action effect stable identity while preserving explicit outcome ambiguity.       |
 
 The three compatibility headers are optional only as one complete set. Omit
 all three, or send the exact three values emitted for that generated client.
