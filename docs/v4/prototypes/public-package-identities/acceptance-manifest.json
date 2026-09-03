@@ -8,7 +8,7 @@
 		"clean feat/v4 candidate base": "dce0ebd0a7ce5959cfd31adcc9b8a2a3f791afcd",
 		"directionally approved Deep-DX research": "75a72b6515e87d78a559145f65b21a386ea4de3c",
 		"OpenTelemetry design workbench": "2c4a0b98deed36ee38842fdd9c469c2d85a4624b",
-		"deterministic candidate before manifest": "8bb7fc9a4679cbbf30889acfdb9eb0cc7e951372"
+		"deterministic candidate before refreshed manifest": "e0e5f901cd8b499a7c8228f2bc5c5a408d95a265"
 	},
 	"authorityDocuments": [
 		{
@@ -69,12 +69,12 @@
 		{
 			"name": "Proposed focused package identity decision",
 			"path": "docs/adr/0042-freeze-public-package-identities.md",
-			"sha256": "d899fb54ee25d0da860b00e594ce406d241b1cc9710a51830b55221884aa5813"
+			"sha256": "b5d392eeb3cf52381195fd876aefabef08f5f180e1b5ba21be03d06d3174b7ce"
 		},
 		{
 			"name": "candidate proof boundary",
 			"path": "docs/v4/prototypes/public-package-identities/README.md",
-			"sha256": "08a6f554dd03a85ff100c592b786296d9afe907b0a07e9f6ff3d9de32e477ba7"
+			"sha256": "3bdd4e7a491a9f3960f1c95c4db6901b1407c5763eb132041088cc38f12d3ef2"
 		},
 		{
 			"name": "closed projection and deletion inventory",
@@ -84,7 +84,7 @@
 		{
 			"name": "package identity executable proof",
 			"path": "docs/v4/prototypes/public-package-identities/package-identities.test.ts",
-			"sha256": "576dacb55c2356810af689fdccbaffb217bbfadbf26cb62454094e17af8f5721"
+			"sha256": "b8dd946e011b55ba5fdebebf51dd9e865fcc5eac7d9ff18fbe7e52dfdbe9f0f7"
 		},
 		{
 			"name": "prototype questpie manifest",
@@ -175,7 +175,7 @@
 		"The obsolete @questpie/react and @questpie/opentelemetry identities are deleted during the post-PASS breaking vertical. No alias, forwarding package, re-export, diagnostic suggestion, CLI fallback, or compatibility path remains.",
 		"The supersession is limited to package spelling, placement, peer metadata, CLI resolution specifier, and release cardinality/archive clauses of ADR-0033 and ADR-0035 and their projections. Their React, Query Resource, observation, propagation, durable-link, flush, shutdown, failure, and disclosure kernels remain unchanged.",
 		"Native package-manager and loader diagnostics are tool-owned. QUESTPIE-owned CLI, release, and startup diagnostics disclose only the canonical identity, safe expected version or peer range, and mismatch class, with no credentials, search history, environment, Context, or payload.",
-		"The candidate prototype proves the narrow isolated topology and import behavior only. It does not claim production migration, mismatch enforcement, deterministic production archives, declaration digests, relocated clean installs, PostgreSQL/browser evidence, or beta.2 release readiness; PPI-01 through PPI-08 own those post-PASS gates.",
+		"The isolated prototype proves candidate topology, twice-identical candidate archives, relocated offline candidate installs, import behavior, and declared peer-range mismatch rejection. It does not claim production migration, deterministic production archives, production declaration digests, exhaustive active deletion, PostgreSQL/browser evidence, or beta.2 release readiness; PPI-01 through PPI-08 own those post-PASS gates.",
 		"The machine-checked projection/deletion inventory accounts for every old scoped-name occurrence in the reviewed head and separates live authority, breaking implementation, and frozen historical evidence. No production implementation starts before PASS."
 	]
 }
