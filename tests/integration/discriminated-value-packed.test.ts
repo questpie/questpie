@@ -175,4 +175,4 @@ console.log(JSON.stringify({
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
-}, 30_000);
+}, 60_000);

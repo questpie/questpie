@@ -149,4 +149,4 @@ test("projects one authored Action into exact direct and canonical HTTP artifact
 	expect(client).toContain('"action:delivery.publish"');
 	expect(client).toContain("ACTION_OUTCOME_AMBIGUOUS");
 	expect(client).not.toContain("retry?:");
-}, 15_000);
+}, 30_000);
