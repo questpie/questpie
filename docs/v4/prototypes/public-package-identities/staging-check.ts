@@ -10,6 +10,7 @@ type Projection = Readonly<{
 	status: string;
 	decision: string;
 	candidateDocuments: readonly string[];
+	proposedRegistration: readonly string[];
 	acceptedProjection: readonly string[];
 	breakingImplementation: readonly string[];
 	frozenEvidence: readonly string[];
@@ -32,6 +33,7 @@ expect(read("docs/adr/README.md")).toContain(
 expect(read("docs/adr/README.md")).toContain(
 	"- [Freeze public package identities](./0042-freeze-public-package-identities.md)",
 );
+expect(projection.proposedRegistration).toEqual(["docs/adr/README.md"]);
 expect(read("SPEC.md")).toContain(
 	"`questpie`, `@questpie/react`, and\n`@questpie/opentelemetry`",
 );
@@ -47,6 +49,7 @@ expect(existsSync(resolve(import.meta.dir, "REVIEW.json"))).toBe(false);
 
 for (const paths of [
 	projection.candidateDocuments,
+	projection.proposedRegistration,
 	projection.acceptedProjection,
 	projection.breakingImplementation,
 ]) {
@@ -74,6 +77,7 @@ const trackedOldNameFiles = (oldNameScan.stdout?.toString() ?? "")
 	.map((line) => line.replace(/^HEAD:/, ""));
 const accounted = new Set([
 	...projection.candidateDocuments,
+	...projection.proposedRegistration,
 	...projection.acceptedProjection,
 	...projection.breakingImplementation,
 ]);

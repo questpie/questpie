@@ -11,12 +11,12 @@
 		"docs/v4/prototypes/public-package-identities/package-identities.test.ts",
 		"docs/v4/prototypes/public-package-identities/staging-check.ts"
 	],
+	"proposedRegistration": ["docs/adr/README.md"],
 	"acceptedProjection": [
 		".agents/skills/questpie-v4/references/codebase.md",
 		"SPEC.md",
 		"CONTEXT.md",
 		"HANDOFF.md",
-		"docs/adr/README.md",
 		"docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
 		"docs/adr/0035-freeze-query-resource-and-react-client-integration.md",
 		"docs/adr/0039-slice-the-beta-two-dx-release.md",
@@ -26,6 +26,7 @@
 		"apps/docs/content/docs/v4/semantic-kernels-and-public-surface.mdx",
 		"docs/v4/implementation/opentelemetry/README.md",
 		"docs/v4/implementation/opentelemetry/SPEC.md",
+		"docs/v4/implementation/inverse-tomany-projection/README.md",
 		"docs/v4/implementation/reactive-client-integration/SPEC.md",
 		"docs/v4/implementation/reactive-client-integration/TICKETS.md"
 	],
@@ -35,6 +36,7 @@
 		"packages/react/src/index.ts",
 		"packages/opentelemetry/package.json",
 		"packages/react/package.json",
+		"packages/react/tsconfig.json",
 		"packages/questpie/cli/telemetry.ts",
 		"fixtures/team-support-desk/package.json",
 		"fixtures/team-support-desk/tracer/browser/app.tsx",
@@ -60,6 +62,7 @@
 		"docs/v4/implementation/**/REVIEW*.json"
 	],
 	"rules": [
+		"Before acceptance, docs/adr/README.md changes only to register ADR-0042 under Proposed; its Accepted promotion remains post-acceptance work.",
 		"No acceptedProjection file changes before a committed PASS protocol-v2 PASS record.",
 		"The breakingImplementation set changes only after PASS and starts from red tests.",
 		"packages/react is deleted after questpie/react is green; it never becomes a compatibility package.",
