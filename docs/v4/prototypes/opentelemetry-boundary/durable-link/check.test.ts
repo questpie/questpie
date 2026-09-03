@@ -24,13 +24,7 @@ import {
 } from "./kernel";
 
 const postgresDescribe = process.env.PGHOST ? describe : describe.skip;
-const pool = new Pool({
-	host: process.env.PGHOST,
-	port: Number(process.env.PGPORT ?? "5432"),
-	database: process.env.PGDATABASE ?? "postgres",
-	user: process.env.PGUSER ?? "postgres",
-	max: 4,
-});
+let pool: Pool;
 const schema = `qp_otel_${randomUUID().replaceAll("-", "")}`;
 const sha256 = (value: string) =>
 	createHash("sha256").update(value).digest("hex");
@@ -65,6 +59,13 @@ const acceptance = (
 
 postgresDescribe("protocol-v8 durable trace-link candidate", () => {
 	beforeAll(async () => {
+		pool = new Pool({
+			host: process.env.PGHOST,
+			port: Number(process.env.PGPORT ?? "5432"),
+			database: process.env.PGDATABASE ?? "postgres",
+			user: process.env.PGUSER ?? "postgres",
+			max: 4,
+		});
 		const version = await pool.query<{ server_version_num: string }>(
 			"SHOW server_version_num",
 		);
