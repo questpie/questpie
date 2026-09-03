@@ -3,6 +3,7 @@ import type { EvaluatedExport, NormalizedResource, SourceSpan } from "../types";
 
 export {
 	projectOperationProjection,
+	projectOperationJsDoc,
 	type OperationProjection,
 	type OperationProjectionInput,
 } from "./operation-projection";

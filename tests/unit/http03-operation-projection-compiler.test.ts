@@ -34,6 +34,16 @@ afterAll(async () => {
 });
 
 describe("HTTP-03 / DOC-02 compiler ownership", () => {
+	test("projects generated JSDoc independently of OpenAPI selection", async () => {
+		const root = await copyFixture("jsdoc-without-openapi");
+		const compilation = await compileApplication({ applicationRoot: root });
+
+		expect(compilation.generatedFiles).not.toHaveProperty("openapi.json");
+		expect(compilation.generatedFiles["app.ts"]).toContain(
+			"Fetch one visible support ticket",
+		);
+	});
+
 	test("selects OpenAPI exactly, pins digests, and keeps prose out of Runtime", async () => {
 		const root = await copyFixture("selected");
 		const outputDirectory = join(root, ".questpie/generated");

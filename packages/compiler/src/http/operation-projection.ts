@@ -215,9 +215,10 @@ function projectCodec(value: unknown): JsonSchema {
 	return projectNormalizedCodec(normalizedCodec(value));
 }
 
-function documentationEntries(
-	input: OperationProjectionInput,
-): DocumentationEntry[] {
+function documentationEntries(input: {
+	readonly documentationBytes: string;
+	readonly documentationDigest: string;
+}): DocumentationEntry[] {
 	const artifact = record(JSON.parse(input.documentationBytes));
 	if (
 		artifact.format !== "questpie.operation-documentation" ||
@@ -229,6 +230,18 @@ function documentationEntries(
 		return invalid("operation documentation digest mismatch");
 	return (artifact.operations as DocumentationEntry[]).toSorted((left, right) =>
 		compareAscii(left.identity, right.identity),
+	);
+}
+
+export function projectOperationJsDoc(input: {
+	readonly documentationBytes: string;
+	readonly documentationDigest: string;
+}): Readonly<Record<string, string>> {
+	return Object.fromEntries(
+		documentationEntries(input).map((entry) => [
+			entry.identity,
+			renderJsDoc(entry),
+		]),
 	);
 }
 
@@ -662,9 +675,7 @@ export function projectOperationProjection(
 		input,
 		new Set(network.map(({ identity }) => identity)),
 	);
-	const jsdoc = Object.fromEntries(
-		documentation.map((entry) => [entry.identity, renderJsDoc(entry)]),
-	);
+	const jsdoc = projectOperationJsDoc(input);
 	return {
 		openapi,
 		openapiBytes: canonicalBytes(openapi),
