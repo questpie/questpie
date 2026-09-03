@@ -30,7 +30,7 @@ into public documentation.
 The implemented three-package subset passes PostgreSQL 17 and Firefox reference
 and hostile tracers, `quality:release`, strict package checks, the docs build,
 and two byte-identical isolated dry-runs. The current tarball SHA-256 values are
-`dd21a98ad45121d679db93458b7d4e6a0f4498146b2a8fcbc41bdbb136236518`
+`7c5882b0ef732e7d1e30f5085bd4f130a50628394cff032947d4067a93a2bded`
 for `questpie`, `924829aaf4b4a4b83cdc9326a134651c018dfb49e55dea00319bc7e250f7eda0`
 for `@questpie/react`, and
 `e27ba51aa0c6a9249c5850f3cfb276c7063ff10ebc55106162833bbd349e718d`
