@@ -20,7 +20,7 @@ into public documentation.
 | Canonical Operation HTTP                                         | compiler and Runtime ingress               | per-Operation Query/Mutation/Action endpoints                          | generated client                    | credentials, Context, identities, cancellation, nondisclosure, no old endpoint | complete; no polymorphic endpoint or fallback                                   |
 | Operation documentation                                          | compiler                                   | projection-neutral documentation artifact and digest                   | OpenAPI, MCP, declarations, explain | Package/application parity, escaping, stale deletion, no Runtime prose read    | complete through DOC-02; MCP consumption remains excluded                       |
 | OpenAPI 3.1                                                      | compiler                                   | canonical `openapi.json` and explain inventory                         | Team Support Desk with Scalar UI    | carrier/codec parity, deterministic output, stale deletion, browser rendering  | complete; Scalar hides and injects only the exact compatibility trio            |
-| Basic MCP                                                        | compiler and Runtime ingress               | canonical catalogue/binding and `POST /_questpie/mcp`                  | current-protocol MCP client         | schema/outcome parity, Policy hostiles, cancellation, no retry/fallback        | Proposed candidate; terminal `NO_RESULT`, acceptance lane stopped               |
+| Basic MCP                                                        | compiler and Runtime ingress               | canonical catalogue/binding and `POST /_questpie/mcp`                  | current-protocol MCP client         | schema/outcome parity, Policy hostiles, cancellation, no retry/fallback        | isolated Proposed candidate; terminal `NO_RESULT`, acceptance lane stopped      |
 | Public framework skill                                           | repository `skills/` tree                  | portable Agent Skills directory plus referenced released docs/examples | clean external agent workspace      | format validation, no internal pointers, packed-example compile                | standard research complete; authoring waits for released syntax                 |
 | Public beta.2 documentation                                      | docs application                           | versioned release inventory and finished guides                        | human and agent readers             | links, snippets, package existence, docs typecheck/build                       | blocked by included verticals                                                   |
 | Aggregate release                                                | release tooling                            | three exact-peer tarballs and release manifest                         | relocated clean consumer            | PostgreSQL/browser, `quality:release`, two byte-identical dry-runs             | implemented three-package subset green; beta.2 remains blocked by MCP and skill |
@@ -36,10 +36,13 @@ for `@questpie/react`, and
 `e27ba51aa0c6a9249c5850f3cfb276c7063ff10ebc55106162833bbd349e718d`
 for `@questpie/opentelemetry`.
 
-This does not accept or release MCP. ADR-0038 remains Proposed after its one
-permitted formal review returned terminal `NO_RESULT`, and ADR-0039/public skill
-release remains downstream of that authority. No retry, fallback reviewer,
-authority projection, push, tag, publish, or deployment occurred.
+This does not accept or release MCP. The ADR-0038 Proposed candidate and its
+executable proof remain isolated from this authority branch at candidate head
+`f5e143d4043e56e2420cfb8835420b3d63430937`. Its one permitted formal review
+returned terminal `NO_RESULT`; that outcome intentionally produced no review
+record or authority projection. ADR-0039 and the public skill remain downstream
+of accepted MCP authority. No retry, fallback reviewer, push, tag, publish, or
+deployment occurred.
 
 ## Explicit exclusions
 
