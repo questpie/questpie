@@ -120,6 +120,7 @@ type RealtimeBinding = {
 				binding.acknowledgement = acknowledgement;
 				void acknowledgement.catch((error: unknown) => {
 					if (bindings.get(frame.bindingId as string) !== binding || streamAbort !== activeStream) return;
+					scheduleReconnect();
 					activeStream?.abort(error);
 				});
 				return;
