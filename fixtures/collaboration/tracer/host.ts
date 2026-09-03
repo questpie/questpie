@@ -93,11 +93,6 @@ const response = (body: BodyInit, contentType: string) =>
 
 const server = Bun.serve({
 	port,
-	error(error) {
-		if (error instanceof DOMException && error.name === "AbortError")
-			return new Response(null, { status: 499 });
-		throw error;
-	},
 	async fetch(request) {
 		const url = new URL(request.url);
 		if (url.pathname === "/") {
@@ -181,17 +176,7 @@ const server = Bun.serve({
 			completeRecovery();
 			return new Response(null, { status: 204 });
 		}
-		try {
-			return await application.fetch(request);
-		} catch (error) {
-			if (
-				request.signal.aborted &&
-				error instanceof DOMException &&
-				error.name === "AbortError"
-			)
-				return new Response(null, { status: 499 });
-			throw error;
-		}
+		return application.fetch(request);
 	},
 });
 
