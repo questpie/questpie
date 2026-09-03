@@ -7,8 +7,8 @@
 			"name": "questpie",
 			"version": "4.0.0-beta.1",
 			"filename": "questpie-4.0.0-beta.1.tgz",
-			"sha256": "8d5dec695b81588db80b1efa557acb8bdbe7b9ad63295d01a0b3b0e31d525494",
-			"declarationSha256": "ded3ff8d0fefb93c77ade5f1c035f51ad0034df6f14dc04c9c4559a99272c68d"
+			"sha256": "63a10bfc8dbd29ecf40d5bf315800321ca3cb585590eab1ae42e3a2a96d86bfc",
+			"declarationSha256": "89cc806c0bba9d61c4b1278eff454216cf4e35cdb8eabd81b77e229a3e4ea721"
 		},
 		{
 			"name": "@questpie/react",
@@ -16,6 +16,13 @@
 			"filename": "questpie-react-4.0.0-beta.1.tgz",
 			"sha256": "924829aaf4b4a4b83cdc9326a134651c018dfb49e55dea00319bc7e250f7eda0",
 			"declarationSha256": "8a9503898c5f1925be1cced252d20ade694d16f60d1bf2f7d2a5c95f2b814a29"
+		},
+		{
+			"name": "@questpie/opentelemetry",
+			"version": "4.0.0-beta.1",
+			"filename": "questpie-opentelemetry-4.0.0-beta.1.tgz",
+			"sha256": "e27ba51aa0c6a9249c5850f3cfb276c7063ff10ebc55106162833bbd349e718d",
+			"declarationSha256": "279a667eac3647eccc2a35bdde775086ea7499eb4ea9852e3ed110ef8810cf7f"
 		}
 	]
 }

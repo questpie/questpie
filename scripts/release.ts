@@ -7,21 +7,24 @@ import {
 	readFileSync,
 	readdirSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 type PackageJson = Readonly<{
 	name?: string;
 	version?: string;
 	private?: boolean;
 	peerDependencies?: Readonly<Record<string, string>>;
+	dependencies?: Readonly<Record<string, string>>;
 }>;
 
 const releaseProfiles = [
 	{ name: "questpie", kind: "core" },
 	{ name: "@questpie/react", kind: "react" },
+	{ name: "@questpie/opentelemetry", kind: "opentelemetry" },
 ] as const;
 type ReleasePackageName = (typeof releaseProfiles)[number]["name"];
 
@@ -140,6 +143,45 @@ function verifyNegativeImports(
 	}
 }
 
+function linkPackageDependencies(
+	consumer: string,
+	packageRoot: string,
+	dependencies: Readonly<Record<string, string>> | undefined,
+): void {
+	for (const dependency of Object.keys(dependencies ?? {})) {
+		const source = resolve(
+			packageRoot,
+			"node_modules",
+			...dependency.split("/"),
+		);
+		if (!existsSync(source))
+			fail(
+				`@questpie/opentelemetry: dependency is unavailable for isolated import: ${dependency}`,
+			);
+		const target = join(consumer, "node_modules", ...dependency.split("/"));
+		mkdirSync(dirname(target), { recursive: true });
+		symlinkSync(source, target, "dir");
+	}
+}
+
+function installReactTestPeer(consumer: string): void {
+	const reactRoot = join(consumer, "node_modules", "react");
+	mkdirSync(reactRoot, { recursive: true });
+	writeFileSync(
+		join(reactRoot, "package.json"),
+		JSON.stringify({
+			name: "react",
+			version: "19.2.8",
+			type: "module",
+			exports: "./index.js",
+		}),
+	);
+	writeFileSync(
+		join(reactRoot, "index.js"),
+		"export const useSyncExternalStore = (_subscribe, getSnapshot) => getSnapshot();\n",
+	);
+}
+
 if (dryRun) {
 	if (!existsSync(manifestPath))
 		fail(`artifact manifest missing: ${manifestPath}`);
@@ -228,7 +270,7 @@ if (dryRun) {
 		}
 
 		for (const artifact of packedArtifacts) {
-			const { json, profile } = artifact.package;
+			const { json, profile, root: packageRoot } = artifact.package;
 			const consumer = join(temporary, `consumer-${profile.kind}`);
 			extractPackage(consumer, profile.name, artifact.firstTarball);
 			writeFileSync(
@@ -247,21 +289,7 @@ if (dryRun) {
 				if (!core)
 					fail("questpie: core package must precede React verification");
 				extractPackage(consumer, "questpie", core.firstTarball);
-				const reactRoot = join(consumer, "node_modules", "react");
-				mkdirSync(reactRoot, { recursive: true });
-				writeFileSync(
-					join(reactRoot, "package.json"),
-					JSON.stringify({
-						name: "react",
-						version: "19.2.8",
-						type: "module",
-						exports: "./index.js",
-					}),
-				);
-				writeFileSync(
-					join(reactRoot, "index.js"),
-					"export const useSyncExternalStore = (_subscribe, getSnapshot) => getSnapshot();\n",
-				);
+				installReactTestPeer(consumer);
 				const installed = JSON.parse(
 					readFileSync(
 						join(consumer, "node_modules/@questpie/react/package.json"),
@@ -278,6 +306,25 @@ if (dryRun) {
 				)
 					fail("@questpie/react: exact peer or mismatch boundary drifted");
 			}
+			if (profile.kind === "opentelemetry") {
+				const core = packedArtifacts.find(
+					(candidate) => candidate.package.profile.kind === "core",
+				);
+				if (!core)
+					fail(
+						"questpie: core package must precede OpenTelemetry verification",
+					);
+				extractPackage(consumer, "questpie", core.firstTarball);
+				const installed = JSON.parse(
+					readFileSync(
+						join(consumer, "node_modules/@questpie/opentelemetry/package.json"),
+						"utf8",
+					),
+				) as PackageJson;
+				if (installed.peerDependencies?.questpie !== releaseVersion)
+					fail("@questpie/opentelemetry: exact peer boundary drifted");
+				linkPackageDependencies(consumer, packageRoot, installed.dependencies);
+			}
 
 			run(
 				[
@@ -285,7 +332,9 @@ if (dryRun) {
 					"-e",
 					profile.kind === "react"
 						? 'const value = await import("@questpie/react"); if (typeof value.useQueryResource !== "function") process.exit(1)'
-						: 'await import("questpie")',
+						: profile.kind === "opentelemetry"
+							? 'const value = await import("@questpie/opentelemetry"); if (typeof value.createOpenTelemetry !== "function") process.exit(1)'
+							: 'await import("questpie")',
 				],
 				consumer,
 			);
@@ -350,6 +399,43 @@ if (dryRun) {
 				`release dry-run: ${profile.name}@${json.version} ${basename(artifact.firstTarball)} sha256=${artifact.actual} ${markers}`,
 			);
 		}
+
+		const combinedConsumer = join(temporary, "consumer-combined");
+		mkdirSync(combinedConsumer, { recursive: true });
+		writeFileSync(
+			join(combinedConsumer, "package.json"),
+			JSON.stringify({
+				name: "questpie-combined-release-consumer",
+				private: true,
+				type: "module",
+			}),
+		);
+		for (const artifact of packedArtifacts)
+			extractPackage(
+				combinedConsumer,
+				artifact.package.profile.name,
+				artifact.firstTarball,
+			);
+		installReactTestPeer(combinedConsumer);
+		const telemetryArtifact = packedArtifacts.find(
+			(candidate) => candidate.package.profile.kind === "opentelemetry",
+		);
+		if (!telemetryArtifact)
+			fail("@questpie/opentelemetry: combined release artifact is missing");
+		linkPackageDependencies(
+			combinedConsumer,
+			telemetryArtifact.package.root,
+			telemetryArtifact.package.json.dependencies,
+		);
+		run(
+			[
+				"bun",
+				"-e",
+				'await import("questpie"); await import("@questpie/react"); await import("@questpie/opentelemetry")',
+			],
+			combinedConsumer,
+		);
+		console.log("release dry-run: exact-three-package combined-import");
 	} finally {
 		rmSync(temporary, { force: true, recursive: true });
 	}

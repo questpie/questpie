@@ -24,7 +24,13 @@ test("owns the aggregate release and production-backend budgets", async () => {
 	expect(release.stdout.toString()).toContain(
 		`@questpie/react@${releaseVersion}`,
 	);
+	expect(release.stdout.toString()).toContain(
+		`@questpie/opentelemetry@${releaseVersion}`,
+	);
 	expect(release.stdout.toString()).toContain("exact-peers");
+	expect(release.stdout.toString()).toContain(
+		"exact-three-package combined-import",
+	);
 
 	const root = resolve(repositoryRoot, "quality/performance");
 	const manifests = await Promise.all(

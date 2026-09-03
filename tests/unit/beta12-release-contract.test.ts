@@ -30,9 +30,15 @@ test("dry-run packs every exact public package and rejects manifest drift", asyn
 	expect(first.stdout.toString()).toContain(
 		`@questpie/react@${releaseVersion}`,
 	);
+	expect(first.stdout.toString()).toContain(
+		`@questpie/opentelemetry@${releaseVersion}`,
+	);
 	expect(first.stdout.toString()).toContain("retry-stable");
 	expect(first.stdout.toString()).toContain("packed-build");
 	expect(first.stdout.toString()).toContain("exact-peers");
+	expect(first.stdout.toString()).toContain(
+		"exact-three-package combined-import",
+	);
 
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta12-manifest-"));
 	try {
@@ -83,6 +89,39 @@ test("dry-run packs every exact public package and rejects manifest drift", asyn
 		]);
 		expect(missingPackage.exitCode).not.toBe(0);
 		expect(missingPackage.stderr.toString()).toContain(
+			"exact public package set",
+		);
+
+		const missingTelemetryManifest = JSON.parse(
+			await readFile(
+				resolve(repositoryRoot, "quality/release/package-artifacts.json"),
+				"utf8",
+			),
+		);
+		missingTelemetryManifest.packages =
+			missingTelemetryManifest.packages.filter(
+				(candidate: { name: string }) =>
+					candidate.name !== "@questpie/opentelemetry",
+			);
+		const missingTelemetryPath = join(
+			temporary,
+			"missing-telemetry-package-artifacts.json",
+		);
+		await writeFile(
+			missingTelemetryPath,
+			`${JSON.stringify(missingTelemetryManifest)}\n`,
+		);
+		const missingTelemetry = run([
+			"bun",
+			"run",
+			"release",
+			"--",
+			"--dry-run",
+			"--artifact-manifest",
+			missingTelemetryPath,
+		]);
+		expect(missingTelemetry.exitCode).not.toBe(0);
+		expect(missingTelemetry.stderr.toString()).toContain(
 			"exact public package set",
 		);
 	} finally {
