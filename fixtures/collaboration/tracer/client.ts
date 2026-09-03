@@ -48,6 +48,20 @@ const queryResourceEvidence = {
 	retainedEvictionTerminal: false,
 	subscriberFaultContained: false,
 };
+const inverseLiveQueryEvidence = {
+	failure: undefined as
+		| Readonly<{ code: string; publicKeys: readonly string[] }>
+		| undefined,
+	lastSuccessfulMessages: [] as ReadonlyArray<
+		Readonly<{
+			id: string;
+			body?: string;
+			channelId: string;
+			createdAt: string;
+		}>
+	>,
+	publications: 0,
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -77,24 +91,31 @@ async function loadWhoami(): Promise<Whoami> {
 	return parseWhoami(await response.json());
 }
 
-async function report(next: TracerPhase, whoami: Whoami): Promise<void> {
+let reportSequence: Promise<void> = Promise.resolve();
+function report(next: TracerPhase, whoami: Whoami): Promise<void> {
 	phase = next;
 	statusElement.textContent = next;
-	await fetch("/__questpie_tracer/report", {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify({
-			phase: next,
-			connections,
-			queryResource: {
-				generated: true,
-				...queryResourceEvidence,
-				forbiddenValueObserved,
-				publications,
-			},
-			whoami,
-		}),
+	const body = JSON.stringify({
+		phase: next,
+		connections,
+		inverseLiveQuery: inverseLiveQueryEvidence,
+		queryResource: {
+			generated: true,
+			...queryResourceEvidence,
+			forbiddenValueObserved,
+			publications,
+		},
+		whoami,
 	});
+	reportSequence = reportSequence.then(async () => {
+		const response = await fetch("/__questpie_tracer/report", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body,
+		});
+		if (!response.ok) throw new TypeError("tracer report failed");
+	});
+	return reportSequence;
 }
 
 function render(
@@ -116,6 +137,9 @@ async function start(): Promise<void> {
 		companyId: tracerIds.company,
 	});
 	const client = rootClient.withContext({ companyId: tracerIds.company });
+	const channelDetailResource = client.queries["channels.detail"].observe({
+		id: tracerIds.channel,
+	});
 	const queryInput = {
 		after: null,
 		channelId: tracerIds.channel,
@@ -162,6 +186,53 @@ async function start(): Promise<void> {
 	let freshScopeReported = false;
 	let finishing = false;
 	const subscriptions: Array<() => void> = [];
+	let priorChannelDetailDelivery: unknown;
+	let inverseReady = recoveryMode;
+	let messagePageReady = recoveryMode;
+	const publishExpectedWhenReady = () => {
+		if (
+			expectedBody === null ||
+			mutationStarted ||
+			!inverseReady ||
+			!messagePageReady
+		)
+			return;
+		mutationStarted = true;
+		void publish(expectedBody).catch((error: unknown) => {
+			statusElement.textContent =
+				error instanceof Error ? error.message : String(error);
+		});
+	};
+	const synchronizeChannelDetail = () => {
+		const snapshot = channelDetailResource.getSnapshot();
+		if (snapshot.kind === "failed") {
+			inverseLiveQueryEvidence.failure = Object.freeze({
+				code: snapshot.failure.code,
+				publicKeys: Object.keys(snapshot.failure).sort(),
+			});
+			void report(phase, whoami);
+			return;
+		}
+		if (
+			snapshot.kind !== "ready" ||
+			snapshot.delivery === priorChannelDetailDelivery
+		)
+			return;
+		priorChannelDetailDelivery = snapshot.delivery;
+		inverseReady = true;
+		inverseLiveQueryEvidence.failure = undefined;
+		inverseLiveQueryEvidence.lastSuccessfulMessages =
+			snapshot.value?.messages.map((message) => ({
+				id: message.id,
+				...(message.body === undefined ? {} : { body: message.body }),
+				channelId: message.channelId,
+				createdAt: message.createdAt.toISOString(),
+			})) ?? [];
+		inverseLiveQueryEvidence.publications += 1;
+		void report(phase, whoami);
+		publishExpectedWhenReady();
+	};
+	subscriptions.push(channelDetailResource.subscribe(synchronizeChannelDetail));
 	const synchronize = () => {
 		const snapshot = resource.getSnapshot();
 		if (snapshot.kind === "failed") {
@@ -177,6 +248,7 @@ async function start(): Promise<void> {
 		if (phase === "starting") void report("watching", whoami);
 		else statusElement.textContent = `${phase} · ${snapshot.connection.kind}`;
 		if (snapshot.kind === "ready") {
+			messagePageReady = true;
 			const page = snapshot.value;
 			if (snapshot.delivery !== priorDelivery) {
 				priorDelivery = snapshot.delivery;
@@ -276,13 +348,7 @@ async function start(): Promise<void> {
 					void report("mutation-observed", whoami);
 				return;
 			}
-			if (expectedBody !== null && !mutationStarted) {
-				mutationStarted = true;
-				void publish(expectedBody).catch((error: unknown) => {
-					statusElement.textContent =
-						error instanceof Error ? error.message : String(error);
-				});
-			}
+			publishExpectedWhenReady();
 		}
 	};
 	subscriptions.push(resource.subscribe(synchronize));
@@ -309,6 +375,7 @@ async function start(): Promise<void> {
 			throw subscriberFault;
 		}),
 	);
+	synchronizeChannelDetail();
 	synchronize();
 }
 

@@ -149,6 +149,18 @@ type GeneratedDurableWorker = Readonly<{
 
 type TracerEvent = Readonly<{
 	phase?: unknown;
+	inverseLiveQuery?: Readonly<{
+		failure?: Readonly<{ code?: unknown; publicKeys?: readonly unknown[] }>;
+		lastSuccessfulMessages?: ReadonlyArray<
+			Readonly<{
+				id?: unknown;
+				body?: unknown;
+				channelId?: unknown;
+				createdAt?: unknown;
+			}>
+		>;
+		publications?: unknown;
+	}>;
 	queryResource?: Readonly<{
 		byteEqualScopesIsolated?: unknown;
 		duplicateSubscriberIndependent?: unknown;
@@ -286,20 +298,19 @@ async function report(port: number): Promise<TracerReport | null> {
 }
 
 async function waitForBlockedLifecycleChannelRead(): Promise<void> {
-	for (let attempt = 0; attempt < 200; attempt += 1) {
+	for (let attempt = 0; attempt < 3_000; attempt += 1) {
 		const [result] = await database!.unsafe<
 			Readonly<Array<{ blocked: boolean }>>
 		>(`SELECT EXISTS (
-  SELECT 1
-  FROM pg_catalog.pg_stat_activity
-  WHERE pid <> pg_catalog.pg_backend_pid()
-    AND query LIKE '%FROM "collaboration"."channels"%'
-    AND pg_catalog.cardinality(pg_catalog.pg_blocking_pids(pid)) > 0
+	  SELECT 1
+	  FROM pg_catalog.pg_stat_activity
+	  WHERE pid <> pg_catalog.pg_backend_pid()
+	    AND pg_catalog.cardinality(pg_catalog.pg_blocking_pids(pid)) > 0
 ) AS blocked`);
 		if (result?.blocked) return;
 		await Bun.sleep(10);
 	}
-	throw new Error("Mutation did not reach the lifecycle Channel Policy read");
+	throw new Error("Runtime did not reach the blocked Collaboration read");
 }
 
 afterAll(async () => {
@@ -410,6 +421,8 @@ postgresTest(
 				realtime: { hmacKey: new Uint8Array(32).fill(23) },
 				maintenance: { authorize: () => false },
 			});
+			let initialChannelDetail: ChannelDetail = null;
+			const foreignChannelId = "00000000-0000-4000-8000-000000000074";
 			type PostgresFacts = Readonly<{
 				state: string;
 				generation: number;
@@ -559,7 +572,6 @@ postgresTest(
 				const missingChannelId = "00000000-0000-4000-8000-000000000071";
 				const foreignCompanyId = "00000000-0000-4000-8000-000000000072";
 				const foreignSpaceId = "00000000-0000-4000-8000-000000000073";
-				const foreignChannelId = "00000000-0000-4000-8000-000000000074";
 				await database!.unsafe(
 					"INSERT INTO collaboration.companies (id, name) VALUES ($1, 'Foreign company')",
 					[foreignCompanyId],
@@ -596,6 +608,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 					executionInput,
 					({ queries }) => queries.channels.detail({ id: tracerIds.channel }),
 				);
+				initialChannelDetail = directChannel;
 				const networkChannel = await networkClient.queries["channels.detail"]({
 					id: tracerIds.channel,
 				});
@@ -1190,6 +1203,15 @@ VALUES ($1, $2, $3, $4, $5)`,
 				expect(await direct.json()).toEqual({
 					principal: { id: tracerIds.principal, kind: "user" },
 				});
+				const finalDirectChannel = await routeApplication.execution(
+					executionInput,
+					({ queries }) => queries.channels.detail({ id: tracerIds.channel }),
+				);
+				const finalNetworkChannel = await networkClient.queries[
+					"channels.detail"
+				]({ id: tracerIds.channel });
+				expect(finalNetworkChannel).toEqual(finalDirectChannel);
+				initialChannelDetail = finalDirectChannel;
 			} finally {
 				await routeApplication.close();
 				expect(postgresFacts()).toMatchObject({
@@ -1278,23 +1300,26 @@ VALUES ($1, $2, $3, $4, $5)`,
 			);
 			cleanup.defer(() => stop(browser, "SIGKILL"));
 
-			expect(
-				await eventually(() => report(first.port), {
-					accept: (current) =>
-						current?.whoami?.principal?.kind === "user" &&
-						current.whoami.principal.id === tracerIds.principal,
-					description: "browser demo cookie recognized through /api/whoami",
-					intervalMilliseconds: 50,
-					timeoutMilliseconds: 30_000,
-				}),
-			).toMatchObject({
+			const redactedReport = await eventually(() => report(first.port), {
+				accept: (current) =>
+					current?.whoami?.principal?.kind === "user" &&
+					current.whoami.principal.id === tracerIds.principal,
+				description: "browser demo cookie recognized through /api/whoami",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			expect(redactedReport).toMatchObject({
 				whoami: {
 					principal: { id: tracerIds.principal, kind: "user" },
 				},
 			});
-
 			const mutationReport = await eventually(() => report(first.port), {
-				accept: (current) => current?.phase === "mutation-observed",
+				accept: (current) =>
+					current?.phase === "mutation-observed" &&
+					Number(current.inverseLiveQuery?.publications) >= 2 &&
+					current.inverseLiveQuery?.lastSuccessfulMessages?.some(
+						(message) => message.body === body,
+					) === true,
 				description: "browser-observed committed Mutation",
 				intervalMilliseconds: 50,
 				timeoutMilliseconds: 30_000,
@@ -1326,6 +1351,195 @@ WHERE messages.body = $1 AND events.kind = 'published'`,
 				[body],
 			);
 			expect(published).toEqual({ events: 1 });
+			const normalizeChannelMessages = (channel: ChannelDetail) =>
+				channel?.messages.map((message) => ({
+					id: message.id,
+					...(message.body === undefined ? {} : { body: message.body }),
+					channelId: message.channelId,
+					createdAt: message.createdAt.toISOString(),
+				})) ?? [];
+			const initialInverse = mutationReport?.history?.find(
+				(event) => Number(event.inverseLiveQuery?.publications) === 1,
+			);
+			expect(initialInverse?.inverseLiveQuery?.lastSuccessfulMessages).toEqual(
+				normalizeChannelMessages(initialChannelDetail),
+			);
+			const hiddenMessageIds = Array.from(
+				{ length: 50 },
+				(_, index) =>
+					`40000000-0000-4000-8000-${index.toString(16).padStart(12, "0")}`,
+			);
+			for (const message of mutationReport?.inverseLiveQuery
+				?.lastSuccessfulMessages ?? [])
+				expect(hiddenMessageIds).not.toContain(message.id);
+
+			const inverseMoveId = "00000000-0000-4000-8000-000000000077";
+			await database!.unsafe(
+				`INSERT INTO collaboration.messages
+  (id, channel_id, author_membership_id, body, created_at)
+VALUES ($1, $2, '018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3', 'inverse-order-probe', '2030-01-01T00:00:00.000Z')`,
+				[inverseMoveId, tracerIds.channel],
+			);
+			const insertedInverse = await eventually(() => report(first.port), {
+				accept: (current) =>
+					current?.inverseLiveQuery?.lastSuccessfulMessages?.[0]?.id ===
+					inverseMoveId,
+				description: "inverse Live Query child insert and order boundary",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			const insertedInversePublications = Number(
+				insertedInverse?.inverseLiveQuery?.publications,
+			);
+			const inverseOrderPeerId = "00000000-0000-4000-8000-000000000078";
+			await database!.unsafe(
+				`INSERT INTO collaboration.messages
+  (id, channel_id, author_membership_id, body, created_at)
+VALUES ($1, $2, '018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3', 'inverse-order-peer', '2031-01-01T00:00:00.000Z')`,
+				[inverseOrderPeerId, tracerIds.channel],
+			);
+			const insertedOrderPeer = await eventually(() => report(first.port), {
+				accept: (current) =>
+					Number(current?.inverseLiveQuery?.publications) >
+						insertedInversePublications &&
+					current?.inverseLiveQuery?.lastSuccessfulMessages?.[0]?.id ===
+						inverseOrderPeerId &&
+					current.inverseLiveQuery.lastSuccessfulMessages[1]?.id ===
+						inverseMoveId,
+				description: "inverse Live Query ordered peer insert",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			const orderPeerPublications = Number(
+				insertedOrderPeer?.inverseLiveQuery?.publications,
+			);
+			await database!.unsafe(
+				"UPDATE collaboration.messages SET created_at = '2032-01-01T00:00:00.000Z' WHERE id = $1",
+				[inverseMoveId],
+			);
+			const reorderedInverse = await eventually(() => report(first.port), {
+				accept: (current) =>
+					Number(current?.inverseLiveQuery?.publications) >
+					orderPeerPublications,
+				description: "inverse Live Query ordering change",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			expect(
+				reorderedInverse?.inverseLiveQuery?.lastSuccessfulMessages?.slice(0, 2),
+			).toMatchObject([{ id: inverseMoveId }, { id: inverseOrderPeerId }]);
+			const reorderedInversePublications = Number(
+				reorderedInverse?.inverseLiveQuery?.publications,
+			);
+			await database!.unsafe(
+				"UPDATE collaboration.messages SET channel_id = $2 WHERE id = $1",
+				[inverseMoveId, foreignChannelId],
+			);
+			const movedInverse = await eventually(() => report(first.port), {
+				accept: (current) =>
+					Number(current?.inverseLiveQuery?.publications) >
+						reorderedInversePublications &&
+					current?.inverseLiveQuery?.lastSuccessfulMessages?.every(
+						(message) => message.id !== inverseMoveId,
+					) === true,
+				description: "inverse Live Query correlation-key move",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			const inverseBeforeFailure = movedInverse?.inverseLiveQuery;
+			type InverseGeneration = Readonly<{
+				dependencyPlan: string;
+				evaluated: string;
+				generation: string;
+				invalidation: string;
+				result: string;
+				tokenDigest: string;
+			}>;
+			const readInverseGeneration = async (): Promise<InverseGeneration> => {
+				const [generation] = await database!.unsafe<
+					readonly InverseGeneration[]
+				>(`SELECT generation.generation::text AS generation,
+  generation.token_digest AS "tokenDigest",
+  encode(generation.result_bytes, 'base64') AS result,
+  encode(generation.dependency_plan_bytes, 'base64') AS "dependencyPlan",
+  watch.evaluated_invalidation_generation::text AS evaluated,
+  watch.invalidation_generation::text AS invalidation
+FROM questpie_internal.realtime_watch_bindings AS watch
+JOIN questpie_internal.realtime_binding_generations AS generation
+  USING (application_name, scope_identity, binding_identity)
+WHERE watch.query_identity = 'channels.detail'
+  AND watch.state = 'open'
+  AND generation.latest_slot = 1
+ORDER BY generation.generation DESC
+LIMIT 1`);
+				if (!generation)
+					throw new TypeError("inverse Live Query generation is unavailable");
+				return generation;
+			};
+			const generationBeforeFailure = await readInverseGeneration();
+			await database!.begin(async (transaction) => {
+				await transaction.unsafe(
+					"UPDATE collaboration.channels SET name = name WHERE id = $1",
+					[tracerIds.channel],
+				);
+				await transaction.unsafe(
+					"ALTER TABLE collaboration.messages RENAME TO messages_unavailable",
+				);
+			});
+			const dirtyGeneration = await eventually(readInverseGeneration, {
+				accept: (current) =>
+					BigInt(current.invalidation) > BigInt(current.evaluated),
+				description: "failed inverse Live Query recompute remains dirty",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			await Bun.sleep(250);
+			const failedInverse = await report(first.port);
+			expect(failedInverse?.inverseLiveQuery).toMatchObject({
+				lastSuccessfulMessages: inverseBeforeFailure?.lastSuccessfulMessages,
+				publications: inverseBeforeFailure?.publications,
+			});
+			expect(failedInverse?.inverseLiveQuery?.failure).toBeUndefined();
+			for (const secret of [
+				"messages_unavailable",
+				"collaboration.messages",
+				"PostgreSQL",
+				"stack",
+			])
+				expect(JSON.stringify(failedInverse?.inverseLiveQuery)).not.toContain(
+					secret,
+				);
+			expect(dirtyGeneration).toMatchObject({
+				dependencyPlan: generationBeforeFailure.dependencyPlan,
+				evaluated: generationBeforeFailure.evaluated,
+				generation: generationBeforeFailure.generation,
+				result: generationBeforeFailure.result,
+				tokenDigest: generationBeforeFailure.tokenDigest,
+			});
+			await database!.begin(async (transaction) => {
+				await transaction.unsafe(
+					"ALTER TABLE collaboration.messages_unavailable RENAME TO messages",
+				);
+				await transaction.unsafe(
+					"UPDATE collaboration.channels SET name = name WHERE id = $1",
+					[tracerIds.channel],
+				);
+			});
+			const recoveredInverse = await eventually(() => report(first.port), {
+				accept: (current) =>
+					current?.inverseLiveQuery?.failure === undefined &&
+					Number(current?.inverseLiveQuery?.publications) >
+						Number(inverseBeforeFailure?.publications),
+				description: "inverse Live Query recovery after failed recompute",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			const recoveredInversePublications = Number(
+				recoveredInverse?.inverseLiveQuery?.publications,
+			);
+			const recoveredQueryPublications = Number(
+				recoveredInverse?.queryResource?.publications,
+			);
 
 			await expect(
 				database!.begin(async (transaction) => {
@@ -1344,25 +1558,38 @@ WHERE messages.body = $1 AND events.kind = 'published'`,
 				"UPDATE collaboration.memberships SET role = 'member' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
 				[tracerIds.company, tracerIds.principal],
 			);
-			expect(
-				await eventually(() => report(first.port), {
-					accept: (current) => current?.phase === "authority-redacted",
-					description: "Query Resource current-Policy redaction",
-					intervalMilliseconds: 50,
-					timeoutMilliseconds: 30_000,
-				}),
-			).toMatchObject({
+			const authorityRedacted = await eventually(() => report(first.port), {
+				accept: (current) =>
+					current?.phase === "authority-redacted" &&
+					Number(current.inverseLiveQuery?.publications) >
+						recoveredInversePublications &&
+					Number(current.queryResource?.publications) >
+						recoveredQueryPublications &&
+					current.inverseLiveQuery?.lastSuccessfulMessages?.some(
+						(message) => message.body === body,
+					) === false,
+				description: "Query Resource current-Policy redaction",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			expect(authorityRedacted).toMatchObject({
 				phase: "authority-redacted",
 				queryResource: {
 					forbiddenValueObserved: false,
-					publications: mutationPublications + 1,
 				},
 			});
+			expect(authorityRedacted?.inverseLiveQuery?.failure).toBeUndefined();
+			const authorityRedactedInversePublications = Number(
+				authorityRedacted?.inverseLiveQuery?.publications,
+			);
+			const authorityRedactedQueryPublications = Number(
+				authorityRedacted?.queryResource?.publications,
+			);
 			await database!.unsafe(
 				"UPDATE collaboration.memberships SET role = 'admin' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
 				[tracerIds.company, tracerIds.principal],
 			);
-			const restoredReport = await eventually(() => report(first.port), {
+			const restoredPhaseReport = await eventually(() => report(first.port), {
 				accept: (current) =>
 					current?.history?.some(
 						(event) => event.phase === "authority-restored",
@@ -1372,6 +1599,28 @@ WHERE messages.body = $1 AND events.kind = 'published'`,
 				timeoutMilliseconds: 30_000,
 			});
 			expect(
+				Number(restoredPhaseReport?.queryResource?.publications),
+			).toBeGreaterThan(authorityRedactedQueryPublications);
+			const restoredReport = await eventually(() => report(first.port), {
+				accept: (current) =>
+					Number(current?.inverseLiveQuery?.publications) >
+						authorityRedactedInversePublications &&
+					current?.inverseLiveQuery?.lastSuccessfulMessages?.some(
+						(message) => message.body === body,
+					) === true,
+				description: "inverse Live Query current-Policy restoration",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			expect(
+				Number(restoredReport?.inverseLiveQuery?.publications),
+			).toBeGreaterThan(authorityRedactedInversePublications);
+			expect(
+				restoredReport?.inverseLiveQuery?.lastSuccessfulMessages?.some(
+					(message) => message.body === body,
+				),
+			).toBe(true);
+			expect(
 				restoredReport?.history?.find(
 					(event) => event.phase === "authority-restored",
 				),
@@ -1379,7 +1628,6 @@ WHERE messages.body = $1 AND events.kind = 'published'`,
 				phase: "authority-restored",
 				queryResource: {
 					forbiddenValueObserved: false,
-					publications: mutationPublications + 2,
 				},
 			});
 			expect(
@@ -1400,6 +1648,7 @@ WHERE messages.body = $1 AND events.kind = 'published'`,
 			const authorizationReport = await eventually(() => report(first.port), {
 				accept: (current) =>
 					current?.phase === "fresh-scope-ready" &&
+					Number(current.inverseLiveQuery?.publications) >= 1 &&
 					current.history?.some(
 						(event) => event.phase === "authorization-failed",
 					) === true,
@@ -1416,7 +1665,26 @@ WHERE messages.body = $1 AND events.kind = 'published'`,
 				queryResource: { credentialLifetimeReplaced: true },
 			});
 
-			await stop(first.child, "SIGKILL");
+			const generationBeforeCancellation = await readInverseGeneration();
+			const recomputeBlocker = await database!.reserve();
+			try {
+				await recomputeBlocker.unsafe("BEGIN");
+				await recomputeBlocker.unsafe(
+					"LOCK TABLE questpie_internal.realtime_binding_generations IN ACCESS EXCLUSIVE MODE",
+				);
+				await database!.unsafe(
+					"UPDATE collaboration.messages SET body = body || ' cancellation-probe' WHERE id = $1",
+					[inverseOrderPeerId],
+				);
+				await waitForBlockedLifecycleChannelRead();
+				await stop(first.child, "SIGKILL");
+			} finally {
+				await recomputeBlocker.unsafe("ROLLBACK").catch(() => {});
+				await recomputeBlocker.release();
+			}
+			expect(await readInverseGeneration()).toEqual(
+				generationBeforeCancellation,
+			);
 			const recovered = await startHost(temporary, first.port);
 			cleanup.defer(() => stop(recovered.child, "SIGTERM"));
 

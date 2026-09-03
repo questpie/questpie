@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
@@ -75,4 +76,15 @@ test("publishes one Policy-aware channel detail inverse message list", async () 
 				tokens.includes("relationMiss"),
 		),
 	).toBe(true);
+});
+
+test("executes the Collaboration channel detail through the generated Live Query client", async () => {
+	const tracer = await readFile(
+		resolve(fixtureRoot, "tracer/client.ts"),
+		"utf8",
+	);
+
+	expect(tracer).toMatch(
+		/client\.queries\["channels\.detail"\]\.observe\(\{\s+id: tracerIds\.channel,/,
+	);
 });
