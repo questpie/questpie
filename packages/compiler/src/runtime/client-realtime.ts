@@ -50,6 +50,7 @@ type RealtimeBinding = {
 	readonly callback: (result: unknown, delivery: QueryDelivery) => void;
 	readonly options: WatchOptions;
 	readonly terminate: () => void;
+	acknowledgement: Promise<void>;
 	resumeToken: string | null;
 };
 `;
@@ -93,6 +94,7 @@ type RealtimeBinding = {
 				streamReady = true;
 				reconnectAttempt = 0;
 				for (const [bindingId, binding] of bindings) {
+					binding.acknowledgement = Promise.resolve();
 					binding.options.onStateChange?.(Object.freeze({ kind: "connected" }));
 					openBinding(bindingId, binding);
 				}
@@ -113,7 +115,13 @@ type RealtimeBinding = {
 						: protocolFailure();
 				binding.callback(result, delivery);
 				binding.resumeToken = frame.resumeToken;
-				await command({ ...commandBase, command: "ack", bindingId: frame.bindingId, resumeToken: frame.resumeToken });
+				const activeStream = streamAbort;
+				const acknowledgement = binding.acknowledgement.then(() => command({ ...commandBase, command: "ack", bindingId: frame.bindingId, resumeToken: frame.resumeToken }));
+				binding.acknowledgement = acknowledgement;
+				void acknowledgement.catch((error: unknown) => {
+					if (bindings.get(frame.bindingId as string) !== binding || streamAbort !== activeStream) return;
+					activeStream?.abort(error);
+				});
 				return;
 			}
 			if (frame.kind === "failure") {
@@ -212,7 +220,7 @@ type RealtimeBinding = {
 					streamReady = false;
 				}
 			};
-			const binding: RealtimeBinding = { query, input: structuredClone(encodedInput), callback: callback as RealtimeBinding["callback"], options, terminate, resumeToken: null };
+			const binding: RealtimeBinding = { query, input: structuredClone(encodedInput), callback: callback as RealtimeBinding["callback"], options, terminate, acknowledgement: Promise.resolve(), resumeToken: null };
 			bindings.set(bindingId, binding);
 			ensureStream();
 			if (streamReady) openBinding(bindingId, binding);

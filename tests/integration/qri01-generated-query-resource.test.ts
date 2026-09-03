@@ -477,6 +477,109 @@ test("runs a compiler-generated packed client through one real loopback Live Que
 	}
 }, 30_000);
 
+test("does not block a sibling binding behind an acknowledgement", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-ack-"));
+	try {
+		await writeFile(
+			join(directory, "app.ts"),
+			"export type AppContextInput = Readonly<{ companyId: string }>\n",
+		);
+		await writeFile(join(directory, "client.ts"), renderClient());
+		const generated = (await import(
+			`${pathToFileURL(join(directory, "client.ts")).href}?${crypto.randomUUID()}`
+		)) as GeneratedClientModule;
+		const commands: Record<string, unknown>[] = [];
+		let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+		let scopeId: string | null = null;
+		const firstAcknowledgement = Promise.withResolvers<void>();
+		const client = generated.createClient({
+			baseUrl: "http://runtime.test",
+			fetch: async (request) => {
+				if (request.method === "GET") {
+					scopeId = request.headers.get("x-questpie-realtime-scope");
+					return new Response(
+						new ReadableStream<Uint8Array>({
+							start(current) {
+								controller = current;
+								request.signal.addEventListener(
+									"abort",
+									() => current.close(),
+									{ once: true },
+								);
+							},
+						}),
+						{ headers: { "content-type": realtime.streamMediaType } },
+					);
+				}
+				const command = (await request.json()) as Record<string, unknown>;
+				commands.push(command);
+				const opens = commands.filter(({ command }) => command === "open");
+				if (
+					command.command === "ack" &&
+					command.bindingId === opens[0]?.bindingId
+				)
+					await firstAcknowledgement.promise;
+				return new Response(null, { status: 202 });
+			},
+		});
+		const query = client.withContext({ companyId: "company:one" }).queries[
+			"messages.page"
+		];
+		const deliveries: string[] = [];
+		const stopFirst = query.watch(
+			{
+				after: null,
+				channelId: "00000000-0000-4000-8000-000000000001",
+				first: 1,
+			},
+			() => deliveries.push("first"),
+		);
+		const stopSecond = query.watch(
+			{
+				after: null,
+				channelId: "00000000-0000-4000-8000-000000000001",
+				first: 2,
+			},
+			() => deliveries.push("second"),
+		);
+		await Bun.sleep(0);
+		controller?.enqueue(
+			new TextEncoder().encode(
+				`data: ${JSON.stringify({ protocol: realtime.protocol, kind: "ready", scopeId })}\n\n`,
+			),
+		);
+		await eventually(
+			() => commands.filter(({ command }) => command === "open").length === 2,
+			"both sibling watches did not open",
+		);
+		const opens = commands.filter(({ command }) => command === "open");
+		for (const [index, open] of opens.entries())
+			controller?.enqueue(
+				new TextEncoder().encode(
+					`data: ${JSON.stringify({ protocol: realtime.protocol, kind: "delivery", bindingId: open.bindingId, query: "query:messages.page", delivery: "initial", resetReason: null, payload: { nodes: [] }, resumeToken: `token:${index}` })}\n\n`,
+				),
+			);
+		await eventually(
+			() => deliveries.length === 2,
+			"second sibling delivery was blocked behind the first acknowledgement",
+		);
+		await eventually(
+			() =>
+				commands.some(
+					(command) =>
+						command.command === "ack" &&
+						command.bindingId === opens[1]?.bindingId,
+				),
+			"second sibling acknowledgement was blocked",
+		);
+		firstAcknowledgement.resolve();
+		stopFirst();
+		stopSecond();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
+
 test("direct watch validates and canonically encodes input once", async () => {
 	const directory = await mkdtemp(
 		join(tmpdir(), "questpie-qri01-watch-codec-"),
