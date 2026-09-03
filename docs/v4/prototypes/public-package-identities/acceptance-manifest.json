@@ -1,0 +1,181 @@
+{
+	"protocolVersion": 2,
+	"ticket": "PUBLIC-PACKAGE-IDENTITIES-RATIFICATION",
+	"proof": "Propose exactly two beta.2 npm packages: questpie, including the optional questpie/react export subpath, and questpie-opentelemetry. Delete the old scoped package identities after PASS without aliases or fallback resolution. Supersede only package spelling, placement, peer metadata, CLI specifier, and release cardinality/archive clauses while preserving the accepted React and OpenTelemetry kernels. Keep all current authority and production on the accepted pre-decision package graph until a committed PASS.",
+	"diffBase": "dce0ebd0a7ce5959cfd31adcc9b8a2a3f791afcd",
+	"reviewOutput": "docs/v4/prototypes/public-package-identities/REVIEW.json",
+	"authorityHeads": {
+		"clean feat/v4 candidate base": "dce0ebd0a7ce5959cfd31adcc9b8a2a3f791afcd",
+		"directionally approved Deep-DX research": "75a72b6515e87d78a559145f65b21a386ea4de3c",
+		"OpenTelemetry design workbench": "2c4a0b98deed36ee38842fdd9c469c2d85a4624b",
+		"deterministic candidate before manifest": "8bb7fc9a4679cbbf30889acfdb9eb0cc7e951372"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product and public-interface decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof construction and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "repository quality and release procedure",
+			"path": ".agents/skills/questpie-v4/references/repository-quality.md",
+			"sha256": "e0fb79556af46b0f9e005d762e30fee59876012846b4c6087f00607dda230cc8"
+		},
+		{
+			"name": "canonical product specification before projection",
+			"path": "SPEC.md",
+			"sha256": "b9f4323fc0330c2a745bd40e7cab01e1c298777b812a4bfbccb8dc833b1e300f"
+		},
+		{
+			"name": "canonical product language before projection",
+			"path": "CONTEXT.md",
+			"sha256": "a0d0c90ee2ac1a3e95c55e0d9a0dae580196fc3bd6a962fb817d9f5bfa47aca7"
+		},
+		{
+			"name": "canonical handoff before projection",
+			"path": "HANDOFF.md",
+			"sha256": "ad93011f31cd2820d97be88d4dc7e7c920f038bfceee04ea1cdb1ca01e008b29"
+		},
+		{
+			"name": "accepted tracer-led delivery flow",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+		},
+		{
+			"name": "live ADR index with Proposed candidate",
+			"path": "docs/adr/README.md",
+			"sha256": "466526b745c22736889447a6077d5e30b8456d3799223abf3bd82dc3072ff9d8"
+		},
+		{
+			"name": "accepted OpenTelemetry package and kernel decision",
+			"path": "docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
+			"sha256": "c9d1c2e7b7de26db0295d77d28191bc33e1dac4d8e24a35633e3d23d73c827e6"
+		},
+		{
+			"name": "accepted React package and Query Resource decision",
+			"path": "docs/adr/0035-freeze-query-resource-and-react-client-integration.md",
+			"sha256": "4cb723b6646e221b12bf7a3efd8f9117e0e9704189306a692874114eb839b0e2"
+		},
+		{
+			"name": "Proposed beta.2 release slice before projection",
+			"path": "docs/adr/0039-slice-the-beta-two-dx-release.md",
+			"sha256": "c8edfb53b9c7ef9c21c5b69d22b6dc43b29a5652dcdbb263262aa7c47aa8e6af"
+		},
+		{
+			"name": "Proposed focused package identity decision",
+			"path": "docs/adr/0042-freeze-public-package-identities.md",
+			"sha256": "d899fb54ee25d0da860b00e594ce406d241b1cc9710a51830b55221884aa5813"
+		},
+		{
+			"name": "candidate proof boundary",
+			"path": "docs/v4/prototypes/public-package-identities/README.md",
+			"sha256": "08a6f554dd03a85ff100c592b786296d9afe907b0a07e9f6ff3d9de32e477ba7"
+		},
+		{
+			"name": "closed projection and deletion inventory",
+			"path": "docs/v4/prototypes/public-package-identities/authority-projection.json",
+			"sha256": "538a9e00649dd4e42c8c062f3b5f1d68e35a317fcb9d5615effcfeea62a239a9"
+		},
+		{
+			"name": "package identity executable proof",
+			"path": "docs/v4/prototypes/public-package-identities/package-identities.test.ts",
+			"sha256": "576dacb55c2356810af689fdccbaffb217bbfadbf26cb62454094e17af8f5721"
+		},
+		{
+			"name": "prototype questpie manifest",
+			"path": "docs/v4/prototypes/public-package-identities/packages/questpie/package.json",
+			"sha256": "ddf7dac88069c384b9eb417de31d23d204d28ef0a3a22c17d4d61989d1930a9c"
+		},
+		{
+			"name": "prototype questpie root",
+			"path": "docs/v4/prototypes/public-package-identities/packages/questpie/index.js",
+			"sha256": "9037269a0544a886e8d505cfe9c393c3ab4d730cb9544692c2246a66f6ead8f4"
+		},
+		{
+			"name": "prototype React subpath",
+			"path": "docs/v4/prototypes/public-package-identities/packages/questpie/react.js",
+			"sha256": "fc500c5cde1180df08ed33341390faf44062c341da8ff154c59c28bc8e9aeb4b"
+		},
+		{
+			"name": "preserved private observability bridge model",
+			"path": "docs/v4/prototypes/public-package-identities/packages/questpie/internal-observability.js",
+			"sha256": "0331ea01ecefdffa2d7bf6a0e9d43b9880ec491a61beb79500d297375f96116d"
+		},
+		{
+			"name": "prototype OpenTelemetry manifest",
+			"path": "docs/v4/prototypes/public-package-identities/packages/questpie-opentelemetry/package.json",
+			"sha256": "520d33381d357bdaa5dea04bb7627400282e61682883adfda141559c9f7235eb"
+		},
+		{
+			"name": "prototype OpenTelemetry root",
+			"path": "docs/v4/prototypes/public-package-identities/packages/questpie-opentelemetry/index.js",
+			"sha256": "f09dee118e6f3cd2c880ee5693408f767e0eb0f32a669297721fea00ad4738b0"
+		},
+		{
+			"name": "Proposed-status and completeness staging gate",
+			"path": "docs/v4/prototypes/public-package-identities/staging-check.ts",
+			"sha256": "3ce46e55122ce7f4578b9c4dfadf2b09a2dc2f3a6e3899cded14d13e1910cd2c"
+		},
+		{
+			"name": "post-PASS implementation specification",
+			"path": "docs/v4/implementation/public-package-identities/SPEC.md",
+			"sha256": "34afac5f2b7dc01831cae970d56723b5b4542e2a584ce067a5ed1fc706ce26b7"
+		},
+		{
+			"name": "post-PASS blocking ticket graph",
+			"path": "docs/v4/implementation/public-package-identities/TICKETS.md",
+			"sha256": "54042994565b0f9a5076126c0e699ee6a59d39d67089373734ff53a265364bc9"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun test docs/v4/prototypes/public-package-identities/package-identities.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun docs/v4/prototypes/public-package-identities/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/public-package-identities/package-identities.test.ts docs/v4/prototypes/public-package-identities/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx tsc --noEmit --strict --skipLibCheck --target ES2024 --module preserve --moduleResolution bundler --types bun docs/v4/prototypes/public-package-identities/package-identities.test.ts docs/v4/prototypes/public-package-identities/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/adr/0042-freeze-public-package-identities.md docs/v4/prototypes/public-package-identities docs/v4/implementation/public-package-identities docs/adr/README.md",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check dce0ebd0a7ce5959cfd31adcc9b8a2a3f791afcd..HEAD",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"ADR-0042 and its ADR-index entry remain Proposed. SPEC, CONTEXT, HANDOFF, public docs, package manifests, fixtures, CLI, release manifests, and ADR-0039 retain the accepted pre-decision package graph until a committed protocol-v2 PASS record and separate authority projection.",
+		"The beta.2 public package inventory is exactly questpie and questpie-opentelemetry at one version. questpie/react is an export subpath, not a third npm package.",
+		"questpie declares React ^19.2.0 as an optional peer. Root and every non-React subpath remain importable without React or OpenTelemetry and do not import, initialize, bundle, or expose React-only declarations.",
+		"questpie/react retains the accepted one-hook useSyncExternalStore projection and owns no cache, identity, transport, retry, invalidation, Context, credentials, provider, SSR, Suspense, hydration, ReactDOM, or fallback behavior.",
+		"questpie-opentelemetry exact-peers the same-version questpie package, preserves the accepted opaque observation boundary, and remains absent from core. The CLI resolves only questpie-opentelemetry from the application root and fails before readiness under the existing semantics.",
+		"The obsolete @questpie/react and @questpie/opentelemetry identities are deleted during the post-PASS breaking vertical. No alias, forwarding package, re-export, diagnostic suggestion, CLI fallback, or compatibility path remains.",
+		"The supersession is limited to package spelling, placement, peer metadata, CLI resolution specifier, and release cardinality/archive clauses of ADR-0033 and ADR-0035 and their projections. Their React, Query Resource, observation, propagation, durable-link, flush, shutdown, failure, and disclosure kernels remain unchanged.",
+		"Native package-manager and loader diagnostics are tool-owned. QUESTPIE-owned CLI, release, and startup diagnostics disclose only the canonical identity, safe expected version or peer range, and mismatch class, with no credentials, search history, environment, Context, or payload.",
+		"The candidate prototype proves the narrow isolated topology and import behavior only. It does not claim production migration, mismatch enforcement, deterministic production archives, declaration digests, relocated clean installs, PostgreSQL/browser evidence, or beta.2 release readiness; PPI-01 through PPI-08 own those post-PASS gates.",
+		"The machine-checked projection/deletion inventory accounts for every old scoped-name occurrence in the reviewed head and separates live authority, breaking implementation, and frozen historical evidence. No production implementation starts before PASS."
+	]
+}

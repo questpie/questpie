@@ -7,6 +7,7 @@
 		"docs/v4/implementation/public-package-identities/SPEC.md",
 		"docs/v4/implementation/public-package-identities/TICKETS.md",
 		"docs/v4/prototypes/public-package-identities/README.md",
+		"docs/v4/prototypes/public-package-identities/acceptance-manifest.json",
 		"docs/v4/prototypes/public-package-identities/package-identities.test.ts",
 		"docs/v4/prototypes/public-package-identities/staging-check.ts"
 	],
