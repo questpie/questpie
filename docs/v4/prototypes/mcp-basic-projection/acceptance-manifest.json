@@ -2,12 +2,12 @@
 	"protocolVersion": 2,
 	"ticket": "MCP-BASIC-PROJECTION-REPLACEMENT",
 	"proof": "Propose one stateless MCP 2026-07-28 Tools projection over canonical documented network Operations, with exact invocation arguments, one executor, request-scoped SSE cancellation, and no metadata duplication, retry, fallback, legacy route, or second kernel.",
-	"diffBase": "7d45731b8a35aca5a436438f73a2a7ead3c32f18",
+	"diffBase": "735df07b8bb88ea72a6ec40b2d9a725742a4a28f",
 	"reviewOutput": "docs/v4/prototypes/mcp-basic-projection/REVIEW.json",
 	"authorityHeads": {
 		"accepted canonical per-operation HTTP authority": "f1f6c2d806a5cd1ea8a07ec58e35d00cacd66863",
 		"accepted operation documentation authority": "476df65ec60ab02ad9820b43390daf13f4883b23",
-		"replacement candidate base": "7d45731b8a35aca5a436438f73a2a7ead3c32f18"
+		"replacement candidate base": "735df07b8bb88ea72a6ec40b2d9a725742a4a28f"
 	},
 	"authorityDocuments": [
 		{
@@ -59,6 +59,6 @@
 		"The stateless 2026-07-28 endpoint implements only server discover, tools list, and tools call with exact modern metadata and headers, JSON discovery/list, request-scoped SSE call completion and stream-close cancellation.",
 		"A Query MCP POST invokes the one Operation executor directly rather than canonical Query GET or an old generic Operation route; Policy, codecs, limits, outcomes and disclosure remain parity owners.",
 		"There is no Runtime documentation join, domain metadata duplication, session, MRTR, retry, fallback, alias, compatibility route, second cache, or second business executor.",
-		"This candidate changes only a Proposed ADR, executable prototype/proof, manifest, and blocked tracer tickets. It projects no Accepted authority or public behavior and requires independent Fable/adversarial review before formal acceptance."
+		"This candidate changes only a Proposed ADR, executable prototype/proof, manifest, and blocked tracer tickets. It projects no Accepted authority or public behavior and requires the pinned independent acceptance review before formal acceptance."
 	]
 }
