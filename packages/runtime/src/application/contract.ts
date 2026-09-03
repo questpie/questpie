@@ -112,6 +112,7 @@ export interface RuntimeApplication<Input, ExecutionView> {
 				signal: AbortSignal;
 				finalize(): void;
 				retainControl: boolean;
+				abortOutcome(): "cancelled" | "deadline";
 			}>
 		>,
 	): Promise<Response>;

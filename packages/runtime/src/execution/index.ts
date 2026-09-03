@@ -305,6 +305,7 @@ export function createApplicationRuntime<
 					signal: AbortSignal;
 					finalize(): void;
 					retainControl: boolean;
+					abortOutcome(): "cancelled" | "deadline";
 				}>
 			>,
 		) => {
@@ -316,7 +317,7 @@ export function createApplicationRuntime<
 				"route",
 				owned.signal,
 				owned.finalize,
-				owned.outcome,
+				{ complete: owned.outcome, abort: owned.abortOutcome },
 			);
 		},
 		observeUnmatchedFetch: (_request: Request, use: () => Promise<Response>) =>

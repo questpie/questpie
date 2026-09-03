@@ -20,14 +20,17 @@ export function retainScopeThroughResponse(
 	kind: "fetch" | "route" = "fetch",
 	signal?: AbortSignal,
 	onFinalize?: () => void,
-	responseOutcome: "ok" | "framework_error" | "deadline" = "ok",
+	outcomes: Readonly<{
+		complete: "ok" | "framework_error" | "deadline";
+		abort(): "cancelled" | "deadline";
+	}> = { complete: "ok", abort: () => "cancelled" },
 ): Response {
 	if (response.body === null) {
 		onFinalize?.();
 		scope?.end({
 			httpResponseStatusCode: response.status,
 			kind,
-			outcome: signal?.aborted === true ? "cancelled" : responseOutcome,
+			outcome: signal?.aborted === true ? outcomes.abort() : outcomes.complete,
 		});
 		return response;
 	}
@@ -60,9 +63,11 @@ export function retainScopeThroughResponse(
 		scope?.end({ httpResponseStatusCode: response.status, kind, outcome });
 	};
 	const abort = () => {
-		finalize("cancelled");
+		const outcome = outcomes.abort();
+		finalize(outcome);
 		try {
-			controller?.close();
+			if (outcome === "deadline") controller?.error(signal?.reason);
+			else controller?.close();
 		} catch {
 			/* Downstream is terminal. */
 		}
@@ -80,7 +85,7 @@ export function retainScopeThroughResponse(
 				const result = await reader.read();
 				if (finalized) return;
 				if (result.done) {
-					finalize(responseOutcome);
+					finalize(outcomes.complete);
 					streamController.close();
 					return;
 				}

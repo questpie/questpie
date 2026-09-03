@@ -251,6 +251,7 @@ type OwnedHttpResponse = Readonly<{
 	signal: AbortSignal;
 	finalize(): void;
 	retainControl: boolean;
+	abortOutcome(): "cancelled" | "deadline";
 }>;
 
 /** Owns one matched authored Route from ingress through response-body completion. */
@@ -269,7 +270,7 @@ export async function observeApplicationRoute(
 			"route",
 			owned.signal,
 			owned.finalize,
-			owned.outcome,
+			{ complete: owned.outcome, abort: owned.abortOutcome },
 		);
 	}
 	const http = observedHttpRequest(request);
@@ -282,7 +283,7 @@ export async function observeApplicationRoute(
 			"route",
 			owned.signal,
 			owned.finalize,
-			owned.outcome,
+			{ complete: owned.outcome, abort: owned.abortOutcome },
 		);
 	}
 	const ingressTrace = observation.extract({
@@ -306,7 +307,7 @@ export async function observeApplicationRoute(
 			"route",
 			owned.signal,
 			owned.finalize,
-			owned.outcome,
+			{ complete: owned.outcome, abort: owned.abortOutcome },
 		);
 	} catch (error) {
 		const failure = applicationObservationFailure(error, {

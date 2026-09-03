@@ -113,6 +113,7 @@ type OwnedRouteResponse = Readonly<{
 	signal: AbortSignal;
 	finalize(): void;
 	retainControl: boolean;
+	abortOutcome(): "cancelled" | "deadline";
 }>;
 
 const ownedRouteResponse = (
@@ -126,6 +127,7 @@ const ownedRouteResponse = (
 		signal,
 		finalize: () => undefined,
 		retainControl: false,
+		abortOutcome: () => "cancelled",
 	});
 
 function failureResponse(
@@ -441,14 +443,15 @@ export function createRuntimeRouteExecutor<
 			? Date.now() + limits.durationMs
 			: Number.MAX_SAFE_INTEGER;
 		const controller = new AbortController();
+		let deadlineExpired = false;
 		const onAbort = () => controller.abort(request.signal.reason);
 		if (request.signal.aborted) onAbort();
 		else request.signal.addEventListener("abort", onAbort, { once: true });
 		const timer = binding.limits
-			? setTimeout(
-					() => controller.abort(new RouteResourceLimitError(429)),
-					limits.durationMs,
-				)
+			? setTimeout(() => {
+					deadlineExpired = true;
+					controller.abort(new RouteResourceLimitError(429));
+				}, limits.durationMs)
 			: undefined;
 		const finalize = () => {
 			if (timer !== undefined) clearTimeout(timer);
@@ -489,6 +492,7 @@ export function createRuntimeRouteExecutor<
 				signal: controller.signal,
 				finalize,
 				retainControl: true,
+				abortOutcome: () => (deadlineExpired ? "deadline" : "cancelled"),
 			});
 		} catch (error) {
 			finalize();
