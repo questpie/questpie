@@ -150,7 +150,10 @@ type GeneratedDurableWorker = Readonly<{
 
 type TracerEvent = Readonly<{
 	phase?: unknown;
-	inverseRuntime?: Readonly<{ failedRecomputations?: unknown }>;
+	inverseRuntime?: Readonly<{
+		failedRecomputations?: unknown;
+		inverseObservationNondisclosure?: unknown;
+	}>;
 	inverseLiveQuery?: Readonly<{
 		failure?: Readonly<{ code?: unknown; publicKeys?: readonly unknown[] }>;
 		lastSuccessfulMessages?: ReadonlyArray<
@@ -257,13 +260,24 @@ type GeneratedNetworkClient = Readonly<{
 	withContext(input: Readonly<{ companyId: string }>): Readonly<{
 		actions: Readonly<{ "delivery.publish": DeliveryAction }>;
 		queries: Readonly<{
-			"channels.detail"(
-				input: Readonly<{ id: string }>,
-				options?: Readonly<{
-					callId?: string;
-					timeoutMilliseconds?: number;
-				}>,
-			): Promise<ChannelDetail>;
+			"channels.detail": {
+				(
+					input: Readonly<{ id: string }>,
+					options?: Readonly<{
+						callId?: string;
+						signal?: AbortSignal;
+						timeoutMilliseconds?: number;
+					}>,
+				): Promise<ChannelDetail>;
+				watch(
+					input: Readonly<{ id: string }>,
+					callback: (result: ChannelDetail) => void,
+					options?: Readonly<{
+						signal?: AbortSignal;
+						onError?: (error: Readonly<{ code: string }>) => void;
+					}>,
+				): () => void;
+			};
 		}>;
 		mutations: Readonly<{
 			"message.publish"(
@@ -571,6 +585,121 @@ postgresTest(
 					retryable: true,
 				});
 				credentialOutage = false;
+				const authorizedEmptyChannelId = "00000000-0000-4000-8000-000000000070";
+				const limitedChannelId = "00000000-0000-4000-8000-000000000079";
+				for (const [id, name] of [
+					[authorizedEmptyChannelId, "authorized-empty"],
+					[limitedChannelId, "bounded-inverse"],
+				] as const)
+					await database!.unsafe(
+						`INSERT INTO collaboration.channels (id, space_id, name)
+SELECT $1, space_id, $2 FROM collaboration.channels WHERE id = $3`,
+						[id, name, tracerIds.channel],
+					);
+				for (let index = 0; index < 51; index += 1)
+					await database!.unsafe(
+						`INSERT INTO collaboration.messages
+  (id, channel_id, author_membership_id, body, created_at)
+VALUES ($1, $2, '018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3', $3, $4)`,
+						[
+							`50000000-0000-4000-8000-${index.toString(16).padStart(12, "0")}`,
+							limitedChannelId,
+							`bounded-${index}`,
+							new Date(1_790_000_000_000 + index * 1_000),
+						],
+					);
+				const directChannelDetail = (id: string) =>
+					routeApplication.execution(executionInput, ({ queries }) =>
+						queries.channels.detail({ id }),
+					);
+				const watchedChannelDetail = async (
+					id: string,
+				): Promise<ChannelDetail> => {
+					let observed: ChannelDetail | undefined;
+					let failure: Readonly<{ code: string }> | undefined;
+					const stop = networkClient.queries["channels.detail"].watch(
+						{ id },
+						(value) => {
+							observed = value;
+						},
+						{ onError: (error) => (failure = error) },
+					);
+					try {
+						return await eventually(() => ({ failure, observed }), {
+							accept: (current) => current.observed !== undefined,
+							description: `public inverse watch ${id}`,
+							intervalMilliseconds: 50,
+							timeoutMilliseconds: 30_000,
+						}).then((current) => {
+							if (current.failure) throw current.failure;
+							return current.observed!;
+						});
+					} finally {
+						stop();
+					}
+				};
+				const inversePublicParity = {
+					empty: await Promise.all([
+						directChannelDetail(authorizedEmptyChannelId),
+						networkClient.queries["channels.detail"]({
+							id: authorizedEmptyChannelId,
+						}),
+						watchedChannelDetail(authorizedEmptyChannelId),
+					]),
+					bounded: await Promise.all([
+						directChannelDetail(limitedChannelId),
+						networkClient.queries["channels.detail"]({ id: limitedChannelId }),
+						watchedChannelDetail(limitedChannelId),
+					]),
+				};
+				expect(inversePublicParity.empty).toEqual([
+					expect.objectContaining({ messages: [] }),
+					expect.objectContaining({ messages: [] }),
+					expect.objectContaining({ messages: [] }),
+				]);
+				expect(
+					inversePublicParity.bounded.map(
+						(channel) => channel?.messages.length,
+					),
+				).toEqual([50, 50, 50]);
+				expect(inversePublicParity.bounded[1]).toEqual(
+					inversePublicParity.bounded[0],
+				);
+				expect(inversePublicParity.bounded[2]).toEqual(
+					inversePublicParity.bounded[0],
+				);
+				const directCancellation = new AbortController();
+				directCancellation.abort();
+				await expect(
+					routeApplication.execution(
+						{ ...executionInput, signal: directCancellation.signal },
+						({ queries }) =>
+							queries.channels.detail({ id: authorizedEmptyChannelId }),
+					),
+				).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED", retryable: true });
+				const networkCancellation = new AbortController();
+				networkCancellation.abort();
+				await expect(
+					networkClient.queries["channels.detail"](
+						{ id: authorizedEmptyChannelId },
+						{ signal: networkCancellation.signal },
+					),
+				).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED", retryable: true });
+				let cancelledWatchPublished = false;
+				const watchCancellation = new AbortController();
+				watchCancellation.abort();
+				const stopCancelledWatch = networkClient.queries[
+					"channels.detail"
+				].watch(
+					{ id: authorizedEmptyChannelId },
+					() => {
+						cancelledWatchPublished = true;
+					},
+					{ signal: watchCancellation.signal },
+				);
+				await Promise.resolve();
+				stopCancelledWatch();
+				expect(cancelledWatchPublished).toBe(false);
 				const missingChannelId = "00000000-0000-4000-8000-000000000071";
 				const foreignCompanyId = "00000000-0000-4000-8000-000000000072";
 				const foreignSpaceId = "00000000-0000-4000-8000-000000000073";
@@ -1696,6 +1825,34 @@ LIMIT 1`);
 					"ALTER TABLE collaboration.messages RENAME TO messages_unavailable",
 				);
 			});
+			const captureInverseFailure = async (
+				operation: Promise<unknown>,
+			): Promise<unknown> => {
+				try {
+					await operation;
+				} catch (error) {
+					return error;
+				}
+				expect.unreachable("inverse query unexpectedly succeeded");
+			};
+			const inverseInternalFailures = await Promise.all([
+				captureInverseFailure(directChannelDetail(tracerIds.channel)),
+				captureInverseFailure(
+					networkClient.queries["channels.detail"]({ id: tracerIds.channel }),
+				),
+			]);
+			for (const failure of inverseInternalFailures) {
+				expect(failure).toMatchObject({ code: "INTERNAL", retryable: false });
+				for (const secret of [
+					"messages_unavailable",
+					"collaboration.messages",
+					"PostgreSQL",
+					"SELECT ",
+					"Policy",
+					"selectOrdinal",
+				])
+					expect(ownErrorBytes(failure)).not.toContain(secret);
+			}
 			const dirtyGeneration = await eventually(readInverseGeneration, {
 				accept: (current) =>
 					BigInt(current.invalidation) > BigInt(current.evaluated),
@@ -1715,6 +1872,9 @@ LIMIT 1`);
 				publications: inverseBeforeFailure?.publications,
 			});
 			expect(failedInverse?.inverseLiveQuery?.failure).toBeUndefined();
+			expect(
+				failedInverse?.inverseRuntime?.inverseObservationNondisclosure,
+			).toBe(true);
 			for (const secret of [
 				"messages_unavailable",
 				"collaboration.messages",

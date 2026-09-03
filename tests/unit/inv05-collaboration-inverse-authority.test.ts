@@ -83,6 +83,14 @@ test("executes the Collaboration channel detail through the generated Live Query
 		resolve(fixtureRoot, "tracer/client.ts"),
 		"utf8",
 	);
+	const host = await readFile(resolve(fixtureRoot, "tracer/host.ts"), "utf8");
+	const postgresTracer = await readFile(
+		resolve(
+			fixtureRoot,
+			"../../tests/integration/postgres/collaboration-walking-skeleton.test.ts",
+		),
+		"utf8",
+	);
 
 	expect(tracer).toMatch(
 		/client\.queries\["channels\.detail"\]\.observe\(\{\s+id: tracerIds\.channel,/,
@@ -92,4 +100,9 @@ test("executes the Collaboration channel detail through the generated Live Query
 		/!recoveryMode \|\|\s+connections < 2 \|\|\s+!inverseReady \|\|\s+!messagePageObservedExpected/,
 	);
 	expect(tracer).toContain('fetch("/__questpie_tracer/complete-recovery")');
+	expect(host).toContain("inverseObservationNondisclosure");
+	expect(host).toContain("observationForbiddenValues");
+	expect(postgresTracer).toContain("authorizedEmptyChannelId");
+	expect(postgresTracer).toContain("inversePublicParity");
+	expect(postgresTracer).toContain("inverseObservationNondisclosure");
 });

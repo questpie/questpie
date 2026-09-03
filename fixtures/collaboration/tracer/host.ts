@@ -36,7 +36,31 @@ const [html, styles, browserBuild] = await Promise.all([
 if (!browserBuild.success)
 	throw new Error(browserBuild.logs.map((entry) => entry.message).join("\n"));
 const browserJavaScript = await browserBuild.outputs[0]!.text();
-const inverseRuntimeEvidence = { failedRecomputations: 0 };
+const observationForbiddenValues = [
+	"hidden-",
+	"40000000-0000-4000-8000-",
+	"00000000-0000-4000-8000-000000000075",
+	"collaboration.messages",
+	"messages_unavailable",
+	"policyEvidencePoint",
+	'"hiddenCardinality":50',
+	'"hiddenCount":50',
+	'"rowCount":50',
+	"PostgreSQL",
+	"SELECT ",
+	"select ",
+	"selectOrdinal",
+	"forgedOrdinal",
+] as const;
+const inverseRuntimeEvidence = {
+	failedRecomputations: 0,
+	inverseObservationNondisclosure: true,
+};
+function inspectInverseObservation(value: unknown): void {
+	const bytes = JSON.stringify(value);
+	if (observationForbiddenValues.some((secret) => bytes.includes(secret)))
+		inverseRuntimeEvidence.inverseObservationNondisclosure = false;
+}
 const observability = createOfficialQuestpieObservability(() => ({
 	format: "questpie.runtime-observability",
 	version: 1,
@@ -46,11 +70,15 @@ const observability = createOfficialQuestpieObservability(() => ({
 			start.kind === "query" &&
 			start.entry === "watch_recompute" &&
 			start.resourceIdentity === "query:channels.detail";
+		if (inverseRecompute) inspectInverseObservation(start);
 		return {
 			context: null,
 			run: async <Result>(use: () => Result | Promise<Result>) => await use(),
-			event: () => undefined,
+			event: (event: unknown) => {
+				if (inverseRecompute) inspectInverseObservation(event);
+			},
 			end: (end: Readonly<{ outcome: string }>) => {
+				if (inverseRecompute) inspectInverseObservation(end);
 				if (inverseRecompute && end.outcome === "framework_error")
 					inverseRuntimeEvidence.failedRecomputations += 1;
 			},
