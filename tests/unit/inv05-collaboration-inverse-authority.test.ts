@@ -87,4 +87,9 @@ test("executes the Collaboration channel detail through the generated Live Query
 	expect(tracer).toMatch(
 		/client\.queries\["channels\.detail"\]\.observe\(\{\s+id: tracerIds\.channel,/,
 	);
+	expect(tracer).toContain("let inverseReady = false;");
+	expect(tracer).toMatch(
+		/!recoveryMode \|\|\s+connections < 2 \|\|\s+!inverseReady \|\|\s+!messagePageObservedExpected/,
+	);
+	expect(tracer).toContain('fetch("/__questpie_tracer/complete-recovery")');
 });

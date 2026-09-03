@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { createOfficialQuestpieObservability } from "questpie/internal/observability";
+
 import { createApp } from "../.questpie/generated/app";
 import { demoSessionCookieName, demoSessionToken } from "../src/route-auth";
 
@@ -34,16 +36,42 @@ const [html, styles, browserBuild] = await Promise.all([
 if (!browserBuild.success)
 	throw new Error(browserBuild.logs.map((entry) => entry.message).join("\n"));
 const browserJavaScript = await browserBuild.outputs[0]!.text();
+const inverseRuntimeEvidence = { failedRecomputations: 0 };
+const observability = createOfficialQuestpieObservability(() => ({
+	format: "questpie.runtime-observability",
+	version: 1,
+	extract: () => null,
+	begin: (start: Readonly<Record<string, unknown>>) => {
+		const inverseRecompute =
+			start.kind === "query" &&
+			start.entry === "watch_recompute" &&
+			start.resourceIdentity === "query:channels.detail";
+		return {
+			context: null,
+			run: async <Result>(use: () => Result | Promise<Result>) => await use(),
+			event: () => undefined,
+			end: (end: Readonly<{ outcome: string }>) => {
+				if (inverseRecompute && end.outcome === "framework_error")
+					inverseRuntimeEvidence.failedRecomputations += 1;
+			},
+		};
+	},
+}));
 const application = await createApp({
 	postgres: { connectionUrl: databaseUrl, directConnectionUrl: databaseUrl },
 	realtime: { hmacKey: new Uint8Array(32).fill(23) },
 	maintenance: { authorize: () => false },
+	observability,
 });
 let report: Readonly<Record<string, unknown>> = Object.freeze({
 	phase: "host-ready",
 	connections: 0,
 });
 const reportHistory: Readonly<Record<string, unknown>>[] = [];
+let completeRecovery!: () => void;
+const recoveryCompletion = new Promise<void>((resolveCompletion) => {
+	completeRecovery = resolveCompletion;
+});
 
 const response = (body: BodyInit, contentType: string) =>
 	new Response(body, { headers: { "content-type": contentType } });
@@ -101,7 +129,24 @@ const server = Bun.serve({
 				report = Object.freeze({ ...event, history: [...reportHistory] });
 				return new Response(null, { status: 204 });
 			}
-			return Response.json(report);
+			return Response.json({
+				...report,
+				inverseRuntime: inverseRuntimeEvidence,
+			});
+		}
+		if (
+			request.method === "GET" &&
+			url.pathname === "/__questpie_tracer/complete-recovery"
+		) {
+			await recoveryCompletion;
+			return new Response(null, { status: 204 });
+		}
+		if (
+			request.method === "POST" &&
+			url.pathname === "/__questpie_tracer/complete-recovery"
+		) {
+			completeRecovery();
+			return new Response(null, { status: 204 });
 		}
 		return application.fetch(request);
 	},

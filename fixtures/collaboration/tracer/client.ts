@@ -187,8 +187,33 @@ async function start(): Promise<void> {
 	let finishing = false;
 	const subscriptions: Array<() => void> = [];
 	let priorChannelDetailDelivery: unknown;
-	let inverseReady = recoveryMode;
+	let inverseReady = false;
 	let messagePageReady = recoveryMode;
+	let messagePageObservedExpected = false;
+	const completeRecoveryWhenReady = () => {
+		if (
+			!recoveryMode ||
+			connections < 2 ||
+			!inverseReady ||
+			!messagePageObservedExpected ||
+			finishing
+		)
+			return;
+		finishing = true;
+		void (async () => {
+			await report("recovered", whoami);
+			const completion = await fetch("/__questpie_tracer/complete-recovery");
+			if (!completion.ok)
+				throw new TypeError("tracer recovery completion failed");
+			for (const unsubscribe of subscriptions) unsubscribe();
+			const idle = resource.getSnapshot();
+			queryResourceEvidence.lastUnsubscribeIdle =
+				idle.kind === "ready" && idle.connection.kind === "idle";
+			await report("qri-complete", whoami);
+		})().catch(() => {
+			statusElement.textContent = "recovery completion failed";
+		});
+	};
 	const publishExpectedWhenReady = () => {
 		if (
 			expectedBody === null ||
@@ -213,6 +238,10 @@ async function start(): Promise<void> {
 			void report(phase, whoami);
 			return;
 		}
+		if (snapshot.connection.kind !== "connected") {
+			inverseReady = false;
+			return;
+		}
 		if (
 			snapshot.kind !== "ready" ||
 			snapshot.delivery === priorChannelDetailDelivery
@@ -231,6 +260,7 @@ async function start(): Promise<void> {
 		inverseLiveQueryEvidence.publications += 1;
 		void report(phase, whoami);
 		publishExpectedWhenReady();
+		completeRecoveryWhenReady();
 	};
 	subscriptions.push(channelDetailResource.subscribe(synchronizeChannelDetail));
 	const synchronize = () => {
@@ -330,17 +360,10 @@ async function start(): Promise<void> {
 			}
 			const observed = visibleExpected !== undefined;
 			if (observed) {
-				if (recoveryMode && connections >= 2 && !finishing) {
-					finishing = true;
-					void (async () => {
-						await report("recovered", whoami);
-						for (const unsubscribe of subscriptions) unsubscribe();
-						const idle = resource.getSnapshot();
-						queryResourceEvidence.lastUnsubscribeIdle =
-							idle.kind === "ready" && idle.connection.kind === "idle";
-						await report("qri-complete", whoami);
-					})();
-				} else if (recoveryMode && !freshScopeReported) {
+				messagePageObservedExpected = true;
+				completeRecoveryWhenReady();
+				if (recoveryMode && connections >= 2) return;
+				if (recoveryMode && !freshScopeReported) {
 					freshScopeReported = true;
 					void report("fresh-scope-ready", whoami);
 				} else if (connections >= 2) void report("recovered", whoami);

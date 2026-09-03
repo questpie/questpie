@@ -149,6 +149,7 @@ type GeneratedDurableWorker = Readonly<{
 
 type TracerEvent = Readonly<{
 	phase?: unknown;
+	inverseRuntime?: Readonly<{ failedRecomputations?: unknown }>;
 	inverseLiveQuery?: Readonly<{
 		failure?: Readonly<{ code?: unknown; publicKeys?: readonly unknown[] }>;
 		lastSuccessfulMessages?: ReadonlyArray<
@@ -1493,8 +1494,13 @@ LIMIT 1`);
 				intervalMilliseconds: 50,
 				timeoutMilliseconds: 30_000,
 			});
-			await Bun.sleep(250);
-			const failedInverse = await report(first.port);
+			const failedInverse = await eventually(() => report(first.port), {
+				accept: (current) =>
+					Number(current?.inverseRuntime?.failedRecomputations) >= 1,
+				description: "failed inverse Live Query recomputation attempt",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
 			expect(failedInverse?.inverseLiveQuery).toMatchObject({
 				lastSuccessfulMessages: inverseBeforeFailure?.lastSuccessfulMessages,
 				publications: inverseBeforeFailure?.publications,
@@ -1688,9 +1694,43 @@ LIMIT 1`);
 			const recovered = await startHost(temporary, first.port);
 			cleanup.defer(() => stop(recovered.child, "SIGTERM"));
 
+			const recoveredInverseReport = await eventually(
+				() => report(recovered.port),
+				{
+					accept: (current) =>
+						current?.phase === "recovered" &&
+						Number(current.inverseLiveQuery?.publications) >
+							Number(authorizationReport?.inverseLiveQuery?.publications) &&
+						current.inverseLiveQuery?.lastSuccessfulMessages?.some(
+							(message) =>
+								message.id === inverseOrderPeerId &&
+								message.body === "inverse-order-peer cancellation-probe",
+						) === true,
+					description: "cancelled inverse Live Query fresh recovery",
+					intervalMilliseconds: 50,
+					timeoutMilliseconds: 30_000,
+				},
+			);
+			expect(
+				Number(recoveredInverseReport?.inverseLiveQuery?.publications),
+			).toBeGreaterThan(
+				Number(authorizationReport?.inverseLiveQuery?.publications),
+			);
+			const recoveredGeneration = await readInverseGeneration();
+			expect(BigInt(recoveredGeneration.generation)).toBeGreaterThan(
+				BigInt(generationBeforeCancellation.generation),
+			);
+			expect(recoveredGeneration.evaluated).toBe(
+				recoveredGeneration.invalidation,
+			);
+			const releaseRecovery = await fetch(
+				`http://127.0.0.1:${recovered.port}/__questpie_tracer/complete-recovery`,
+				{ method: "POST" },
+			);
+			expect(releaseRecovery.status).toBe(204);
 			const recoveredReport = await eventually(() => report(recovered.port), {
 				accept: (current) => current?.phase === "qri-complete",
-				description: "browser authorization failure and fresh-scope recovery",
+				description: "browser fresh-scope recovery completion",
 				intervalMilliseconds: 50,
 				timeoutMilliseconds: 30_000,
 			});
