@@ -1,4 +1,4 @@
-import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
@@ -57,6 +57,97 @@ export async function installQuestpieForTracer(
 		"file",
 	);
 	return join(packageRoot, "index.ts");
+}
+
+export async function installOpenTelemetryForTracer(
+	applicationRoot: string,
+	tarball = process.env.QUESTPIE_OTEL_PACKED_TARBALL,
+): Promise<void> {
+	const packageRoot = join(
+		applicationRoot,
+		"node_modules/@questpie/opentelemetry",
+	);
+	await rm(packageRoot, { force: true, recursive: true });
+	await mkdir(packageRoot, { recursive: true });
+	if (tarball) {
+		const extracted = Bun.spawnSync([
+			"tar",
+			"-xzf",
+			resolve(tarball),
+			"--strip-components=1",
+			"-C",
+			packageRoot,
+		]);
+		if (extracted.exitCode !== 0)
+			throw new Error(
+				`failed to extract packed @questpie/opentelemetry: ${extracted.stderr.toString().trim()}`,
+			);
+	} else {
+		const sourceRoot = resolve(repositoryRoot, "packages/opentelemetry");
+		const build = Bun.spawnSync(["bun", "run", "build"], {
+			cwd: sourceRoot,
+			stderr: "pipe",
+			stdout: "pipe",
+		});
+		if (build.exitCode !== 0)
+			throw new Error(
+				`failed to build @questpie/opentelemetry: ${build.stderr.toString().trim()}`,
+			);
+		await cp(join(sourceRoot, "dist"), join(packageRoot, "dist"), {
+			recursive: true,
+		});
+		await cp(
+			join(sourceRoot, "package.json"),
+			join(packageRoot, "package.json"),
+		);
+	}
+	const dependencies = join(applicationRoot, "node_modules/@opentelemetry");
+	await rm(dependencies, { force: true, recursive: true });
+	await symlink(
+		resolve(
+			repositoryRoot,
+			"packages/opentelemetry/node_modules/@opentelemetry",
+		),
+		dependencies,
+		"dir",
+	);
+}
+
+export async function installReactForTracer(
+	applicationRoot: string,
+): Promise<void> {
+	const sourceRoot = resolve(repositoryRoot, "packages/react");
+	const packageRoot = join(applicationRoot, "node_modules/@questpie/react");
+	const build = Bun.spawnSync(["bun", "run", "build"], {
+		cwd: sourceRoot,
+		stderr: "pipe",
+		stdout: "pipe",
+	});
+	if (build.exitCode !== 0)
+		throw new Error(
+			`failed to build @questpie/react: ${build.stderr.toString().trim()}`,
+		);
+	await rm(packageRoot, { force: true, recursive: true });
+	await mkdir(packageRoot, { recursive: true });
+	await cp(join(sourceRoot, "dist"), join(packageRoot, "dist"), {
+		recursive: true,
+	});
+	await cp(join(sourceRoot, "package.json"), join(packageRoot, "package.json"));
+	for (const dependency of ["react", "react-dom"]) {
+		const installed = join(applicationRoot, "node_modules", dependency);
+		await rm(installed, { force: true, recursive: true });
+		await symlink(
+			await realpath(
+				resolve(
+					repositoryRoot,
+					"fixtures/team-support-desk/node_modules",
+					dependency,
+				),
+			),
+			installed,
+			"dir",
+		);
+	}
 }
 
 export function buildPackedTracer(

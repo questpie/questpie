@@ -100,6 +100,7 @@
       "name": "@questpie/fixture-team-support-desk",
       "version": "4.0.0-beta.1",
       "dependencies": {
+        "@questpie/opentelemetry": "workspace:*",
         "@questpie/react": "workspace:*",
         "better-auth": "1.7.1",
         "pg": "8.23.0",

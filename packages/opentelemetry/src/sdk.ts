@@ -269,10 +269,11 @@ export function createOpenTelemetrySdkFromSignalRuntime(
 				scope: start.kind,
 				start,
 			});
+			const parent = unsuppressTracing(parentContext(start.trace, manager));
 			const span = tracer.startSpan(
 				definition.name,
 				{ kind: definition.kind, attributes, links },
-				parentContext(start.trace, manager),
+				parent,
 			);
 			const active = trace.setSpan(ROOT_CONTEXT, span);
 			const scopeContext =
@@ -326,9 +327,14 @@ export function createOpenTelemetrySdkFromSignalRuntime(
 							scope: start.kind,
 						});
 						span.addEvent(eventName, eventAttrs);
-						const transactionId = eventAttrs["questpie.transaction.id"];
-						if (typeof transactionId === "string")
-							span.setAttribute("questpie.transaction.id", transactionId);
+						for (const name of [
+							"questpie.transaction.id",
+							"questpie.dispatch.id",
+							"questpie.run.id",
+						] as const) {
+							const value = eventAttrs[name];
+							if (typeof value === "string") span.setAttribute(name, value);
+						}
 					} catch (error) {
 						dropped.add(1, {
 							cause: "adapter_fault",

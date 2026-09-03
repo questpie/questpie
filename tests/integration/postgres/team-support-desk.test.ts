@@ -22,7 +22,12 @@ import {
 	eventually,
 	waitForOutputLine,
 } from "../../../packages/testkit/src";
-import { installQuestpieForTracer } from "../../support/beta12-packed-questpie";
+import {
+	installOpenTelemetryForTracer,
+	installQuestpieForTracer,
+	installReactForTracer,
+} from "../../support/beta12-packed-questpie";
+import { normalizeOtlpSpanGraph } from "../../support/otel-protobuf";
 
 const repositoryRoot = resolve(import.meta.dir, "../../..");
 const fixtureRoot = resolve(repositoryRoot, "fixtures/team-support-desk");
@@ -87,6 +92,7 @@ type Host = Readonly<{
 	child: Child;
 	port: number;
 	receiverPort: number;
+	stderr: Promise<string>;
 }>;
 
 async function startHost(
@@ -96,7 +102,9 @@ async function startHost(
 		attemptDeadlineMilliseconds: number;
 		heartbeatMilliseconds: number;
 		leaseMilliseconds: number;
+		pause?: boolean;
 	}>,
+	telemetryEndpoint?: string,
 ): Promise<Host> {
 	const child = Bun.spawn(["bun", "tracer/host.ts", `--port=${port}`], {
 		cwd: root,
@@ -112,16 +120,36 @@ async function startHost(
 			QUESTPIE_TRACER_WORKER_LEASE_MILLISECONDS: String(
 				worker.leaseMilliseconds,
 			),
+			...(worker.pause === true ? { QUESTPIE_TRACER_PAUSE_WORKER: "1" } : {}),
+			...(telemetryEndpoint === undefined
+				? {}
+				: {
+						QUESTPIE_TRACER_OPENTELEMETRY: "1",
+						OTEL_EXPORTER_OTLP_ENDPOINT: telemetryEndpoint,
+						OTEL_METRICS_EXPORTER: "none",
+						OTEL_TRACES_EXPORTER: "otlp",
+					}),
 		},
 		stdin: "ignore",
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	const line = await waitForOutputLine(child.stdout, {
-		accept: (candidate) => candidate.includes('"event":"ready"'),
-		description: "Team Support Desk host readiness",
-		timeoutMilliseconds: 30_000,
-	});
+	const stderr = new Response(child.stderr).text();
+	let line: string;
+	try {
+		line = await waitForOutputLine(child.stdout, {
+			accept: (candidate) => candidate.includes('"event":"ready"'),
+			description: "Team Support Desk host readiness",
+			timeoutMilliseconds: 30_000,
+		});
+	} catch (error) {
+		throw new Error(
+			`Team Support Desk host failed readiness: ${(await stderr).trim()}`,
+			{
+				cause: error,
+			},
+		);
+	}
 	const ready = JSON.parse(line) as Readonly<{
 		port?: unknown;
 		receiverPort?: unknown;
@@ -135,6 +163,7 @@ async function startHost(
 		child,
 		port: Number(ready.port),
 		receiverPort: Number(ready.receiverPort),
+		stderr,
 	});
 }
 
@@ -264,6 +293,17 @@ postgresTest(
 		});
 		const temporary = await mkdtemp(join(tmpdir(), "questpie-team-support-"));
 		cleanup.defer(() => rm(temporary, { force: true, recursive: true }));
+		const traceBodies: Uint8Array[] = [];
+		const telemetryReceiver = Bun.serve({
+			hostname: "127.0.0.1",
+			port: 0,
+			async fetch(request) {
+				if (new URL(request.url).pathname === "/v1/traces")
+					traceBodies.push(new Uint8Array(await request.arrayBuffer()));
+				return new Response(null, { status: 200 });
+			},
+		});
+		cleanup.defer(() => telemetryReceiver.stop(true));
 		try {
 			const versionRows = (await database!.unsafe(
 				"SHOW server_version_num",
@@ -278,6 +318,8 @@ postgresTest(
 			);
 			await cp(fixtureRoot, temporary, { recursive: true });
 			const questpieEntry = await installQuestpieForTracer(temporary);
+			await installOpenTelemetryForTracer(temporary);
+			await installReactForTracer(temporary);
 			runCli(temporary, ["build"]);
 			runCli(temporary, ["migration", "apply"]);
 			runCli(temporary, ["migration", "apply"]);
@@ -1229,34 +1271,64 @@ WHERE call_id = ${editCallId}`;
 				watchedCommentObserved: true,
 			});
 			await stop(customerBrowser, "SIGTERM");
+			await stop(recoveredHost.child, "SIGTERM");
+			const observedHost = await startHost(
+				temporary,
+				firstHost.port,
+				{ ...hostWorker, pause: true },
+				telemetryReceiver.url.href,
+			);
+			cleanup.defer(() => stop(observedHost.child, "SIGTERM"));
 
 			const firefoxComment = `Firefox operator update ${crypto.randomUUID()}`;
 			const browser = await startFirefoxJourney({
 				commentBody: firefoxComment,
 				persona: "agent",
-				port: recoveredHost.port,
+				port: observedHost.port,
 				profile: join(temporary, "firefox-agent-profile"),
 				reference: supportTracerIds.referenceOpen,
 			});
 			cleanup.defer(() => stop(browser, "SIGKILL"));
-			const agentBrowserReport = await eventually(
-				() => tracerReport(recoveredHost.port),
-				{
-					accept: (report) =>
-						report?.phase === "firefox-complete" &&
-						report.commentBody === firefoxComment,
-					description: "Firefox generated-client Operator App journey",
-					intervalMilliseconds: 100,
-					timeoutMilliseconds: 40_000,
-				},
-			);
+			let latestBrowserReport: Readonly<Record<string, unknown>> | null = null;
+			let browserReport: Readonly<Record<string, unknown>>;
+			try {
+				browserReport = await eventually(
+					async () =>
+						(latestBrowserReport = await tracerReport(observedHost.port)),
+					{
+						accept: (report) =>
+							report?.phase === "firefox-complete" &&
+							report.commentBody === firefoxComment,
+						description: "Firefox generated-client Operator App journey",
+						intervalMilliseconds: 100,
+						timeoutMilliseconds: 40_000,
+					},
+				);
+			} catch (error) {
+				const hostError =
+					observedHost.child.exitCode === null
+						? "host still running"
+						: (await observedHost.stderr).trim();
+				throw new Error(
+					`Firefox journey failed; last report: ${JSON.stringify(latestBrowserReport)}; host: ${hostError}`,
+					{ cause: error },
+				);
+			}
+			const browserJobRunId = browserReport.jobRunId;
+			if (
+				typeof browserJobRunId !== "string" ||
+				!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u.test(browserJobRunId)
+			)
+				throw new TypeError(
+					`Firefox report returned an invalid Job run ID: ${JSON.stringify(browserJobRunId)}`,
+				);
 			const browserOperationRequests =
-				agentBrowserReport?.["browserOperationRequests"];
+				browserReport["browserOperationRequests"];
 			expect(Array.isArray(browserOperationRequests)).toBe(true);
-			expect(agentBrowserReport).toMatchObject({
+			expect(browserReport).toMatchObject({
 				authProvider: "better-auth",
 				browserOperationRequests: expect.arrayContaining([
-					"GET /_questpie/query/tickets.detail",
+					"GET /_questpie/query/tickets.searchByReference",
 					"GET /_questpie/query/tickets.queue",
 					"POST /_questpie/mutation/ticket.addComment",
 					"POST /_questpie/action/notification.sendTicketSummary",
@@ -1280,8 +1352,53 @@ WHERE call_id = ${editCallId}`;
 				await fetch(`${receiverOrigin}/__receipts`)
 			).json()) as Readonly<{ receipts: readonly unknown[] }>;
 			expect(browserReceipts.receipts.length).toBeGreaterThanOrEqual(1);
+			await stop(observedHost.child, "SIGTERM");
+			await observedHost.stderr;
 			await stop(browser, "SIGTERM");
-			await stop(recoveredHost.child, "SIGTERM");
+			expect(await app.durable.inspect(browserJobRunId)).toMatchObject({
+				attemptCount: 0,
+			});
+			const attemptHost = await startHost(
+				temporary,
+				firstHost.port,
+				hostWorker,
+				telemetryReceiver.url.href,
+			);
+			cleanup.defer(() => stop(attemptHost.child, "SIGTERM"));
+			await eventually(() => app.durable.inspect(browserJobRunId), {
+				accept: (run) => run?.state === "succeeded",
+				description: "post-restart Firefox Mutation Job reaches terminal state",
+				intervalMilliseconds: 100,
+				timeoutMilliseconds: 40_000,
+			});
+			await stop(attemptHost.child, "SIGTERM");
+			await eventually(() => traceBodies.length, {
+				accept: (length) => length > 0,
+				description: "recovered Team Support host exports OTLP traces",
+			});
+			const spans = traceBodies.flatMap((body) => normalizeOtlpSpanGraph(body));
+			const accepted = spans.filter(
+				(span) =>
+					span.name === "job job:ticket.slaFollowUp accept" &&
+					span.attributes["questpie.run.id"] === browserJobRunId,
+			);
+			const attempts = spans.filter(
+				(span) =>
+					span.name === "job job:ticket.slaFollowUp attempt" &&
+					span.attributes["questpie.run.id"] === browserJobRunId,
+			);
+			expect(accepted).toHaveLength(1);
+			expect(attempts).toHaveLength(1);
+			expect(attempts[0]).toMatchObject({
+				links: [
+					{
+						spanId: accepted[0]!.spanId,
+						traceId: accepted[0]!.traceId,
+					},
+				],
+				parentSpanId: null,
+			});
+			expect(attempts[0]!.traceId).not.toBe(accepted[0]!.traceId);
 		} finally {
 			try {
 				await cleanup.dispose();

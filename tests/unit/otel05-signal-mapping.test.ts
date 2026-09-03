@@ -269,6 +269,14 @@ test("suppresses owned same-layer instrumentation and re-enables outbound Action
 			expect(ambient.isTracingSuppressed()).toBe(true);
 		});
 		postgres.end({ kind: "postgresql", outcome: "ok" });
+		await harness.forceFlush();
+		const spans = harness.finishedSpans() as readonly ReadableSpan[];
+		const fetchSpan = byName(spans, "GET");
+		const actionSpan = byName(spans, "action action:notifications.send");
+		expect(actionSpan.parentSpanContext?.spanId).toBe(
+			fetchSpan.spanContext().spanId,
+		);
+		byName(spans, "SELECT");
 	} finally {
 		await harness.close();
 		ambient.close();
@@ -735,6 +743,18 @@ test("keeps opted-in operational identities on spans and out of metrics", async 
 			transactionId: "42",
 		});
 		transaction.end({ kind: "transaction", outcome: "ok" });
+		const acceptance = adapter.begin({
+			kind: "job.accept",
+			principalKind: "user",
+			resourceIdentity: "job:reports.digest",
+			trace: { kind: "root" },
+		});
+		acceptance.event({
+			dispatchId,
+			kind: "durable.accepted",
+			runId,
+		});
+		acceptance.end({ kind: "job.accept", outcome: "ok" });
 		const attempt = adapter.begin({
 			attemptId,
 			attemptNumber: 1,
@@ -755,6 +775,13 @@ test("keeps opted-in operational identities on spans and out of metrics", async 
 		).toMatchObject({
 			"questpie.runtime.instance.id": "01234567-89ab-4def-8123-456789abcdef",
 			"questpie.transaction.id": "42",
+		});
+		expect(
+			byName(spans as readonly ReadableSpan[], "job job:reports.digest accept")
+				.attributes,
+		).toMatchObject({
+			"questpie.dispatch.id": dispatchId,
+			"questpie.run.id": runId,
 		});
 		expect(
 			byName(spans as readonly ReadableSpan[], "job job:reports.digest attempt")

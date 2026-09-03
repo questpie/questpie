@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { createOpenTelemetry } from "@questpie/opentelemetry";
+
 import { createApp } from "../.questpie/generated/app";
 
 const root = resolve(import.meta.dir, "..");
@@ -87,11 +89,22 @@ if (!browserBuild.success)
 if (browserBuild.outputs.length !== 1)
 	throw new TypeError("Team Support Desk must compile to one browser bundle");
 const browserJavaScript = await browserBuild.outputs[0]!.text();
-const application = await createApp({
-	postgres: { connectionUrl: databaseUrl, directConnectionUrl: databaseUrl },
-	realtime: { hmacKey: new Uint8Array(32).fill(41) },
-	maintenance: { authorize: () => true },
-});
+const telemetry =
+	process.env.QUESTPIE_TRACER_OPENTELEMETRY === "1"
+		? await createOpenTelemetry({ operationalIds: "spans" })
+		: undefined;
+let application: Awaited<ReturnType<typeof createApp>>;
+try {
+	application = await createApp({
+		postgres: { connectionUrl: databaseUrl, directConnectionUrl: databaseUrl },
+		realtime: { hmacKey: new Uint8Array(32).fill(41) },
+		maintenance: { authorize: () => true },
+		...(telemetry === undefined ? {} : { observability: telemetry }),
+	});
+} catch (error) {
+	await telemetry?.close();
+	throw error;
+}
 
 let latestReport: Readonly<Record<string, unknown>> = Object.freeze({
 	phase: "host-ready",
@@ -184,9 +197,19 @@ async function close(): Promise<void> {
 	stopping = true;
 	worker.beginDrain();
 	server.stop(false);
-	receiver.stop(false);
 	await workerLoop;
-	await application.close();
+	try {
+		try {
+			await application.close();
+		} finally {
+			await telemetry?.close();
+		}
+	} finally {
+		receiver.stop(false);
+	}
 }
-process.once("SIGINT", () => void close());
-process.once("SIGTERM", () => void close());
+await new Promise<void>((resolve) => {
+	process.once("SIGINT", resolve);
+	process.once("SIGTERM", resolve);
+});
+await close();

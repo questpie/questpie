@@ -111,7 +111,13 @@ export function parentContext(
 	plan: TracePlan,
 	manager: ContextManager,
 ): Context {
-	if (plan.kind === "active-parent") return manager.active();
+	if (plan.kind === "active-parent") {
+		const active = manager.active();
+		const activeSpan = trace.getSpanContext(active);
+		return activeSpan !== undefined && isSpanContextValid(activeSpan)
+			? active
+			: ROOT_CONTEXT;
+	}
 	if (plan.kind !== "remote-parent" || plan.extracted === undefined)
 		return ROOT_CONTEXT;
 	const extracted = plan.extracted;

@@ -533,8 +533,13 @@ describe("OTEL-01 hostile Runtime observation kernel", () => {
 			}
 			if (mode === "cancel") await reader.cancel("consumer");
 			if (mode === "abort") {
-				abort.abort("host");
-				await expect(reader.read()).rejects.toBe("host");
+				abort.abort(
+					new DOMException("The connection was closed.", "AbortError"),
+				);
+				await expect(reader.read()).resolves.toEqual({
+					done: true,
+					value: undefined,
+				});
 			}
 			try {
 				source.close();

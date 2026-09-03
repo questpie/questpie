@@ -106,6 +106,64 @@ export type NormalizedOtlpTrace = Readonly<{
 	}>[];
 }>;
 
+export type NormalizedOtlpSpanGraph = readonly Readonly<{
+	attributes: Readonly<Record<string, unknown>>;
+	links: readonly Readonly<{ spanId: string; traceId: string }>[];
+	name: string;
+	parentSpanId: string | null;
+	spanId: string;
+	traceId: string;
+}>[];
+
+export function normalizeOtlpSpanGraph(
+	bytes: Uint8Array,
+): NormalizedOtlpSpanGraph {
+	return Object.freeze(
+		embedded(bytes, 1).flatMap((resourceSpan) =>
+			embedded(resourceSpan, 2).flatMap((scope) =>
+				embedded(scope, 2).map((span) => {
+					const traceId = embedded(span, 1)[0];
+					const spanId = embedded(span, 2)[0];
+					const parentSpanId = embedded(span, 4)[0];
+					const name = text(span, 5);
+					if (traceId === undefined || spanId === undefined || name === null)
+						throw new Error("invalid OTLP span graph");
+					return Object.freeze({
+						attributes: Object.freeze(
+							Object.fromEntries(
+								embedded(span, 9).flatMap((keyValue) => {
+									const key = text(keyValue, 1);
+									const value = embedded(keyValue, 2)[0];
+									return key === null || value === undefined
+										? []
+										: [[key, anyValue(value)] as const];
+								}),
+							),
+						),
+						links: Object.freeze(
+							embedded(span, 13).map((link) => {
+								const linkedTraceId = embedded(link, 1)[0];
+								const linkedSpanId = embedded(link, 2)[0];
+								if (linkedTraceId === undefined || linkedSpanId === undefined)
+									throw new Error("invalid OTLP span link");
+								return Object.freeze({
+									spanId: hexadecimal(linkedSpanId),
+									traceId: hexadecimal(linkedTraceId),
+								});
+							}),
+						),
+						name,
+						parentSpanId:
+							parentSpanId === undefined ? null : hexadecimal(parentSpanId),
+						spanId: hexadecimal(spanId),
+						traceId: hexadecimal(traceId),
+					});
+				}),
+			),
+		),
+	);
+}
+
 export function normalizeOtlpTrace(bytes: Uint8Array): NormalizedOtlpTrace {
 	const resourceSpans = embedded(bytes, 1);
 	const resources = resourceSpans.map((entry) => {

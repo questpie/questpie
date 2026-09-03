@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { decodeOpenTelemetryConfiguration } from "../../packages/opentelemetry/src/config";
+import { parentContext } from "../../packages/opentelemetry/src/propagation";
 import { createOpenTelemetrySdk } from "../../packages/opentelemetry/src/sdk";
 
 const traceId = "0af7651916cd43dd8448eb211c80319c";
@@ -12,6 +13,14 @@ const metadata = Object.freeze({
 	runtimeInstanceId: "01234567-89ab-4def-8123-456789abcdef",
 	signalProjectionDigest:
 		"b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
+});
+
+test("treats an invalid ambient span as an absent active parent", () => {
+	const invalid = { getValue: () => undefined };
+	const manager = { active: () => invalid };
+	expect(parentContext({ kind: "active-parent" }, manager as never)).toBe(
+		parentContext({ kind: "root" }, manager as never),
+	);
 });
 
 function sdk(trustBoundary: "continue" | "restart") {
