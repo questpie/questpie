@@ -183,6 +183,7 @@ async function start(): Promise<void> {
 	let priorDelivery: unknown;
 	let expectedMessageId: string | undefined;
 	let signingOut = false;
+	let replacingCredential = false;
 	let freshScopeReported = false;
 	let finishing = false;
 	const subscriptions: Array<() => void> = [];
@@ -332,23 +333,25 @@ async function start(): Promise<void> {
 					retiredResource.subscribe(() => {
 						const retired = retiredResource.getSnapshot();
 						if (
+							replacingCredential ||
 							retired.kind !== "failed" ||
 							retired.failure.code !== "AUTHORIZATION_FAILED"
 						)
 							return;
+						replacingCredential = true;
+						for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
 						queryResourceEvidence.authorizationFailure = Object.freeze({
 							code: "AUTHORIZATION_FAILED",
 						});
 						void (async () => {
 							await report("authorization-failed", whoami);
-							const signIn = await fetch("/__questpie_tracer/sign-in", {
-								method: "POST",
-							});
-							if (!signIn.ok) throw new TypeError("tracer sign-in failed");
 							const recovered = new URL(location.href);
 							recovered.searchParams.delete("credential");
 							recovered.searchParams.set("recovered", "1");
-							location.replace(recovered);
+							const returnTo = `${recovered.pathname}${recovered.search}${recovered.hash}`;
+							location.replace(
+								`/__questpie_tracer/sign-in?return=${encodeURIComponent(returnTo)}`,
+							);
 						})().catch(() => {
 							statusElement.textContent = "credential replacement failed";
 						});

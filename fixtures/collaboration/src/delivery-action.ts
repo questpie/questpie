@@ -11,6 +11,9 @@ import { deliverMessage } from "./delivery";
 
 let deliveryAttempts = 0;
 let deliveryDisposals = 0;
+const blockedDeliveryAdmission = Symbol.for(
+	"questpie.tracer.delivery-block-admission",
+);
 
 function assertOperationMap(value: object, namespace: object): void {
 	if (
@@ -31,6 +34,7 @@ export const deliveryProvider = defineService({
 			send: async (input: Readonly<{ effectId: string; message: string }>) => {
 				deliveryAttempts += 1;
 				if (input.message === "delivery-blocked") {
+					Reflect.set(globalThis, blockedDeliveryAdmission, input.effectId);
 					if (signal.aborted) throw signal.reason;
 					await new Promise<never>((_resolve, reject) =>
 						signal.addEventListener("abort", () => reject(signal.reason), {

@@ -75,6 +75,7 @@ async function startHost(
 ): Promise<
 	Readonly<{
 		child: Child;
+		errors: Promise<string>;
 		output: ReadableStream<Uint8Array>;
 		port: number;
 	}>
@@ -111,6 +112,12 @@ async function startHost(
 		stdout: "pipe",
 		stderr: "pipe",
 	});
+	const errors = new Response(child.stderr).text().then((value) =>
+		value
+			.replaceAll(postgresUrl(), "[DATABASE_URL]")
+			.replace(/postgres(?:ql)?:\/\/[^\s"']+/gu, "[DATABASE_URL]")
+			.replace(/questpie_tracer_session=[a-f0-9]+/gu, "[SESSION]"),
+	);
 	const [readiness, output] = child.stdout.tee();
 	const line = await waitForOutputLine(readiness, {
 		accept: (candidate) => candidate.includes('"event":"ready"'),
@@ -120,7 +127,7 @@ async function startHost(
 	const ready = JSON.parse(line) as Readonly<{ port?: unknown }>;
 	if (!Number.isSafeInteger(ready.port) || Number(ready.port) <= 0)
 		throw new TypeError("collaboration tracer readiness port is invalid");
-	return Object.freeze({ child, output, port: Number(ready.port) });
+	return Object.freeze({ child, errors, output, port: Number(ready.port) });
 }
 
 type JobAttemptProbe = Readonly<{
@@ -809,10 +816,11 @@ VALUES ($1, $2, $3, $4, $5)`,
 								{ callId: cancelledCallId },
 							),
 					);
+					const cancelledFailure = cancelled.catch((error: unknown) => error);
 					await waitForBlockedLifecycleChannelRead();
 					cancellation.abort(cancellationReason);
+					expect(await cancelledFailure).toBe(cancellationReason);
 					await blocker.unsafe("COMMIT");
-					await expect(cancelled).rejects.toBe(cancellationReason);
 					await assertNoMutationRecords(cancelledCallId, cancelledBody);
 
 					await blocker.unsafe("BEGIN");
@@ -829,8 +837,9 @@ VALUES ($1, $2, $3, $4, $5)`,
 								{ callId: deadlineCallId },
 							),
 					);
+					const expiredFailure = expired.catch((error: unknown) => error);
 					await waitForBlockedLifecycleChannelRead();
-					await expect(expired).rejects.toMatchObject({
+					expect(await expiredFailure).toMatchObject({
 						code: "DEADLINE_EXCEEDED",
 						retryable: true,
 					});
@@ -850,8 +859,11 @@ VALUES ($1, $2, $3, $4, $5)`,
 							timeoutMilliseconds: 500,
 						},
 					);
+					const networkExpiredFailure = networkExpired.catch(
+						(error: unknown) => error,
+					);
 					await waitForBlockedLifecycleChannelRead();
-					await expect(networkExpired).rejects.toMatchObject({
+					expect(await networkExpiredFailure).toMatchObject({
 						code: "DEADLINE_EXCEEDED",
 						retryable: true,
 					});
@@ -1090,23 +1102,41 @@ VALUES ($1, $2, $3, $4, $5)`,
 					payload: null,
 					status: 502,
 				});
-				await expect(
-					networkClient.actions["delivery.publish"](
-						{
-							effectKey: "domain-network-timeout",
-							message: "delivery-blocked",
-						},
-						{
-							effectKey: "provider-network-timeout",
-							callId: "delivery-network-timeout",
-							timeoutMilliseconds: 10,
-						},
-					),
-				).rejects.toMatchObject({
+				const blockedDeliveryAdmission = Symbol.for(
+					"questpie.tracer.delivery-block-admission",
+				);
+				Reflect.deleteProperty(globalThis, blockedDeliveryAdmission);
+				const networkCancellation = new AbortController();
+				const networkAmbiguous = networkClient.actions["delivery.publish"](
+					{
+						effectKey: "domain-network-timeout",
+						message: "delivery-blocked",
+					},
+					{
+						effectKey: "provider-network-timeout",
+						callId: "delivery-network-timeout",
+						signal: networkCancellation.signal,
+						timeoutMilliseconds: Number.MAX_SAFE_INTEGER,
+					},
+				).catch((error: unknown) => error);
+				await eventually(
+					() => Reflect.get(globalThis, blockedDeliveryAdmission),
+					{
+						accept: (effectId) => typeof effectId === "string",
+						description: "network Action external-effect admission",
+						intervalMilliseconds: 1,
+						timeoutMilliseconds: 5_000,
+					},
+				);
+				networkCancellation.abort(
+					new DOMException("network Action cancelled", "AbortError"),
+				);
+				expect(await networkAmbiguous).toMatchObject({
 					code: "ACTION_OUTCOME_AMBIGUOUS",
 					payload: { callId: "delivery-network-timeout" },
 					retryable: false,
 				});
+				Reflect.deleteProperty(globalThis, blockedDeliveryAdmission);
 				expect(transportCalls).toBe(callsAfterNetworkDelivery + 3);
 				expect(networkOperations).toEqual(
 					expect.arrayContaining([
@@ -1223,10 +1253,14 @@ VALUES ($1, $2, $3, $4, $5)`,
 				});
 			}
 
-			const hostileHelper = join(temporary, "otel07-hostile-observability.ts");
-			await writeFile(
-				hostileHelper,
-				`import { createOfficialQuestpieObservability } from "questpie/internal/observability";
+			const runHostileObservability = async (): Promise<void> => {
+				const hostileHelper = join(
+					temporary,
+					"otel07-hostile-observability.ts",
+				);
+				await writeFile(
+					hostileHelper,
+					`import { createOfficialQuestpieObservability } from "questpie/internal/observability";
 export function createHostileQuestpieObservability(state: { begins: number; eventFaults: number; signals: unknown[] }) {
 	return createOfficialQuestpieObservability(() => ({
 		format: "questpie.runtime-observability", version: 1, extract: () => null,
@@ -1244,116 +1278,118 @@ export function createHostileQuestpieObservability(state: { begins: number; even
 	}));
 }
 `,
-			);
-			const { createHostileQuestpieObservability } = (await import(
-				pathToFileURL(hostileHelper).href
-			)) as Readonly<{
-				createHostileQuestpieObservability(state: {
-					begins: number;
-					eventFaults: number;
-					signals: unknown[];
-				}): unknown;
-			}>;
-			const hostileState = {
-				begins: 0,
-				eventFaults: 0,
-				signals: [] as unknown[],
-			};
-			const observability = createHostileQuestpieObservability(hostileState);
-			const observationEnvelopes: unknown[] = [];
-			const hostileApplication = await createApp({
-				postgres: {
-					connectionUrl: postgresUrl(),
-					directConnectionUrl: postgresUrl(),
-				},
-				realtime: { hmacKey: new Uint8Array(32).fill(29) },
-				maintenance: { authorize: () => false },
-				observability,
-				events: (event: unknown) => observationEnvelopes.push(event),
-			});
-			try {
-				const hostileExecution = {
-					principal: principal.user({ id: tracerIds.principal }),
-					context: { companyId: tracerIds.company },
+				);
+				const { createHostileQuestpieObservability } = (await import(
+					pathToFileURL(hostileHelper).href
+				)) as Readonly<{
+					createHostileQuestpieObservability(state: {
+						begins: number;
+						eventFaults: number;
+						signals: unknown[];
+					}): unknown;
+				}>;
+				const hostileState = {
+					begins: 0,
+					eventFaults: 0,
+					signals: [] as unknown[],
 				};
-				const hostileDirect = await hostileApplication.execution(
-					hostileExecution,
-					({ queries }) => queries.channels.detail({ id: tracerIds.channel }),
-				);
-				expect(hostileDirect).toEqual(initialChannelDetail);
-				const hostileNetwork = createClient({
-					baseUrl: "https://app.test",
-					fetch: (request: Request) => {
-						const headers = new Headers(request.headers);
-						headers.set(
-							"cookie",
-							"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
-						);
-						return hostileApplication.fetch(new Request(request, { headers }));
+				const observability = createHostileQuestpieObservability(hostileState);
+				const observationEnvelopes: unknown[] = [];
+				const hostileApplication = await createApp({
+					postgres: {
+						connectionUrl: postgresUrl(),
+						directConnectionUrl: postgresUrl(),
 					},
-				}).withContext({ companyId: tracerIds.company });
-				expect(
-					await hostileNetwork.queries["channels.detail"]({
-						id: tracerIds.channel,
-					}),
-				).toEqual(hostileDirect);
-				const disclosureSentinel = "__questpie_hostile_invalid_event__";
-				const hostileCallId = `otel07:hostile:${crypto.randomUUID()}`;
-				let hostileDirectError: unknown;
-				try {
-					await hostileApplication.execution(
-						hostileExecution,
-						({ mutations }) =>
-							mutations.message.publish(
-								{
-									body: disclosureSentinel,
-									channelId: tracerIds.channel,
-								},
-								{ callId: hostileCallId },
-							),
-					);
-				} catch (error) {
-					hostileDirectError = error;
-				}
-				expect(hostileDirectError).toMatchObject({
-					code: "PUBLICATION_REJECTED",
-					payload: null,
-					status: 422,
+					realtime: { hmacKey: new Uint8Array(32).fill(29) },
+					maintenance: { authorize: () => false },
+					observability,
+					events: (event: unknown) => observationEnvelopes.push(event),
 				});
-				let hostileNetworkError: unknown;
 				try {
-					await hostileNetwork.mutations["message.publish"](
-						{ body: disclosureSentinel, channelId: tracerIds.channel },
-						{ callId: hostileCallId },
+					const hostileExecution = {
+						principal: principal.user({ id: tracerIds.principal }),
+						context: { companyId: tracerIds.company },
+					};
+					const hostileDirect = await hostileApplication.execution(
+						hostileExecution,
+						({ queries }) => queries.channels.detail({ id: tracerIds.channel }),
 					);
-				} catch (error) {
-					hostileNetworkError = error;
+					const hostileNetwork = createClient({
+						baseUrl: "https://app.test",
+						fetch: (request: Request) => {
+							const headers = new Headers(request.headers);
+							headers.set(
+								"cookie",
+								"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+							);
+							return hostileApplication.fetch(
+								new Request(request, { headers }),
+							);
+						},
+					}).withContext({ companyId: tracerIds.company });
+					expect(
+						await hostileNetwork.queries["channels.detail"]({
+							id: tracerIds.channel,
+						}),
+					).toEqual(hostileDirect);
+					const disclosureSentinel = "__questpie_hostile_invalid_event__";
+					const hostileCallId = `otel07:hostile:${crypto.randomUUID()}`;
+					let hostileDirectError: unknown;
+					try {
+						await hostileApplication.execution(
+							hostileExecution,
+							({ mutations }) =>
+								mutations.message.publish(
+									{
+										body: disclosureSentinel,
+										channelId: tracerIds.channel,
+									},
+									{ callId: hostileCallId },
+								),
+						);
+					} catch (error) {
+						hostileDirectError = error;
+					}
+					expect(hostileDirectError).toMatchObject({
+						code: "PUBLICATION_REJECTED",
+						payload: null,
+						status: 422,
+					});
+					let hostileNetworkError: unknown;
+					try {
+						await hostileNetwork.mutations["message.publish"](
+							{ body: disclosureSentinel, channelId: tracerIds.channel },
+							{ callId: hostileCallId },
+						);
+					} catch (error) {
+						hostileNetworkError = error;
+					}
+					expect(ownErrorBytes(hostileNetworkError)).toBe(
+						ownErrorBytes(hostileDirectError),
+					);
+					const [hostileRows] = await database!.unsafe<
+						ReadonlyArray<Readonly<{ count: number }>>
+					>(
+						"SELECT count(*)::integer AS count FROM collaboration.messages WHERE body = $1",
+						[disclosureSentinel],
+					);
+					expect(hostileRows?.count).toBe(0);
+					expect(hostileState.begins).toBeGreaterThan(0);
+					expect(hostileState.eventFaults).toBeGreaterThan(0);
+					const observationBytes = JSON.stringify([
+						...hostileState.signals,
+						...observationEnvelopes,
+					]);
+					for (const forbidden of [
+						disclosureSentinel,
+						postgresUrl(),
+						"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+					])
+						expect(observationBytes).not.toContain(forbidden);
+				} finally {
+					await hostileApplication.close();
 				}
-				expect(ownErrorBytes(hostileNetworkError)).toBe(
-					ownErrorBytes(hostileDirectError),
-				);
-				const [hostileRows] = await database!.unsafe<
-					ReadonlyArray<Readonly<{ count: number }>>
-				>(
-					"SELECT count(*)::integer AS count FROM collaboration.messages WHERE body = $1",
-					[disclosureSentinel],
-				);
-				expect(hostileRows?.count).toBe(0);
-				expect(hostileState.begins).toBeGreaterThan(0);
-				expect(hostileState.eventFaults).toBeGreaterThan(0);
-				const observationBytes = JSON.stringify([
-					...hostileState.signals,
-					...observationEnvelopes,
-				]);
-				for (const forbidden of [
-					disclosureSentinel,
-					postgresUrl(),
-					"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
-				])
-					expect(observationBytes).not.toContain(forbidden);
-			} finally {
-				await hostileApplication.close();
-			}
+			};
 
 			const first = await startHost(temporary, 0, { pauseWorker: true });
 			cleanup.defer(() => stop(first.child, "SIGKILL"));
@@ -1441,6 +1477,28 @@ export function createHostileQuestpieObservability(state: { begins: number; even
 				intervalMilliseconds: 50,
 				timeoutMilliseconds: 30_000,
 			});
+			const waitForRealtimeAcknowledgement = (description: string) =>
+				eventually(
+					async () => {
+						const [acknowledgement] = await database!.unsafe<
+							readonly Readonly<{ acknowledged: boolean }>[]
+						>(`SELECT count(*) = 2
+  AND coalesce(bool_and(generation.ack_slot = 1), false) AS acknowledged
+FROM questpie_internal.realtime_binding_generations AS generation
+JOIN questpie_internal.realtime_watch_bindings AS watch
+  USING (application_name, scope_identity, binding_identity)
+WHERE generation.latest_slot = 1
+  AND watch.state = 'open'
+  AND watch.query_identity IN ('channels.detail', 'messages.page')`);
+						return acknowledgement?.acknowledged === true;
+					},
+					{
+						accept: (acknowledged) => acknowledged,
+						description,
+						intervalMilliseconds: 10,
+						timeoutMilliseconds: 30_000,
+					},
+				);
 			expect(redactedReport).toMatchObject({
 				whoami: {
 					principal: { id: tracerIds.principal, kind: "user" },
@@ -1472,6 +1530,9 @@ export function createHostileQuestpieObservability(state: { begins: number; even
 			});
 			const mutationPublications = Number(
 				mutationReport?.queryResource?.publications,
+			);
+			await waitForRealtimeAcknowledgement(
+				"browser acknowledgement before inverse changes",
 			);
 			expect(Number.isSafeInteger(mutationPublications)).toBe(true);
 			const [published] = await database!.unsafe<
@@ -1524,6 +1585,9 @@ VALUES ($1, $2, '018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3', 'inverse-order-probe', '
 			const insertedInversePublications = Number(
 				insertedInverse?.inverseLiveQuery?.publications,
 			);
+			await waitForRealtimeAcknowledgement(
+				"browser acknowledgement before ordered peer insert",
+			);
 			const inverseOrderPeerId = "00000000-0000-4000-8000-000000000078";
 			await database!.unsafe(
 				`INSERT INTO collaboration.messages
@@ -1546,23 +1610,43 @@ VALUES ($1, $2, '018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3', 'inverse-order-peer', '2
 			const orderPeerPublications = Number(
 				insertedOrderPeer?.inverseLiveQuery?.publications,
 			);
+			await waitForRealtimeAcknowledgement(
+				"browser acknowledgement before inverse reorder",
+			);
 			await database!.unsafe(
 				"UPDATE collaboration.messages SET created_at = '2032-01-01T00:00:00.000Z' WHERE id = $1",
 				[inverseMoveId],
 			);
-			const reorderedInverse = await eventually(() => report(first.port), {
-				accept: (current) =>
-					Number(current?.inverseLiveQuery?.publications) >
-					orderPeerPublications,
-				description: "inverse Live Query ordering change",
-				intervalMilliseconds: 50,
-				timeoutMilliseconds: 30_000,
-			});
+			let reorderedInverse: TracerReport | null;
+			try {
+				reorderedInverse = await eventually(() => report(first.port), {
+					accept: (current) =>
+						Number(current?.inverseLiveQuery?.publications) >
+						orderPeerPublications,
+					description: "inverse Live Query ordering change",
+					intervalMilliseconds: 50,
+					timeoutMilliseconds: 30_000,
+				});
+			} catch (error) {
+				throw new Error(
+					`inverse ordering tracer host ${JSON.stringify({
+						errors:
+							first.child.exitCode === null
+								? null
+								: (await first.errors).slice(-2_000),
+						exitCode: first.child.exitCode,
+					})}`,
+					{ cause: error },
+				);
+			}
 			expect(
 				reorderedInverse?.inverseLiveQuery?.lastSuccessfulMessages?.slice(0, 2),
 			).toMatchObject([{ id: inverseMoveId }, { id: inverseOrderPeerId }]);
 			const reorderedInversePublications = Number(
 				reorderedInverse?.inverseLiveQuery?.publications,
+			);
+			await waitForRealtimeAcknowledgement(
+				"browser acknowledgement before inverse correlation move",
 			);
 			await database!.unsafe(
 				"UPDATE collaboration.messages SET channel_id = $2 WHERE id = $1",
@@ -1580,6 +1664,9 @@ VALUES ($1, $2, '018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3', 'inverse-order-peer', '2
 				timeoutMilliseconds: 30_000,
 			});
 			const inverseBeforeFailure = movedInverse?.inverseLiveQuery;
+			await waitForRealtimeAcknowledgement(
+				"browser acknowledgement before inverse failure",
+			);
 			type InverseGeneration = Readonly<{
 				dependencyPlan: string;
 				evaluated: string;
@@ -1678,6 +1765,9 @@ LIMIT 1`);
 			const recoveredQueryPublications = Number(
 				recoveredInverse?.queryResource?.publications,
 			);
+			await waitForRealtimeAcknowledgement(
+				"browser acknowledgement before current-Policy change",
+			);
 
 			await expect(
 				database!.begin(async (transaction) => {
@@ -1723,6 +1813,9 @@ LIMIT 1`);
 			const authorityRedactedQueryPublications = Number(
 				authorityRedacted?.queryResource?.publications,
 			);
+			await waitForRealtimeAcknowledgement(
+				"browser acknowledgement before current-Policy restoration",
+			);
 			await database!.unsafe(
 				"UPDATE collaboration.memberships SET role = 'admin' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
 				[tracerIds.company, tracerIds.principal],
@@ -1739,17 +1832,64 @@ LIMIT 1`);
 			expect(
 				Number(restoredPhaseReport?.queryResource?.publications),
 			).toBeGreaterThan(authorityRedactedQueryPublications);
-			const restoredReport = await eventually(() => report(first.port), {
-				accept: (current) =>
-					Number(current?.inverseLiveQuery?.publications) >
-						authorityRedactedInversePublications &&
-					current?.inverseLiveQuery?.lastSuccessfulMessages?.some(
-						(message) => message.body === body,
-					) === true,
-				description: "inverse Live Query current-Policy restoration",
-				intervalMilliseconds: 50,
-				timeoutMilliseconds: 30_000,
-			});
+			let lastRestorationReport: TracerReport | null = null;
+			let restoredReport: TracerReport | null;
+			try {
+				restoredReport = await eventually(
+					async () => {
+						lastRestorationReport = await report(first.port);
+						return lastRestorationReport;
+					},
+					{
+						accept: (current) =>
+							Number(current?.inverseLiveQuery?.publications) >
+								authorityRedactedInversePublications &&
+							current?.inverseLiveQuery?.lastSuccessfulMessages?.some(
+								(message) => message.body === body,
+							) === true,
+						description: "inverse Live Query current-Policy restoration",
+						intervalMilliseconds: 50,
+						timeoutMilliseconds: 30_000,
+					},
+				);
+			} catch (error) {
+				const generations = await database!.unsafe<
+					readonly Readonly<{
+						acknowledged: boolean;
+						evaluated: string;
+						generation: string;
+						invalidated: string;
+						query: string;
+					}>[]
+				>(`SELECT generation.ack_slot = 1 AS acknowledged,
+  watch.evaluated_invalidation_generation::text AS evaluated,
+  generation.generation::text AS generation,
+  watch.invalidation_generation::text AS invalidated,
+  watch.query_identity AS query
+FROM questpie_internal.realtime_watch_bindings AS watch
+JOIN questpie_internal.realtime_binding_generations AS generation
+  USING (application_name, scope_identity, binding_identity)
+WHERE generation.latest_slot = 1
+  AND watch.state = 'open'
+  AND watch.query_identity IN ('channels.detail', 'messages.page')
+ORDER BY watch.query_identity`);
+				throw new Error(
+					`inverse restoration tracer state ${JSON.stringify({
+						generations,
+						hostErrors:
+							first.child.exitCode === null
+								? null
+								: (await first.errors).slice(-2_000),
+						hostExitCode: first.child.exitCode,
+						inversePublications:
+							lastRestorationReport?.inverseLiveQuery?.publications ?? null,
+						phase: lastRestorationReport?.phase ?? null,
+						queryPublications:
+							lastRestorationReport?.queryResource?.publications ?? null,
+					})}`,
+					{ cause: error },
+				);
+			}
 			expect(
 				Number(restoredReport?.inverseLiveQuery?.publications),
 			).toBeGreaterThan(authorityRedactedInversePublications);
@@ -1783,25 +1923,73 @@ LIMIT 1`);
 					expect.objectContaining({ phase: "signed-out-ready" }),
 				]),
 			});
-			const authorizationReport = await eventually(() => report(first.port), {
-				accept: (current) =>
-					current?.phase === "fresh-scope-ready" &&
-					Number(current.inverseLiveQuery?.publications) >= 1 &&
-					current.history?.some(
-						(event) => event.phase === "authorization-failed",
-					) === true,
-				description: "browser terminal authorization failure and fresh scope",
-				intervalMilliseconds: 50,
-				timeoutMilliseconds: 30_000,
-			});
+			let lastAuthorizationReport: TracerReport | null = null;
+			let authorizationReport: TracerReport | null;
+			try {
+				authorizationReport = await eventually(
+					async () => {
+						lastAuthorizationReport = await report(first.port);
+						return lastAuthorizationReport;
+					},
+					{
+						accept: (current) => {
+							const history = current?.history;
+							return (
+								history?.some(
+									(event) => event.phase === "authorization-failed",
+								) === true &&
+								history.some(
+									(event) =>
+										event.phase === "fresh-scope-ready" &&
+										Number(event.inverseLiveQuery?.publications) >= 1,
+								) === true
+							);
+						},
+						description:
+							"browser terminal authorization failure and fresh scope",
+						intervalMilliseconds: 50,
+						timeoutMilliseconds: 30_000,
+					},
+				);
+			} catch (error) {
+				const history = lastAuthorizationReport?.history ?? [];
+				throw new Error(
+					`authorization tracer state ${JSON.stringify({
+						hostErrors:
+							first.child.exitCode === null
+								? null
+								: (await first.errors).slice(-2_000),
+						hostExitCode: first.child.exitCode,
+						phase: lastAuthorizationReport?.phase ?? null,
+						history: history.map((event) => event.phase ?? null),
+						inversePublications:
+							lastAuthorizationReport?.inverseLiveQuery?.publications ?? null,
+						queryPublications:
+							lastAuthorizationReport?.queryResource?.publications ?? null,
+						authorizationCode:
+							lastAuthorizationReport?.queryResource?.authorizationFailure
+								?.code ?? null,
+					})}`,
+					{ cause: error },
+				);
+			}
+			const freshScopeReport = authorizationReport?.history
+				?.toReversed()
+				.find((event) => event.phase === "fresh-scope-ready");
 			const authorizationFailure = authorizationReport?.history?.find(
 				(event) => event.phase === "authorization-failed",
 			)?.queryResource?.authorizationFailure;
 			expect(authorizationFailure).toEqual({ code: "AUTHORIZATION_FAILED" });
-			expect(authorizationReport).toMatchObject({
+			expect(freshScopeReport).toMatchObject({
 				phase: "fresh-scope-ready",
 				queryResource: { credentialLifetimeReplaced: true },
 			});
+			const authorizationInversePublications = Number(
+				freshScopeReport?.inverseLiveQuery?.publications,
+			);
+			await waitForRealtimeAcknowledgement(
+				"fresh browser acknowledgement before host cancellation",
+			);
 
 			const generationBeforeCancellation = await readInverseGeneration();
 			const recomputeBlocker = await database!.reserve();
@@ -1832,7 +2020,7 @@ LIMIT 1`);
 					accept: (current) =>
 						current?.phase === "recovered" &&
 						Number(current.inverseLiveQuery?.publications) >
-							Number(authorizationReport?.inverseLiveQuery?.publications) &&
+							authorizationInversePublications &&
 						current.inverseLiveQuery?.lastSuccessfulMessages?.some(
 							(message) =>
 								message.id === inverseOrderPeerId &&
@@ -1845,9 +2033,7 @@ LIMIT 1`);
 			);
 			expect(
 				Number(recoveredInverseReport?.inverseLiveQuery?.publications),
-			).toBeGreaterThan(
-				Number(authorizationReport?.inverseLiveQuery?.publications),
-			);
+			).toBeGreaterThan(authorizationInversePublications);
 			const recoveredGeneration = await readInverseGeneration();
 			expect(BigInt(recoveredGeneration.generation)).toBeGreaterThan(
 				BigInt(generationBeforeCancellation.generation),
@@ -2020,16 +2206,37 @@ LIMIT 1`,
 				attemptDeadlineMilliseconds: 30_000,
 			});
 			cleanup.defer(() => stop(firstJobHost.child, "SIGKILL"));
-			const firstRestartProbe = JSON.parse(
-				await waitForOutputLine(firstJobHost.output, {
-					accept: (line) =>
-						line.includes('"event":"collaboration-job-attempt"') &&
-						line.includes(`"runId":"${restartJob.runId}"`) &&
-						line.includes('"attemptNumber":1'),
-					description: "first ordinary Job attempt before hard restart",
-					timeoutMilliseconds: 30_000,
-				}),
-			) as JobAttemptProbe;
+			let firstRestartProbe: JobAttemptProbe;
+			try {
+				firstRestartProbe = JSON.parse(
+					await waitForOutputLine(firstJobHost.output, {
+						accept: (line) =>
+							line.includes('"event":"collaboration-job-attempt"') &&
+							line.includes(`"runId":"${restartJob.runId}"`) &&
+							line.includes('"attemptNumber":1'),
+						description: "first ordinary Job attempt before hard restart",
+						timeoutMilliseconds: 30_000,
+					}),
+				) as JobAttemptProbe;
+			} catch (error) {
+				const runs = await database!.unsafe(
+					`SELECT resource_identity, state, failure_code,
+  convert_from(context_input_bytes, 'UTF8') AS context
+FROM questpie_internal.durable_runs
+ORDER BY accepted_at`,
+				);
+				throw new Error(
+					`first Job host state ${JSON.stringify({
+						exitCode: firstJobHost.child.exitCode,
+						hostErrors:
+							firstJobHost.child.exitCode === null
+								? null
+								: (await firstJobHost.errors).slice(-2_000),
+						runs,
+					})}`,
+					{ cause: error },
+				);
+			}
 			expect(firstRestartProbe).toMatchObject({
 				attemptNumber: 1,
 				role: "admin",
@@ -2543,6 +2750,13 @@ ORDER BY sequence`,
 			await stop(policyHost.child, "SIGTERM");
 			const policyHostOutput = await new Response(policyHost.output).text();
 			expect(policyHostOutput).not.toContain(`"runId":"${deniedRun.runId}"`);
+			await database!.unsafe(
+				`UPDATE collaboration.memberships
+SET status = 'active'
+WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'`,
+				[tracerIds.company, tracerIds.principal],
+			);
+			await runHostileObservability();
 		} finally {
 			await cleanup.dispose();
 		}

@@ -6,6 +6,21 @@ import { createOfficialQuestpieObservability } from "questpie/internal/observabi
 import { createApp } from "../.questpie/generated/app";
 import { demoSessionCookieName, demoSessionToken } from "../src/route-auth";
 
+// Bun reports a peer-closing an active streamed Response as a host-level
+// rejection after the carrier has already received its Request abort. The
+// fixture owns that transport terminal; every other rejection remains fatal.
+process.on("unhandledRejection", (reason) => {
+	if (
+		reason instanceof DOMException &&
+		reason.name === "AbortError" &&
+		reason.message === "The connection was closed."
+	)
+		return;
+	queueMicrotask(() => {
+		throw reason;
+	});
+});
+
 const root = resolve(import.meta.dir, "..");
 const databaseUrl =
 	process.env.DATABASE_URL ??
@@ -78,6 +93,11 @@ const response = (body: BodyInit, contentType: string) =>
 
 const server = Bun.serve({
 	port,
+	error(error) {
+		if (error instanceof DOMException && error.name === "AbortError")
+			return new Response(null, { status: 499 });
+		throw error;
+	},
 	async fetch(request) {
 		const url = new URL(request.url);
 		if (url.pathname === "/") {
@@ -100,15 +120,23 @@ const server = Bun.serve({
 		if (url.pathname === "/tracer.js")
 			return response(browserJavaScript, "text/javascript; charset=utf-8");
 		if (
-			request.method === "POST" &&
+			request.method === "GET" &&
 			url.pathname === "/__questpie_tracer/sign-in"
-		)
+		) {
+			const returnTo = url.searchParams.get("return");
+			if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//"))
+				return new Response(null, { status: 400 });
+			const destination = new URL(returnTo, url);
+			if (destination.origin !== url.origin)
+				return new Response(null, { status: 400 });
 			return new Response(null, {
-				status: 204,
+				status: 303,
 				headers: {
+					location: `${destination.pathname}${destination.search}${destination.hash}`,
 					"set-cookie": `${demoSessionCookieName}=${demoSessionToken}; Path=/; HttpOnly; SameSite=Strict`,
 				},
 			});
+		}
 		if (
 			request.method === "POST" &&
 			url.pathname === "/__questpie_tracer/sign-out"
@@ -121,7 +149,12 @@ const server = Bun.serve({
 			});
 		if (url.pathname === "/__questpie_tracer/report") {
 			if (request.method === "POST") {
-				const body = await request.json();
+				let body: unknown;
+				try {
+					body = await request.json();
+				} catch {
+					return new Response(null, { status: 400 });
+				}
 				if (!body || typeof body !== "object" || Array.isArray(body))
 					return new Response(null, { status: 400 });
 				const event = Object.freeze({ ...(body as Record<string, unknown>) });
@@ -148,7 +181,17 @@ const server = Bun.serve({
 			completeRecovery();
 			return new Response(null, { status: 204 });
 		}
-		return application.fetch(request);
+		try {
+			return await application.fetch(request);
+		} catch (error) {
+			if (
+				request.signal.aborted &&
+				error instanceof DOMException &&
+				error.name === "AbortError"
+			)
+				return new Response(null, { status: 499 });
+			throw error;
+		}
 	},
 });
 
