@@ -154,10 +154,12 @@ review, executable proof must falsify the package-topology decision without
 changing production: exactly two package manifests, root-without-React
 isolation, React-subpath failure without React, success with React 19, exact
 OpenTelemetry peer declaration and import, obsolete-name non-resolution, and a
-complete machine-checked projection/deletion inventory. Peer-range mismatch,
-deterministic production packing, relocated clean installation, declaration
-digests, and exhaustive deletion are post-acceptance implementation gates in
-the release contract above; the acceptance record must not claim that the
+complete machine-checked projection/deletion inventory. The isolated prototype
+also packs both candidate packages twice byte-identically, installs them into
+relocated offline consumers, and rejects incompatible declared peer versions.
+Deterministic production packing, production declaration digests, and
+exhaustive active-surface deletion remain post-acceptance implementation gates
+in the release contract above; the acceptance record must not claim that the
 prototype has already shipped or completed them.
 
 A committed PASS permits a separate authority projection followed by the

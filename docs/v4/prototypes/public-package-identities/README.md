@@ -31,13 +31,19 @@ OpenTelemetry dependency graph. It exact-peers `questpie` at
 `4.0.0-beta.2`; the core package neither depends on it nor imports it in this
 prototype.
 
-The executable test stages a React-free, OpenTelemetry-free consumer and proves
-that `questpie` imports successfully. It then proves that `questpie/react`
-fails without React and works after React 19 is installed, that the telemetry
-package fails without core and binds through it when present, and that
-`@questpie/react` and
-`@questpie/opentelemetry` do not resolve. The two manifests expose no alias for
-either old name.
+The executable test first stages a React-free, OpenTelemetry-free consumer and
+proves that `questpie` imports successfully. It then proves that
+`questpie/react` fails without React and works after React 19 is installed, that
+the telemetry package fails without core and binds through it when present, and
+that `@questpie/react` and `@questpie/opentelemetry` do not resolve. The two
+manifests expose no alias for either old name.
+
+A second case packs both prototype packages twice and compares their SHA-256
+digests, installs the archives offline into relocated core-only and complete
+consumers, and repeats the root, React, and telemetry imports from packed bytes.
+It also executes the declared peer ranges against compatible and incompatible
+React and QUESTPIE versions. These are isolated candidate-package facts, not a
+claim that production packages or beta.2 release artifacts have migrated.
 
 This directory deliberately does not modify or supersede current Accepted
 ADRs, `SPEC.md`, `CONTEXT.md`, production packages, generated artifacts, or
