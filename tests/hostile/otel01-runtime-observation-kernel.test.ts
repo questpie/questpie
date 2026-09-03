@@ -536,8 +536,9 @@ describe("OTEL-01 hostile Runtime observation kernel", () => {
 				abort.abort(
 					new DOMException("The connection was closed.", "AbortError"),
 				);
-				await expect(reader.read()).rejects.toMatchObject({
-					name: "AbortError",
+				await expect(reader.read()).resolves.toEqual({
+					done: true,
+					value: undefined,
 				});
 			}
 			try {

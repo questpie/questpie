@@ -75,7 +75,6 @@ async function startHost(
 ): Promise<
 	Readonly<{
 		child: Child;
-		errors: Promise<string>;
 		output: ReadableStream<Uint8Array>;
 		port: number;
 	}>
@@ -112,12 +111,7 @@ async function startHost(
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	const errors = new Response(child.stderr).text().then((value) =>
-		value
-			.replaceAll(postgresUrl(), "[DATABASE_URL]")
-			.replace(/postgres(?:ql)?:\/\/[^\s"']+/gu, "[DATABASE_URL]")
-			.replace(/questpie_tracer_session=[a-f0-9]+/gu, "[SESSION]"),
-	);
+	void new Response(child.stderr).arrayBuffer();
 	const [readiness, output] = child.stdout.tee();
 	const line = await waitForOutputLine(readiness, {
 		accept: (candidate) => candidate.includes('"event":"ready"'),
@@ -127,7 +121,7 @@ async function startHost(
 	const ready = JSON.parse(line) as Readonly<{ port?: unknown }>;
 	if (!Number.isSafeInteger(ready.port) || Number(ready.port) <= 0)
 		throw new TypeError("collaboration tracer readiness port is invalid");
-	return Object.freeze({ child, errors, output, port: Number(ready.port) });
+	return Object.freeze({ child, output, port: Number(ready.port) });
 }
 
 type JobAttemptProbe = Readonly<{
@@ -1630,10 +1624,6 @@ VALUES ($1, $2, '018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3', 'inverse-order-peer', '2
 			} catch (error) {
 				throw new Error(
 					`inverse ordering tracer host ${JSON.stringify({
-						errors:
-							first.child.exitCode === null
-								? null
-								: (await first.errors).slice(-2_000),
 						exitCode: first.child.exitCode,
 					})}`,
 					{ cause: error },
@@ -1876,10 +1866,6 @@ ORDER BY watch.query_identity`);
 				throw new Error(
 					`inverse restoration tracer state ${JSON.stringify({
 						generations,
-						hostErrors:
-							first.child.exitCode === null
-								? null
-								: (await first.errors).slice(-2_000),
 						hostExitCode: first.child.exitCode,
 						inversePublications:
 							lastRestorationReport?.inverseLiveQuery?.publications ?? null,
@@ -1955,10 +1941,6 @@ ORDER BY watch.query_identity`);
 				const history = lastAuthorizationReport?.history ?? [];
 				throw new Error(
 					`authorization tracer state ${JSON.stringify({
-						hostErrors:
-							first.child.exitCode === null
-								? null
-								: (await first.errors).slice(-2_000),
 						hostExitCode: first.child.exitCode,
 						phase: lastAuthorizationReport?.phase ?? null,
 						history: history.map((event) => event.phase ?? null),
@@ -2220,18 +2202,13 @@ LIMIT 1`,
 				) as JobAttemptProbe;
 			} catch (error) {
 				const runs = await database!.unsafe(
-					`SELECT resource_identity, state, failure_code,
-  convert_from(context_input_bytes, 'UTF8') AS context
+					`SELECT resource_identity, state, failure_code
 FROM questpie_internal.durable_runs
 ORDER BY accepted_at`,
 				);
 				throw new Error(
 					`first Job host state ${JSON.stringify({
 						exitCode: firstJobHost.child.exitCode,
-						hostErrors:
-							firstJobHost.child.exitCode === null
-								? null
-								: (await firstJobHost.errors).slice(-2_000),
 						runs,
 					})}`,
 					{ cause: error },

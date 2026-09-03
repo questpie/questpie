@@ -308,7 +308,6 @@ export function createRealtimeCarrier<Context>(
 			request.signal.addEventListener(
 				"abort",
 				() => {
-					session.close("connection-aborted", true);
 					disposeSession(session);
 				},
 				{ once: true },

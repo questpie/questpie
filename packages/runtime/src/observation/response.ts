@@ -62,7 +62,7 @@ export function retainScopeThroughResponse(
 	const abort = () => {
 		finalize("cancelled");
 		try {
-			controller?.error(signal?.reason);
+			controller?.close();
 		} catch {
 			/* Downstream is terminal. */
 		}

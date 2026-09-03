@@ -6,21 +6,6 @@ import { createOfficialQuestpieObservability } from "questpie/internal/observabi
 import { createApp } from "../.questpie/generated/app";
 import { demoSessionCookieName, demoSessionToken } from "../src/route-auth";
 
-// Bun reports a peer-closing an active streamed Response as a host-level
-// rejection after the carrier has already received its Request abort. The
-// fixture owns that transport terminal; every other rejection remains fatal.
-process.on("unhandledRejection", (reason) => {
-	if (
-		reason instanceof DOMException &&
-		reason.name === "AbortError" &&
-		reason.message === "The connection was closed."
-	)
-		return;
-	queueMicrotask(() => {
-		throw reason;
-	});
-});
-
 const root = resolve(import.meta.dir, "..");
 const databaseUrl =
 	process.env.DATABASE_URL ??
