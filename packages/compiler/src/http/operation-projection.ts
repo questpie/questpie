@@ -2,10 +2,7 @@ import { decodeRuntimeCodec } from "@questpie/runtime/codec";
 
 import { canonicalBytes, compareAscii } from "../canonical";
 import { normalizeCodecContract } from "../codec";
-import {
-	projectCommonCarrierParameters,
-	projectOperationCarrierHeaders,
-} from "./operation-carrier";
+import { projectOperationCarrierHeaders } from "./operation-carrier";
 import {
 	type DocumentationEntry,
 	projectOperationMetadata,
@@ -540,10 +537,26 @@ function openApiOperation(
 	entry: DocumentationEntry | undefined,
 	applicationName: string,
 	contextCodec: unknown,
+	compatibility: Readonly<{
+		application: string;
+		clientContractDigest: string;
+		wireDigest: string;
+	}>,
 ): JsonRecord {
 	const kind = operationKind(operation.identity);
 	const name = operationName(operation.identity);
 	const examples = requestExamples(entry, contextCodec);
+	const carrierHeaders = () =>
+		projectOperationCarrierHeaders({
+			kind,
+			contextSchema: projectCodec(contextCodec),
+			contextAcceptsEmpty: contextAcceptsEmpty(contextCodec),
+			compatibility: {
+				application: compatibility.application,
+				clientContractDigest: compatibility.clientContractDigest,
+				wireDigest: compatibility.wireDigest,
+			},
+		});
 	return {
 		operationId: name,
 		tags: [operationTag(name, applicationName)],
@@ -553,21 +566,13 @@ function openApiOperation(
 			? {
 					parameters: [
 						...queryParameters(operation.input, entry),
-						...projectOperationCarrierHeaders({
-							kind,
-							contextSchema: projectCodec(contextCodec),
-							contextAcceptsEmpty: contextAcceptsEmpty(contextCodec),
-						}),
+						...carrierHeaders(),
 					].sort((left, right) =>
 						compareAscii(String(left.name), String(right.name)),
 					),
 				}
 			: {
-					parameters: projectOperationCarrierHeaders({
-						kind,
-						contextSchema: projectCodec(contextCodec),
-						contextAcceptsEmpty: contextAcceptsEmpty(contextCodec),
-					}),
+					parameters: carrierHeaders(),
 					requestBody: {
 						required: true,
 						content: {
@@ -723,6 +728,11 @@ export function projectOperationProjection(
 						metadata.documentationByIdentity.get(operation.identity),
 						input.applicationName,
 						input.contextCodec,
+						{
+							application: input.httpContract.application,
+							clientContractDigest: input.httpContract.clientContractDigest,
+							wireDigest: input.httpContract.digest,
+						},
 					),
 				},
 			];
@@ -737,14 +747,7 @@ export function projectOperationProjection(
 			"x-questpie-operation-http-digest": input.httpContract.digest,
 		},
 		paths,
-		components: {
-			parameters: projectCommonCarrierParameters({
-				application: input.httpContract.application,
-				clientContractDigest: input.httpContract.clientContractDigest,
-				wireDigest: input.httpContract.digest,
-			}),
-			schemas: frameworkSchemas(input.httpContract.failures),
-		},
+		components: { schemas: frameworkSchemas(input.httpContract.failures) },
 	};
 	return {
 		openapi,

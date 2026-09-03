@@ -244,8 +244,9 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 			"x-questpie-decoded-schema": expect.objectContaining({ type: "object" }),
 			"x-questpie-http-encoding": "canonical-json-base64url",
 		});
-		expect(query.parameters.map(({ name }: { name: string }) => name)).toEqual(
-			query.parameters.map(({ name }: { name: string }) => name).toSorted(),
+		const parameterKey = (parameter: { name: string }) => parameter.name;
+		expect(query.parameters.map(parameterKey)).toEqual(
+			query.parameters.map(parameterKey).toSorted(),
 		);
 		expect(query.parameters).toContainEqual(
 			expect.objectContaining({
@@ -271,23 +272,26 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 			["Questpie-Client-Contract", httpContract.clientContractDigest],
 			["Questpie-Wire-Digest", httpContract.digest],
 		] as const) {
-			const parameter = first.openapi.components.parameters[name];
+			const parameter = query.parameters.find(
+				(candidate: { name: string }) => candidate.name === name,
+			);
 			expect(parameter).toMatchObject({
 				required: false,
 				schema: { const: value, default: value, type: "string" },
 			});
 		}
-		expect(first.openapi.components.parameters).toHaveProperty(
-			"Questpie-Call-Id",
+		expect(first.openapi.components).not.toHaveProperty("parameters");
+		expect(query.parameters).toContainEqual(
+			expect.objectContaining({ name: "Questpie-Call-Id" }),
 		);
-		expect(first.openapi.components.parameters).toHaveProperty(
-			"Questpie-Timeout-Milliseconds",
+		expect(query.parameters).toContainEqual(
+			expect.objectContaining({ name: "Questpie-Timeout-Milliseconds" }),
 		);
 		expect(
 			query.parameters.filter(
 				(parameter: { in: string }) => parameter.in === "header",
 			),
-		).toEqual([contextParameter]);
+		).toHaveLength(6);
 		expect(query).not.toHaveProperty("requestBody");
 
 		const mutation =
@@ -312,10 +316,8 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 				required: true,
 			}),
 		);
-		expect(
-			mutation.parameters.map(({ name }: { name: string }) => name),
-		).toEqual(
-			mutation.parameters.map(({ name }: { name: string }) => name).toSorted(),
+		expect(mutation.parameters.map(parameterKey)).toEqual(
+			mutation.parameters.map(parameterKey).toSorted(),
 		);
 		expect(
 			JSON.stringify(mutation.requestBody.content["application/json"].examples),

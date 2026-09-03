@@ -13,16 +13,37 @@
 				const document = await fetch("/openapi.json").then((response) =>
 					response.json(),
 				);
-				const compatibilityHeaders = [
+				const hiddenCompatibilityHeaderNames = new Set([
 					"Questpie-Application",
 					"Questpie-Client-Contract",
 					"Questpie-Wire-Digest",
-				];
+				]);
+				const hiddenCompatibilityHeaders = new Map();
+				for (const pathItem of Object.values(document.paths)) {
+					for (const operation of Object.values(pathItem)) {
+						if (!Array.isArray(operation.parameters)) continue;
+						for (const parameter of operation.parameters) {
+							if (!hiddenCompatibilityHeaderNames.has(parameter.name)) continue;
+							hiddenCompatibilityHeaders.set(
+								parameter.name,
+								parameter.schema.default,
+							);
+						}
+					}
+				}
+				const displayDocument = structuredClone(document);
+				for (const pathItem of Object.values(displayDocument.paths)) {
+					for (const operation of Object.values(pathItem)) {
+						if (!Array.isArray(operation.parameters)) continue;
+						operation.parameters = operation.parameters.filter((parameter) => {
+							return !hiddenCompatibilityHeaders.has(parameter.name);
+						});
+					}
+				}
 				Scalar.createApiReference("#app", {
-					content: document,
+					content: displayDocument,
 					onBeforeRequest: ({ requestBuilder }) => {
-						for (const name of compatibilityHeaders) {
-							const value = document.components.parameters[name].schema.default;
+						for (const [name, value] of hiddenCompatibilityHeaders) {
 							requestBuilder.headers.set(name, value);
 						}
 					},

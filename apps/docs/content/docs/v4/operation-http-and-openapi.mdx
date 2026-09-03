@@ -141,10 +141,12 @@ documentation metadata.
 
 The three compatibility headers are optional only as one complete set. Omit
 all three, or send the exact three values emitted for that generated client.
-OpenAPI stores their exact values once under `components.parameters`; they are
-not repeated in every Operation's visible header list. An interactive client
-such as Scalar can read those components and add the matched set before each
-request. A partial or mismatched set returns
+The canonical OpenAPI Operation declares every applicable carrier so generated
+tools remain complete. A Scalar wrapper may keep the three compatibility
+carriers out of its visible per-request form and derive their exact values from
+the same generated document's `info` identity and digests before sending. The
+optional Call ID and timeout remain available as advanced request controls. A
+partial or mismatched compatibility set returns
 `PROTOCOL_UNSUPPORTED` before Context Resolution, Policy, or Operation work.
 
 This is a fail-closed rolling-deployment check, not an in-process fallback or
