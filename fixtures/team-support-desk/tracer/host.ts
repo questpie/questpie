@@ -96,6 +96,7 @@ const application = await createApp({
 let latestReport: Readonly<Record<string, unknown>> = Object.freeze({
 	phase: "host-ready",
 });
+const browserOperationRequests: string[] = [];
 const response = (body: BodyInit, contentType: string) =>
 	new Response(body, {
 		headers: {
@@ -109,6 +110,13 @@ const server = Bun.serve({
 	port: portFromArguments(),
 	async fetch(request) {
 		const url = new URL(request.url);
+		if (
+			url.pathname === "/_questpie/operation" ||
+			url.pathname.startsWith("/_questpie/query/") ||
+			url.pathname.startsWith("/_questpie/mutation/") ||
+			url.pathname.startsWith("/_questpie/action/")
+		)
+			browserOperationRequests.push(`${request.method} ${url.pathname}`);
 		if (url.pathname === "/" && request.method === "GET")
 			return response(html, "text/html; charset=utf-8");
 		if (url.pathname === "/styles.css" && request.method === "GET")
@@ -116,7 +124,11 @@ const server = Bun.serve({
 		if (url.pathname === "/desk.js" && request.method === "GET")
 			return response(browserJavaScript, "text/javascript; charset=utf-8");
 		if (url.pathname === "/__team_support/report") {
-			if (request.method === "GET") return Response.json(latestReport);
+			if (request.method === "GET")
+				return Response.json({
+					...latestReport,
+					browserOperationRequests: [...browserOperationRequests],
+				});
 			if (request.method === "POST") {
 				const body = await request.json();
 				if (!body || typeof body !== "object" || Array.isArray(body))

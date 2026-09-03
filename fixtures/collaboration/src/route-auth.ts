@@ -11,6 +11,7 @@ import { tracerIds } from "../tracer/constants";
 
 export const demoSessionCookieName = "questpie_tracer_session";
 export const demoSessionToken = "f18f8b8e0e1446079dc6e6d4755505f9";
+const credentialOutageHeader = "x-questpie-tracer-credential";
 
 function hasDemoSession(headers: Headers): boolean {
 	const cookie = headers.get("cookie");
@@ -42,12 +43,14 @@ export const applicationCredentials = defineCredentialResolver({
 	name: "collaboration.credentials",
 	service: demoAuth,
 	resolve: ({ request, service }) =>
-		service.hasDemoSession(request.headers)
-			? {
-					kind: "resolved",
-					principal: principal.user({ id: tracerIds.principal }),
-				}
-			: { kind: "anonymous" },
+		request.headers.get(credentialOutageHeader) === "unavailable"
+			? { kind: "unavailable" }
+			: service.hasDemoSession(request.headers)
+				? {
+						kind: "resolved",
+						principal: principal.user({ id: tracerIds.principal }),
+					}
+				: { kind: "anonymous" },
 });
 
 export const whoami = defineRoute({

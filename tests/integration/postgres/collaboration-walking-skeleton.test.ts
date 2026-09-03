@@ -245,7 +245,27 @@ type GeneratedNetworkClient = Readonly<{
 		queries: Readonly<{
 			"channels.detail"(
 				input: Readonly<{ id: string }>,
+				options?: Readonly<{
+					callId?: string;
+					timeoutMilliseconds?: number;
+				}>,
 			): Promise<ChannelDetail>;
+		}>;
+		mutations: Readonly<{
+			"message.publish"(
+				input: Readonly<{ body: string; channelId: string }>,
+				options: Readonly<{
+					callId: string;
+					timeoutMilliseconds?: number;
+				}>,
+			): Promise<
+				Readonly<{
+					body: string;
+					channelId: string;
+					createdAt: Date;
+					id: string;
+				}>
+			>;
 		}>;
 	}>;
 }>;
@@ -492,16 +512,22 @@ postgresTest(
 					receipt: `delivery:${effectId}`,
 				});
 				let transportCalls = 0;
+				let credentialOutage = false;
+				const networkOperations: string[] = [];
 				const wireErrorBytes = new Map<string, string>();
 				const networkClient = createClient({
 					baseUrl: "https://app.test",
 					fetch: async (request) => {
 						transportCalls += 1;
+						const requestUrl = new URL(request.url);
+						networkOperations.push(`${request.method} ${requestUrl.pathname}`);
 						const headers = new Headers(request.headers);
 						headers.set(
 							"cookie",
 							"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
 						);
+						if (credentialOutage)
+							headers.set("x-questpie-tracer-credential", "unavailable");
 						const response = await routeApplication.fetch(
 							new Request(request, { headers }),
 						);
@@ -522,6 +548,14 @@ postgresTest(
 						return response;
 					},
 				}).withContext({ companyId: tracerIds.company });
+				credentialOutage = true;
+				await expect(
+					networkClient.queries["channels.detail"]({ id: tracerIds.channel }),
+				).rejects.toMatchObject({
+					code: "RUNTIME_UNAVAILABLE",
+					retryable: true,
+				});
+				credentialOutage = false;
 				const missingChannelId = "00000000-0000-4000-8000-000000000071";
 				const foreignCompanyId = "00000000-0000-4000-8000-000000000072";
 				const foreignSpaceId = "00000000-0000-4000-8000-000000000073";
@@ -580,6 +614,33 @@ VALUES ($1, $2, $3, $4, $5)`,
 						id: foreignChannelId,
 					}),
 				).toBeNull();
+				const committedBody = `network-commit-${crypto.randomUUID()}`;
+				const committedCallId = `network:commit:${crypto.randomUUID()}`;
+				const committed = await networkClient.mutations["message.publish"](
+					{ body: committedBody, channelId: tracerIds.channel },
+					{ callId: committedCallId },
+				);
+				const replayed = await networkClient.mutations["message.publish"](
+					{ body: committedBody, channelId: tracerIds.channel },
+					{ callId: committedCallId },
+				);
+				expect(replayed).toEqual(committed);
+				const [committedEvidence] = await database!.unsafe<
+					Readonly<
+						Array<{ events: number; messages: number; receipts: number }>
+					>
+				>(
+					`SELECT
+  (SELECT count(*)::int FROM collaboration.messages WHERE body = $2) AS messages,
+  (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $3 AND kind = 'published') AS events,
+  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1) AS receipts`,
+					[committedCallId, committedBody, committed.id],
+				);
+				expect(committedEvidence).toEqual({
+					events: 1,
+					messages: 1,
+					receipts: 1,
+				});
 				const rejectedCheckCallIds: string[] = [];
 				const assertChannelUnavailable = (error: unknown): string => {
 					expect(error).toMatchObject({
@@ -761,6 +822,30 @@ VALUES ($1, $2, $3, $4, $5)`,
 					});
 					await blocker.unsafe("COMMIT");
 					await assertNoMutationRecords(deadlineCallId, deadlineBody);
+
+					await blocker.unsafe("BEGIN");
+					await blocker.unsafe(
+						"LOCK TABLE collaboration.channels IN ACCESS EXCLUSIVE MODE",
+					);
+					const networkDeadlineCallId = `network:check:deadline:${crypto.randomUUID()}`;
+					const networkDeadlineBody = "check-network-deadline-read";
+					const networkExpired = networkClient.mutations["message.publish"](
+						{ body: networkDeadlineBody, channelId: tracerIds.channel },
+						{
+							callId: networkDeadlineCallId,
+							timeoutMilliseconds: 500,
+						},
+					);
+					await waitForBlockedLifecycleChannelRead();
+					await expect(networkExpired).rejects.toMatchObject({
+						code: "DEADLINE_EXCEEDED",
+						retryable: true,
+					});
+					await blocker.unsafe("COMMIT");
+					await assertNoMutationRecords(
+						networkDeadlineCallId,
+						networkDeadlineBody,
+					);
 				} finally {
 					await blocker.unsafe("ROLLBACK").catch(() => {});
 					await blocker.release();
@@ -951,7 +1036,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 					disposals: 2,
 					receipt: `delivery:${effectId}`,
 				});
-				expect(transportCalls).toBe(7);
+				const callsAfterNetworkDelivery = transportCalls;
 				const maximumTimeoutEffectKey = "provider-maximum-timeout";
 				const directMaximumTimeout = await invokeDelivery(
 					{ effectKey: "domain-direct-maximum", message: "delivery-maximum" },
@@ -974,7 +1059,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 				expect(networkMaximumTimeout.receipt).toBe(
 					directMaximumTimeout.receipt,
 				);
-				expect(transportCalls).toBe(8);
+				expect(transportCalls).toBe(callsAfterNetworkDelivery + 1);
 				await expect(
 					networkClient.actions["delivery.publish"](
 						{
@@ -1008,7 +1093,19 @@ VALUES ($1, $2, $3, $4, $5)`,
 					payload: { callId: "delivery-network-timeout" },
 					retryable: false,
 				});
-				expect(transportCalls).toBe(10);
+				expect(transportCalls).toBe(callsAfterNetworkDelivery + 3);
+				expect(networkOperations).toEqual(
+					expect.arrayContaining([
+						"GET /_questpie/query/channels.detail",
+						"POST /_questpie/mutation/message.publish",
+						"POST /_questpie/action/delivery.publish",
+					]),
+				);
+				expect(
+					networkOperations.some((entry) =>
+						entry.includes("/_questpie/operation"),
+					),
+				).toBe(false);
 
 				await expect(
 					invokeDelivery(

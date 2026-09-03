@@ -1239,17 +1239,28 @@ WHERE call_id = ${editCallId}`;
 				reference: supportTracerIds.referenceOpen,
 			});
 			cleanup.defer(() => stop(browser, "SIGKILL"));
-			expect(
-				await eventually(() => tracerReport(recoveredHost.port), {
+			const agentBrowserReport = await eventually(
+				() => tracerReport(recoveredHost.port),
+				{
 					accept: (report) =>
 						report?.phase === "firefox-complete" &&
 						report.commentBody === firefoxComment,
 					description: "Firefox generated-client Operator App journey",
 					intervalMilliseconds: 100,
 					timeoutMilliseconds: 40_000,
-				}),
-			).toMatchObject({
+				},
+			);
+			const browserOperationRequests =
+				agentBrowserReport?.["browserOperationRequests"];
+			expect(Array.isArray(browserOperationRequests)).toBe(true);
+			expect(agentBrowserReport).toMatchObject({
 				authProvider: "better-auth",
+				browserOperationRequests: expect.arrayContaining([
+					"GET /_questpie/query/tickets.detail",
+					"GET /_questpie/query/tickets.queue",
+					"POST /_questpie/mutation/ticket.addComment",
+					"POST /_questpie/action/notification.sendTicketSummary",
+				]),
 				commentBody: firefoxComment,
 				databaseOwnedUpdateAdvanced: true,
 				jobRunId: expect.stringMatching(/^[0-9a-f-]{36}$/),
@@ -1259,6 +1270,12 @@ WHERE call_id = ${editCallId}`;
 				role: "agent",
 				watchedCommentObserved: true,
 			});
+			expect(
+				(browserOperationRequests as readonly unknown[]).some(
+					(entry) =>
+						typeof entry === "string" && entry.includes("/_questpie/operation"),
+				),
+			).toBe(false);
 			const browserReceipts = (await (
 				await fetch(`${receiverOrigin}/__receipts`)
 			).json()) as Readonly<{ receipts: readonly unknown[] }>;
