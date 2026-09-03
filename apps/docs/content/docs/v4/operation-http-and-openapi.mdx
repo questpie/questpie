@@ -186,3 +186,22 @@ projects `summary`, `description`, and schema-valid examples from Operation
 Documentation and records the documentation digest at
 `info.x-questpie-operation-documentation-digest`. Grouping remains
 compiler-inferred; there is no custom-group member.
+
+## Inspect the generated contract
+
+`questpie build` writes the selected `openapi.json` and
+`operation-projection-explain.json` beside the generated App Contract. The
+explain artifact lists each included network Operation and records direct-only
+Operations and raw Routes as omissions with their Origins. It does not include
+handlers, request values, credentials, Context, Policy evidence, SQL, or
+PostgreSQL details.
+
+Generated `app.ts` and activated Package declarations receive JSDoc from the
+same Operation Documentation artifact. JSDoc generation does not depend on the
+OpenAPI selector: removing `projections.openapi` removes the OpenAPI projection,
+not the documentation attached to generated TypeScript definitions.
+
+These are compiler outputs, not Runtime inputs. The Runtime Build inventory
+excludes OpenAPI, Operation Documentation, and projection-explain artifacts, so
+changing prose cannot change request dispatch, Policy, transaction, retry, or
+cancellation behavior.
