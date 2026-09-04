@@ -215,6 +215,10 @@ function projectCodec(value: unknown): JsonSchema {
 	return projectNormalizedCodec(normalizedCodec(value));
 }
 
+export function projectOperationCodecSchema(value: unknown): JsonSchema {
+	return projectCodec(value);
+}
+
 function operationKind(identity: string): "action" | "mutation" | "query" {
 	const kind = identity.slice(0, identity.indexOf(":"));
 	if (kind !== "action" && kind !== "mutation" && kind !== "query")

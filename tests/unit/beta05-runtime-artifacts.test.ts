@@ -58,7 +58,11 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		const compatibleBuild = JSON.parse(
 			first.generatedFiles["runtime-build.json"]!,
 		);
-		const { digest: _v7Digest, ...v4Unsigned } = {
+		const {
+			digest: _v7Digest,
+			mcpProjectionDigest: _mcpProjectionDigest,
+			...v4Unsigned
+		} = {
 			...compatibleBuild,
 			internalProtocol: "questpie.internal.v4",
 			later: (({ jobDigest: _jobDigest, ...later }) => later)(

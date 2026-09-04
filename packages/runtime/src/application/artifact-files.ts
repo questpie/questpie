@@ -266,6 +266,25 @@ export function verifyRuntimeArtifactFiles(
 			build.operationHttpContractDigest
 	)
 		fail("operation-http-contract.json semantic digest does not match");
+	const rawMcp = files["mcp-projection.json"];
+	if (build.mcpProjectionDigest == null) {
+		if (rawMcp !== undefined)
+			fail("unselected MCP projection artifact is present");
+	} else {
+		const mcp = record(
+			parseJsonFile("mcp-projection.json"),
+			"mcp-projection.json",
+		);
+		const { digest: rawMcpDigest, ...unsignedMcp } = mcp;
+		if (
+			rawMcpDigest !== build.mcpProjectionDigest ||
+			artifactDigest("questpie-mcp-projection-v1", unsignedMcp) !==
+				build.mcpProjectionDigest ||
+			mcp.operationContractDigest !== build.operationContractsDigest ||
+			mcp.operationHttpContractDigest !== build.operationHttpContractDigest
+		)
+			fail("MCP projection semantic digest does not match");
+	}
 	if (
 		build.later.reactionDigest !== null &&
 		artifactDigest(

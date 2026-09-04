@@ -7,6 +7,8 @@
 
 ## MCP-01 — Compile one documented catalogue
 
+Status: implemented; MCP-02 is the active blocker.
+
 Blocked by canonical per-Operation HTTP and Operation Documentation artifacts.
 Test-first compile the application opt-in, exact Query/Mutation/Action argument
 schemas, canonical outcome schemas, documentation/example mapping, global

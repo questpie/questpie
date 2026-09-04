@@ -415,7 +415,8 @@ export function projectRuntimeBuild(
 				path !== "internal/checksums.json" &&
 				path !== "operation-documentation.json" &&
 				path !== "openapi.json" &&
-				path !== "operation-projection-explain.json",
+				path !== "operation-projection-explain.json" &&
+				path !== "mcp-projection-explain.json",
 		)
 		.map(([path, bytes]) => ({ path, digest: contentDigest(bytes) }))
 		.sort((left, right) => compareAscii(left.path, right.path));
@@ -469,6 +470,14 @@ export function projectRuntimeBuild(
 		operationContractsDigest: input.runtime.operationContractsDigest,
 		runtimeGraphDigest,
 		operationHttpContractDigest: input.runtime.httpContractDigest,
+		mcpProjectionDigest: (() => {
+			const bytes = input.files["mcp-projection.json"];
+			if (bytes === undefined) return null;
+			const artifact = JSON.parse(bytes) as Readonly<{ digest?: unknown }>;
+			if (typeof artifact.digest !== "string")
+				throw new TypeError("Runtime Build MCP projection digest is invalid");
+			return artifact.digest;
+		})(),
 		realtimeWireDigest: input.realtimeWireDigest,
 		executableSlots: slots.map((slot) => `${slot.identity}#${slot.slot}`),
 		slots: slots.map(

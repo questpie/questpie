@@ -22,7 +22,7 @@ function record(value: unknown): JsonRecord {
 	return value as JsonRecord;
 }
 
-function documentationEntries(input: {
+export function projectOperationDocumentationEntries(input: {
 	readonly documentationBytes: string;
 	readonly documentationDigest: string;
 }): DocumentationEntry[] {
@@ -65,7 +65,7 @@ export function projectOperationJsDoc(input: {
 	readonly documentationDigest: string;
 }): Readonly<Record<string, string>> {
 	return Object.fromEntries(
-		documentationEntries(input).map((entry) => [
+		projectOperationDocumentationEntries(input).map((entry) => [
 			entry.identity,
 			renderJsDoc(entry),
 		]),
@@ -123,7 +123,7 @@ export function projectOperationMetadata(input: {
 	explain: JsonRecord & Readonly<{ operations: readonly JsonRecord[] }>;
 	jsdoc: Readonly<Record<string, string>>;
 }> {
-	const documentation = documentationEntries(input);
+	const documentation = projectOperationDocumentationEntries(input);
 	assertUniqueOperationIds(input.networkOperations, input.origins);
 	const networkIdentities = new Set(
 		input.networkOperations.map(({ identity }) => identity),

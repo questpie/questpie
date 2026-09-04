@@ -23,6 +23,7 @@ import {
 	projectLiveQueryChangeCapture,
 	projectLiveQueryCompilation,
 } from "./live-query";
+import { projectMcpProjection } from "./mcp";
 import {
 	lowerPostgresCollectionOperationPlans,
 	projectCollectionKernelExecutionPrograms,
@@ -430,6 +431,26 @@ export async function createArtifacts(
 				originMap: originMap as never,
 			})
 		: undefined;
+	const mcpProjection = input.configuration.projections?.mcp
+		? projectMcpProjection({
+				contextCodec: input.resources.find(
+					(resource) => resource.kind === "context",
+				)?.contract.input ?? { kind: "object", properties: {} },
+				operationContracts: runtime.operationContracts as never,
+				operationContractDigest: runtime.operationContractsDigest,
+				httpContract: runtime.http as never,
+				documentationBytes: operationDocumentation.bytes,
+				documentationDigest: operationDocumentation.digest,
+				origins: (
+					originMap as Readonly<{
+						resources: readonly Readonly<{
+							identity: string;
+							establishedAt: Readonly<Record<string, unknown>>;
+						}>[];
+					}>
+				).resources,
+			})
+		: undefined;
 	const operationJsDoc = projectOperationJsDoc({
 		documentationBytes: operationDocumentation.bytes,
 		documentationDigest: operationDocumentation.digest,
@@ -522,6 +543,10 @@ export async function createArtifacts(
 		generated["openapi.json"] = operationProjection.openapiBytes;
 		generated["operation-projection-explain.json"] =
 			operationProjection.explainBytes;
+	}
+	if (mcpProjection) {
+		generated["mcp-projection.json"] = mcpProjection.bytes;
+		generated["mcp-projection-explain.json"] = mcpProjection.explainBytes;
 	}
 	if (lifecyclePrograms.programs.length > 0)
 		generated["collection-lifecycle-programs.json"] =

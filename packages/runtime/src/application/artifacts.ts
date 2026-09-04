@@ -57,6 +57,7 @@ type RuntimeBuildV1 = Readonly<{
 	operationContractsDigest: string;
 	runtimeGraphDigest: string;
 	operationHttpContractDigest: string;
+	mcpProjectionDigest?: string | null;
 	realtimeWireDigest: string | null;
 	later: Readonly<{
 		changeLedgerDigest: string | null;
@@ -370,6 +371,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 			"operationContractsDigest",
 			"runtimeGraphDigest",
 			"operationHttpContractDigest",
+			...(jobs ? ["mcpProjectionDigest"] : []),
 			...(v3 ? ["realtimeWireDigest"] : []),
 			"later",
 			"executableSlots",
@@ -406,6 +408,12 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 	] as const)
 		digestValue(build[key], key);
 	if (v3) digestValue(build.realtimeWireDigest, "realtimeWireDigest");
+	if (
+		jobs &&
+		build.mcpProjectionDigest !== null &&
+		build.mcpProjectionDigest !== undefined
+	)
+		digestValue(build.mcpProjectionDigest, "mcpProjectionDigest");
 	for (const key of [
 		"policyProjectionDigest",
 		"queryProjectionDigest",

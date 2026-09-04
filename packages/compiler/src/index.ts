@@ -318,13 +318,20 @@ function configuration(value: unknown): ApplicationConfiguration {
 			["{", "}", "[", "]", "!", "\\"].some((token) => pattern.includes(token))
 		)
 			invalid(`source.exclude contains unsupported pattern ${pattern}`);
-	let projections: Readonly<{ openapi: true }> | undefined;
+	let projections: Readonly<{ openapi?: true; mcp?: true }> | undefined;
 	if (root.projections !== undefined) {
 		const configured = object(root.projections, "projections");
-		exactKeys(configured, ["openapi"], "projections");
-		if (configured.openapi !== true)
+		exactKeys(configured, ["mcp", "openapi"], "projections");
+		if (configured.openapi !== undefined && configured.openapi !== true)
 			invalid("projections.openapi must equal true when present");
-		projections = { openapi: true };
+		if (configured.mcp !== undefined && configured.mcp !== true)
+			invalid("projections.mcp must equal true when present");
+		if (configured.openapi === undefined && configured.mcp === undefined)
+			invalid("projections must select openapi or mcp");
+		projections = {
+			...(configured.openapi === true ? { openapi: true as const } : {}),
+			...(configured.mcp === true ? { mcp: true as const } : {}),
+		};
 	}
 
 	const rawPackages = object(root.packages, "packages");
