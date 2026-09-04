@@ -188,7 +188,7 @@ const mismatched = await createOpenTelemetry();
 try {
   bindOfficialQuestpieObservability(mismatched, {
     ...metadata,
-    questpieVersion: "4.0.0-beta.2",
+    questpieVersion: "4.0.0-beta.1",
   } as never);
   throw new Error("exact-peer Runtime metadata mismatch was accepted");
 } catch (error) {

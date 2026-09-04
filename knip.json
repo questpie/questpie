@@ -8,7 +8,6 @@
 		"docs/v4/prototypes/**",
 		"tests/load/*.ts"
 	],
-	"ignoreDependencies": ["react"],
 	"ignoreUnresolved": ["/^fumadocs-mdx:collections\\//"],
 	"rules": {
 		"files": "warn",
@@ -25,6 +24,9 @@
 		"apps/docs": {
 			"entry": ["src/start.ts!", "vite.config.ts!", "source.config.ts!"],
 			"project": ["src/**/*.{ts,tsx}!", "*.ts!"]
+		},
+		"packages/questpie": {
+			"ignoreDependencies": ["react"]
 		}
 	}
 }
