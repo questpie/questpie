@@ -100,4 +100,24 @@ export const auditEntry = defineQuery({
 			exportName: "auditEntry",
 		},
 	});
+
+	await writeFile(
+		packageSource,
+		(await readFile(packageSource, "utf8")).replace("\tnetwork: true,\n", ""),
+	);
+	configuration.packages["@questpie/collaboration-audit"].inventoryDigest =
+		await expectInventoryDigest(root);
+	await writeFile(
+		configurationPath,
+		`${JSON.stringify(configuration, null, "\t")}\n`,
+	);
+	const directOnly = await compileApplication({ applicationRoot: root });
+	const directOnlyCatalogue = JSON.parse(
+		directOnly.generatedFiles["mcp-projection.json"] ?? "null",
+	);
+	expect(
+		directOnlyCatalogue.tools.some(
+			({ identity }: { identity: string }) => identity === "query:audit.entry",
+		),
+	).toBe(false);
 });
