@@ -38,11 +38,16 @@ postgresTest(
 				generated.generatedRoot,
 				"operation-http-contract.json",
 			);
+			const mcpPath = join(
+				generated.generatedRoot,
+				"mcp-projection.json",
+			);
 			const checksumsPath = join(
 				generated.generatedRoot,
 				"internal/checksums.json",
 			);
 			const httpBytes = await readFile(httpPath, "utf8");
+			const mcpBytes = await readFile(mcpPath, "utf8");
 			const checksumsBytes = await readFile(checksumsPath, "utf8");
 			const mismatched = JSON.parse(runtimeBuildBytes);
 			mismatched.schemaFingerprint = "0".repeat(64);
@@ -114,16 +119,32 @@ postgresTest(
 				),
 			};
 			const forgedHttpBytes = `${JSON.stringify(forgedHttp)}\n`;
+			const { digest: _mcpDigest, ...unsignedMcp } = JSON.parse(mcpBytes);
+			const forgedUnsignedMcp = {
+				...unsignedMcp,
+				operationHttpContractDigest: forgedHttp.digest,
+			};
+			const forgedMcp = {
+				...forgedUnsignedMcp,
+				digest: artifactDigest(
+					"questpie-mcp-projection-v1",
+					forgedUnsignedMcp,
+				),
+			};
+			const forgedMcpBytes = `${JSON.stringify(forgedMcp)}\n`;
 			const { digest: _runtimeBuildDigest, ...unsignedRuntimeBuild } =
 				JSON.parse(runtimeBuildBytes);
 			const forgedUnsignedRuntimeBuild = {
 				...unsignedRuntimeBuild,
 				application: "application:forged",
 				operationHttpContractDigest: forgedHttp.digest,
+				mcpProjectionDigest: forgedMcp.digest,
 				inventory: unsignedRuntimeBuild.inventory.map(
 					(item: Readonly<{ path: string; digest: string }>) =>
 						item.path === "operation-http-contract.json"
 							? { ...item, digest: contentDigest(forgedHttpBytes) }
+							: item.path === "mcp-projection.json"
+								? { ...item, digest: contentDigest(forgedMcpBytes) }
 							: item,
 				),
 			};
@@ -140,12 +161,15 @@ postgresTest(
 				(item: Readonly<{ path: string; digest: string }>) =>
 					item.path === "operation-http-contract.json"
 						? { ...item, digest: contentDigest(forgedHttpBytes) }
+						: item.path === "mcp-projection.json"
+							? { ...item, digest: contentDigest(forgedMcpBytes) }
 						: item.path === "runtime-build.json"
 							? { ...item, digest: contentDigest(forgedRuntimeBuildBytes) }
 							: item,
 			);
 			await Promise.all([
 				writeFile(httpPath, forgedHttpBytes),
+				writeFile(mcpPath, forgedMcpBytes),
 				writeFile(runtimeBuildPath, forgedRuntimeBuildBytes),
 				writeFile(checksumsPath, `${JSON.stringify(checksums)}\n`),
 			]);
@@ -171,6 +195,7 @@ postgresTest(
 			);
 			await Promise.all([
 				writeFile(httpPath, httpBytes),
+				writeFile(mcpPath, mcpBytes),
 				writeFile(runtimeBuildPath, runtimeBuildBytes),
 				writeFile(checksumsPath, checksumsBytes),
 			]);
@@ -253,7 +278,7 @@ postgresTest(
 				"Query SQL placeholders do not match its parameters",
 			);
 			await refuseSelfConsistentQueryPlans(
-				{ ...originalQueryPlans, plans: [] },
+				{ ...originalQueryPlans, version: 1, plans: [] },
 				"PostgreSQL Query plans do not match the Runtime Query identities",
 			);
 			const surplusPlan = {
