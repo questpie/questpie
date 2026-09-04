@@ -18,15 +18,23 @@ const publicSkillReference = resolve(
 	repositoryRoot,
 	"skills/questpie/references/query-resources-react-and-relations.md",
 );
+const publicOperationsReference = resolve(
+	repositoryRoot,
+	"skills/questpie/references/operations-http-openapi-and-mcp.md",
+);
 
-async function publicDiscriminatedReferenceExample(): Promise<string> {
-	const source = await readFile(publicSkillReference, "utf8");
-	const match =
-		/<!-- packed-example: discriminated-reference -->\s*```ts\n([\s\S]*?)\n```/u.exec(
-			source,
-		);
-	if (!match?.[1])
-		throw new Error("public discriminated-reference example missing");
+async function publicExample(
+	reference: string,
+	name: string,
+	language: "json" | "ts" | "tsx",
+): Promise<string> {
+	const source = await readFile(reference, "utf8");
+	const fence = "```";
+	const match = new RegExp(
+		`<!-- packed-example: ${name} -->\\s*${fence}${language}\\n([\\s\\S]*?)\\n${fence}`,
+		"u",
+	).exec(source);
+	if (!match?.[1]) throw new Error(`public ${name} example missing`);
 	return `${match[1]}\n`;
 }
 
@@ -40,7 +48,7 @@ function run(command: string[], cwd: string): string {
 	return result.stdout.toString();
 }
 
-test("packed questpie exposes only the three discriminated helpers", async () => {
+test("packed questpie exposes the three helpers and compiles every public skill example", async () => {
 	const temporary = await mkdtemp(
 		join(tmpdir(), "questpie-discriminated-pack-"),
 	);
@@ -118,8 +126,58 @@ test("packed questpie exposes only the three discriminated helpers", async () =>
 		);
 		await writeFile(
 			join(consumer, "types.ts"),
-			await publicDiscriminatedReferenceExample(),
+			await publicExample(
+				publicSkillReference,
+				"discriminated-reference",
+				"ts",
+			),
 		);
+		await writeFile(
+			join(consumer, "generated-contract.d.ts"),
+			`declare module "#questpie/client" {
+  export function createClient(input: { baseUrl: string }): {
+    withContext(context: { tenantId: string }): {
+      queries: Record<string, (input: { first: number; after: null }) => Promise<unknown>>;
+    };
+  };
+}
+`,
+		);
+		await writeFile(
+			join(consumer, "generated-client.ts"),
+			`declare const tenantId: string;\n${await publicExample(
+				publicOperationsReference,
+				"generated-client",
+				"ts",
+			)}void tickets;\n`,
+		);
+		await writeFile(
+			join(consumer, "react.tsx"),
+			`declare const ticketId: string;
+declare const api: {
+  queries: Record<string, {
+    observe(input: { id: string }): {
+      getSnapshot(): Readonly<{ status: "pending" }>;
+      subscribe(notify: () => void): () => void;
+    };
+  }>;
+};
+${await publicExample(
+	publicSkillReference,
+	"react-query-resource",
+	"tsx",
+)}void snapshot;
+`,
+		);
+		expect(
+			JSON.parse(
+				await publicExample(
+					publicOperationsReference,
+					"projection-config",
+					"json",
+				),
+			),
+		).toEqual({ projections: { mcp: true, openapi: true } });
 		await writeFile(
 			join(consumer, "negative.ts"),
 			`import { codec, relation, type DiscriminatedValue } from "questpie";
@@ -159,7 +217,13 @@ console.log(JSON.stringify({
 					target: "ESNext",
 					types: [],
 				},
-				files: ["negative.ts", "types.ts"],
+				files: [
+					"generated-contract.d.ts",
+					"generated-client.ts",
+					"negative.ts",
+					"react.tsx",
+					"types.ts",
+				],
 			}),
 		);
 

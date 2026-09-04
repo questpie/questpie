@@ -20,7 +20,7 @@ into public documentation.
 | Canonical Operation HTTP                                         | compiler and Runtime ingress               | per-Operation Query/Mutation/Action endpoints                          | generated client                    | credentials, Context, identities, cancellation, nondisclosure, no old endpoint | complete; no polymorphic endpoint or fallback                        |
 | Operation documentation                                          | compiler                                   | projection-neutral documentation artifact and digest                   | OpenAPI, MCP, declarations, explain | Package/application parity, escaping, stale deletion, no Runtime prose read    | complete through DOC-02; shared by OpenAPI and MCP                   |
 | OpenAPI 3.1                                                      | compiler                                   | canonical `openapi.json` and explain inventory                         | Team Support Desk with Scalar UI    | carrier/codec parity, deterministic output, stale deletion, browser rendering  | complete; Scalar hides and injects only the exact compatibility trio |
-| Basic MCP                                                        | compiler and Runtime ingress               | canonical catalogue/binding and `POST /_questpie/mcp`                  | pinned-protocol MCP client          | schema/outcome parity, Policy hostiles, cancellation, no retry/fallback        | complete through MCP-03                                              |
+| Basic MCP                                                        | compiler and Runtime ingress               | canonical catalogue/binding and `POST /_questpie/mcp`                  | strict current-protocol MCP client  | schema/outcome parity, Policy hostiles, cancellation, no retry/fallback        | complete through MCP-03                                              |
 | Public framework skill                                           | repository `skills/` tree                  | portable Agent Skills directory plus referenced released docs/examples | clean external agent workspace      | format validation, no internal pointers, packed-example compile                | complete; packed example and negative portability gates pass         |
 | Public beta.2 documentation                                      | docs application                           | versioned release inventory and finished guides                        | human and agent readers             | links, snippets, package existence, docs typecheck/build                       | content complete; latest-release projection waits for ADR-0039 PASS  |
 | Aggregate release                                                | release tooling                            | two same-version tarballs and release manifest                         | relocated clean consumer            | PostgreSQL/browser, `quality:release`, two byte-identical dry-runs             | implementation complete; final deterministic gates and PASS pending  |
@@ -39,8 +39,10 @@ serialization-fault gaps. The preserved record states that it is not a
 protocol-v2 Opus PASS and does not add a fallback to the acceptance wrapper.
 MCP-01 through MCP-03 now pass compiler, Runtime, Package, PostgreSQL 17,
 Firefox, cancellation, uncertainty, replay, nondisclosure, and hostile
-observation evidence. The portable public skill passes format, link,
-portability, negative-import, and packed-example compilation gates. ADR-0039
+observation evidence. Their small strict test client speaks exactly the accepted
+`2026-07-28` protocol; it is not a claim that an older published SDK revision is
+compatible. The portable public skill passes format, link, portability,
+negative-import, and all referenced-example compilation gates. ADR-0039
 remains Proposed until its own manifest-bound review passes. No push, tag,
 publish, or deployment occurred.
 

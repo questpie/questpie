@@ -104,7 +104,7 @@ or deploy.
 
 ## Consequences
 
-- A later beta starts from one clean three-package and artifact inventory.
+- A later beta starts from one clean two-package and artifact inventory.
 - Public documentation distinguishes released behavior from accepted or
   in-progress source behavior.
 - Landing-page work can consume one exact framework capability inventory while

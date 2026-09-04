@@ -13,6 +13,11 @@ import {
 	waitForOutputLine,
 } from "../../../packages/testkit/src";
 import { installQuestpieForTracer } from "../../support/beta12-packed-questpie";
+import {
+	callCurrentProtocolMcp,
+	currentProtocolMcpRequest,
+	type CurrentProtocolMcpCall,
+} from "../../support/mcp-2026-07-28-client";
 
 const repositoryRoot = resolve(import.meta.dir, "../../..");
 const fixtureRoot = resolve(repositoryRoot, "fixtures/collaboration");
@@ -41,74 +46,46 @@ function ownErrorBytes(error: unknown): string {
 	);
 }
 
-type McpOperationFrame = Readonly<{
-	callId: string;
-	error?: Readonly<{
-		code: string;
-		payload?: unknown;
-		retryable?: boolean;
-	}>;
-	result?: unknown;
-}>;
-
-function mcpRequest(input: {
+type FixtureMcpCall = Readonly<{
 	arguments: Readonly<Record<string, unknown>>;
 	cookie?: string;
 	credentialUnavailable?: boolean;
 	name: string;
 	signal?: AbortSignal;
-}): Readonly<{ id: string; request: Request }> {
-	const id = `mcp:${crypto.randomUUID()}`;
+}>;
+
+function currentProtocolCall(input: FixtureMcpCall): CurrentProtocolMcpCall {
 	return {
-		id,
-		request: new Request("https://app.test/_questpie/mcp", {
-			method: "POST",
-			...(input.signal === undefined ? {} : { signal: input.signal }),
-			headers: {
-				accept: "application/json, text/event-stream",
-				"content-type": "application/json",
-				...(input.cookie === undefined ? {} : { cookie: input.cookie }),
-				...(input.credentialUnavailable
-					? { "x-questpie-tracer-credential": "unavailable" }
-					: {}),
-				"mcp-method": "tools/call",
-				"mcp-name": input.name,
-				"mcp-protocol-version": "2026-07-28",
-				origin: "https://app.test",
-			},
-			body: JSON.stringify({
-				jsonrpc: "2.0",
-				id,
-				method: "tools/call",
-				params: {
-					name: input.name,
-					arguments: input.arguments,
-					_meta: {
-						"io.modelcontextprotocol/protocolVersion": "2026-07-28",
-						"io.modelcontextprotocol/clientCapabilities": {},
-					},
-				},
-			}),
-		}),
+		arguments: input.arguments,
+		name: input.name,
+		...(input.signal === undefined ? {} : { signal: input.signal }),
+		headers: {
+			...(input.cookie === undefined ? {} : { cookie: input.cookie }),
+			...(input.credentialUnavailable
+				? { "x-questpie-tracer-credential": "unavailable" }
+				: {}),
+		},
 	};
+}
+
+function mcpRequest(
+	input: FixtureMcpCall,
+): Readonly<{ id: string; request: Request }> {
+	return currentProtocolMcpRequest(
+		"https://app.test",
+		currentProtocolCall(input),
+	);
 }
 
 async function callMcp(
 	fetch: (request: Request) => Promise<Response>,
-	input: Parameters<typeof mcpRequest>[0],
-): Promise<McpOperationFrame> {
-	const { id, request } = mcpRequest(input);
-	const response = await fetch(request);
-	expect(response.status).toBe(200);
-	const event = await response.text();
-	const envelope = JSON.parse(event.slice(6, -2)) as Readonly<{
-		id: unknown;
-		result?: Readonly<{ structuredContent?: unknown }>;
-	}>;
-	expect(envelope.id).toBe(id);
-	if (!envelope.result?.structuredContent)
-		throw new TypeError("MCP call did not return structured content");
-	return envelope.result.structuredContent as McpOperationFrame;
+	input: FixtureMcpCall,
+) {
+	return callCurrentProtocolMcp(
+		fetch,
+		"https://app.test",
+		currentProtocolCall(input),
+	);
 }
 
 function runCli(root: string, arguments_: readonly string[]): string {

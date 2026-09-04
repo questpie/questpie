@@ -31,6 +31,8 @@ observation. There is no polling fallback or automatic Mutation invalidation.
 
 For React 19, import only the adapter hook:
 
+<!-- packed-example: react-query-resource -->
+
 ```tsx
 import { useQueryResource } from "questpie/react";
 

@@ -18,6 +18,8 @@ error schema, description, or handler for a projection.
 
 Prefer the generated `#questpie/client`. Create an immutable Context scope:
 
+<!-- packed-example: generated-client -->
+
 ```ts
 import { createClient } from "#questpie/client";
 
@@ -50,6 +52,8 @@ Operation endpoint or fallback transport.
 ## Select projections once
 
 Select OpenAPI or MCP at the application level in `questpie.json`:
+
+<!-- packed-example: projection-config -->
 
 ```json
 {

@@ -10,8 +10,9 @@ work that outlives a request or exporting telemetry.
 - Use an Action for one caller-requested external effect. Supply a stable
   caller-owned `effectKey`.
 - Accept a Job when work must be durable, delayed, retryable, or checkpointed.
-- Use a Reaction when a committed application event should accept durable
-  follow-up work.
+- Prefer accepting a Job directly for new application-owned follow-up work.
+  Use a Reaction only when the required source is an already committed fact
+  projected into durable follow-up work.
 
 Job is the single checkpointed durable-work abstraction in beta.2. Design each
 attempt for replay. Reauthorize with fresh Context and Policy, treat

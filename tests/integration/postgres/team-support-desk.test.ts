@@ -27,6 +27,11 @@ import {
 	installQuestpieForTracer,
 	installReactForTracer,
 } from "../../support/beta12-packed-questpie";
+import {
+	callCurrentProtocolMcp,
+	currentProtocolMcpRequest,
+	type CurrentProtocolMcpCall,
+} from "../../support/mcp-2026-07-28-client";
 import { normalizeOtlpSpanGraph } from "../../support/otel-protobuf";
 
 const repositoryRoot = resolve(import.meta.dir, "../../..");
@@ -189,75 +194,39 @@ function responseCookie(response: Response): string {
 	return value;
 }
 
-type McpOperationFrame = Readonly<{
-	callId: string;
-	error?: Readonly<{
-		code: string;
-		payload?: unknown;
-		retryable?: boolean;
-	}>;
-	result?: unknown;
-}>;
-
-async function callMcp(input: {
+type FixtureMcpInput = Readonly<{
 	arguments: Readonly<Record<string, unknown>>;
 	cookie?: string;
-	fetch: (request: Request) => Promise<Response>;
 	name: string;
-	origin: string;
-}): Promise<McpOperationFrame> {
-	const { id, request } = mcpRequest(input);
-	const response = await input.fetch(request);
-	expect(response.status).toBe(200);
-	expect(response.headers.get("content-type")).toBe("text/event-stream");
-	const event = await response.text();
-	const envelope = JSON.parse(event.slice(6, -2)) as Readonly<{
-		id: unknown;
-		result?: Readonly<{ structuredContent?: unknown }>;
+	signal?: AbortSignal;
+}>;
+type FixtureMcpCall = FixtureMcpInput &
+	Readonly<{
+		fetch: (request: Request) => Promise<Response>;
+		origin: string;
 	}>;
-	expect(envelope.id).toBe(id);
-	if (!envelope.result || !envelope.result.structuredContent)
-		throw new TypeError("MCP call did not return structured content");
-	return envelope.result.structuredContent as McpOperationFrame;
+
+function currentProtocolCall(input: FixtureMcpInput): CurrentProtocolMcpCall {
+	return {
+		arguments: input.arguments,
+		name: input.name,
+		...(input.signal === undefined ? {} : { signal: input.signal }),
+		headers: input.cookie === undefined ? undefined : { cookie: input.cookie },
+	};
 }
 
-function mcpRequest(input: {
-	arguments: Readonly<Record<string, unknown>>;
-	cookie?: string;
-	name: string;
-	origin: string;
-	signal?: AbortSignal;
-}): Readonly<{ id: string; request: Request }> {
-	const id = `mcp:${crypto.randomUUID()}`;
-	return {
-		id,
-		request: new Request(`${input.origin}/_questpie/mcp`, {
-			method: "POST",
-			...(input.signal === undefined ? {} : { signal: input.signal }),
-			headers: {
-				accept: "application/json, text/event-stream",
-				"content-type": "application/json",
-				...(input.cookie === undefined ? {} : { cookie: input.cookie }),
-				"mcp-method": "tools/call",
-				"mcp-name": input.name,
-				"mcp-protocol-version": "2026-07-28",
-				origin: input.origin,
-			},
-			body: JSON.stringify({
-				jsonrpc: "2.0",
-				id,
-				method: "tools/call",
-				params: {
-					name: input.name,
-					arguments: input.arguments,
-					_meta: {
-						"io.modelcontextprotocol/protocolVersion": "2026-07-28",
-						"io.modelcontextprotocol/clientCapabilities": {},
-					},
-				},
-			}),
-		}),
-	};
+async function callMcp(input: FixtureMcpCall) {
+	return callCurrentProtocolMcp(
+		input.fetch,
+		input.origin,
+		currentProtocolCall(input),
+	);
+}
+
+function mcpRequest(
+	input: FixtureMcpInput & Readonly<{ origin: string }>,
+): Readonly<{ id: string; request: Request }> {
+	return currentProtocolMcpRequest(input.origin, currentProtocolCall(input));
 }
 
 async function databaseHasBlockedWork(): Promise<boolean> {

@@ -18,7 +18,7 @@ but unselected Packages are inert. No authored MCP metadata or Runtime docs join
 
 ## MCP-02 — Execute one modern stateless ingress
 
-Status: implemented; MCP-03 is the active blocker.
+Status: implemented.
 
 Blocked by MCP-01. Test-first mount only `POST /_questpie/mcp`; implement exact
 2026-07-28 discovery/list/call headers, `_meta`, JSON and request-scoped SSE,
