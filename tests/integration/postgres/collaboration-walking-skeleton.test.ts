@@ -41,6 +41,74 @@ function ownErrorBytes(error: unknown): string {
 	);
 }
 
+type McpOperationFrame = Readonly<{
+	callId: string;
+	error?: Readonly<{
+		code: string;
+		payload?: unknown;
+		retryable?: boolean;
+	}>;
+	result?: unknown;
+}>;
+
+function mcpRequest(input: {
+	arguments: Readonly<Record<string, unknown>>;
+	cookie?: string;
+	credentialUnavailable?: boolean;
+	name: string;
+}): Readonly<{ id: string; request: Request }> {
+	const id = `mcp:${crypto.randomUUID()}`;
+	return {
+		id,
+		request: new Request("https://app.test/_questpie/mcp", {
+			method: "POST",
+			headers: {
+				accept: "application/json, text/event-stream",
+				"content-type": "application/json",
+				...(input.cookie === undefined ? {} : { cookie: input.cookie }),
+				...(input.credentialUnavailable
+					? { "x-questpie-tracer-credential": "unavailable" }
+					: {}),
+				"mcp-method": "tools/call",
+				"mcp-name": input.name,
+				"mcp-protocol-version": "2026-07-28",
+				origin: "https://app.test",
+			},
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id,
+				method: "tools/call",
+				params: {
+					name: input.name,
+					arguments: input.arguments,
+					_meta: {
+						"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+						"io.modelcontextprotocol/clientCapabilities": {},
+					},
+				},
+			}),
+		}),
+	};
+}
+
+async function callMcp(
+	fetch: (request: Request) => Promise<Response>,
+	input: Parameters<typeof mcpRequest>[0],
+): Promise<McpOperationFrame> {
+	const { id, request } = mcpRequest(input);
+	const response = await fetch(request);
+	expect(response.status).toBe(200);
+	const event = await response.text();
+	const envelope = JSON.parse(event.slice(6, -2)) as Readonly<{
+		id: unknown;
+		result?: Readonly<{ structuredContent?: unknown }>;
+	}>;
+	expect(envelope.id).toBe(id);
+	if (!envelope.result?.structuredContent)
+		throw new TypeError("MCP call did not return structured content");
+	return envelope.result.structuredContent as McpOperationFrame;
+}
+
 function runCli(root: string, arguments_: readonly string[]): string {
 	const result = Bun.spawnSync(["bun", cli, ...arguments_], {
 		cwd: root,
@@ -620,6 +688,22 @@ postgresTest(
 					code: "RUNTIME_UNAVAILABLE",
 					retryable: true,
 				});
+				const mcpCredentialOutage = await callMcp(
+					(request) => routeApplication.fetch(request),
+					{
+						cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						credentialUnavailable: true,
+						name: "query.channels.detail",
+						arguments: {
+							context: { companyId: tracerIds.company },
+							input: { id: tracerIds.channel },
+						},
+					},
+				);
+				expect(mcpCredentialOutage.error).toEqual({
+					code: "RUNTIME_UNAVAILABLE",
+					retryable: true,
+				});
 				credentialOutage = false;
 				await database!.unsafe(
 					`INSERT INTO collaboration.channels (id, space_id, name)
@@ -782,6 +866,20 @@ VALUES ($1, $2, $3, $4, $5)`,
 					id: tracerIds.channel,
 				});
 				expect(networkChannel).toEqual(directChannel);
+				const mcpChannel = await callMcp(
+					(request) => routeApplication.fetch(request),
+					{
+						cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						name: "query.channels.detail",
+						arguments: {
+							context: { companyId: tracerIds.company },
+							input: { id: tracerIds.channel },
+						},
+					},
+				);
+				expect(mcpChannel.result).toEqual(
+					JSON.parse(JSON.stringify(directChannel)),
+				);
 				expect(directChannel?.messages).toHaveLength(1);
 				expect(directChannel?.messages).toEqual([
 					{
@@ -797,6 +895,33 @@ VALUES ($1, $2, $3, $4, $5)`,
 						id: foreignChannelId,
 					}),
 				).toBeNull();
+				const hiddenMcpChannel = await callMcp(
+					(request) => routeApplication.fetch(request),
+					{
+						cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						name: "query.channels.detail",
+						arguments: {
+							context: { companyId: tracerIds.company },
+							input: { id: foreignChannelId },
+						},
+					},
+				);
+				expect(hiddenMcpChannel.result).toBeNull();
+				const invalidMcpChannel = await callMcp(
+					(request) => routeApplication.fetch(request),
+					{
+						cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						name: "query.channels.detail",
+						arguments: {
+							context: { companyId: tracerIds.company },
+							input: { id: "not-a-uuid" },
+						},
+					},
+				);
+				expect(invalidMcpChannel.error).toEqual({
+					code: "PROTOCOL_UNSUPPORTED",
+					retryable: false,
+				});
 				const committedBody = `network-commit-${crypto.randomUUID()}`;
 				const committedCallId = `network:commit:${crypto.randomUUID()}`;
 				const committed = await networkClient.mutations["message.publish"](
@@ -808,6 +933,31 @@ VALUES ($1, $2, $3, $4, $5)`,
 					{ callId: committedCallId },
 				);
 				expect(replayed).toEqual(committed);
+				const mcpMutationInput = {
+					cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+					name: "mutation.message.publish",
+					arguments: {
+						callId: committedCallId,
+						context: { companyId: tracerIds.company },
+						input: {
+							body: committedBody,
+							channelId: tracerIds.channel,
+						},
+					},
+				} as const;
+				const mcpCommitted = await callMcp(
+					(request) => routeApplication.fetch(request),
+					mcpMutationInput,
+				);
+				expect(mcpCommitted.result).toEqual(
+					JSON.parse(JSON.stringify(committed)),
+				);
+				expect(
+					await callMcp(
+						(request) => routeApplication.fetch(request),
+						mcpMutationInput,
+					),
+				).toEqual(mcpCommitted);
 				const [committedEvidence] = await database!.unsafe<
 					Readonly<
 						Array<{ events: number; messages: number; receipts: number }>
@@ -875,6 +1025,31 @@ VALUES ($1, $2, $3, $4, $5)`,
 					expect(wireErrorBytes.get("CHANNEL_UNAVAILABLE")).toBe(
 						'{"code":"CHANNEL_UNAVAILABLE","payload":null}',
 					);
+					const mcpError = await callMcp(
+						(request) => routeApplication.fetch(request),
+						{
+							cookie:
+								"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+							name: "mutation.message.publish",
+							arguments: {
+								callId: `mcp:check:${label}:${crypto.randomUUID()}`,
+								context: { companyId: tracerIds.company },
+								input: { body: `check-${label}-mcp`, channelId },
+							},
+						},
+					);
+					expect(mcpError.error).toEqual({
+						code: "CHANNEL_UNAVAILABLE",
+						payload: null,
+					});
+					const mcpErrorBytes = JSON.stringify(mcpError.error);
+					for (const secret of [
+						foreignChannelId,
+						missingChannelId,
+						"Policy",
+						"PostgreSQL",
+					])
+						expect(mcpErrorBytes).not.toContain(secret);
 				}
 				for (const secret of [
 					"collection:messages",
@@ -1224,6 +1399,27 @@ VALUES ($1, $2, $3, $4, $5)`,
 					disposals: 2,
 					receipt: `delivery:${effectId}`,
 				});
+				const mcpDelivery = await callMcp(
+					(request) => routeApplication.fetch(request),
+					{
+						cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						name: "action.delivery.publish",
+						arguments: {
+							callId: `mcp:delivery:${crypto.randomUUID()}`,
+							context: { companyId: tracerIds.company },
+							effectKey: `mcp:delivery:${crypto.randomUUID()}`,
+							input: {
+								effectKey: "domain-mcp",
+								message: "delivery-mcp",
+							},
+						},
+					},
+				);
+				expect(mcpDelivery.result).toMatchObject({
+					attempt: expect.any(Number),
+					disposals: expect.any(Number),
+					receipt: expect.stringMatching(/^delivery:/),
+				});
 				const callsAfterNetworkDelivery = transportCalls;
 				const maximumTimeoutEffectKey = "provider-maximum-timeout";
 				const directMaximumTimeout = await invokeDelivery(
@@ -1366,7 +1562,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 					{ effectKey: "domain-cleanup", message: "delivery-after-failure" },
 					{ effectKey: "provider-after-failure" },
 				);
-				expect(afterFailure).toMatchObject({ attempt: 11, disposals: 10 });
+				expect(afterFailure).toMatchObject({ attempt: 12, disposals: 11 });
 				await expect(
 					escapedAction!(
 						{ effectKey: "domain-escaped", message: "delivery-escaped" },

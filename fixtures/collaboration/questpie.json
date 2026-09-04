@@ -16,6 +16,9 @@
 		"root": "src",
 		"exclude": []
 	},
+	"projections": {
+		"mcp": true
+	},
 	"packages": {
 		"@questpie/collaboration-audit": {
 			"inventoryDigest": "1a2ace658948831cc4be0cfc7fd2080d5598f2100d9ceb86a3d4729216cf6079"
