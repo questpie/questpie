@@ -1,0 +1,52 @@
+{
+	"format": "questpie.human-directed-codex-panel-review.v1",
+	"decision": "docs/adr/0038-freeze-basic-mcp-operation-projection.md",
+	"diffBase": "703cd8435fa6a2f5a5bf3925b47dd8cbcfcdf234",
+	"reviewedHead": "34b3b1cf80be1a21e857b8ecbf01ca7763087df6",
+	"acceptancePacketDigest": "97416517a6b02aa312cbc2e53784a439686b2d936e2c2670ffc7fddf2c929ebc",
+	"transportException": {
+		"reason": "The earlier pinned reviewer produced terminal NO_RESULT without a review artifact. The human owner later directed the agent to use a different review method and continue release closure; the terminal head was not retried.",
+		"protocolV2PassClaimed": false,
+		"syntheticOpusRecordCreated": false,
+		"fallbackRepresentedAsOpus": false
+	},
+	"panel": [
+		{
+			"axis": "compiler-and-protocol",
+			"model": "gpt-5.6-luna",
+			"effort": "medium",
+			"initialVerdict": "BLOCKED",
+			"findings": [
+				"A parsed JSON null value escaped the malformed-envelope boundary.",
+				"An unknown MCP method returned a bare HTTP 404 instead of a JSON-RPC method error.",
+				"JSON-RPC envelope fields and null client capabilities were not closed before dispatch.",
+				"A noncanonical executor outcome could reject serialization outside the sanitizing boundary and leave SSE unsettled."
+			],
+			"replacementVerdict": "PASS"
+		},
+		{
+			"axis": "security-deletion-and-beginner-dx",
+			"model": "gpt-5.6-sol",
+			"effort": "high",
+			"initialVerdict": "BLOCKED",
+			"findings": [
+				"Malformed JSON-RPC fields and null capabilities could reach dispatch.",
+				"Noncanonical executor output was not contained as a nondisclosing JSON-RPC internal error."
+			],
+			"replacementVerdict": "PASS"
+		}
+	],
+	"repairs": [
+		"Rejected non-object JSON values and unknown methods with closed JSON-RPC errors.",
+		"Validated jsonrpc, id, method, params, and client capabilities before execution.",
+		"Moved canonical outcome serialization inside the adapter-fault boundary so SSE completes with sanitized -32603.",
+		"Re-ran the focused projection and protocol suites, strict TypeScript, lint, formatting, packet dry-run, and diff checks on the replacement head."
+	],
+	"evidence": {
+		"focusedTests": "12 PASS, 44 assertions",
+		"packetDocuments": 6,
+		"gitDiffCheck": "PASS"
+	},
+	"verdict": "PASS",
+	"scope": "Human-directed replacement review for ADR-0038 only. This is not a protocol-v2 Opus record and creates no fallback transport in the repository acceptance wrapper."
+}
