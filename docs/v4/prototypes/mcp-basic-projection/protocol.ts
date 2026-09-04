@@ -56,6 +56,17 @@ export function createMcpIngress(
 			}
 			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
 				return protocolError(undefined, -32600, "Invalid request", 400);
+			const envelope = parsed as Readonly<Record<string, unknown>>;
+			if (
+				envelope.jsonrpc !== "2.0" ||
+				(typeof envelope.id !== "string" && typeof envelope.id !== "number") ||
+				typeof envelope.method !== "string" ||
+				(envelope.params !== undefined &&
+					(!envelope.params ||
+						typeof envelope.params !== "object" ||
+						Array.isArray(envelope.params)))
+			)
+				return protocolError(undefined, -32600, "Invalid request", 400);
 			const message = parsed as Readonly<{
 				id: string | number;
 				method: string;
@@ -77,8 +88,10 @@ export function createMcpIngress(
 				request.headers.get("mcp-method") !== message.method ||
 				metadata?.["io.modelcontextprotocol/protocolVersion"] !==
 					MCP_PROTOCOL_VERSION ||
-				typeof metadata?.["io.modelcontextprotocol/clientCapabilities"] !==
-					"object"
+				!metadata?.["io.modelcontextprotocol/clientCapabilities"] ||
+				typeof metadata["io.modelcontextprotocol/clientCapabilities"] !==
+					"object" ||
+				Array.isArray(metadata["io.modelcontextprotocol/clientCapabilities"])
 			)
 				return protocolError(
 					message.id,
@@ -123,14 +136,27 @@ export function createMcpIngress(
 				const binding = input.tools.find(({ tool }) => tool.name === name);
 				if (!binding) return protocolError(message.id, -32602, "Unknown tool");
 				return sse(request, async (signal) => {
-					let outcome: McpExecutionResult;
 					try {
-						outcome = await input.execute({
+						const outcome = await input.execute({
 							identity: binding.identity,
 							kind: binding.kind,
 							arguments: message.params?.arguments,
 							signal,
 						});
+						const text = canonicalJson(outcome.structuredContent);
+						return {
+							jsonrpc: "2.0",
+							id: message.id,
+							result: {
+								resultType: "complete",
+								content: [{ type: "text", text }],
+								structuredContent: outcome.structuredContent,
+								...(outcome.isError ? { isError: true } : {}),
+								_meta: {
+									"io.modelcontextprotocol/serverInfo": input.serverInfo,
+								},
+							},
+						};
 					} catch {
 						return {
 							jsonrpc: "2.0",
@@ -138,24 +164,6 @@ export function createMcpIngress(
 							error: { code: -32603, message: "Internal error" },
 						};
 					}
-					return {
-						jsonrpc: "2.0",
-						id: message.id,
-						result: {
-							resultType: "complete",
-							content: [
-								{
-									type: "text",
-									text: canonicalJson(outcome.structuredContent),
-								},
-							],
-							structuredContent: outcome.structuredContent,
-							...(outcome.isError ? { isError: true } : {}),
-							_meta: {
-								"io.modelcontextprotocol/serverInfo": input.serverInfo,
-							},
-						},
-					};
 				});
 			}
 			if (message.method !== "server/discover")

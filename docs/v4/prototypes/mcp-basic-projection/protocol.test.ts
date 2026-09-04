@@ -251,6 +251,58 @@ test("closes malformed JSON values and unknown methods as JSON-RPC errors", asyn
 	});
 });
 
+test("rejects malformed JSON-RPC fields and null capabilities before execution", async () => {
+	let executions = 0;
+	const ingress = createMcpIngress({
+		serverInfo: { name: "questpie", version: "4.0.0-beta.2" },
+		tools: [],
+		execute: async () => {
+			executions += 1;
+			return { structuredContent: null, isError: false };
+		},
+	});
+	for (const body of [
+		{ jsonrpc: "1.0", id: "bad-version", method: "server/discover" },
+		{ jsonrpc: "2.0", method: "server/discover" },
+		{ jsonrpc: "2.0", id: "bad-method", method: 1 },
+	] as const) {
+		const response = await ingress.fetch(
+			new Request("https://support.example/_questpie/mcp", {
+				method: "POST",
+				headers: {
+					accept: "application/json, text/event-stream",
+					"content-type": "application/json",
+					"mcp-protocol-version": "2026-07-28",
+					"mcp-method": "server/discover",
+				},
+				body: JSON.stringify(body),
+			}),
+		);
+		expect(response?.status).toBe(400);
+		expect(await response?.json()).toEqual({
+			jsonrpc: "2.0",
+			error: { code: -32600, message: "Invalid request" },
+		});
+	}
+	const nullCapabilities = modernRequest("server/discover", {
+		id: "null-capabilities",
+		params: {
+			_meta: {
+				"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+				"io.modelcontextprotocol/clientCapabilities": null,
+			},
+		},
+	});
+	const response = await ingress.fetch(nullCapabilities);
+	expect(response?.status).toBe(400);
+	expect(await response?.json()).toEqual({
+		jsonrpc: "2.0",
+		id: "null-capabilities",
+		error: { code: -32020, message: "Request metadata mismatch" },
+	});
+	expect(executions).toBe(0);
+});
+
 test("cancels one in-flight execution when the response stream closes and never retries", async () => {
 	let executions = 0;
 	let observedAbort!: () => void;
@@ -332,6 +384,34 @@ test("refuses MRTR and sanitizes an executor fault without retry", async () => {
 	});
 	expect(event).not.toContain("postgres");
 	expect(executions).toBe(1);
+});
+
+test("sanitizes a noncanonical executor outcome and closes the SSE response", async () => {
+	const ingress = createMcpIngress({
+		serverInfo: { name: "questpie", version: "4.0.0-beta.2" },
+		tools: [queryTool()],
+		execute: async () => ({
+			structuredContent: undefined,
+			isError: false,
+		}),
+	});
+	const response = await ingress.fetch(
+		modernRequest("tools/call", {
+			id: "serialization-fault",
+			name: "query.tickets.list",
+			params: {
+				_meta: requestMeta(),
+				name: "query.tickets.list",
+				arguments: { input: {}, context: {} },
+			},
+		}),
+	);
+	const event = await response!.text();
+	expect(JSON.parse(event.slice(6, -2))).toEqual({
+		jsonrpc: "2.0",
+		id: "serialization-fault",
+		error: { code: -32603, message: "Internal error" },
+	});
 });
 
 function requestMeta() {
