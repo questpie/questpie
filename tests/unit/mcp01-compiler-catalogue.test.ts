@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { compileApplication } from "@questpie/compiler";
 
 import { digest } from "../../packages/compiler/src/canonical";
+import { decodeMcpProjection } from "../../packages/runtime/src/application/mcp";
 
 setDefaultTimeout(90_000);
 
@@ -80,6 +81,33 @@ describe("MCP-01 compiler catalogue", () => {
 			runtimeBuild.inventory.map(({ path }: { path: string }) => path),
 		).not.toContain("mcp-projection-explain.json");
 		expect(compilation.generatedFiles).not.toHaveProperty("openapi.json");
+		expect(
+			decodeMcpProjection({
+				bytes: compilation.generatedFiles["mcp-projection.json"],
+				digest: catalogue.digest,
+				operationContractDigest: runtimeBuild.operationContractsDigest,
+				operationHttpContractDigest: runtimeBuild.operationHttpContractDigest,
+			})?.tools.map(({ tool }) => tool.name),
+		).toEqual(
+			catalogue.tools.map(({ tool }: { tool: { name: string } }) => tool.name),
+		);
+
+		const reorderedUnsigned = {
+			...unsignedCatalogue,
+			tools: catalogue.tools.toReversed(),
+		};
+		const reordered = {
+			...reorderedUnsigned,
+			digest: digest("questpie-mcp-projection-v1", reorderedUnsigned),
+		};
+		expect(() =>
+			decodeMcpProjection({
+				bytes: JSON.stringify(reordered),
+				digest: reordered.digest,
+				operationContractDigest: runtimeBuild.operationContractsDigest,
+				operationHttpContractDigest: runtimeBuild.operationHttpContractDigest,
+			}),
+		).toThrow("MCP tool contract is invalid");
 	});
 
 	test("derives exact documented Query, Mutation, and Action tools", async () => {
@@ -133,6 +161,26 @@ describe("MCP-01 compiler catalogue", () => {
 		]);
 		expect(mutation.tool).not.toHaveProperty("annotations");
 		expect(action.tool).not.toHaveProperty("annotations");
+		expect(
+			action.tool.outputSchema.oneOf
+				.filter(
+					(frame: {
+						properties?: {
+							error?: { properties?: { code?: { const?: string } } };
+						};
+					}) =>
+						frame.properties?.error?.properties?.code?.const ===
+						"RESOURCE_LIMIT",
+				)
+				.map(
+					(frame: {
+						properties: {
+							error: { properties: { retryable: { const: boolean } } };
+						};
+					}) => frame.properties.error.properties.retryable.const,
+				)
+				.sort(),
+		).toEqual([false, true]);
 		expect(query.tool.outputSchema.$schema).toBe(
 			"https://json-schema.org/draft/2020-12/schema",
 		);

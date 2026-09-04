@@ -38,6 +38,8 @@ import type {
 } from "./contract";
 import { createCanonicalPostHttp } from "./http-post";
 import { createCanonicalQueryApplicationHttp } from "./http-query";
+import { createMcpIngress, decodeMcpProjection } from "./mcp";
+import { createMcpOperationAdapter } from "./mcp-operation";
 import {
 	applicationObservationFailure,
 	beginApplicationExecution,
@@ -105,6 +107,13 @@ export async function createRuntimeApplication<
 	const drainMilliseconds = input.drainMilliseconds ?? 30_000;
 	const artifacts = decodeRuntimeArtifacts(input.artifacts);
 	verifyRuntimeArtifactFiles(artifacts, input.artifactFiles);
+	const mcpProjection = decodeMcpProjection({
+		bytes: input.artifactFiles["mcp-projection.json"],
+		digest: artifacts.runtimeBuild.mcpProjectionDigest,
+		operationContractDigest: artifacts.runtimeBuild.operationContractsDigest,
+		operationHttpContractDigest:
+			artifacts.runtimeBuild.operationHttpContractDigest,
+	});
 	const observation = createApplicationObservation({
 		applicationIdentity: artifacts.runtimeBuild.application,
 		runtimeBuildDigest: artifacts.runtimeBuild.digest,
@@ -480,6 +489,119 @@ export async function createRuntimeApplication<
 		executeRoot,
 		now: deadlineNow,
 	});
+	const executePreparedNetworkOperation = (
+		value: Readonly<{
+			principal: Principal;
+			context: ContextInputOf<Context>;
+			operation: PreparedOperation<OperationView>;
+			callId: string;
+			signal: AbortSignal;
+			deadline?: number;
+			onCommitted?(transactionId: string): void;
+		}>,
+	) =>
+		executeRoot(
+			{
+				principal: value.principal,
+				context: value.context,
+				signal: value.signal,
+				...(value.deadline === undefined ? {} : { deadline: value.deadline }),
+				observationEntry: "fetch",
+				onMutationCommitted: value.onCommitted,
+			},
+			({ invoke }) => invoke(value.operation, value.callId),
+		);
+	const executeNetworkAction = (
+		value: Readonly<{
+			principal: Principal;
+			context: ContextInputOf<Context>;
+			identity: string;
+			operationInput: unknown;
+			effectKey: string;
+			callId: string;
+			signal: AbortSignal;
+			deadline?: number;
+			timeoutMilliseconds?: number;
+			onHandlerDispatch(): void;
+		}>,
+	) => {
+		if (!input.program.invokeAction)
+			throw new OperationFailure("RUNTIME_UNAVAILABLE", true);
+		return executeRoot(
+			{
+				principal: value.principal,
+				context: value.context,
+				signal: value.signal,
+				...(value.deadline === undefined ? {} : { deadline: value.deadline }),
+				observationEntry: "fetch",
+				completionOwnsAbort: true,
+			},
+			async ({ invoke, view }) => {
+				const operations: RuntimeOperations = Object.freeze({
+					invoke: (
+						nestedIdentity: string,
+						nestedInput: unknown,
+						options?: Readonly<{
+							callId?: string;
+							signal?: AbortSignal;
+							deadline?: number;
+						}>,
+					) => {
+						const nested = operationEngine.prepare(nestedIdentity, nestedInput);
+						if (nested.binding.kind === "mutation") {
+							const nestedCallId = options?.callId ?? crypto.randomUUID();
+							if (!isOperationCallId(nestedCallId))
+								throw new OperationFailure("PROTOCOL_UNSUPPORTED");
+							return invoke(nested, nestedCallId, options);
+						}
+						callSequence += 1;
+						return invoke(nested, `action:${callSequence}`, options);
+					},
+				});
+				return input.program.invokeAction!({
+					identity: value.identity,
+					input: value.operationInput,
+					effectKey: value.effectKey,
+					callId: value.callId,
+					...(value.timeoutMilliseconds === undefined
+						? {}
+						: { timeoutMilliseconds: value.timeoutMilliseconds }),
+					onHandlerDispatch: value.onHandlerDispatch,
+					execution: await view.execution(),
+					operations,
+				});
+			},
+		);
+	};
+	const mcpOperation = createMcpOperationAdapter<
+		ContextInputOf<Context>,
+		OperationView
+	>({
+		contextCodec: input.program.context.input as never,
+		operations: artifacts.httpContract.operations,
+		maximumResponseBytes: artifacts.httpContract.limits.responseBytes,
+		prepare: operationEngine.prepare,
+		resolvePrincipal: async (request, signal) =>
+			input.program.resolvePrincipal(request, signal),
+		execute: (value) =>
+			value.kind === "action"
+				? executeNetworkAction({ ...value, effectKey: value.effectKey! })
+				: executePreparedNetworkOperation({
+						...value,
+						operation: value.operation!,
+					}),
+	});
+	const mcp = mcpProjection
+		? createMcpIngress({
+				serverInfo: {
+					name: artifacts.runtimeBuild.application.slice("application:".length),
+					version: artifacts.runtimeBuild.compiler.version,
+				},
+				maximumRequestBytes: artifacts.httpContract.limits.requestBytes,
+				tools: mcpProjection.tools,
+				execute: mcpOperation,
+			})
+		: null;
 	const canonicalPost = createCanonicalPostHttp<
 		ContextInputOf<Context>,
 		OperationView
@@ -494,89 +616,15 @@ export async function createRuntimeApplication<
 		prepare: operationEngine.prepare,
 		resolvePrincipal: async (request, signal) =>
 			input.program.resolvePrincipal(request, signal),
-		executeMutation: ({
-			principal: caller,
-			context,
-			operation,
-			callId,
-			signal,
-			deadline,
-			onCommitted,
-		}) =>
-			executeRoot(
-				{
-					principal: caller,
-					context,
-					signal,
-					deadline,
-					observationEntry: "fetch",
-					onMutationCommitted: onCommitted,
-				},
-				({ invoke }) => invoke(operation, callId),
-			),
-		executeAction: ({
-			principal: caller,
-			context,
-			identity,
-			operationInput,
-			effectKey,
-			callId,
-			signal,
-			timeoutMilliseconds,
-			deadline,
-			onHandlerDispatch,
-		}) =>
-			executeRoot(
-				{
-					principal: caller,
-					context,
-					signal,
-					deadline,
-					observationEntry: "fetch",
-					completionOwnsAbort: true,
-				},
-				async ({ invoke, view }) => {
-					const operations: RuntimeOperations = Object.freeze({
-						invoke: (
-							nestedIdentity: string,
-							nestedInput: unknown,
-							options?: Readonly<{
-								callId?: string;
-								signal?: AbortSignal;
-								deadline?: number;
-							}>,
-						) => {
-							const nested = operationEngine.prepare(
-								nestedIdentity,
-								nestedInput,
-							);
-							if (nested.binding.kind === "mutation") {
-								const nestedCallId = options?.callId ?? crypto.randomUUID();
-								if (!isOperationCallId(nestedCallId))
-									throw new OperationFailure("PROTOCOL_UNSUPPORTED");
-								return invoke(nested, nestedCallId, options);
-							}
-							callSequence += 1;
-							return invoke(nested, `action:${callSequence}`, options);
-						},
-					});
-					return input.program.invokeAction!({
-						identity,
-						input: operationInput,
-						effectKey,
-						callId,
-						...(timeoutMilliseconds === undefined
-							? {}
-							: { timeoutMilliseconds }),
-						onHandlerDispatch,
-						execution: await view.execution(),
-						operations,
-					});
-				},
-			),
+		executeMutation: executePreparedNetworkOperation,
+		executeAction: executeNetworkAction,
 		now: deadlineNow,
 	});
 	const fetch = async (request: Request): Promise<Response> => {
+		if (mcp) {
+			const response = await mcp.fetch(request);
+			if (response) return response;
+		}
 		if (realtime) {
 			const response = await realtime.fetch(request);
 			if (response) return response;

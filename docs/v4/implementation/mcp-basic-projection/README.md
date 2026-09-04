@@ -7,7 +7,7 @@
 
 ## MCP-01 — Compile one documented catalogue
 
-Status: implemented; MCP-02 is the active blocker.
+Status: implemented.
 
 Blocked by canonical per-Operation HTTP and Operation Documentation artifacts.
 Test-first compile the application opt-in, exact Query/Mutation/Action argument
@@ -17,6 +17,8 @@ atomic stale deletion, Runtime Build inventory, and explain parity. Installed
 but unselected Packages are inert. No authored MCP metadata or Runtime docs join.
 
 ## MCP-02 — Execute one modern stateless ingress
+
+Status: implemented; MCP-03 is the active blocker.
 
 Blocked by MCP-01. Test-first mount only `POST /_questpie/mcp`; implement exact
 2026-07-28 discovery/list/call headers, `_meta`, JSON and request-scoped SSE,
