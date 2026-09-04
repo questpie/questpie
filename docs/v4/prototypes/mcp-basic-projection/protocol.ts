@@ -48,16 +48,19 @@ export function createMcpIngress(
 			const origin = request.headers.get("origin");
 			if (origin !== null && origin !== url.origin)
 				return new Response(null, { status: 403 });
-			let message: Readonly<{
+			let parsed: unknown;
+			try {
+				parsed = await request.json();
+			} catch {
+				return protocolError(undefined, -32700, "Parse error", 400);
+			}
+			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+				return protocolError(undefined, -32600, "Invalid request", 400);
+			const message = parsed as Readonly<{
 				id: string | number;
 				method: string;
 				params?: Readonly<Record<string, unknown>>;
 			}>;
-			try {
-				message = (await request.json()) as typeof message;
-			} catch {
-				return protocolError(undefined, -32700, "Parse error", 400);
-			}
 			const requestedVersion = request.headers.get("mcp-protocol-version");
 			if (requestedVersion !== MCP_PROTOCOL_VERSION)
 				return protocolError(
@@ -156,7 +159,7 @@ export function createMcpIngress(
 				});
 			}
 			if (message.method !== "server/discover")
-				return new Response(null, { status: 404 });
+				return protocolError(message.id, -32601, "Method not found");
 			return json({
 				jsonrpc: "2.0",
 				id: message.id,

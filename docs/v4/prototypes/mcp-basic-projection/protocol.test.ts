@@ -211,6 +211,46 @@ test("rejects cross-origin and header/body ambiguity before execution", async ()
 	expect(executions).toBe(0);
 });
 
+test("closes malformed JSON values and unknown methods as JSON-RPC errors", async () => {
+	const ingress = createMcpIngress({
+		serverInfo: { name: "questpie", version: "4.0.0-beta.2" },
+		tools: [],
+		execute: async () => {
+			throw new Error("invalid protocol requests must not execute");
+		},
+	});
+	const malformed = await ingress.fetch(
+		new Request("https://support.example/_questpie/mcp", {
+			method: "POST",
+			headers: {
+				accept: "application/json, text/event-stream",
+				"content-type": "application/json",
+				"mcp-protocol-version": "2026-07-28",
+				"mcp-method": "tools/list",
+			},
+			body: "null",
+		}),
+	);
+	expect(malformed?.status).toBe(400);
+	expect(await malformed?.json()).toEqual({
+		jsonrpc: "2.0",
+		error: { code: -32600, message: "Invalid request" },
+	});
+
+	const unknown = await ingress.fetch(
+		modernRequest("resources/list", {
+			id: "unknown-1",
+			params: { _meta: requestMeta() },
+		}),
+	);
+	expect(unknown?.status).toBe(200);
+	expect(await unknown?.json()).toEqual({
+		jsonrpc: "2.0",
+		id: "unknown-1",
+		error: { code: -32601, message: "Method not found" },
+	});
+});
+
 test("cancels one in-flight execution when the response stream closes and never retries", async () => {
 	let executions = 0;
 	let observedAbort!: () => void;
