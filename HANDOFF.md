@@ -798,12 +798,15 @@ exposure, Authority, Policy, handler, or Runtime capability. `DOC-01` owns
 production compiler/artifact/package parity and digest-independence evidence.
 `DOC-02` owns OpenAPI/JSDoc/explain projection, target escaping,
 disclosure/exposure parity, and request-time Runtime absence and is complete.
-MCP consumption remains excluded. The ADR-0038 Proposed candidate and executable
-proof exist only on isolated candidate head
-`f5e143d4043e56e2420cfb8835420b3d63430937`, not on this authority branch. Its
-one permitted formal review returned terminal `NO_RESULT`, which produced no
-review record or authority projection and cannot be retried or replaced. The
-planned public `skills/questpie` skill stays a separate portable framework
+ADR-0038 is Accepted after a human-directed replacement Codex panel found and
+closed malformed JSON values, unknown methods, invalid JSON-RPC fields, null
+capabilities, and noncanonical outcome serialization. Its record explicitly
+does not claim protocol-v2 Opus PASS and does not add a fallback to the
+acceptance wrapper. The accepted boundary is one stateless MCP `2026-07-28`
+Tools endpoint over documented network Operations, the same executor, and no
+authored MCP metadata, session, retry, fallback, compatibility protocol, or
+second kernel. Production MCP implementation is the next tracer vertical. The
+planned public `skills/questpie` skill remains a separate portable framework
 skill, not an application-generated projection.
 
 ADR-0041 is Proposed to resolve the remaining explain authority ambiguity. Its
@@ -869,17 +872,19 @@ byte-identical release dry-runs pass.
    and one documentation artifact; do not add codec/Field prose,
    projection-specific registries, Runtime reads, fallback behavior, or
    application-generated skills.
-9. Keep the isolated ADR-0038 candidate out of the authority branch after its
-   terminal `NO_RESULT`. Do not retry that review head, substitute a fallback
-   reviewer, manufacture a record, implement MCP, or author the downstream
-   public framework skill without new accepted authority.
+9. Implement accepted ADR-0038 in MCP-01 through MCP-03: compiler catalogue
+   first, then the stateless Runtime ingress, then Team Support Desk and
+   Collaboration hostiles plus public docs. Preserve one Operation executor and
+   add no MCP-specific author metadata, retry, fallback, session, raw Route,
+   Job control, or compatibility protocol. Author the portable public framework
+   skill only from syntax exercised by the packed release.
 10. Do not implement the proposed ADR-0041 CLI until the focused candidate is
     accepted. `EXPLAIN-01` may expose only the exact local OpenAPI JSON command
     and unchanged compiler artifact; it cannot add a broad explain surface,
     source/Runtime/database execution, filtering, wrapper, compatibility path,
     or fallback.
 11. ADR-0033/0034 and OTEL-01 through OTEL-08 are closed through the exact
-    three-package release candidate. Do not restore a v7/v8 Runtime
+    two-package release candidate. Do not restore a v7/v8 Runtime
     compatibility path or add a second observation kernel. No publishability
     is implied without explicit release authority.
 12. Do not reopen the reference application by adding Cron, Collection triggers,

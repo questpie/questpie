@@ -43,8 +43,9 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 35. [Freeze Query Resource and React client integration](./0035-freeze-query-resource-and-react-client-integration.md)
 36. [Freeze canonical Operation HTTP and OpenAPI projection](./0036-freeze-canonical-operation-http-and-openapi-projection.md)
 37. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
-38. [Freeze projection-neutral Operation documentation](./0040-freeze-projection-neutral-operation-documentation.md)
-39. [Freeze public package identities](./0042-freeze-public-package-identities.md)
+38. [Freeze basic MCP Operation projection](./0038-freeze-basic-mcp-operation-projection.md)
+39. [Freeze projection-neutral Operation documentation](./0040-freeze-projection-neutral-operation-documentation.md)
+40. [Freeze public package identities](./0042-freeze-public-package-identities.md)
 
 ## Proposed
 
@@ -139,6 +140,12 @@ ADR-0037 exports `DiscriminatedValue`, `DiscriminatedReference`, and
 `matchDiscriminated` as ordinary TypeScript helpers. They preserve exhaustive
 disjunction handling and branded reference IDs without creating a codec,
 Relation, generated descriptor, Policy traversal, or Runtime polymorphism.
+ADR-0038 adds one application-selected, stateless MCP `2026-07-28` Tools
+projection at `POST /_questpie/mcp`. It derives every tool name, schema,
+description, example, outcome, and binding from canonical documented network
+Operations and invokes the same executor. It adds no MCP-specific authoring,
+authority, retry, session, compatibility protocol, raw Route, Job control, or
+second business kernel.
 ADR-0040 adds one optional Operation-level `describe` envelope with required
 summary, optional description, and codec-typed examples. The compiler owns one
 relocation-stable documentation artifact and independent digest shared by

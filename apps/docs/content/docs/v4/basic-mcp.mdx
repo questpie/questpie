@@ -1,0 +1,164 @@
+---
+title: Expose documented Operations as MCP tools
+description: Generate one stateless MCP Tools endpoint from the same typed Operations used by direct calls, HTTP, and OpenAPI.
+---
+
+QUESTPIE can expose canonical network Operations to an MCP client without a
+second handler or a second schema. The compiler derives tool names, arguments,
+results, errors, and descriptions from the same App Contract that drives direct
+calls, generated clients, HTTP, and OpenAPI.
+
+## Enable the projection once
+
+Select MCP for the application in `questpie.json`:
+
+```json title="questpie.json"
+{
+	"projections": {
+		"mcp": true
+	}
+}
+```
+
+This switch includes every `network: true` Query, Mutation, and Action. There
+is no per-Operation MCP option. Removing the switch removes the generated MCP
+catalogue and endpoint on the next complete build.
+
+## Name and document Operations once
+
+For TanStack Barbershop, documented Operations project as follows:
+
+| Operation kind | Qualified name      | MCP tool name                |
+| -------------- | ------------------- | ---------------------------- |
+| Query          | `appointments.list` | `query.appointments.list`    |
+| Mutation       | `appointments.book` | `mutation.appointments.book` |
+| Action         | `reminders.send`    | `action.reminders.send`      |
+
+The compiler preserves dots and case and prefixes the Operation kind. Invalid
+names and collisions fail the build with both source Origins. QUESTPIE does not
+rewrite a conflicting name or pick a source-order winner.
+
+Use the Operation `describe` envelope for a summary, description, and typed
+examples. MCP consumes the shared Operation Documentation artifact. Do not add
+an MCP-specific name, schema, description, example, or handler.
+
+## Understand tool arguments
+
+Every tool receives an exact object built from the Operation's existing
+`input` and `context` schemas plus the request fields required for that
+Operation type:
+
+```ts
+type QueryCall<Input, Context> = {
+	input: Input;
+	context: Context;
+	callId?: string;
+};
+
+type MutationCall<Input, Context> = {
+	input: Input;
+	context: Context;
+	callId: string;
+};
+
+type ActionCall<Input, Context> = {
+	input: Input;
+	context: Context;
+	effectKey: string;
+	callId?: string;
+};
+```
+
+`callId` makes a Mutation result replayable after response loss. `effectKey`
+identifies one Action effect. These values are framework invocation arguments;
+they are not fields in the domain input.
+
+Credentials, Principal, Authority, deadlines, cancellation signals, request
+state, and transport headers are not part of the tool input. The Runtime
+resolves credentials and Context and then applies Policy for the concrete call.
+
+## Connect a current MCP client
+
+The application mounts one endpoint:
+
+```text
+POST /_questpie/mcp
+```
+
+The endpoint uses MCP `2026-07-28`. Discovery and `tools/list` return JSON.
+`tools/call` returns one request-scoped Server-Sent Events response whose final
+event has `resultType: "complete"`.
+
+A request must provide matching protocol metadata in its body and these
+headers:
+
+| Header                 | Meaning                                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| `MCP-Protocol-Version` | Must equal `2026-07-28`.                                    |
+| `Mcp-Method`           | Must equal the JSON-RPC method.                             |
+| `Mcp-Name`             | Required for `tools/call`; must equal the requested tool.   |
+| `Accept`               | Must admit both `application/json` and `text/event-stream`. |
+| `Content-Type`         | Must be `application/json`.                                 |
+
+For a `tools/call` request with
+`Mcp-Name: query.appointments.list`, the matching JSON body is:
+
+```json
+{
+	"jsonrpc": "2.0",
+	"id": "appointments-list-1",
+	"method": "tools/call",
+	"params": {
+		"name": "query.appointments.list",
+		"arguments": {
+			"input": {
+				"after": null,
+				"first": 20
+			},
+			"context": {
+				"shopId": "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131"
+			}
+		},
+		"_meta": {
+			"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+			"io.modelcontextprotocol/clientCapabilities": {}
+		}
+	}
+}
+```
+
+`server/discover` and `tools/list` use the same `_meta` object and matching
+`Mcp-Method` header. They do not send `Mcp-Name`.
+
+A non-browser client may omit `Origin`. When `Origin` is present, it must
+exactly match the request URL origin. QUESTPIE rejects a mismatch before it
+resolves credentials or starts an Execution.
+
+## Results and failures
+
+The generated `outputSchema` is a closed union of the canonical Operation
+frames. It includes success, declared errors, applicable framework failures,
+Mutation committed-result uncertainty, and Action ambiguity. A success or
+Operation error returns matching `structuredContent` and the same canonical
+JSON in a text block. Error results also set `isError: true`.
+
+Unknown tools, malformed envelopes, and server protocol failures use JSON-RPC
+errors. Invalid input, declared Operation errors, nondisclosing framework
+errors, and uncertain Mutation or Action outcomes remain tool results. The
+adapter never retries a call. Use the caller-owned `callId` or `effectKey`
+according to the Operation recovery contract.
+
+Closing the call response cancels its one Execution. A framework or transport
+adapter failure does not expose credentials, Context values, Policy evidence,
+payloads, handler source, PostgreSQL details, or stack traces.
+
+## What this projection does not add
+
+The basic projection has no session or initialize flow. It does not expose raw
+Routes, Jobs, durable maintenance, resources, prompts, sampling, elicitation,
+or application-generated skills. Query tools use MCP POST but invoke the Query
+executor directly; they do not call the canonical Query GET endpoint.
+
+MCP annotations are untrusted hints, not authorization. QUESTPIE emits only
+`readOnlyHint: true` for Query. Mutation and Action keep the protocol's
+conservative defaults. Policy remains the sole authored authorization model.

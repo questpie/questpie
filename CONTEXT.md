@@ -593,6 +593,14 @@ network Operations. It derives paths and schemas from Resource identities and
 codecs, omits raw Routes, and creates no exposure, authorization, handler, or
 projection-specific authoring vocabulary.
 
+### MCP Projection
+
+The optional stateless MCP `2026-07-28` Tools Contract Projection selected once
+for an application. It derives one tool for every canonical network Query,
+Mutation, and Action, then invokes the same Operation executor. It owns only
+MCP transport decoding and encoding; it owns no business handler, Policy,
+credential model, retry, session, compatibility protocol, or durable work.
+
 ### Transactional Dispatch
 
 Durable follow-up intent committed in the same transaction as business data and

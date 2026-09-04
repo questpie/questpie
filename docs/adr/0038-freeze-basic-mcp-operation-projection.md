@@ -1,6 +1,6 @@
 # ADR-0038: Freeze the basic MCP Operation projection
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-01
 - Owners: Product architecture, compiler, Runtime ingress
 - Protocol target: MCP `2026-07-28` (`5f5440bb26a62e2cf3440b92da5a667efa03b267`)
@@ -144,5 +144,8 @@ Ratification requires independent Product review and executable evidence for:
    annotations, automatic retry, protocol fallback, and out-of-scope MCP
    capabilities.
 
-ADR-0038 remains Proposed until that evidence and review pass. Accepted ADR
-index, SPEC, CONTEXT, public docs, and HANDOFF must not project it early.
+The human-directed replacement Codex panel records PASS against candidate head
+`34b3b1cf80be1a21e857b8ecbf01ca7763087df6` after its protocol findings were
+repaired. Its record explicitly does not claim a protocol-v2 Opus PASS or add a
+fallback to the repository acceptance wrapper. This authority projection is a
+separate commit after that record.

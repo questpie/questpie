@@ -1,6 +1,6 @@
 # Basic MCP projection tracer tickets
 
-- Status: candidate tickets; blocked on ADR-0038 acceptance
+- Status: accepted design; implementation tickets ready
 - Dependency chain: `HTTP-02 + DOC-01 -> MCP-01 -> MCP-02 -> MCP-03`
 - Scope: basic Tools projection only; no resources, prompts, Tasks, Jobs,
   Routes, sessions, retry, fallback, or legacy protocol

@@ -15,6 +15,7 @@
 		"semantic-kernels-and-public-surface",
 		"services",
 		"operation-http-and-openapi",
+		"basic-mcp",
 		"beta1-release",
 		"runtime-and-studio",
 		"opentelemetry"

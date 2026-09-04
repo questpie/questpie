@@ -491,6 +491,20 @@ existing codecs. Authors cannot restate paths, methods, parameters, schemas,
 nullability, bounds, results, errors, grouping, handlers, or authorization for
 OpenAPI. Raw Routes and security schemes are omitted.
 
+Exact selection `{ "projections": { "mcp": true } }` emits and mounts one
+stateless MCP `2026-07-28` Tools projection at `POST /_questpie/mcp`. Every
+`network: true` Query, Mutation, and Action becomes exactly one tool named
+`<kind>.<qualified-name>`. Tool arguments combine the existing input and
+Context codecs with framework invocation identities: Mutation requires
+`callId`, Action requires `effectKey`, and Query and Action accept optional
+`callId`. The closed output schema is the canonical Operation outcome universe.
+Discovery and listing are JSON; calls complete through one request-scoped SSE
+stream whose cancellation cancels the same Execution. The projection uses the
+existing credential, Context, Policy, codec, limit, error, nondisclosure,
+cancellation, receipt, ambiguity, and observation owners. It adds no authored
+MCP names or schemas, per-Operation MCP switch, session, retry, fallback,
+compatibility protocol, raw Route, Job control, or second executor.
+
 An Operation may author one projection-neutral `describe` envelope with a
 required bounded summary, optional bounded description, and codec-typed
 non-executable examples. Query, Mutation, Action, and generated Collection
