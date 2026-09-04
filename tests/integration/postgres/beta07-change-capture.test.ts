@@ -624,7 +624,13 @@ SELECT 'message-' || value, 'bulk', 'body' FROM generate_series(1, 17) value;`);
 			async () => {
 				await ensure(database!);
 				await installApplicationSchema(database!);
-				const writerPassword = crypto.randomUUID();
+				const url = new URL("postgres://localhost/");
+				url.username = writerRole;
+				url.password = crypto.randomUUID();
+				url.hostname = process.env.PGHOST ?? "localhost";
+				url.port = process.env.PGPORT ?? "5432";
+				url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
+				const writerPassword = url.password;
 				if (!/^[0-9a-f-]+$/.test(writerPassword)) {
 					throw new Error(
 						"generated PostgreSQL writer password has an unsafe format",
@@ -634,14 +640,7 @@ SELECT 'message-' || value, 'bulk', 'body' FROM generate_series(1, 17) value;`);
 					.unsafe(`CREATE ROLE ${writerRole} LOGIN PASSWORD '${writerPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 GRANT USAGE ON SCHEMA collaboration TO ${writerRole};
 GRANT SELECT, INSERT, UPDATE, DELETE ON collaboration.channels, collaboration.messages TO ${writerRole};`);
-				const writer = new SQL({
-					database: process.env.PGDATABASE,
-					hostname: process.env.PGHOST,
-					password: writerPassword,
-					port: Number(process.env.PGPORT ?? "5432"),
-					username: writerRole,
-					max: 1,
-				});
+				const writer = new SQL(url.toString(), { max: 1 });
 				try {
 					await writer`insert into collaboration.channels values ('managed', 'Managed')`;
 					for (const table of [

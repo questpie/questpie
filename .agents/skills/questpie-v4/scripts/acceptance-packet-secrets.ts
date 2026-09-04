@@ -20,6 +20,8 @@ const SAFE_PASSWORD_PLACEHOLDER =
 	/\burl\.password\s*=\s*\.\.\.(?=[ \t]*(?:;|$))/giu;
 const SAFE_PASSWORD_INLINE_CODE =
 	/`url(?:\.password|\[\s*["']password["']\s*\])\s*=\s*(?:process\.env\.PGPASSWORD|\.\.\.)`/giu;
+const SAFE_CREDENTIAL_FREE_ENV_POSTGRES_URL =
+	/\bpostgres:\/\/\$\{[A-Za-z_$][\w$]*\}@\$\{process\.env\.PGHOST\}:\$\{process\.env\.PGPORT\s*\?\?\s*["']5432["']\}\/\$\{process\.env\.PGDATABASE\}/giu;
 const NEGATIVE_CONTROL_PATH = "tests/unit/acceptance-packet-secrets.test.ts";
 const NEGATIVE_CONTROL_MARKER = "acceptance-secret-negative-control";
 const SECRET_PATTERNS: Array<[AcceptancePacketSecret["name"], RegExp]> = [
@@ -63,19 +65,31 @@ function maskRanges(value: string, ranges: Range[]): string {
 }
 
 /**
- * Finds secret-bearing packet text while permitting exactly two source forms:
- * credential-free PostgreSQL localhost literals and forwarding from PGPASSWORD
- * into the `url` password property. These are source/configuration
- * descriptions, not credential values. Alternate environment variables,
- * fallback values, embedded URL credentials, remote hosts, queries, fragments,
- * and every other database URL remain prohibited.
+ * Finds secret-bearing packet text while permitting only source forms that do
+ * not contain credential or endpoint values: credential-free PostgreSQL
+ * localhost literals, the retained env-forwarding URL deleted by a reviewed
+ * diff, PGPASSWORD forwarding, and a freshly generated UUID assigned to the
+ * `url` password property. Alternate environment variables, fallback values,
+ * embedded URL credentials, literal remote hosts, queries, fragments, and
+ * every other database URL remain prohibited.
  */
 export function findAcceptancePacketSecret(
 	packet: string,
 ): AcceptancePacketSecret | null {
 	const allowed: Range[] = [];
+	for (const match of packet.matchAll(SAFE_CREDENTIAL_FREE_ENV_POSTGRES_URL)) {
+		allowed.push({ start: match.index, end: match.index + match[0].length });
+	}
 
 	for (const match of packet.matchAll(DATABASE_URL)) {
+		if (
+			allowed.some(
+				(range) =>
+					match.index >= range.start &&
+					match.index + match[0].length <= range.end,
+			)
+		)
+			continue;
 		if (!isSafeLocalPostgresUrl(match[0])) return { name: "database URL" };
 		allowed.push({ start: match.index, end: match.index + match[0].length });
 	}
@@ -117,10 +131,9 @@ export function findAcceptanceGitDiffSecret(
 			if (header) currentPath = header[2];
 			if (
 				currentPath === NEGATIVE_CONTROL_PATH &&
-				/^[+-](?![+-])/.test(line) &&
 				line.includes(NEGATIVE_CONTROL_MARKER)
 			) {
-				return `${line[0]}// ${NEGATIVE_CONTROL_MARKER}`;
+				return `${/^[+ -]/.test(line) ? line[0] : " "}// ${NEGATIVE_CONTROL_MARKER}`;
 			}
 			return line;
 		})

@@ -12,6 +12,7 @@ describe("acceptance packet secret scanner", () => {
 		"if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;",
 		'if (process.env.PGPASSWORD) url["password"] = process.env.PGPASSWORD;',
 		"url.password = crypto.randomUUID();",
+		'const connectionString = `postgres://${role}@${process.env.PGHOST}:${process.env.PGPORT ?? "5432"}/${process.env.PGDATABASE}`;',
 		"review requirement: `url.password = ...`",
 		"review requirement: `url.password = process.env.PGPASSWORD`",
 		'živý packet — new URL("postgres://localhost/questpie"); url.password = process.env.PGPASSWORD;',
@@ -25,6 +26,7 @@ describe("acceptance packet secret scanner", () => {
 		"postgres://database.example.com/questpie", // acceptance-secret-negative-control
 		"postgres://localhost/questpie?password=real-secret", // acceptance-secret-negative-control
 		"mysql://localhost/questpie", // acceptance-secret-negative-control
+		'postgres://${role}:${process.env.PGPASSWORD}@${process.env.PGHOST}:${process.env.PGPORT ?? "5432"}/${process.env.PGDATABASE}', // acceptance-secret-negative-control
 	])("rejects a real or non-allowlisted database URL: %s", (packet) => {
 		expect(findAcceptancePacketSecret(packet)?.name).toBe("database URL");
 	});
@@ -62,6 +64,7 @@ describe("acceptance packet secret scanner", () => {
 		const probe =
 			'+\t"postgres://questpie:real-secret@localhost/db", // acceptance-secret-negative-control';
 		const fixtureDiff = `diff --git a/tests/unit/acceptance-packet-secrets.test.ts b/tests/unit/acceptance-packet-secrets.test.ts\n${probe}`;
+		const fixtureContextDiff = fixtureDiff.replace(/^\+/m, " ");
 		const sourceDiff = `diff --git a/packages/runtime/src/index.ts b/packages/runtime/src/index.ts\n${probe}`;
 		const unmarkedFixtureDiff = fixtureDiff.replace(
 			" // acceptance-secret-negative-control",
@@ -69,6 +72,7 @@ describe("acceptance packet secret scanner", () => {
 		);
 
 		expect(findAcceptanceGitDiffSecret(fixtureDiff)).toBeNull();
+		expect(findAcceptanceGitDiffSecret(fixtureContextDiff)).toBeNull();
 		expect(findAcceptanceGitDiffSecret(sourceDiff)?.name).toBe("database URL");
 		expect(findAcceptanceGitDiffSecret(unmarkedFixtureDiff)?.name).toBe(
 			"database URL",
