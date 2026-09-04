@@ -1,0 +1,156 @@
+{
+	"protocolVersion": 2,
+	"ticket": "BETA2-ACCEPTANCE",
+	"proof": "Accept the exceptional 4.0.0-beta.2 release boundary as one exact two-package, compiler-derived DX contract spanning lifecycle, inverse relations, Query Resource and React, canonical HTTP and OpenAPI, operation documentation, MCP, discriminated-value helpers, OpenTelemetry, PostgreSQL 17, browser consumers, and the public agent skill without compatibility paths, duplicated author metadata, or a second execution kernel.",
+	"diffBase": "b355bc62472ffc7f5cdec26a9c006cff5958b75d",
+	"reviewOutput": "docs/v4/prototypes/beta2-release/REVIEW.json",
+	"authorityHeads": {
+		"accepted beta.1 release projection": "cc1916f304fc9f75f776e3eaffe4a47eb9fbd48d",
+		"accepted public package identity projection": "14e5958a088c1a9bd87140f3502c8627bda511a4",
+		"accepted basic MCP authority projection": "8f8864c22d1e87daeb29ff76cc2edf2c5872160d",
+		"deterministic beta.2 release evidence before manifest binding": "f794330485b21471ed4de6b80e39215ffaf728b7"
+	},
+	"authorityDocuments": [
+		{
+			"name": "proof and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "tracer-led delivery flow",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+		},
+		{
+			"name": "canonical product specification",
+			"path": "SPEC.md",
+			"sha256": "2d8142a150d9d5616ee33e4d57aae92cde5e68c32877de8487387603b2d5113c"
+		},
+		{
+			"name": "canonical product language",
+			"path": "CONTEXT.md",
+			"sha256": "35923bba65f4b5d4906110711df42e53617455a1ef71fc575aee3361644b6466"
+		},
+		{
+			"name": "accepted beta.1 release boundary",
+			"path": "docs/adr/0021-slice-the-beta-one-release.md",
+			"sha256": "92987198216dc0213356b21b2b3d4a5fa81811f450a86adee028b37c9d9d8511"
+		},
+		{
+			"name": "accepted delivery and review policy",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "accepted bounded inverse to-many projection",
+			"path": "docs/adr/0032-freeze-bounded-inverse-tomany-query-projection.md",
+			"sha256": "9f6bd2231e736d88fd09655408ca4ef1f53510939262d4bb24214a62bc5a589d"
+		},
+		{
+			"name": "accepted Runtime observation and OpenTelemetry boundary",
+			"path": "docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
+			"sha256": "62cb8d773380989eabec6154533410d52dda01445ed9deb4b08ad6959d59870b"
+		},
+		{
+			"name": "accepted ingress observation terminal boundary",
+			"path": "docs/adr/0034-freeze-explicit-ingress-trace-plans-and-response-absent-http-terminals.md",
+			"sha256": "de672479afedefe9a81ca1125b56ab879e2f067862594338ae6be5cc9f356596"
+		},
+		{
+			"name": "accepted Query Resource and React integration",
+			"path": "docs/adr/0035-freeze-query-resource-and-react-client-integration.md",
+			"sha256": "370ba64359f9ef204d5045bea41a971c1a24717d04ff359046ff02ba64002e32"
+		},
+		{
+			"name": "accepted canonical Operation HTTP and OpenAPI projection",
+			"path": "docs/adr/0036-freeze-canonical-operation-http-and-openapi-projection.md",
+			"sha256": "8e550f39443e1b08adb2359ab3a31a400797f29d839a6e2ed8a9342d9f6a4284"
+		},
+		{
+			"name": "accepted discriminated-value helpers",
+			"path": "docs/adr/0037-freeze-discriminated-value-helpers.md",
+			"sha256": "fa5d918cdc43d65ce7be6a8e68529626826a8fd35fc70aa0f91d595cb48f039f"
+		},
+		{
+			"name": "accepted basic MCP Operation projection",
+			"path": "docs/adr/0038-freeze-basic-mcp-operation-projection.md",
+			"sha256": "0f3fcb8d9b3ff158cdb385289ad2feaadb5b21a0cbff5e904410a75df1a3c08b"
+		},
+		{
+			"name": "proposed beta.2 exceptional release boundary",
+			"path": "docs/adr/0039-slice-the-beta-two-dx-release.md",
+			"sha256": "2ecdd539f580c48ee145fd8a3e2e9d6f0049844ae10cd6799335f5a9809fbe36"
+		},
+		{
+			"name": "accepted projection-neutral Operation documentation",
+			"path": "docs/adr/0040-freeze-projection-neutral-operation-documentation.md",
+			"sha256": "def1886b3ceaf3272a195f4115fc16f8f5a61899c68ca378e81ef83503ae1465"
+		},
+		{
+			"name": "accepted public package identities",
+			"path": "docs/adr/0042-freeze-public-package-identities.md",
+			"sha256": "fa1f8158b7c73e90aa6792f7baffa226d329744ed4fd5deaf341e73d4ca52acd"
+		},
+		{
+			"name": "candidate beta.2 release inventory",
+			"path": "docs/v4/beta2-release-scope.md",
+			"sha256": "7e028d575073df00c5be995101a5ed667719780e0de5f1dc24430d9091c5fe5f"
+		},
+		{
+			"name": "accepted proof history",
+			"path": "docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+			"sha256": "16ba127f8e491fc3bb6687fc9030afb405262b714c43f643e7f05ec6ab3a78b1"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run quality:release",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=127.0.0.1 PGPORT=<local-pg17-port> PGDATABASE=postgres PGUSER=postgres PGPASSWORD=<process-only-secret> QUESTPIE_POSTGRES_MAJOR=17 bun run test:postgres",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run quality:typescript-forward",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run release -- --dry-run (first isolated build: questpie SHA-256 79befee8da77a3b794fe9d262eaeffefa595648a0d9ad0a3305e97588687a180; questpie-opentelemetry SHA-256 0c84e8b805a65058efb31e28bac9a143a8390d8780132fced3ff9b7c29c4861f; exact-two-package combined-import PASS)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run release -- --dry-run (second isolated build: byte-identical archive names and SHA-256 values; exact-two-package combined-import PASS)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run knip:negative-control",
+			"result": "PASS"
+		},
+		{
+			"command": "independent Standards and Spec reviews over the complete beta.2 closure range",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"ADR-0039 remains Proposed and the ADR index, SPEC, CONTEXT, public latest-version docs, and HANDOFF do not project beta.2 as accepted or released before a committed protocol-v2 PASS record and a separate authority-projection commit.",
+		"The release contains exactly two public packages at exact version 4.0.0-beta.2: questpie, including the optional questpie/react subpath and optional React ^19.2.0 peer, and the exact questpie-opentelemetry peer. No former scoped package name, compatibility export, alias, fallback, or third public package remains.",
+		"One compiler-owned App Contract drives direct invocation, canonical HTTP, OpenAPI, MCP, Query Resource, React types, and generated clients. Authors do not repeat transport paths, tool names, parameters, codecs, nullability, bounds, results, errors, or projection-specific descriptions.",
+		"Every network Query uses one visible canonical GET endpoint and URL-query input; every network Mutation and Action uses one visible canonical POST endpoint and JSON body. Raw Routes retain authored external-protocol paths. The former polymorphic Operation endpoint is absent with no redirect, compatibility handler, fallback method, or second executor.",
+		"Basic MCP is one stateless 2026-07-28 Tools endpoint over documented network Operations and the same executor. It owns no authored metadata, schema, session, retry, fallback, compatibility protocol, raw Route projection, Job control, or second kernel; exact discovery, tools/list, tools/call, cancellation, Policy nondisclosure, declared/framework outcomes, Mutation replay, and Action uncertainty are exercised by the strict current-protocol client.",
+		"Collection lifecycle retains exactly normalize, validate, check, and afterWrite; compiled analyzable programs make normalize purity truthful; Collection-owned issues cross only explicit Operation mappings; check owns bounded Policy-aware reads; afterWrite shares the Mutation transaction and permits only bounded kernel reads/writes and Job acceptance; ctx.now is transaction-stable and onUpdate now remains database-owned.",
+		"Inverse relations use one bounded inverse child list in the existing relational Query and Live Query kernel: at most one inverse child list, four total Relation edges, child first 1 through 50, root first at most 100, at most 5050 materialized positions, at most 1 MiB result, Policy before order and limit, and atomic recomputation that preserves the last successful snapshot on failure.",
+		"Query Resource and questpie/react add no parallel cache or transport: immutable withContext scopes own bounded resource identity and compiler-proven observe methods; useQueryResource is only a useSyncExternalStore adapter and adds no provider, SSR, Suspense, hydration, invalidation, polling, retry, or fallback behavior.",
+		"The public root exposes exactly DiscriminatedValue, DiscriminatedReference, and matchDiscriminated for ordinary TypeScript disjunctions. No polymorphic Relation, codec, descriptor, registry, generated artifact, Policy traversal, Runtime kernel, or compatibility alias is introduced.",
+		"Runtime observation remains optional and behavior-neutral; questpie-opentelemetry is the only official adapter, binds exact Runtime metadata and package peers, contains adapter faults, owns bounded shutdown, and does not move Policy, transaction, retry, cancellation, durable truth, or application authority into telemetry.",
+		"Team Support Desk is the beginner/DX browser consumer and Collaboration is the authority/security hostile consumer. The registered PostgreSQL 17 and Firefox lanes cover lifecycle, inverse realtime, canonical HTTP/OpenAPI, MCP, OpenTelemetry, direct/network parity, cancellation, replay, nondisclosure, receipts, and rolling compatibility without partial durable or published state.",
+		"The public skills/questpie tree validates in the current Agent Skills format, contains no repository-internal pointer, teaches only packed beta.2 syntax, compiles every tagged referenced example against packed packages, and keeps application-specific generated skills outside this release.",
+		"Both package archives build twice with byte-identical names and SHA-256 values, install together in a relocated clean consumer, pass positive combined imports and optional React behavior, and fail closed on negative imports plus missing or mismatched exact peers. Strict dependency audit remains active outside the narrow packages/questpie optional-React attribution.",
+		"Files, Search, Studio, split Runtime roles, generic browser Job control, Cron, triggers, a separate Workflow Resource, application-generated skill projection, broad explain CLI, polymorphic Relation kernel, OpenTelemetry expansion, Autopilot implementation, landing pages, push, tag, publish, and deployment remain outside this acceptance.",
+		"A PASS authorizes only a separate repository authority projection for ADR-0039 and release readiness. It does not itself accept by assertion, alter historical beta.1, or authorize any push, tag, publish, or deployment."
+	]
+}
