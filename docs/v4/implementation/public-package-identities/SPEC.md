@@ -1,10 +1,18 @@
 # Public package identities implementation spec
 
-- Status: Proposed; unimplemented
+- Status: Implemented; final beta.2 release freeze remains downstream
 - Classification: Product packaging projection with an exceptional release boundary
 - Consumers: Team Support Desk, packed consumers, CLI telemetry host
-- Authority prerequisite: a focused superseding package-identity decision must
-  receive its required committed `PASS` before implementation begins
+- Authority: Accepted ADR-0042
+
+## Implementation evidence
+
+The implementation ships `questpie/react`, deletes the former React package,
+renames the official adapter and CLI resolver without a fallback, migrates Team
+Support Desk, and binds the exact two-package release manifest. Focused package,
+CLI, PostgreSQL 17, Firefox, architecture, TypeScript, and release dry-run gates
+pass. Final beta.2 versioning and whole-release acceptance remain owned by
+ADR-0039 rather than this package-placement slice.
 
 ## Outcome
 

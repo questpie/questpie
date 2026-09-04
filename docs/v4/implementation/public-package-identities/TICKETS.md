@@ -1,6 +1,7 @@
 # Public package identities tickets
 
-- Status: Proposed; unimplemented
+- Status: PPI-00 through PPI-06 implemented; PPI-07/08 close on the final
+  beta.2 candidate head
 - Delivery rule: pull in order through the packed Team Support Desk tracer
 - Compatibility rule: delete old identities; never add aliases or fallbacks
 
