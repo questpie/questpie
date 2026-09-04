@@ -114,6 +114,8 @@ describe("BETA-01 generated contract", () => {
 			"live-query-limits.json",
 			"live-query-resume.json",
 			"manifest.json",
+			"mcp-projection-explain.json",
+			"mcp-projection.json",
 			"mutation-projection.json",
 			"mutation-transaction-plans.json",
 			"opentelemetry-signal-projection.json",
