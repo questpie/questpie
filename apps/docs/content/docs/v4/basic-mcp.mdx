@@ -24,6 +24,18 @@ This switch includes every `network: true` Query, Mutation, and Action. There
 is no per-Operation MCP option. Removing the switch removes the generated MCP
 catalogue and endpoint on the next complete build.
 
+Inspect the last complete build without rebuilding or starting the Runtime:
+
+```bash
+questpie explain projection mcp
+```
+
+The command writes the compiler-owned canonical explanation bytes. They show
+included and omitted Operation identities, tool names, source Origins, source
+digests, and omission reasons. The CLI does not reconstruct that information
+from MCP output or Runtime state, and the explanation contains no credentials,
+Context values, Policy evidence, payloads, handler source, or database detail.
+
 ## Name and document Operations once
 
 For TanStack Barbershop, documented Operations project as follows:

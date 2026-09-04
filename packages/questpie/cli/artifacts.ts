@@ -23,6 +23,31 @@ export async function loadGeneratedSchemaProjection(
 	);
 }
 
+export async function loadGeneratedMcpProjectionExplanation(
+	root: string,
+): Promise<string> {
+	const bytes = await readFile(
+		resolve(root, ".questpie/generated/mcp-projection-explain.json"),
+		"utf8",
+	);
+	let artifact: unknown;
+	try {
+		artifact = JSON.parse(bytes);
+	} catch {
+		throw new TypeError("generated MCP projection explanation is invalid");
+	}
+	if (
+		!artifact ||
+		typeof artifact !== "object" ||
+		Array.isArray(artifact) ||
+		(artifact as { format?: unknown }).format !==
+			"questpie.mcp-projection-explain" ||
+		(artifact as { version?: unknown }).version !== 1
+	)
+		throw new TypeError("generated MCP projection explanation is invalid");
+	return bytes;
+}
+
 export function requestedPort(
 	arguments_: readonly string[],
 	environmentPort: string | undefined,

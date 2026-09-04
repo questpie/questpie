@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 
 import {
 	committedArtifactDirectories,
+	loadGeneratedMcpProjectionExplanation,
 	loadGeneratedSchemaProjection,
 	requestedPort,
 } from "./artifacts";
@@ -109,6 +110,22 @@ async function main(): Promise<void> {
 			await rm(output, { force: true, recursive: true });
 		}
 		console.log("questpie: application contract valid");
+		return;
+	}
+	if (command === "explain") {
+		if (
+			cliArguments.length !== 3 ||
+			subcommand !== "projection" ||
+			cliArguments[2] !== "mcp"
+		)
+			fail("use explain projection mcp");
+		try {
+			process.stdout.write(await loadGeneratedMcpProjectionExplanation(root));
+		} catch {
+			fail(
+				"MCP projection explanation is unavailable; run questpie build with projections.mcp enabled",
+			);
+		}
 		return;
 	}
 	if (command === "migration" && subcommand === "apply") {
