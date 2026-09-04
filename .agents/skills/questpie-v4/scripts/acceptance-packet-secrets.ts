@@ -14,6 +14,8 @@ const PASSWORD_PROPERTY_ASSIGNMENT =
 	/\b[A-Za-z_$][\w$]*(?:\.password|\[\s*["']password["']\s*\])\s*(?:\|\|=|&&=|\?\?=|>>>=|<<=|>>=|\*\*=|[+\-*/%&|^]=|=(?!=|>))/iu;
 const SAFE_PASSWORD_FORWARDING =
 	/\burl(?:\.password|\[\s*["']password["']\s*\])\s*=\s*process\.env\.PGPASSWORD\b(?=[ \t]*(?:;|$))/giu;
+const SAFE_PASSWORD_RUNTIME_UUID =
+	/\burl(?:\.password|\[\s*["']password["']\s*\])\s*=\s*crypto\.randomUUID\(\)(?=[ \t]*(?:;|$))/giu;
 const SAFE_PASSWORD_PLACEHOLDER =
 	/\burl\.password\s*=\s*\.\.\.(?=[ \t]*(?:;|$))/giu;
 const SAFE_PASSWORD_INLINE_CODE =
@@ -80,6 +82,7 @@ export function findAcceptancePacketSecret(
 
 	for (const pattern of [
 		SAFE_PASSWORD_FORWARDING,
+		SAFE_PASSWORD_RUNTIME_UUID,
 		SAFE_PASSWORD_PLACEHOLDER,
 		SAFE_PASSWORD_INLINE_CODE,
 	]) {

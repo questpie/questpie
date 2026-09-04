@@ -489,7 +489,13 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		});
 		await applyCommittedMigrations({ migrations: [migration] });
 		const role = "questpie_beta02_deployer";
-		const rolePassword = crypto.randomUUID();
+		const url = new URL("postgres://localhost/");
+		url.username = role;
+		url.password = crypto.randomUUID();
+		url.hostname = process.env.PGHOST ?? "localhost";
+		url.port = process.env.PGPORT ?? "5432";
+		url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
+		const rolePassword = url.password;
 		if (!/^[0-9a-f-]+$/.test(rolePassword)) {
 			throw new Error(
 				"generated PostgreSQL probe password has an unsafe format",
@@ -504,9 +510,8 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			await database!.unsafe(
 				`GRANT USAGE ON SCHEMA questpie_internal, deploy_role_probe TO ${role}; GRANT SELECT ON ALL TABLES IN SCHEMA questpie_internal TO ${role}`,
 			);
-			const connectionString = `postgres://${role}:${encodeURIComponent(rolePassword)}@${process.env.PGHOST}:${process.env.PGPORT ?? "5432"}/${process.env.PGDATABASE}`;
 			const result = await applyCommittedMigrations({
-				connectionString,
+				connectionString: url.toString(),
 				migrations: [migration],
 			});
 			expect(result).toMatchObject({

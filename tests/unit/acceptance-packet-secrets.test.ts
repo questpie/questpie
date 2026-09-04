@@ -11,6 +11,7 @@ describe("acceptance packet secret scanner", () => {
 		'createApp({ postgres: { url: "postgres://localhost/questpie" } });',
 		"if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;",
 		'if (process.env.PGPASSWORD) url["password"] = process.env.PGPASSWORD;',
+		"url.password = crypto.randomUUID();",
 		"review requirement: `url.password = ...`",
 		"review requirement: `url.password = process.env.PGPASSWORD`",
 		'živý packet — new URL("postgres://localhost/questpie"); url.password = process.env.PGPASSWORD;',
@@ -41,6 +42,7 @@ describe("acceptance packet secret scanner", () => {
 		'url.password = process.env.PGPASSWORD\n + "real-secret";', // acceptance-secret-negative-control
 		"url.password = process.env.PGPASSWORD`real-secret`;", // acceptance-secret-negative-control
 		'url["password"] = "real-secret";', // acceptance-secret-negative-control
+		'url.password = crypto.randomUUID() || "real-secret";', // acceptance-secret-negative-control
 	])("rejects a real or evasive password assignment: %s", (packet) => {
 		expect(findAcceptancePacketSecret(packet)?.name).toBe(
 			"credential assignment",
