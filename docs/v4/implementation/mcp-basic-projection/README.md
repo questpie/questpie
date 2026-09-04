@@ -30,15 +30,16 @@ occurs once, and no retry/fallback/session/MRTR path exists.
 ## MCP-03 — Hostile tracers, docs, and release closure
 
 Status: implemented. Team Support Desk passes its packed PostgreSQL 17 and
-Firefox tracer. Collaboration passes credential, codec, Policy nondisclosure,
-cross-transport Mutation replay, and Action hostiles through the same Runtime
-executor. Focused adapter tests retain post-commit uncertainty, Action
-ambiguity, resource-limit, cancellation, and fault evidence.
+Firefox tracer, including hosted SSE disconnect cancellation of blocked
+PostgreSQL work. Collaboration passes credential, codec, Policy
+nondisclosure, MCP-originated Mutation response-loss replay, Action admission,
+known provider uncertainty, resource-limit and no-retry cancellation, hostile
+observation, and application/Package Operation parity through the same Runtime
+executor. Focused adapter tests retain serialization-fault evidence.
 
-Blocked by MCP-01 and MCP-02. Migrate Team Support Desk Query/Mutation/Action and
-Collaboration authority hostiles. Prove application/Package parity, direct/HTTP/
-MCP outcome parity, non-empty Context, Policy nondisclosure, invalid input,
-declared/framework failures, post-commit Mutation replay, Action ambiguity,
-adapter faults and browser/official-client cancellation against PostgreSQL 17.
-Write public basic-MCP docs, run release isolation/dry-runs, then delete this
-prototype. Do not broaden the accepted beta.2 surface.
+The completed slice migrates Team Support Desk Query/Mutation/Action and
+Collaboration authority hostiles; proves application/Package, direct/HTTP/MCP,
+Context, Policy, error, limit, post-commit, Action, adapter-fault, browser, and
+PostgreSQL cancellation behavior; and ships the public basic-MCP guide. The
+temporary executable prototype is deleted. Release-wide isolation and dry-runs
+belong to the aggregate beta.2 candidate rather than a second MCP kernel.

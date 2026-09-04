@@ -805,9 +805,14 @@ does not claim protocol-v2 Opus PASS and does not add a fallback to the
 acceptance wrapper. The accepted boundary is one stateless MCP `2026-07-28`
 Tools endpoint over documented network Operations, the same executor, and no
 authored MCP metadata, session, retry, fallback, compatibility protocol, or
-second kernel. Production MCP implementation is the next tracer vertical. The
-planned public `skills/questpie` skill remains a separate portable framework
-skill, not an application-generated projection.
+second kernel. MCP-01 through MCP-03 are now implemented through Team Support
+Desk PostgreSQL 17/Firefox and Collaboration authority hostiles, including
+hosted cancellation, Package-owned network Query projection, Action
+uncertainty/no-retry behavior, and MCP-originated Mutation response-loss
+replay. The public `skills/questpie` skill is a separate portable framework
+skill, not an application-generated projection, and its exact fenced helper
+example compiles against the packed package. These implementation facts do not
+accept Proposed ADR-0039.
 
 ADR-0041 is Proposed to resolve the remaining explain authority ambiguity. Its
 only candidate command is
@@ -872,12 +877,11 @@ byte-identical release dry-runs pass.
    and one documentation artifact; do not add codec/Field prose,
    projection-specific registries, Runtime reads, fallback behavior, or
    application-generated skills.
-9. Implement accepted ADR-0038 in MCP-01 through MCP-03: compiler catalogue
-   first, then the stateless Runtime ingress, then Team Support Desk and
-   Collaboration hostiles plus public docs. Preserve one Operation executor and
+9. ADR-0038 and MCP-01 through MCP-03 are closed. Preserve the one Operation
+   executor, pinned protocol, hosted cancellation and response-loss evidence;
    add no MCP-specific author metadata, retry, fallback, session, raw Route,
-   Job control, or compatibility protocol. Author the portable public framework
-   skill only from syntax exercised by the packed release.
+   Job control, or compatibility protocol. Keep the portable public framework
+   skill limited to syntax exercised by the packed release.
 10. Do not implement the proposed ADR-0041 CLI until the focused candidate is
     accepted. `EXPLAIN-01` may expose only the exact local OpenAPI JSON command
     and unchanged compiler artifact; it cannot add a broad explain surface,
