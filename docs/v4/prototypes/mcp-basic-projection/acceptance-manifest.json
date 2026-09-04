@@ -2,12 +2,12 @@
 	"protocolVersion": 2,
 	"ticket": "MCP-BASIC-PROJECTION-REPLACEMENT",
 	"proof": "Propose one stateless MCP 2026-07-28 Tools projection over canonical documented network Operations, with exact invocation arguments, one executor, request-scoped SSE cancellation, and no metadata duplication, retry, fallback, legacy route, or second kernel.",
-	"diffBase": "735df07b8bb88ea72a6ec40b2d9a725742a4a28f",
+	"diffBase": "703cd8435fa6a2f5a5bf3925b47dd8cbcfcdf234",
 	"reviewOutput": "docs/v4/prototypes/mcp-basic-projection/REVIEW.json",
 	"authorityHeads": {
 		"accepted canonical per-operation HTTP authority": "f1f6c2d806a5cd1ea8a07ec58e35d00cacd66863",
 		"accepted operation documentation authority": "476df65ec60ab02ad9820b43390daf13f4883b23",
-		"replacement candidate base": "735df07b8bb88ea72a6ec40b2d9a725742a4a28f"
+		"replacement candidate base": "703cd8435fa6a2f5a5bf3925b47dd8cbcfcdf234"
 	},
 	"authorityDocuments": [
 		{
