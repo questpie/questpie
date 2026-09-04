@@ -226,12 +226,14 @@ function mcpRequest(input: {
 	cookie?: string;
 	name: string;
 	origin: string;
+	signal?: AbortSignal;
 }): Readonly<{ id: string; request: Request }> {
 	const id = `mcp:${crypto.randomUUID()}`;
 	return {
 		id,
 		request: new Request(`${input.origin}/_questpie/mcp`, {
 			method: "POST",
+			...(input.signal === undefined ? {} : { signal: input.signal }),
 			headers: {
 				accept: "application/json, text/event-stream",
 				"content-type": "application/json",
@@ -1502,6 +1504,47 @@ WHERE call_id = ${editCallId}`;
 				id: supportTracerIds.ticketOpen,
 				reference: supportTracerIds.referenceOpen,
 			});
+			const hostedMcpCancellationBlocker = await database!.reserve();
+			try {
+				await hostedMcpCancellationBlocker.unsafe("BEGIN");
+				await hostedMcpCancellationBlocker.unsafe(
+					"LOCK TABLE team_support_desk.tickets IN ACCESS EXCLUSIVE MODE",
+				);
+				const hostedMcpCancellation = new AbortController();
+				const { request: blockedHostedMcpRequest } = mcpRequest({
+					origin: hostOrigin,
+					cookie: restartCookie,
+					signal: hostedMcpCancellation.signal,
+					name: "query.tickets.detail",
+					arguments: {
+						context: {
+							organizationId: supportTracerIds.organization,
+							membershipId: supportTracerIds.membershipAgent,
+						},
+						input: { id: supportTracerIds.ticketOpen },
+					},
+				});
+				const blockedHostedMcpResponse = fetch(blockedHostedMcpRequest);
+				await eventually(databaseHasBlockedWork, {
+					accept: (blocked) => blocked,
+					description: "hosted MCP Query reaches blocked PostgreSQL work",
+					intervalMilliseconds: 10,
+					timeoutMilliseconds: 5_000,
+				});
+				hostedMcpCancellation.abort();
+				await expect(blockedHostedMcpResponse).rejects.toMatchObject({
+					name: "AbortError",
+				});
+				await eventually(databaseHasBlockedWork, {
+					accept: (blocked) => !blocked,
+					description: "hosted MCP stream close cancels PostgreSQL work",
+					intervalMilliseconds: 10,
+					timeoutMilliseconds: 5_000,
+				});
+			} finally {
+				await hostedMcpCancellationBlocker.unsafe("ROLLBACK").catch(() => {});
+				await hostedMcpCancellationBlocker.release();
+			}
 			const running = await eventually(
 				() => app.durable.inspect(restart.runId),
 				{
