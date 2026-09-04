@@ -186,7 +186,9 @@ from silently teaching future or beta.1 projects the wrong surface.
 
 The release scope remains **Proposed**, so this research must not project the
 skill or beta.2 capabilities as shipped. Under the current candidate, the
-public skill is one release artifact alongside the three exact-peer packages.
+public skill is one repository release artifact alongside the two same-version
+public packages: `questpie`, including `questpie/react`, and
+`questpie-opentelemetry`.
 It becomes release-eligible only after its released syntax, public links,
 packed-package examples, installation, and validation evidence pass.
 The planning inputs are Proposed ADR-0039 at

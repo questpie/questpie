@@ -14,6 +14,21 @@ import ts from "typescript";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const packageRoot = resolve(repositoryRoot, "packages/questpie");
+const publicSkillReference = resolve(
+	repositoryRoot,
+	"skills/questpie/references/query-resources-react-and-relations.md",
+);
+
+async function publicDiscriminatedReferenceExample(): Promise<string> {
+	const source = await readFile(publicSkillReference, "utf8");
+	const match =
+		/<!-- packed-example: discriminated-reference -->\s*```ts\n([\s\S]*?)\n```/u.exec(
+			source,
+		);
+	if (!match?.[1])
+		throw new Error("public discriminated-reference example missing");
+	return `${match[1]}\n`;
+}
 
 function run(command: string[], cwd: string): string {
 	const result = Bun.spawnSync(command, {
@@ -103,24 +118,15 @@ test("packed questpie exposes only the three discriminated helpers", async () =>
 		);
 		await writeFile(
 			join(consumer, "types.ts"),
-			`import {
-  codec,
-  relation,
-  type DiscriminatedReference,
-  type DiscriminatedValue,
-  matchDiscriminated,
-} from "questpie";
+			await publicDiscriminatedReferenceExample(),
+		);
+		await writeFile(
+			join(consumer, "negative.ts"),
+			`import { codec, relation, type DiscriminatedValue } from "questpie";
 
-declare const appointmentBrand: unique symbol;
-type AppointmentId = string & { readonly [appointmentBrand]: true };
-type Subject = DiscriminatedReference<{ appointment: AppointmentId }>;
-declare const subject: Subject;
-const id: AppointmentId = matchDiscriminated(subject, {
-  appointment: (value) => value.id,
-});
 type Event = DiscriminatedValue<{ opened: { at: Date } }>;
 declare const event: Event;
-void [id, event];
+void event;
 
 // @ts-expect-error The helper adds no codec variant.
 codec.variant;
@@ -153,7 +159,7 @@ console.log(JSON.stringify({
 					target: "ESNext",
 					types: [],
 				},
-				files: ["types.ts"],
+				files: ["negative.ts", "types.ts"],
 			}),
 		);
 
