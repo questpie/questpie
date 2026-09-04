@@ -38,10 +38,7 @@ postgresTest(
 				generated.generatedRoot,
 				"operation-http-contract.json",
 			);
-			const mcpPath = join(
-				generated.generatedRoot,
-				"mcp-projection.json",
-			);
+			const mcpPath = join(generated.generatedRoot, "mcp-projection.json");
 			const checksumsPath = join(
 				generated.generatedRoot,
 				"internal/checksums.json",
@@ -126,10 +123,7 @@ postgresTest(
 			};
 			const forgedMcp = {
 				...forgedUnsignedMcp,
-				digest: artifactDigest(
-					"questpie-mcp-projection-v1",
-					forgedUnsignedMcp,
-				),
+				digest: artifactDigest("questpie-mcp-projection-v1", forgedUnsignedMcp),
 			};
 			const forgedMcpBytes = `${JSON.stringify(forgedMcp)}\n`;
 			const { digest: _runtimeBuildDigest, ...unsignedRuntimeBuild } =
@@ -145,7 +139,7 @@ postgresTest(
 							? { ...item, digest: contentDigest(forgedHttpBytes) }
 							: item.path === "mcp-projection.json"
 								? { ...item, digest: contentDigest(forgedMcpBytes) }
-							: item,
+								: item,
 				),
 			};
 			const forgedRuntimeBuild = {
@@ -163,9 +157,9 @@ postgresTest(
 						? { ...item, digest: contentDigest(forgedHttpBytes) }
 						: item.path === "mcp-projection.json"
 							? { ...item, digest: contentDigest(forgedMcpBytes) }
-						: item.path === "runtime-build.json"
-							? { ...item, digest: contentDigest(forgedRuntimeBuildBytes) }
-							: item,
+							: item.path === "runtime-build.json"
+								? { ...item, digest: contentDigest(forgedRuntimeBuildBytes) }
+								: item,
 			);
 			await Promise.all([
 				writeFile(httpPath, forgedHttpBytes),

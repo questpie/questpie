@@ -483,7 +483,9 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const role = "questpie_beta02_deployer";
 		const rolePassword = crypto.randomUUID();
 		if (!/^[0-9a-f-]+$/.test(rolePassword)) {
-			throw new Error("generated PostgreSQL probe password has an unsafe format");
+			throw new Error(
+				"generated PostgreSQL probe password has an unsafe format",
+			);
 		}
 		let roleCreated = false;
 		try {
