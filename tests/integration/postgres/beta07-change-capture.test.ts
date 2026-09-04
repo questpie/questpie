@@ -624,14 +624,20 @@ SELECT 'message-' || value, 'bulk', 'body' FROM generate_series(1, 17) value;`);
 			async () => {
 				await ensure(database!);
 				await installApplicationSchema(database!);
+				const writerPassword = crypto.randomUUID();
+				if (!/^[0-9a-f-]+$/.test(writerPassword)) {
+					throw new Error(
+						"generated PostgreSQL writer password has an unsafe format",
+					);
+				}
 				await database!
-					.unsafe(`CREATE ROLE ${writerRole} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+					.unsafe(`CREATE ROLE ${writerRole} LOGIN PASSWORD '${writerPassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 GRANT USAGE ON SCHEMA collaboration TO ${writerRole};
 GRANT SELECT, INSERT, UPDATE, DELETE ON collaboration.channels, collaboration.messages TO ${writerRole};`);
 				const writer = new SQL({
 					database: process.env.PGDATABASE,
 					hostname: process.env.PGHOST,
-					password: "",
+					password: writerPassword,
 					port: Number(process.env.PGPORT ?? "5432"),
 					username: writerRole,
 					max: 1,
