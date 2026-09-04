@@ -56,12 +56,14 @@ function mcpRequest(input: {
 	cookie?: string;
 	credentialUnavailable?: boolean;
 	name: string;
+	signal?: AbortSignal;
 }): Readonly<{ id: string; request: Request }> {
 	const id = `mcp:${crypto.randomUUID()}`;
 	return {
 		id,
 		request: new Request("https://app.test/_questpie/mcp", {
 			method: "POST",
+			...(input.signal === undefined ? {} : { signal: input.signal }),
 			headers: {
 				accept: "application/json, text/event-stream",
 				"content-type": "application/json",
@@ -1352,8 +1354,30 @@ VALUES ($1, $2, $3, $4, $5)`,
 				]);
 				const directConstraintErrorBytes = ownErrorBytes(directConstraintError);
 				const clientConstraintErrorBytes = ownErrorBytes(clientConstraintError);
+				const mcpConstraintCallId = `mcp:constraint:${crypto.randomUUID()}`;
+				const mcpConstraint = await callMcp(
+					(request) => routeApplication.fetch(request),
+					{
+						cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						name: "mutation.message.publish",
+						arguments: {
+							callId: mcpConstraintCallId,
+							context: { companyId: tracerIds.company },
+							input: {
+								body: hostileConstraintBody,
+								channelId: tracerIds.channel,
+							},
+						},
+					},
+				);
+				expect(mcpConstraint.error).toEqual({
+					code: "INTERNAL",
+					retryable: false,
+				});
+				const mcpConstraintErrorBytes = ownErrorBytes(mcpConstraint.error);
 				expect(clientConstraintErrorBytes).toBe(directConstraintErrorBytes);
 				expect(wireErrorBytes.get("INTERNAL")).toBe(directConstraintErrorBytes);
+				expect(mcpConstraintErrorBytes).toBe(directConstraintErrorBytes);
 				for (const secret of [
 					hostileConstraintBody,
 					"message_events_message_id_fkey",
@@ -1369,6 +1393,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 					for (const evidence of [
 						ownErrorBytes(directConstraintError),
 						ownErrorBytes(clientConstraintError),
+						mcpConstraintErrorBytes,
 						wireErrorBytes.get("INTERNAL")!,
 					])
 						expect(evidence).not.toContain(secret);
@@ -1420,6 +1445,83 @@ VALUES ($1, $2, $3, $4, $5)`,
 					disposals: expect.any(Number),
 					receipt: expect.stringMatching(/^delivery:/),
 				});
+				const mcpResourceLimit = await callMcp(
+					(request) => routeApplication.fetch(request),
+					{
+						cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						name: "action.delivery.publish",
+						arguments: {
+							callId: `mcp:delivery-limit:${crypto.randomUUID()}`,
+							context: { companyId: tracerIds.company },
+							effectKey: `mcp:delivery-limit:${crypto.randomUUID()}`,
+							input: {
+								effectKey: "domain-mcp-limit",
+								message: "x".repeat(4_096),
+							},
+						},
+					},
+				);
+				expect(mcpResourceLimit.error).toEqual({
+					code: "RESOURCE_LIMIT",
+					retryable: true,
+				});
+				const mcpOutcomeUnknown = await callMcp(
+					(request) => routeApplication.fetch(request),
+					{
+						cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						name: "action.delivery.publish",
+						arguments: {
+							callId: `mcp:delivery-lost:${crypto.randomUUID()}`,
+							context: { companyId: tracerIds.company },
+							effectKey: `mcp:delivery-lost:${crypto.randomUUID()}`,
+							input: {
+								effectKey: "domain-mcp-lost",
+								message: "delivery-lost-mcp",
+							},
+						},
+					},
+				);
+				expect(mcpOutcomeUnknown.error).toEqual({
+					code: "OUTCOME_UNKNOWN",
+					payload: { reason: "provider response was lost" },
+				});
+				const blockedDeliveryAdmission = Symbol.for(
+					"questpie.tracer.delivery-block-admission",
+				);
+				Reflect.deleteProperty(globalThis, blockedDeliveryAdmission);
+				const { request: cancelledMcpActionRequest } = mcpRequest({
+					cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+					name: "action.delivery.publish",
+					arguments: {
+						callId: `mcp:delivery-cancel:${crypto.randomUUID()}`,
+						context: { companyId: tracerIds.company },
+						effectKey: `mcp:delivery-cancel:${crypto.randomUUID()}`,
+						input: {
+							effectKey: "domain-mcp-cancel",
+							message: "delivery-blocked",
+						},
+					},
+				});
+				const cancelledMcpActionResponse = await routeApplication.fetch(
+					cancelledMcpActionRequest,
+				);
+				const cancelledMcpActionReader =
+					cancelledMcpActionResponse.body?.getReader();
+				if (!cancelledMcpActionReader)
+					throw new TypeError("MCP Action cancellation response has no stream");
+				const cancelledMcpActionRead = cancelledMcpActionReader.read();
+				await eventually(
+					() => Reflect.get(globalThis, blockedDeliveryAdmission),
+					{
+						accept: (effect) => typeof effect === "string",
+						description: "MCP Action reaches external-effect admission",
+						intervalMilliseconds: 1,
+						timeoutMilliseconds: 5_000,
+					},
+				);
+				await cancelledMcpActionReader.cancel();
+				await cancelledMcpActionRead.catch(() => undefined);
+				Reflect.deleteProperty(globalThis, blockedDeliveryAdmission);
 				const callsAfterNetworkDelivery = transportCalls;
 				const maximumTimeoutEffectKey = "provider-maximum-timeout";
 				const directMaximumTimeout = await invokeDelivery(
@@ -1430,6 +1532,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 						timeoutMilliseconds: Number.MAX_SAFE_INTEGER,
 					},
 				);
+				expect(directMaximumTimeout.attempt).toBe(networkDelivery.attempt + 4);
 				const networkMaximumTimeout = await networkClient.actions[
 					"delivery.publish"
 				](
@@ -1460,9 +1563,6 @@ VALUES ($1, $2, $3, $4, $5)`,
 					payload: null,
 					status: 502,
 				});
-				const blockedDeliveryAdmission = Symbol.for(
-					"questpie.tracer.delivery-block-admission",
-				);
 				Reflect.deleteProperty(globalThis, blockedDeliveryAdmission);
 				const networkCancellation = new AbortController();
 				const networkAmbiguous = networkClient.actions["delivery.publish"](
@@ -1562,7 +1662,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 					{ effectKey: "domain-cleanup", message: "delivery-after-failure" },
 					{ effectKey: "provider-after-failure" },
 				);
-				expect(afterFailure).toMatchObject({ attempt: 12, disposals: 11 });
+				expect(afterFailure).toMatchObject({ attempt: 14, disposals: 13 });
 				await expect(
 					escapedAction!(
 						{ effectKey: "domain-escaped", message: "delivery-escaped" },
@@ -1610,6 +1710,129 @@ VALUES ($1, $2, $3, $4, $5)`,
 					listener: "disabled",
 				});
 			}
+
+			const runMcpPostCommitLoss = async (): Promise<void> => {
+				let lossController: AbortController | undefined;
+				const commitAbortHelper = join(
+					temporary,
+					"mcp03-commit-abort-observability.ts",
+				);
+				await writeFile(
+					commitAbortHelper,
+					`import { createOfficialQuestpieObservability } from "questpie/internal/observability";
+export function createCommitAbortObservability(state: { abort(): void }) {
+	return createOfficialQuestpieObservability(() => ({
+		format: "questpie.runtime-observability", version: 1, extract: () => null,
+		begin() {
+			return { context: null,
+				run(use: () => unknown) { return use(); },
+				event(event: { kind?: string }) {
+					if (event.kind === "transaction.committed") state.abort();
+				},
+				end() {},
+			};
+		},
+	}));
+}
+`,
+				);
+				const { createCommitAbortObservability } = (await import(
+					pathToFileURL(commitAbortHelper).href
+				)) as Readonly<{
+					createCommitAbortObservability(state: { abort(): void }): unknown;
+				}>;
+				const observability = createCommitAbortObservability({
+					abort: () =>
+						lossController?.abort(
+							new DOMException("MCP response transport left", "AbortError"),
+						),
+				});
+				const lossApplication = await createApp({
+					postgres: {
+						connectionUrl: postgresUrl(),
+						directConnectionUrl: postgresUrl(),
+					},
+					realtime: { hmacKey: new Uint8Array(32).fill(31) },
+					maintenance: { authorize: () => false },
+					observability,
+				});
+				try {
+					const callId = `mcp:post-commit-loss:${crypto.randomUUID()}`;
+					const body = `mcp-post-commit-loss-${crypto.randomUUID()}`;
+					lossController = new AbortController();
+					const operationArguments = {
+						callId,
+						context: { companyId: tracerIds.company },
+						input: { body, channelId: tracerIds.channel },
+					};
+					const { request } = mcpRequest({
+						cookie: "questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						name: "mutation.message.publish",
+						arguments: operationArguments,
+						signal: lossController.signal,
+					});
+					const response = await lossApplication.fetch(request);
+					const reader = response.body?.getReader();
+					if (!reader)
+						throw new TypeError("MCP post-commit response has no stream");
+					const pendingRead = reader.read();
+					await eventually(
+						async () => {
+							const [row] = await database!.unsafe<
+								ReadonlyArray<Readonly<{ receipts: number }>>
+							>(
+								"SELECT count(*)::integer AS receipts FROM questpie_internal.mutation_call_receipts WHERE call_id = $1",
+								[callId],
+							);
+							return row?.receipts ?? 0;
+						},
+						{
+							accept: (receipts) => receipts === 1,
+							description: "MCP Mutation receipt commits before response loss",
+							intervalMilliseconds: 10,
+							timeoutMilliseconds: 5_000,
+						},
+					);
+					await eventually(() => lossController?.signal.aborted === true, {
+						accept: (aborted) => aborted,
+						description: "transaction commit closes MCP response transport",
+						intervalMilliseconds: 1,
+						timeoutMilliseconds: 5_000,
+					});
+					const transportOutcome = await Promise.race([
+						pendingRead,
+						Bun.sleep(100).then(() => null),
+					]);
+					if (transportOutcome === null) await reader.cancel();
+					else {
+						expect(transportOutcome.done).toBe(true);
+						expect(transportOutcome.value).toBeUndefined();
+					}
+					lossController = undefined;
+					const replay = await callMcp(
+						(request) => lossApplication.fetch(request),
+						{
+							cookie:
+								"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+							name: "mutation.message.publish",
+							arguments: operationArguments,
+						},
+					);
+					expect(replay.error).toBeUndefined();
+					expect(replay.result).toMatchObject({ body });
+					const [committed] = await database!.unsafe<
+						ReadonlyArray<Readonly<{ messages: number; receipts: number }>>
+					>(
+						`SELECT
+  (SELECT count(*)::integer FROM collaboration.messages WHERE body = $2) AS messages,
+  (SELECT count(*)::integer FROM questpie_internal.mutation_call_receipts WHERE call_id = $1) AS receipts`,
+						[callId, body],
+					);
+					expect(committed).toEqual({ messages: 1, receipts: 1 });
+				} finally {
+					await lossApplication.close();
+				}
+			};
 
 			const runHostileObservability = async (): Promise<void> => {
 				const hostileHelper = join(
@@ -1690,6 +1913,21 @@ export function createHostileQuestpieObservability(state: { begins: number; even
 							id: tracerIds.channel,
 						}),
 					).toEqual(hostileDirect);
+					const hostileMcpQuery = await callMcp(
+						(request) => hostileApplication.fetch(request),
+						{
+							cookie:
+								"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+							name: "query.channels.detail",
+							arguments: {
+								context: { companyId: tracerIds.company },
+								input: { id: tracerIds.channel },
+							},
+						},
+					);
+					expect(hostileMcpQuery.result).toEqual(
+						JSON.parse(JSON.stringify(hostileDirect)),
+					);
 					const disclosureSentinel = "__questpie_hostile_invalid_event__";
 					const hostileCallId = `otel07:hostile:${crypto.randomUUID()}`;
 					let hostileDirectError: unknown;
@@ -1725,6 +1963,26 @@ export function createHostileQuestpieObservability(state: { begins: number; even
 					expect(ownErrorBytes(hostileNetworkError)).toBe(
 						ownErrorBytes(hostileDirectError),
 					);
+					const hostileMcpError = await callMcp(
+						(request) => hostileApplication.fetch(request),
+						{
+							cookie:
+								"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+							name: "mutation.message.publish",
+							arguments: {
+								callId: hostileCallId,
+								context: { companyId: tracerIds.company },
+								input: {
+									body: disclosureSentinel,
+									channelId: tracerIds.channel,
+								},
+							},
+						},
+					);
+					expect(hostileMcpError.error).toEqual({
+						code: "PUBLICATION_REJECTED",
+						payload: null,
+					});
 					const [hostileRows] = await database!.unsafe<
 						ReadonlyArray<Readonly<{ count: number }>>
 					>(
@@ -2479,12 +2737,24 @@ ORDER BY watch.query_identity`);
 			expect(afterCancelledWatch?.inverseRuntime?.operationRequests).toBe(
 				requestsBeforeCancelledWatch,
 			);
-			const [bindingsAfterCancelledWatch] = await database!.unsafe<
-				readonly Readonly<{ bindings: number }>[]
-			>(
-				"SELECT count(*)::int AS bindings FROM questpie_internal.realtime_watch_bindings",
-			);
-			expect(bindingsAfterCancelledWatch).toEqual({ bindings: 0 });
+			expect(
+				await eventually(
+					async () => {
+						const [current] = await database!.unsafe<
+							readonly Readonly<{ bindings: number }>[]
+						>(
+							"SELECT count(*)::int AS bindings FROM questpie_internal.realtime_watch_bindings",
+						);
+						return current ?? null;
+					},
+					{
+						accept: (current) => current?.bindings === 0,
+						description: "cancelled Query Resource leaves no watch binding",
+						intervalMilliseconds: 50,
+						timeoutMilliseconds: 10_000,
+					},
+				),
+			).toEqual({ bindings: 0 });
 			const terminal = await eventually(
 				async () => {
 					const [row] = await database!.unsafe<
@@ -3155,6 +3425,7 @@ SET status = 'active'
 WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'`,
 				[tracerIds.company, tracerIds.principal],
 			);
+			await runMcpPostCommitLoss();
 			await runHostileObservability();
 		} finally {
 			await cleanup.dispose();
