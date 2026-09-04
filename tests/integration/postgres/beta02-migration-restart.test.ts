@@ -143,8 +143,16 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			} catch (error) {
 				abortError = error;
 			}
-			expect(abortError).toBeInstanceOf(DOMException);
-			expect((abortError as DOMException).name).toBe("AbortError");
+			expect(controller.signal.aborted).toBe(true);
+			if (abortError instanceof DOMException) {
+				expect(abortError.name).toBe("AbortError");
+			} else {
+				expect(abortError).toBeInstanceOf(SQL.PostgresError);
+				expect((abortError as SQL.PostgresError).code).toBe(
+					"ERR_POSTGRES_SERVER_ERROR",
+				);
+				expect((abortError as SQL.PostgresError).errno).toBe("57014");
+			}
 			expect(performance.now() - abortStarted).toBeLessThan(3_000);
 			const [afterAbort] = await database!<
 				{ schemaExists: boolean; receipts: number }[]
