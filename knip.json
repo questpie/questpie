@@ -8,6 +8,7 @@
 		"docs/v4/prototypes/**",
 		"tests/load/*.ts"
 	],
+	"ignoreDependencies": ["react"],
 	"ignoreUnresolved": ["/^fumadocs-mdx:collections\\//"],
 	"rules": {
 		"files": "warn",
