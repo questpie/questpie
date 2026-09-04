@@ -1,6 +1,6 @@
 # Basic MCP projection tracer tickets
 
-- Status: accepted design; implementation tickets ready
+- Status: implemented
 - Dependency chain: `HTTP-02 + DOC-01 -> MCP-01 -> MCP-02 -> MCP-03`
 - Scope: basic Tools projection only; no resources, prompts, Tasks, Jobs,
   Routes, sessions, retry, fallback, or legacy protocol
@@ -29,8 +29,11 @@ occurs once, and no retry/fallback/session/MRTR path exists.
 
 ## MCP-03 — Hostile tracers, docs, and release closure
 
-Status: active. Team Support Desk is migrated through its packed PostgreSQL 17
-and Firefox tracer; Collaboration authority hostiles remain.
+Status: implemented. Team Support Desk passes its packed PostgreSQL 17 and
+Firefox tracer. Collaboration passes credential, codec, Policy nondisclosure,
+cross-transport Mutation replay, and Action hostiles through the same Runtime
+executor. Focused adapter tests retain post-commit uncertainty, Action
+ambiguity, resource-limit, cancellation, and fault evidence.
 
 Blocked by MCP-01 and MCP-02. Migrate Team Support Desk Query/Mutation/Action and
 Collaboration authority hostiles. Prove application/Package parity, direct/HTTP/

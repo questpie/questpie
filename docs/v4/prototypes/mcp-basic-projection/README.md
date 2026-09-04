@@ -1,11 +1,14 @@
-# Basic MCP projection research
+# Basic MCP projection evidence
 
-- Status: research prototype; not Accepted authority
+- Status: archived evidence for Accepted ADR-0038
+- Production parity: compiler, Runtime ingress, Team Support Desk, and
+  Collaboration tracers
 - Scope: derive a model-facing MCP tool catalogue from canonical network
   Operations without re-authoring names, schemas, descriptions, or handlers
 - Protocol target: final MCP revision `2026-07-28`
 
-Pinned official source: tag `2026-07-28`, commit
+The duplicate executable prototype was deleted after production parity. Pinned
+official source: tag `2026-07-28`, commit
 `5f5440bb26a62e2cf3440b92da5a667efa03b267`; schema JSON SHA-256
 `ef70b61f99b6d2e5e3b46863822eab08dff6a45bedc7a08914e0e5b133f40203`;
 schema TypeScript SHA-256
