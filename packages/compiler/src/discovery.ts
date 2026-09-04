@@ -336,6 +336,7 @@ const make = (resourceKind) => (definition) => Object.freeze({
 });
 export const defineQuery = (definition) => Object.freeze({
   ...definition,
+	network: definition.network === true,
   ...(definition.query === undefined || definition.handler !== undefined
     ? {}
     : { handler: ({ input, ctx }) => ctx.data.run(definition.query, input) }),

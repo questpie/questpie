@@ -767,6 +767,7 @@ export type PackageServices = Readonly<{
 export type PackageQueryFactory = <const Name extends keyof PackageQueries>(
 	definition: Readonly<{
 		name: Name;
+		network?: boolean;
 		input: Codec<PackageQueries[Name]["input"]>;
 		output: Codec<PackageQueries[Name]["output"]>; describe?: OperationDescription<PackageQueries[Name]["input"], PackageQueries[Name]["output"]>;
 		handler(input: Readonly<{
@@ -774,7 +775,7 @@ export type PackageQueryFactory = <const Name extends keyof PackageQueries>(
 			ctx: Readonly<{ data: PackageData; signal: AbortSignal }>;
 		}>): PackageQueries[Name]["output"] | Promise<PackageQueries[Name]["output"]>;
 	}>,
-) => Readonly<{ kind: "query"; name: Name }>;
+	) => Readonly<{ kind: "query"; name: Name; network: boolean }>;
 
 type EmptyDefinitionFactory = (definition: never) => never;
 
