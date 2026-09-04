@@ -135,7 +135,6 @@ WHERE application_name = 'application:collaboration' AND run_id = ANY($2::uuid[]
 		})) as Readonly<{ claimed: number }>;
 		expect(cleanup.claimed).toBe(6);
 	},
-	15_000,
 );
 
 postgresTest(

@@ -215,7 +215,7 @@ function postgres(args: string[]): void {
 		fail("PGHOST, PGDATABASE, and PGUSER are required for the PostgreSQL lane");
 	}
 	buildPublicPackage();
-	for (const root of roots) run(["bun", "test", root]);
+	for (const root of roots) run(["bun", "test", "--timeout=15000", root]);
 }
 
 function scenarios(kind: "micro" | "load" | "soak", args: string[]): void {
