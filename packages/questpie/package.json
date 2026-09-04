@@ -13,6 +13,10 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
+		"./react": {
+			"types": "./dist/react.d.ts",
+			"import": "./dist/react.js"
+		},
 		"./internal/observability": {
 			"types": "./dist/internal/observability.d.ts",
 			"import": "./dist/internal/observability.js"
@@ -26,5 +30,17 @@
 		"@types/bun": "1.3.14",
 		"pg": "8.22.0",
 		"typescript": "6.0.2"
+	},
+	"devDependencies": {
+		"@types/react": "19.2.17",
+		"react": "19.2.8"
+	},
+	"peerDependencies": {
+		"react": "^19.2.0"
+	},
+	"peerDependenciesMeta": {
+		"react": {
+			"optional": true
+		}
 	}
 }

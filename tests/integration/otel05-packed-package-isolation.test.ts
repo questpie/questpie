@@ -61,20 +61,20 @@ packageIsolationTest(
 	() => {
 		expect(
 			existsSync(join(adapterRoot, "package.json")),
-			"OTEL-05 requires the publishable @questpie/opentelemetry package",
+			"OTEL-05 requires the publishable questpie-opentelemetry package",
 		).toBe(true);
 
 		const core = manifest(questpieRoot);
 		const adapter = manifest(adapterRoot);
 		expect(core).toMatchObject({ name: "questpie", version: releaseVersion });
 		expect(adapter).toMatchObject({
-			name: "@questpie/opentelemetry",
+			name: "questpie-opentelemetry",
 			version: releaseVersion,
 			peerDependencies: { questpie: releaseVersion },
 		});
 		expect(Object.keys(adapter.peerDependencies ?? {})).toEqual(["questpie"]);
 		expect(Object.keys(core.dependencies ?? {})).not.toContain(
-			"@questpie/opentelemetry",
+			"questpie-opentelemetry",
 		);
 		expect(
 			Object.keys(core.dependencies ?? {}).some((name) =>
@@ -95,11 +95,11 @@ packageIsolationTest(
 			const ownsExplicitCliResolution =
 				path === join(questpieRoot, "cli/telemetry.ts") ||
 				path === join(questpieRoot, "dist/cli.js");
-			if (ownsExplicitCliResolution)
-				expect(source.match(/@questpie\/opentelemetry/gu), path).toHaveLength(
-					1,
-				);
-			else expect(source, path).not.toContain("@questpie/opentelemetry");
+			expect(
+				source.match(/["']questpie-opentelemetry["']/gu) ?? [],
+				path,
+			).toHaveLength(ownsExplicitCliResolution ? 1 : 0);
+			expect(source, path).not.toContain("@questpie/opentelemetry");
 			expect(source, path).not.toContain("@opentelemetry/");
 		}
 
@@ -141,7 +141,7 @@ packageIsolationTest(
 					type: "module",
 					dependencies: {
 						questpie: questpieTarball,
-						"@questpie/opentelemetry": adapterTarball,
+						"questpie-opentelemetry": adapterTarball,
 					},
 				}),
 			);
@@ -149,8 +149,7 @@ packageIsolationTest(
 			const installedAdapter = join(
 				consumer,
 				"node_modules",
-				"@questpie",
-				"opentelemetry",
+				"questpie-opentelemetry",
 			);
 			const shippedSource = files(installedAdapter)
 				.filter((path) => /\.(?:d\.ts|js)$/u.test(path))
@@ -166,8 +165,8 @@ packageIsolationTest(
 				expect(shippedSource).not.toContain(forbiddenTestHook);
 			writeFileSync(
 				join(consumer, "verify.ts"),
-				`import * as adapterPackage from "@questpie/opentelemetry";
-import { createOpenTelemetry } from "@questpie/opentelemetry";
+				`import * as adapterPackage from "questpie-opentelemetry";
+import { createOpenTelemetry } from "questpie-opentelemetry";
 import {
   bindOfficialQuestpieObservability,
 } from "questpie/internal/observability";

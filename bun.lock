@@ -100,11 +100,10 @@
       "name": "@questpie/fixture-team-support-desk",
       "version": "4.0.0-beta.1",
       "dependencies": {
-        "@questpie/opentelemetry": "workspace:*",
-        "@questpie/react": "workspace:*",
         "better-auth": "1.7.1",
         "pg": "8.23.0",
         "questpie": "workspace:*",
+        "questpie-opentelemetry": "workspace:*",
         "react": "19.2.8",
         "react-dom": "19.2.8",
       },
@@ -126,7 +125,7 @@
       },
     },
     "packages/opentelemetry": {
-      "name": "@questpie/opentelemetry",
+      "name": "questpie-opentelemetry",
       "version": "4.0.0-beta.1",
       "dependencies": {
         "@opentelemetry/api": "1.9.1",
@@ -156,19 +155,16 @@
         "pg": "8.22.0",
         "typescript": "6.0.2",
       },
-    },
-    "packages/react": {
-      "name": "@questpie/react",
-      "version": "4.0.0-beta.1",
       "devDependencies": {
         "@types/react": "19.2.17",
         "react": "19.2.8",
-        "typescript": "6.0.2",
       },
       "peerDependencies": {
-        "questpie": "4.0.0-beta.1",
         "react": "^19.2.0",
       },
+      "optionalPeers": [
+        "react",
+      ],
     },
     "packages/runtime": {
       "name": "@questpie/runtime",
@@ -716,10 +712,6 @@
     "@questpie/fixture-collaboration": ["@questpie/fixture-collaboration@workspace:fixtures/collaboration"],
 
     "@questpie/fixture-team-support-desk": ["@questpie/fixture-team-support-desk@workspace:fixtures/team-support-desk"],
-
-    "@questpie/opentelemetry": ["@questpie/opentelemetry@workspace:packages/opentelemetry"],
-
-    "@questpie/react": ["@questpie/react@workspace:packages/react"],
 
     "@questpie/runtime": ["@questpie/runtime@workspace:packages/runtime"],
 
@@ -2090,6 +2082,8 @@
     "qs": ["qs@6.15.3", "", { "dependencies": { "es-define-property": "^1.0.1", "side-channel": "^1.1.1" } }, "sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A=="],
 
     "questpie": ["questpie@workspace:packages/questpie"],
+
+    "questpie-opentelemetry": ["questpie-opentelemetry@workspace:packages/opentelemetry"],
 
     "queue-microtask": ["queue-microtask@1.2.3", "", {}, "sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A=="],
 

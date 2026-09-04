@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { createOpenTelemetry } from "@questpie/opentelemetry";
+import { createOpenTelemetry } from "questpie-opentelemetry";
 
 import { createApp } from "../.questpie/generated/app";
 

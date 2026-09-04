@@ -3,10 +3,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { JSDOM } from "jsdom";
+import { useQueryResource } from "questpie/react";
 import { StrictMode, act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-
-import { useQueryResource } from "@questpie/react";
 
 type Snapshot =
 	| Readonly<{ kind: "pending" }>
@@ -101,22 +100,22 @@ test("projects a Query Resource through React 19 without owning its identity or 
 	}
 });
 
-test("ships one exact-peer React adapter with no second client owner", () => {
-	const packageRoot = resolve(import.meta.dir, "../../../../packages/react");
+test("ships one optional-peer React subpath with no second client owner", () => {
+	const packageRoot = resolve(import.meta.dir, "../../../../packages/questpie");
 	const manifest = JSON.parse(
 		readFileSync(resolve(packageRoot, "package.json"), "utf8"),
 	) as Readonly<{
 		version: string;
 		dependencies?: Readonly<Record<string, string>>;
 		peerDependencies?: Readonly<Record<string, string>>;
+		peerDependenciesMeta?: Readonly<
+			Record<string, Readonly<{ optional?: boolean }>>
+		>;
 	}>;
-	const source = readFileSync(resolve(packageRoot, "src/index.ts"), "utf8");
+	const source = readFileSync(resolve(packageRoot, "src/react.ts"), "utf8");
 
-	expect(manifest.peerDependencies).toEqual({
-		questpie: manifest.version,
-		react: "^19.2.0",
-	});
-	expect(manifest.dependencies ?? {}).toEqual({});
+	expect(manifest.peerDependencies?.react).toBe("^19.2.0");
+	expect(manifest.peerDependenciesMeta?.react).toEqual({ optional: true });
 	expect(source).toContain(
 		"useSyncExternalStore(resource.subscribe, resource.getSnapshot)",
 	);
@@ -134,7 +133,7 @@ test("Team Support Desk observes ticket comments through one detail resource", (
 		readFileSync(resolve(browserRoot, "tickets/selected.tsx"), "utf8"),
 	].join("\n");
 
-	expect(sources).toContain('from "@questpie/react"');
+	expect(sources).toContain('from "questpie/react"');
 	expect(sources).toContain('["tickets.queue"].observe(');
 	expect(sources).toContain('["tickets.detail"].observe(');
 	expect(sources).toContain('["labels.page"].observe(');

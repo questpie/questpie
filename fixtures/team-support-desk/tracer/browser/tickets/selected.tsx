@@ -1,6 +1,5 @@
+import { useQueryResource } from "questpie/react";
 import { useEffect, useRef, useState } from "react";
-
-import { useQueryResource } from "@questpie/react";
 
 import type { SupportSession } from "../auth/client";
 import { reportFixturePhase } from "../fixture-control";

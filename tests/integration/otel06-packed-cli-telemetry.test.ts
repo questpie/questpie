@@ -119,7 +119,7 @@ tracer(
 			await install(cliRoot, { questpie: questpie! });
 			await install(applicationRoot, {
 				questpie: questpie!,
-				"@questpie/opentelemetry": opentelemetry!,
+				"questpie-opentelemetry": opentelemetry!,
 			});
 			const generated = join(applicationRoot, ".questpie/generated/internal");
 			await mkdir(generated, { recursive: true });
@@ -210,7 +210,7 @@ export async function createApplication(input) {
 
 			await writeFile(
 				join(applicationRoot, "embedded.mjs"),
-				`import { createOpenTelemetry } from "@questpie/opentelemetry";
+				`import { createOpenTelemetry } from "questpie-opentelemetry";
 import { createApplication } from "./.questpie/generated/internal/application.js";
 const telemetry = await createOpenTelemetry();
 try {
@@ -331,13 +331,13 @@ try {
 			await install(incompatibleRoot, { questpie: questpie! });
 			const incompatiblePackage = join(
 				incompatibleRoot,
-				"node_modules/@questpie/opentelemetry",
+				"node_modules/questpie-opentelemetry",
 			);
 			await mkdir(incompatiblePackage, { recursive: true });
 			await writeFile(
 				join(incompatiblePackage, "package.json"),
 				JSON.stringify({
-					name: "@questpie/opentelemetry",
+					name: "questpie-opentelemetry",
 					type: "module",
 					exports: "./index.js",
 				}),

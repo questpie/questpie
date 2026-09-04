@@ -46,7 +46,7 @@ export async function loadOpenTelemetry(
 ): Promise<LoadedTelemetry> {
 	let create: unknown;
 	try {
-		const entry = Bun.resolveSync("@questpie/opentelemetry", applicationRoot);
+		const entry = Bun.resolveSync("questpie-opentelemetry", applicationRoot);
 		const module = (await import(
 			`${pathToFileURL(entry).href}?questpie-start=${crypto.randomUUID()}`
 		)) as Readonly<{ createOpenTelemetry?: unknown }>;

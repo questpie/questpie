@@ -1,5 +1,5 @@
 {
-	"name": "@questpie/opentelemetry",
+	"name": "questpie-opentelemetry",
 	"version": "4.0.0-beta.1",
 	"files": [
 		"dist"

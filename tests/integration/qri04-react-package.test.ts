@@ -29,11 +29,7 @@ function run(command: readonly string[], cwd: string) {
 	});
 }
 
-function writePeer(
-	root: string,
-	name: "react",
-	version: string,
-): void {
+function writePeer(root: string, name: "react", version: string): void {
 	const peerRoot = join(root, "node_modules", name);
 	mkdirSync(peerRoot, { recursive: true });
 	writeFileSync(

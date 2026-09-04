@@ -29,6 +29,7 @@ type PackageJson = {
 	scripts?: Record<string, string>;
 	dependencies?: Record<string, string>;
 	peerDependencies?: Record<string, string>;
+	peerDependenciesMeta?: Record<string, { optional?: boolean }>;
 };
 
 function fail(message: string): never {
@@ -57,10 +58,23 @@ const publicPackages = packageFiles(resolve("packages"))
 	}))
 	.filter(({ json }) => !json.private);
 
+const expectedPublicPackageNames = ["questpie", "questpie-opentelemetry"];
+
 if (publicPackages.length === 0) {
 	console.log("package-contract: no publishable implementation packages yet");
 	process.exit(0);
 }
+
+if (
+	JSON.stringify(
+		publicPackages
+			.map(({ json }) => json.name)
+			.sort((left, right) => (left ?? "").localeCompare(right ?? "")),
+	) !== JSON.stringify([...expectedPublicPackageNames].sort())
+)
+	fail(
+		"publishable packages must be exactly questpie and questpie-opentelemetry",
+	);
 
 for (const { path, json } of publicPackages) {
 	const label = json.name ?? path;
@@ -99,25 +113,34 @@ for (const { path, json } of publicPackages) {
 	if (
 		json.name === "questpie" &&
 		(!inspection.includes("dist/internal/observability.d.ts") ||
-			!inspection.includes("dist/internal/observability.js"))
+			!inspection.includes("dist/internal/observability.js") ||
+			!inspection.includes("dist/react.d.ts") ||
+			!inspection.includes("dist/react.js"))
 	)
-		fail(`${label}: tarball omits the official observability bridge`);
+		fail(`${label}: tarball omits a required public subpath`);
 	if (
 		json.name === "questpie" &&
 		JSON.stringify(Object.keys(json.exports).sort()) !==
-			JSON.stringify([".", "./internal/observability"])
+			JSON.stringify([".", "./internal/observability", "./react"])
 	)
-		fail(`${label}: exports an unexpected observability surface`);
+		fail(`${label}: exports an unexpected public surface`);
+	if (
+		json.name === "questpie" &&
+		(json.peerDependencies?.react !== "^19.2.0" ||
+			json.peerDependenciesMeta?.react?.optional !== true)
+	)
+		fail(`${label}: React must be the optional ^19.2.0 peer for ./react`);
 	if (
 		json.name === "questpie" &&
 		Object.keys(json.dependencies ?? {}).some(
 			(name) =>
 				name === "@questpie/opentelemetry" ||
+				name === "questpie-opentelemetry" ||
 				name.startsWith("@opentelemetry/"),
 		)
 	)
 		fail(`${label}: core must not depend on OpenTelemetry`);
-	if (json.name === "@questpie/opentelemetry") {
+	if (json.name === "questpie-opentelemetry") {
 		if (
 			JSON.stringify(Object.keys(json.exports).sort()) !== JSON.stringify(["."])
 		)
@@ -199,6 +222,10 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 			"packages/questpie",
 			{
 				".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
+				"./react": {
+					types: "./dist/react.d.ts",
+					import: "./dist/react.js",
+				},
 				"./internal/observability": {
 					types: "./dist/internal/observability.d.ts",
 					import: "./dist/internal/observability.js",

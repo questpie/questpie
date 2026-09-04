@@ -52,6 +52,9 @@ describe("BETA-01 generated contract", () => {
 		expect(first.generatedFiles["app.ts"]).not.toContain(
 			"@questpie/opentelemetry",
 		);
+		expect(first.generatedFiles["app.ts"]).not.toContain(
+			"questpie-opentelemetry",
+		);
 		expect(first.generatedFiles["client.ts"]).not.toContain("observability");
 		expect(first.generatedFiles["client.ts"]).not.toContain("traceparent");
 		const workspaceGraph = await Promise.all(

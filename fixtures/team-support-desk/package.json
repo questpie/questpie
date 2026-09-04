@@ -14,11 +14,10 @@
 		"tracer": "bun tracer/host.ts"
 	},
 	"dependencies": {
-		"@questpie/opentelemetry": "workspace:*",
-		"@questpie/react": "workspace:*",
 		"better-auth": "1.7.1",
 		"pg": "8.23.0",
 		"questpie": "workspace:*",
+		"questpie-opentelemetry": "workspace:*",
 		"react": "19.2.8",
 		"react-dom": "19.2.8"
 	},

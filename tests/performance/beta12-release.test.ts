@@ -22,14 +22,11 @@ test("owns the aggregate release and production-backend budgets", async () => {
 	expect(elapsed).toBeLessThanOrEqual(15_000);
 	expect(release.stdout.toString()).toContain(`questpie@${releaseVersion}`);
 	expect(release.stdout.toString()).toContain(
-		`@questpie/react@${releaseVersion}`,
-	);
-	expect(release.stdout.toString()).toContain(
-		`@questpie/opentelemetry@${releaseVersion}`,
+		`questpie-opentelemetry@${releaseVersion}`,
 	);
 	expect(release.stdout.toString()).toContain("exact-peers");
 	expect(release.stdout.toString()).toContain(
-		"exact-three-package combined-import",
+		"exact-two-package combined-import",
 	);
 
 	const root = resolve(repositoryRoot, "quality/performance");

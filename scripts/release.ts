@@ -17,14 +17,17 @@ type PackageJson = Readonly<{
 	name?: string;
 	version?: string;
 	private?: boolean;
+	exports?: Readonly<Record<string, unknown>>;
 	peerDependencies?: Readonly<Record<string, string>>;
+	peerDependenciesMeta?: Readonly<
+		Record<string, Readonly<{ optional?: boolean }>>
+	>;
 	dependencies?: Readonly<Record<string, string>>;
 }>;
 
 const releaseProfiles = [
 	{ name: "questpie", kind: "core" },
-	{ name: "@questpie/react", kind: "react" },
-	{ name: "@questpie/opentelemetry", kind: "opentelemetry" },
+	{ name: "questpie-opentelemetry", kind: "opentelemetry" },
 ] as const;
 type ReleasePackageName = (typeof releaseProfiles)[number]["name"];
 
@@ -37,7 +40,11 @@ type ArtifactManifest = Readonly<{
 		version: string;
 		filename: string;
 		sha256: string;
-		declarationSha256: string;
+		declarations: readonly Readonly<{
+			export: string;
+			target: string;
+			sha256: string;
+		}>[];
 	}>[];
 }>;
 
@@ -64,6 +71,36 @@ function run(command: string[], cwd?: string): string {
 
 function sha256(path: string): string {
 	return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function declarationTarget(value: unknown): string | undefined {
+	if (typeof value === "string")
+		return value.endsWith(".d.ts") ? value : undefined;
+	if (!value || typeof value !== "object") return undefined;
+	const entries = value as Readonly<Record<string, unknown>>;
+	if (typeof entries.types === "string") return entries.types;
+	for (const candidate of Object.values(entries)) {
+		const target = declarationTarget(candidate);
+		if (target) return target;
+	}
+	return undefined;
+}
+
+function declarationInventory(packageRoot: string, json: PackageJson) {
+	return Object.entries(json.exports ?? {})
+		.map(([exportName, value]) => {
+			const target = declarationTarget(value);
+			if (!target)
+				fail(
+					`${json.name ?? packageRoot}: ${exportName} has no declaration target`,
+				);
+			return {
+				export: exportName,
+				target,
+				sha256: sha256(resolve(packageRoot, target)),
+			};
+		})
+		.sort((left, right) => left.export.localeCompare(right.export));
 }
 
 const dryRun = Bun.argv.includes("--dry-run");
@@ -156,7 +193,7 @@ function linkPackageDependencies(
 		);
 		if (!existsSync(source))
 			fail(
-				`@questpie/opentelemetry: dependency is unavailable for isolated import: ${dependency}`,
+				`questpie-opentelemetry: dependency is unavailable for isolated import: ${dependency}`,
 			);
 		const target = join(consumer, "node_modules", ...dependency.split("/"));
 		mkdirSync(dirname(target), { recursive: true });
@@ -258,9 +295,11 @@ if (dryRun) {
 				fail(
 					`${profile.name}: artifact checksum mismatch (expected ${expected.sha256}, received ${actual})`,
 				);
-			const declaration = resolve(packageRoot, "dist/index.d.ts");
-			if (sha256(declaration) !== expected.declarationSha256)
-				fail(`${profile.name}: declaration checksum mismatch`);
+			if (
+				JSON.stringify(declarationInventory(packageRoot, json)) !==
+				JSON.stringify(expected.declarations)
+			)
+				fail(`${profile.name}: declaration inventory mismatch`);
 			packedArtifacts.push({
 				package: releasePackage,
 				expected,
@@ -282,31 +321,38 @@ if (dryRun) {
 				}),
 			);
 
-			if (profile.kind === "react") {
-				const core = packedArtifacts.find(
-					(candidate) => candidate.package.profile.kind === "core",
-				);
-				if (!core)
-					fail("questpie: core package must precede React verification");
-				extractPackage(consumer, "questpie", core.firstTarball);
-				installReactTestPeer(consumer);
+			if (profile.kind === "core") {
 				const installed = JSON.parse(
 					readFileSync(
-						join(consumer, "node_modules/@questpie/react/package.json"),
+						join(consumer, "node_modules/questpie/package.json"),
 						"utf8",
 					),
 				) as PackageJson;
 				const peers = installed.peerDependencies;
 				if (
 					!peers ||
-					peers.questpie !== releaseVersion ||
 					peers.react !== "^19.2.0" ||
+					installed.peerDependenciesMeta?.react?.optional !== true ||
 					!Bun.semver.satisfies("19.2.8", peers.react) ||
 					Bun.semver.satisfies("18.3.1", peers.react)
 				)
-					fail("@questpie/react: exact peer or mismatch boundary drifted");
+					fail("questpie/react: optional peer or mismatch boundary drifted");
+				run(["bun", "-e", 'await import("questpie")'], consumer);
+				const missingReact = Bun.spawnSync(
+					["bun", "-e", 'await import("questpie/react")'],
+					{ cwd: consumer, stdout: "pipe", stderr: "pipe" },
+				);
+				if (missingReact.exitCode === 0)
+					fail("questpie/react: import succeeded without React");
+				installReactTestPeer(consumer);
 			}
 			if (profile.kind === "opentelemetry") {
+				const missingCore = Bun.spawnSync(
+					["bun", "-e", 'await import("questpie-opentelemetry")'],
+					{ cwd: consumer, stdout: "pipe", stderr: "pipe" },
+				);
+				if (missingCore.exitCode === 0)
+					fail("questpie-opentelemetry: import succeeded without questpie");
 				const core = packedArtifacts.find(
 					(candidate) => candidate.package.profile.kind === "core",
 				);
@@ -317,12 +363,12 @@ if (dryRun) {
 				extractPackage(consumer, "questpie", core.firstTarball);
 				const installed = JSON.parse(
 					readFileSync(
-						join(consumer, "node_modules/@questpie/opentelemetry/package.json"),
+						join(consumer, "node_modules/questpie-opentelemetry/package.json"),
 						"utf8",
 					),
 				) as PackageJson;
 				if (installed.peerDependencies?.questpie !== releaseVersion)
-					fail("@questpie/opentelemetry: exact peer boundary drifted");
+					fail("questpie-opentelemetry: exact peer boundary drifted");
 				linkPackageDependencies(consumer, packageRoot, installed.dependencies);
 			}
 
@@ -330,17 +376,20 @@ if (dryRun) {
 				[
 					"bun",
 					"-e",
-					profile.kind === "react"
-						? 'const value = await import("@questpie/react"); if (typeof value.useQueryResource !== "function") process.exit(1)'
-						: profile.kind === "opentelemetry"
-							? 'const value = await import("@questpie/opentelemetry"); if (typeof value.createOpenTelemetry !== "function") process.exit(1)'
-							: 'await import("questpie")',
+					profile.kind === "opentelemetry"
+						? 'const value = await import("questpie-opentelemetry"); if (typeof value.createOpenTelemetry !== "function") process.exit(1)'
+						: 'await import("questpie"); const value = await import("questpie/react"); if (typeof value.useQueryResource !== "function") process.exit(1)',
 				],
 				consumer,
 			);
 			verifyNegativeImports(
 				consumer,
-				[`${profile.name}/runtime`, "@questpie/runtime"],
+				[
+					`${profile.name}/runtime`,
+					"@questpie/runtime",
+					"@questpie/react",
+					"@questpie/opentelemetry",
+				],
 				profile.name,
 			);
 
@@ -393,7 +442,7 @@ if (dryRun) {
 
 			const markers =
 				profile.kind === "core"
-					? "retry-stable isolated-import negative-imports packed-build"
+					? "retry-stable isolated-import negative-imports optional-react peer-mismatch packed-build"
 					: "retry-stable isolated-import negative-imports exact-peers peer-mismatch";
 			console.log(
 				`release dry-run: ${profile.name}@${json.version} ${basename(artifact.firstTarball)} sha256=${artifact.actual} ${markers}`,
@@ -421,7 +470,7 @@ if (dryRun) {
 			(candidate) => candidate.package.profile.kind === "opentelemetry",
 		);
 		if (!telemetryArtifact)
-			fail("@questpie/opentelemetry: combined release artifact is missing");
+			fail("questpie-opentelemetry: combined release artifact is missing");
 		linkPackageDependencies(
 			combinedConsumer,
 			telemetryArtifact.package.root,
@@ -431,11 +480,16 @@ if (dryRun) {
 			[
 				"bun",
 				"-e",
-				'await import("questpie"); await import("@questpie/react"); await import("@questpie/opentelemetry")',
+				'await import("questpie"); await import("questpie/react"); await import("questpie-opentelemetry")',
 			],
 			combinedConsumer,
 		);
-		console.log("release dry-run: exact-three-package combined-import");
+		verifyNegativeImports(
+			combinedConsumer,
+			["@questpie/react", "@questpie/opentelemetry"],
+			"questpie",
+		);
+		console.log("release dry-run: exact-two-package combined-import");
 	} finally {
 		rmSync(temporary, { force: true, recursive: true });
 	}

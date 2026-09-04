@@ -53,6 +53,23 @@ async function applicationWithAdapter(source: string): Promise<string> {
 	return root;
 }
 
+async function applicationWithLegacyAdapter(source: string): Promise<string> {
+	const root = await mkdtemp(join(tmpdir(), "questpie-otel06-legacy-loader-"));
+	temporaryRoots.push(root);
+	const packageRoot = join(root, "node_modules/@questpie/opentelemetry");
+	await mkdir(packageRoot, { recursive: true });
+	await writeFile(
+		join(packageRoot, "package.json"),
+		JSON.stringify({
+			name: "@questpie/opentelemetry",
+			type: "module",
+			exports: "./index.js",
+		}),
+	);
+	await writeFile(join(packageRoot, "index.js"), source);
+	return root;
+}
+
 test("resolves and classifies explicit telemetry only from the application root", async () => {
 	const applicationRoot = await applicationWithAdapter(`
 		export async function createOpenTelemetry() {
@@ -67,6 +84,14 @@ test("resolves and classifies explicit telemetry only from the application root"
 		"export const nope = true;",
 	);
 	await expect(loadOpenTelemetry(missingExport)).rejects.toThrow(
+		"QP-START-004 telemetryUnavailable",
+	);
+	const legacyOnly = await applicationWithLegacyAdapter(`
+		export async function createOpenTelemetry() {
+			return Object.freeze({ close: async () => undefined });
+		}
+	`);
+	await expect(loadOpenTelemetry(legacyOnly)).rejects.toThrow(
 		"QP-START-004 telemetryUnavailable",
 	);
 	const invalid = await applicationWithAdapter(`
