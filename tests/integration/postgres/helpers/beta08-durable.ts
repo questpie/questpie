@@ -223,21 +223,31 @@ async function buildBeta08Durable(
 	const currentRuntimeBuild = JSON.parse(currentRuntimeBuildBytes) as Readonly<
 		Record<string, unknown>
 	>;
+	const {
+		digest: _currentDigest,
+		mcpProjectionDigest: _mcpProjectionDigest,
+		...currentUnsigned
+	} = currentRuntimeBuild;
+	const compatibleInventory = (
+		currentUnsigned.inventory as readonly Readonly<{ path: string }>[]
+	).filter(({ path }) => path !== "mcp-projection.json");
 	const { jobDigest: _jobDigest, ...compatibleLater } =
 		currentRuntimeBuild.later as Readonly<Record<string, unknown>>;
-	const { digest: _currentDigest, ...v4Unsigned } = {
-		...currentRuntimeBuild,
+	const v4Unsigned = {
+		...currentUnsigned,
 		internalProtocol: "questpie.internal.v4",
 		later: compatibleLater,
+		inventory: compatibleInventory,
 	};
 	const compatibleV4RuntimeBuildBytes = JSON.stringify({
 		...v4Unsigned,
 		digest: runtimeArtifactDigest("questpie-runtime-build-v1", v4Unsigned),
 	});
-	const { digest: _v6Digest, ...v5Unsigned } = {
-		...currentRuntimeBuild,
+	const v5Unsigned = {
+		...currentUnsigned,
 		internalProtocol: "questpie.internal.v5",
 		later: compatibleLater,
+		inventory: compatibleInventory,
 	};
 	const compatibleV5RuntimeBuildBytes = JSON.stringify({
 		...v5Unsigned,
