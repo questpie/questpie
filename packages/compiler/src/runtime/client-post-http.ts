@@ -54,8 +54,10 @@ async function invokeCanonicalPost<Result>(input: Readonly<{
 	let frame: WireRecord;
 	try {
 		response = await input.transport(request);
+		if (input.options.signal?.aborted) throw input.options.signal.reason;
 		if (response.headers.get("content-type") !== "application/json; charset=utf-8") return protocolFailure();
 		frame = wireRecord(await response.json());
+		if (input.options.signal?.aborted) throw input.options.signal.reason;
 	} catch (error) {
 		if (input.action) throw new ActionOutcomeAmbiguous(input.callId);
 		throw error;

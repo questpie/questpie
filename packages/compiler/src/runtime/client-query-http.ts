@@ -94,8 +94,10 @@ async function invokeCanonicalQuery<Result>(input: Readonly<{
 		request = new Request(url, { method: "GET", headers, ...(input.options.signal === undefined ? {} : { signal: input.options.signal }) });
 	} catch { return protocolFailure(); }
 	const response = await input.transport(request);
+	if (input.options.signal?.aborted) throw input.options.signal.reason;
 	if (response.headers.get("content-type") !== "application/json; charset=utf-8") return protocolFailure();
 	const frame = wireRecord(await response.json());
+	if (input.options.signal?.aborted) throw input.options.signal.reason;
 	return decodeCanonicalHttpResponse<Result>({ response, frame, operation: input.operation, callId: input.callId, kind: "query" });
 }
 `;
