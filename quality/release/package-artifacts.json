@@ -7,7 +7,7 @@
 			"name": "questpie",
 			"version": "4.0.0-beta.2",
 			"filename": "questpie-4.0.0-beta.2.tgz",
-			"sha256": "e684f6ef661454d74bdbbe5c2dbe59567014423b66bdbf69bdc66ab991c4c184",
+			"sha256": "79befee8da77a3b794fe9d262eaeffefa595648a0d9ad0a3305e97588687a180",
 			"declarations": [
 				{
 					"export": ".",
