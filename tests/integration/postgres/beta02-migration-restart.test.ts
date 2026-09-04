@@ -481,12 +481,20 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		});
 		await applyCommittedMigrations({ migrations: [migration] });
 		const role = "questpie_beta02_deployer";
+		const rolePassword = crypto.randomUUID();
+		if (!/^[0-9a-f-]+$/.test(rolePassword)) {
+			throw new Error("generated PostgreSQL probe password has an unsafe format");
+		}
+		let roleCreated = false;
 		try {
-			await database!.unsafe(`CREATE ROLE ${role} LOGIN`);
+			await database!.unsafe(
+				`CREATE ROLE ${role} LOGIN PASSWORD '${rolePassword}'`,
+			);
+			roleCreated = true;
 			await database!.unsafe(
 				`GRANT USAGE ON SCHEMA questpie_internal, deploy_role_probe TO ${role}; GRANT SELECT ON ALL TABLES IN SCHEMA questpie_internal TO ${role}`,
 			);
-			const connectionString = `postgres://${role}@${process.env.PGHOST}:${process.env.PGPORT ?? "5432"}/${process.env.PGDATABASE}`;
+			const connectionString = `postgres://${role}:${encodeURIComponent(rolePassword)}@${process.env.PGHOST}:${process.env.PGPORT ?? "5432"}/${process.env.PGDATABASE}`;
 			const result = await applyCommittedMigrations({
 				connectionString,
 				migrations: [migration],
@@ -496,9 +504,11 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				applied: [],
 			});
 		} finally {
-			await database!.unsafe(
-				`DROP OWNED BY ${role}; DROP ROLE IF EXISTS ${role}`,
-			);
+			if (roleCreated) {
+				await database!.unsafe(
+					`DROP OWNED BY ${role}; DROP ROLE IF EXISTS ${role}`,
+				);
+			}
 		}
 	}, 10_000);
 
