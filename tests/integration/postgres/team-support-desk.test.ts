@@ -189,6 +189,89 @@ function responseCookie(response: Response): string {
 	return value;
 }
 
+type McpOperationFrame = Readonly<{
+	callId: string;
+	error?: Readonly<{
+		code: string;
+		payload?: unknown;
+		retryable?: boolean;
+	}>;
+	result?: unknown;
+}>;
+
+async function callMcp(input: {
+	arguments: Readonly<Record<string, unknown>>;
+	cookie?: string;
+	fetch: (request: Request) => Promise<Response>;
+	name: string;
+	origin: string;
+}): Promise<McpOperationFrame> {
+	const { id, request } = mcpRequest(input);
+	const response = await input.fetch(request);
+	expect(response.status).toBe(200);
+	expect(response.headers.get("content-type")).toBe("text/event-stream");
+	const event = await response.text();
+	const envelope = JSON.parse(event.slice(6, -2)) as Readonly<{
+		id: unknown;
+		result?: Readonly<{ structuredContent?: unknown }>;
+	}>;
+	expect(envelope.id).toBe(id);
+	if (!envelope.result || !envelope.result.structuredContent)
+		throw new TypeError("MCP call did not return structured content");
+	return envelope.result.structuredContent as McpOperationFrame;
+}
+
+function mcpRequest(input: {
+	arguments: Readonly<Record<string, unknown>>;
+	cookie?: string;
+	name: string;
+	origin: string;
+}): Readonly<{ id: string; request: Request }> {
+	const id = `mcp:${crypto.randomUUID()}`;
+	return {
+		id,
+		request: new Request(`${input.origin}/_questpie/mcp`, {
+			method: "POST",
+			headers: {
+				accept: "application/json, text/event-stream",
+				"content-type": "application/json",
+				...(input.cookie === undefined ? {} : { cookie: input.cookie }),
+				"mcp-method": "tools/call",
+				"mcp-name": input.name,
+				"mcp-protocol-version": "2026-07-28",
+				origin: input.origin,
+			},
+			body: JSON.stringify({
+				jsonrpc: "2.0",
+				id,
+				method: "tools/call",
+				params: {
+					name: input.name,
+					arguments: input.arguments,
+					_meta: {
+						"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+						"io.modelcontextprotocol/clientCapabilities": {},
+					},
+				},
+			}),
+		}),
+	};
+}
+
+async function databaseHasBlockedWork(): Promise<boolean> {
+	const [result] = await database!.unsafe<
+		Readonly<Array<{ blocked: boolean }>>
+	>(
+		`SELECT EXISTS (
+  SELECT 1
+  FROM pg_catalog.pg_stat_activity
+  WHERE pid <> pg_catalog.pg_backend_pid()
+    AND pg_catalog.cardinality(pg_catalog.pg_blocking_pids(pid)) > 0
+) AS blocked`,
+	);
+	return result?.blocked === true;
+}
+
 function executionInput(
 	principal: Parameters<GeneratedApp["execution"]>[0]["principal"],
 	persona: (typeof supportPersonas)[keyof typeof supportPersonas],
@@ -926,18 +1009,121 @@ WHERE call_id = ${editCallId}`;
 					})
 				).nodes.some(({ id }) => id === created.id),
 			).toBe(true);
-			expect(
-				(
-					await browserClient.queries["tickets.detail"]({
-						id: supportTracerIds.ticketOpen,
-					})
-				)?.comments.map(({ id }) => id),
-			).toEqual([
+			const browserDetail = await browserClient.queries["tickets.detail"]({
+				id: supportTracerIds.ticketOpen,
+			});
+			expect(browserDetail?.comments.map(({ id }) => id)).toEqual([
 				supportTracerIds.comments.internal,
 				supportTracerIds.comments.customerTie,
 				supportTracerIds.comments.agent,
 				supportTracerIds.comments.customer,
 			]);
+			const mcpDetail = await callMcp({
+				fetch: app.fetch,
+				origin: authOrigin,
+				cookie,
+				name: "query.tickets.detail",
+				arguments: {
+					context: {
+						organizationId: supportTracerIds.organization,
+						membershipId: supportTracerIds.membershipAgent,
+					},
+					input: { id: supportTracerIds.ticketOpen },
+				},
+			});
+			expect(mcpDetail.result).toEqual(
+				JSON.parse(JSON.stringify(browserDetail)),
+			);
+			let anonymousHttpFailure: unknown;
+			try {
+				await createClient({
+					baseUrl: authOrigin,
+					fetch: (request) => app.fetch(request),
+				})
+					.withContext({
+						organizationId: supportTracerIds.organization,
+						membershipId: supportTracerIds.membershipAgent,
+					})
+					.queries["tickets.detail"]({ id: supportTracerIds.ticketOpen });
+			} catch (error) {
+				anonymousHttpFailure = error;
+			}
+			expect(anonymousHttpFailure).toMatchObject({
+				code: "INTERNAL",
+				retryable: false,
+			});
+			const anonymousMcp = await callMcp({
+				fetch: app.fetch,
+				origin: authOrigin,
+				name: "query.tickets.detail",
+				arguments: {
+					context: {
+						organizationId: supportTracerIds.organization,
+						membershipId: supportTracerIds.membershipAgent,
+					},
+					input: { id: supportTracerIds.ticketOpen },
+				},
+			});
+			expect(anonymousMcp.error).toEqual({
+				code: "INTERNAL",
+				retryable: false,
+			});
+			const invalidMcp = await callMcp({
+				fetch: app.fetch,
+				origin: authOrigin,
+				cookie,
+				name: "query.tickets.detail",
+				arguments: {
+					context: {
+						organizationId: supportTracerIds.organization,
+						membershipId: supportTracerIds.membershipAgent,
+					},
+					input: { id: "not-a-uuid" },
+				},
+			});
+			expect(invalidMcp.error).toEqual({
+				code: "PROTOCOL_UNSUPPORTED",
+				retryable: false,
+			});
+			const mcpCancellationBlocker = await database!.reserve();
+			try {
+				await mcpCancellationBlocker.unsafe("BEGIN");
+				await mcpCancellationBlocker.unsafe(
+					"LOCK TABLE team_support_desk.tickets IN ACCESS EXCLUSIVE MODE",
+				);
+				const { request: blockedMcpRequest } = mcpRequest({
+					origin: authOrigin,
+					cookie,
+					name: "query.tickets.detail",
+					arguments: {
+						context: {
+							organizationId: supportTracerIds.organization,
+							membershipId: supportTracerIds.membershipAgent,
+						},
+						input: { id: supportTracerIds.ticketOpen },
+					},
+				});
+				const blockedMcpResponse = await app.fetch(blockedMcpRequest);
+				const blockedMcpReader = blockedMcpResponse.body?.getReader();
+				if (!blockedMcpReader)
+					throw new TypeError("MCP cancellation response has no stream");
+				await eventually(databaseHasBlockedWork, {
+					accept: (blocked) => blocked,
+					description: "MCP Query reaches blocked PostgreSQL work",
+					intervalMilliseconds: 10,
+					timeoutMilliseconds: 5_000,
+				});
+				await blockedMcpReader.cancel();
+				await eventually(databaseHasBlockedWork, {
+					accept: (blocked) => !blocked,
+					description: "MCP stream close cancels blocked PostgreSQL work",
+					intervalMilliseconds: 10,
+					timeoutMilliseconds: 5_000,
+				});
+			} finally {
+				await mcpCancellationBlocker.unsafe("ROLLBACK").catch(() => {});
+				await mcpCancellationBlocker.release();
+			}
 			const browserCreated = await browserClient.mutations["ticket.create"](
 				{
 					description: "Created through the derived Collection input codec.",
@@ -950,6 +1136,101 @@ WHERE call_id = ${editCallId}`;
 			expect(browserCreated).toMatchObject({
 				priority: "normal",
 				requesterMembershipId: supportTracerIds.membershipAgent,
+			});
+			const mcpCreateCallId = `mcp:create:${crypto.randomUUID()}`;
+			const mcpCreateArguments = {
+				callId: mcpCreateCallId,
+				context: {
+					organizationId: supportTracerIds.organization,
+					membershipId: supportTracerIds.membershipAgent,
+				},
+				input: {
+					description: "Created through the MCP Operation projection.",
+					reference: `  SUP-${crypto.randomUUID().slice(0, 8).toUpperCase()}  `,
+					summary: "MCP uses the same Collection lifecycle",
+					teamId: supportTracerIds.teamPlatform,
+				},
+			} as const;
+			const mcpCreated = await callMcp({
+				fetch: app.fetch,
+				origin: authOrigin,
+				cookie,
+				name: "mutation.ticket.create",
+				arguments: mcpCreateArguments,
+			});
+			expect(mcpCreated.result).toMatchObject({
+				priority: "normal",
+				reference: expect.stringMatching(/^SUP-/),
+				requesterMembershipId: supportTracerIds.membershipAgent,
+			});
+			expect(
+				await callMcp({
+					fetch: app.fetch,
+					origin: authOrigin,
+					cookie,
+					name: "mutation.ticket.create",
+					arguments: mcpCreateArguments,
+				}),
+			).toEqual(mcpCreated);
+			const mcpLifecycleFailure = await callMcp({
+				fetch: app.fetch,
+				origin: authOrigin,
+				cookie,
+				name: "mutation.ticket.create",
+				arguments: {
+					callId: `mcp:invalid-create:${crypto.randomUUID()}`,
+					context: {
+						organizationId: supportTracerIds.organization,
+						membershipId: supportTracerIds.membershipAgent,
+					},
+					input: {
+						description: "Rejected through the MCP projection.",
+						reference: "INVALID-REFERENCE",
+						summary: "MCP lifecycle mapping remains typed",
+						teamId: supportTracerIds.teamPlatform,
+					},
+				},
+			});
+			expect(mcpLifecycleFailure.error).toEqual({
+				code: "INVALID_TICKET",
+				payload: null,
+			});
+			const mcpAction = await callMcp({
+				fetch: app.fetch,
+				origin: authOrigin,
+				cookie,
+				name: "action.notification.sendTicketSummary",
+				arguments: {
+					context: {
+						organizationId: supportTracerIds.organization,
+						membershipId: supportTracerIds.membershipAgent,
+					},
+					effectKey: `mcp:summary:${crypto.randomUUID()}`,
+					input: { ticketId: created.id },
+				},
+			});
+			expect(mcpAction.result).toMatchObject({
+				providerReceipt: expect.stringMatching(/^direct:/),
+				ticketReference: created.reference,
+			});
+			rejectNext = true;
+			const mcpActionFailure = await callMcp({
+				fetch: app.fetch,
+				origin: authOrigin,
+				cookie,
+				name: "action.notification.sendTicketSummary",
+				arguments: {
+					context: {
+						organizationId: supportTracerIds.organization,
+						membershipId: supportTracerIds.membershipAgent,
+					},
+					effectKey: `mcp:rejected:${crypto.randomUUID()}`,
+					input: { ticketId: created.id },
+				},
+			});
+			expect(mcpActionFailure.error).toEqual({
+				code: "NOTIFICATION_PROVIDER_REJECTED",
+				payload: null,
 			});
 			let clientLifecycleError: unknown;
 			try {
@@ -1001,6 +1282,27 @@ WHERE call_id = ${editCallId}`;
 				organizationId: supportTracerIds.organization,
 				membershipId: supportTracerIds.membershipCustomer,
 			});
+			const customerMcpDetail = await callMcp({
+				fetch: app.fetch,
+				origin: authOrigin,
+				cookie: customerCookie,
+				name: "query.tickets.detail",
+				arguments: {
+					context: {
+						organizationId: supportTracerIds.organization,
+						membershipId: supportTracerIds.membershipCustomer,
+					},
+					input: { id: supportTracerIds.ticketOpen },
+				},
+			});
+			const customerMcpResult = customerMcpDetail.result as Readonly<{
+				comments: readonly Readonly<{ body?: string; id: string }>[];
+			}>;
+			expect(
+				customerMcpResult.comments.find(
+					({ id }) => id === supportTracerIds.comments.agent,
+				),
+			).not.toHaveProperty("body");
 			const customerEditForm = new FormData();
 			customerEditForm.set("summary", "Customer supplied updated summary");
 			customerEditForm.set(
@@ -1183,6 +1485,23 @@ WHERE call_id = ${editCallId}`;
 			expect(hostSignIn.status).toBe(200);
 			const restartCookie = responseCookie(hostSignIn);
 			expect(restartCookie).toStartWith("team-support.session_token=");
+			const hostedMcpDetail = await callMcp({
+				fetch,
+				origin: hostOrigin,
+				cookie: restartCookie,
+				name: "query.tickets.detail",
+				arguments: {
+					context: {
+						organizationId: supportTracerIds.organization,
+						membershipId: supportTracerIds.membershipAgent,
+					},
+					input: { id: supportTracerIds.ticketOpen },
+				},
+			});
+			expect(hostedMcpDetail.result).toMatchObject({
+				id: supportTracerIds.ticketOpen,
+				reference: supportTracerIds.referenceOpen,
+			});
 			const running = await eventually(
 				() => app.durable.inspect(restart.runId),
 				{

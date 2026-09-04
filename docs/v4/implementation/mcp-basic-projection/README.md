@@ -29,6 +29,9 @@ occurs once, and no retry/fallback/session/MRTR path exists.
 
 ## MCP-03 — Hostile tracers, docs, and release closure
 
+Status: active. Team Support Desk is migrated through its packed PostgreSQL 17
+and Firefox tracer; Collaboration authority hostiles remain.
+
 Blocked by MCP-01 and MCP-02. Migrate Team Support Desk Query/Mutation/Action and
 Collaboration authority hostiles. Prove application/Package parity, direct/HTTP/
 MCP outcome parity, non-empty Context, Policy nondisclosure, invalid input,

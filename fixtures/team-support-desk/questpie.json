@@ -17,6 +17,7 @@
 		"exclude": []
 	},
 	"projections": {
+		"mcp": true,
 		"openapi": true
 	},
 	"packages": {}
