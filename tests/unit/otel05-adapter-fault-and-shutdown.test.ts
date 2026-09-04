@@ -4,7 +4,7 @@ import { createOpenTelemetry } from "../../packages/opentelemetry/src";
 import { createOpenTelemetryTestHarness } from "../../packages/opentelemetry/src/testing";
 import { createApplicationObservation } from "../../packages/runtime/src/application/observation";
 
-const releaseVersion = "4.0.0-beta.1";
+const releaseVersion = "4.0.0-beta.2";
 const runtimeInput = Object.freeze({
 	applicationIdentity: "application:adapter-fault",
 	createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
@@ -113,7 +113,7 @@ test("public pre-bind close is concurrent, idempotent, and terminal", async () =
 			...runtimeInput,
 			observability: telemetry,
 			signalProjectionDigest:
-				"b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
+				"7e192a2a4d0a61b5c926415fd2f612c6b2d45ec05149fc6d2f407f30f2aeddd3",
 		}),
 	).toThrow("QP-OTEL-001 invalidConfiguration: closed");
 });

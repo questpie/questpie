@@ -15,7 +15,7 @@ import { basename, join, resolve } from "node:path";
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const questpieRoot = join(repositoryRoot, "packages/questpie");
 const adapterRoot = join(repositoryRoot, "packages/opentelemetry");
-const releaseVersion = "4.0.0-beta.1";
+const releaseVersion = "4.0.0-beta.2";
 const packageIsolationTest =
 	process.env.QUESTPIE_OTEL05_PACKAGE_ISOLATION === "1" ? test : test.skip;
 
@@ -181,7 +181,7 @@ const metadata = {
   applicationIdentity: "application:clean-consumer",
   runtimeBuildDigest: "a".repeat(64),
   runtimeInstanceId: "01234567-89ab-4def-8123-456789abcdef",
-  signalProjectionDigest: "b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
+  signalProjectionDigest: "7e192a2a4d0a61b5c926415fd2f612c6b2d45ec05149fc6d2f407f30f2aeddd3",
   questpieVersion: "${releaseVersion}",
 } as const;
 const mismatched = await createOpenTelemetry();

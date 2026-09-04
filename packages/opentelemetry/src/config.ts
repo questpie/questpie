@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { SIGNAL_PROJECTION_DIGEST } from "./generated/signal-projection.gen";
 
 export const EXPECTED_SIGNAL_PROJECTION_DIGEST = SIGNAL_PROJECTION_DIGEST;
-export const EXPECTED_QUESTPIE_VERSION = "4.0.0-beta.1" as const;
+export const EXPECTED_QUESTPIE_VERSION = "4.0.0-beta.2" as const;
 
 export type OpenTelemetryOptions = Readonly<{
 	ingress?: Readonly<{ trustBoundary?: "continue" | "restart" }>;

@@ -230,7 +230,7 @@ export async function createArtifacts(
 		})),
 	);
 	const inputs = {
-		compilerVersion: "4.0.0-beta.1",
+		compilerVersion: "4.0.0-beta.2",
 		bunVersion: Bun.version,
 		applicationConfigDigest: digest(
 			"questpie-build-input-component-v1:applicationConfigDigest",
@@ -275,7 +275,7 @@ export async function createArtifacts(
 				role: "framework",
 				resolutionDigest: digest("questpie-package-resolution-v1", {
 					name: "questpie",
-					version: "4.0.0-beta.1",
+					version: "4.0.0-beta.2",
 					resolution: "workspace",
 					integrity: null,
 					commit: null,
@@ -492,7 +492,7 @@ export async function createArtifacts(
 		compiledLifecycle.issueRequirements,
 	);
 	const observationSignalProjection =
-		projectObservationSignalProjection("4.0.0-beta.1");
+		projectObservationSignalProjection("4.0.0-beta.2");
 	const generated: Record<string, string> = {
 		...liveQuery.bytes,
 		"app.ts": renderAppContract(

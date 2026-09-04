@@ -1,6 +1,6 @@
 {
 	"name": "questpie-opentelemetry",
-	"version": "4.0.0-beta.1",
+	"version": "4.0.0-beta.2",
 	"files": [
 		"dist"
 	],
@@ -30,6 +30,6 @@
 		"questpie": "workspace:*"
 	},
 	"peerDependencies": {
-		"questpie": "4.0.0-beta.1"
+		"questpie": "4.0.0-beta.2"
 	}
 }

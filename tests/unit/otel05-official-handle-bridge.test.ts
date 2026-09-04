@@ -16,7 +16,7 @@ const metadata = Object.freeze({
 	runtimeBuildDigest: "a".repeat(64),
 	runtimeInstanceId: "01234567-89ab-4def-8123-456789abcdef",
 	signalProjectionDigest: "b".repeat(64),
-	questpieVersion: "4.0.0-beta.1",
+	questpieVersion: "4.0.0-beta.2",
 }) satisfies QuestpieObservationRuntimeMetadataV1;
 
 test("binds one official opaque handle exactly once", () => {
@@ -48,7 +48,7 @@ test("rejects structural forgeries and malformed metadata before binding", () =>
 	expect(() =>
 		bindOfficialQuestpieObservability(handle, {
 			...metadata,
-			questpieVersion: "4.0.0-beta.2",
+			questpieVersion: "4.0.0-beta.1",
 		} as never),
 	).toThrow("Runtime observation metadata is incompatible");
 	expect(() =>

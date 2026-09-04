@@ -52,7 +52,7 @@ function runtimeArtifacts(
 	actionContractIdentities?: readonly string[],
 ) {
 	const observationSignalProjection =
-		projectObservationSignalProjection("4.0.0-beta.1");
+		projectObservationSignalProjection("4.0.0-beta.2");
 	const runtimeExecutables = {
 		format: "questpie.runtime-executables",
 		version: 1,
@@ -254,7 +254,7 @@ function runtimeArtifacts(
 		"operation-http-contract.json": `${JSON.stringify(httpContract)}\n`,
 	};
 	const compiler = {
-		version: "4.0.0-beta.1",
+		version: "4.0.0-beta.2",
 		bunVersion: Bun.version,
 		buildInputDigest: fileDigest(artifactFiles["build-input.json"]),
 		executableFormat: "source-module-v1",
@@ -980,7 +980,7 @@ test("does zero observation work when the optional boundary is absent", () => {
 		createApplicationObservation({
 			applicationIdentity: "application:collaboration",
 			runtimeBuildDigest: sha("a"),
-			questpieVersion: "4.0.0-beta.1",
+			questpieVersion: "4.0.0-beta.2",
 		}),
 	).toBeNull();
 	expect(() =>
@@ -988,7 +988,7 @@ test("does zero observation work when the optional boundary is absent", () => {
 			applicationIdentity: "application:collaboration",
 			runtimeBuildDigest: sha("a"),
 			signalProjectionDigest: sha("b"),
-			questpieVersion: "4.0.0-beta.1",
+			questpieVersion: "4.0.0-beta.2",
 			observability: createObservationHandle({
 				format: "questpie.runtime-observability",
 				version: 1,

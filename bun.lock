@@ -76,14 +76,14 @@
     },
     "fixtures/archive": {
       "name": "@questpie/fixture-archive",
-      "version": "4.0.0-beta.1",
+      "version": "4.0.0-beta.2",
       "dependencies": {
         "questpie": "workspace:*",
       },
     },
     "fixtures/collaboration": {
       "name": "@questpie/fixture-collaboration",
-      "version": "4.0.0-beta.1",
+      "version": "4.0.0-beta.2",
       "dependencies": {
         "@questpie/collaboration-audit": "workspace:*",
         "questpie": "workspace:*",
@@ -98,7 +98,7 @@
     },
     "fixtures/team-support-desk": {
       "name": "@questpie/fixture-team-support-desk",
-      "version": "4.0.0-beta.1",
+      "version": "4.0.0-beta.2",
       "dependencies": {
         "better-auth": "1.7.1",
         "pg": "8.23.0",
@@ -116,7 +116,7 @@
     },
     "packages/compiler": {
       "name": "@questpie/compiler",
-      "version": "4.0.0-beta.1",
+      "version": "4.0.0-beta.2",
       "dependencies": {
         "@questpie/runtime": "workspace:*",
         "@types/bun": "1.3.14",
@@ -126,7 +126,7 @@
     },
     "packages/opentelemetry": {
       "name": "questpie-opentelemetry",
-      "version": "4.0.0-beta.1",
+      "version": "4.0.0-beta.2",
       "dependencies": {
         "@opentelemetry/api": "1.9.1",
         "@opentelemetry/context-async-hooks": "2.10.0",
@@ -141,12 +141,12 @@
         "questpie": "workspace:*",
       },
       "peerDependencies": {
-        "questpie": "4.0.0-beta.1",
+        "questpie": "4.0.0-beta.2",
       },
     },
     "packages/questpie": {
       "name": "questpie",
-      "version": "4.0.0-beta.1",
+      "version": "4.0.0-beta.2",
       "bin": {
         "questpie": "./dist/cli.js",
       },
@@ -168,7 +168,7 @@
     },
     "packages/runtime": {
       "name": "@questpie/runtime",
-      "version": "4.0.0-beta.1",
+      "version": "4.0.0-beta.2",
       "dependencies": {
         "pg": "8.22.0",
         "questpie": "workspace:*",
@@ -179,7 +179,7 @@
     },
     "packages/testkit": {
       "name": "@questpie/testkit",
-      "version": "4.0.0-beta.1",
+      "version": "4.0.0-beta.2",
     },
   },
   "overrides": {

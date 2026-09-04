@@ -13,7 +13,7 @@ import {
 import { projectObservationSignalProjection } from "../../packages/compiler/src/observation";
 
 test("projects the accepted exact OpenTelemetry signal artifact", () => {
-	const projection = projectObservationSignalProjection("4.0.0-beta.1");
+	const projection = projectObservationSignalProjection("4.0.0-beta.2");
 
 	expect(projection.artifact).toMatchObject({
 		format: "questpie.opentelemetry-signal-projection",
@@ -21,11 +21,11 @@ test("projects the accepted exact OpenTelemetry signal artifact", () => {
 		semanticConventions: { version: "1.44.0" },
 		instrumentationScope: {
 			name: "questpie",
-			version: "4.0.0-beta.1",
+			version: "4.0.0-beta.2",
 		},
 	});
 	expect(projection.digest).toBe(
-		"b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
+		"7e192a2a4d0a61b5c926415fd2f612c6b2d45ec05149fc6d2f407f30f2aeddd3",
 	);
 	expect(projection.bytes.endsWith("\n")).toBe(true);
 	expect(projection.artifact.spanGraph).toHaveLength(14);
@@ -119,10 +119,10 @@ test("binds the signal projection into generated Runtime Build inventory", async
 		}>;
 
 		expect(projectionBytes).toBe(
-			projectObservationSignalProjection("4.0.0-beta.1").bytes,
+			projectObservationSignalProjection("4.0.0-beta.2").bytes,
 		);
 		expect(runtimeBuild.observationSignalProjectionDigest).toBe(
-			"b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
+			"7e192a2a4d0a61b5c926415fd2f612c6b2d45ec05149fc6d2f407f30f2aeddd3",
 		);
 		expect(runtimeBuild.inventory).toContainEqual(
 			expect.objectContaining({

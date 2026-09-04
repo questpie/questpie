@@ -131,7 +131,7 @@ write({
 	status: "PASS",
 	postgresMajor,
 	fixtureTracers: ["collaboration", "archive"],
-	packageShape: "questpie-4.0.0-beta.1.tgz",
+	packageShape: "questpie-4.0.0-beta.2.tgz",
 	durationMs: Number((performance.now() - startedAt).toFixed(2)),
 });
 console.log(`beta12-conformance: ${target} PASS`);

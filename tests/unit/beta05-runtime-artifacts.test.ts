@@ -37,7 +37,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			runtimeAbi: "questpie.runtime.v1",
 			internalProtocol: "questpie.internal.v7",
 			compiler: {
-				version: "4.0.0-beta.1",
+				version: "4.0.0-beta.2",
 				bunVersion: Bun.version,
 				executableFormat: "bun-esm-bundle-v1",
 			},

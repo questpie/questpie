@@ -10,8 +10,8 @@ const metadata = Object.freeze({
 	runtimeBuildDigest: "a".repeat(64),
 	runtimeInstanceId: "01234567-89ab-4def-8123-456789abcdef",
 	signalProjectionDigest:
-		"b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
-	questpieVersion: "4.0.0-beta.1",
+		"7e192a2a4d0a61b5c926415fd2f612c6b2d45ec05149fc6d2f407f30f2aeddd3",
+	questpieVersion: "4.0.0-beta.2",
 });
 
 test("builds one canonical secret-free effective configuration", () => {
@@ -37,7 +37,7 @@ test("builds one canonical secret-free effective configuration", () => {
 	expect(new TextDecoder().decode(first.bytes).endsWith("\n")).toBe(true);
 	expect(first.digest).toMatch(/^[0-9a-f]{64}$/u);
 	expect(first.digest).toBe(
-		"45880ece9d23211758c038abe7a42fab8ea87720a83084920893aee1c41746f8",
+		"585d6b9083d04b57d64da71a81b6bbac4944f50ba25b4f618c79aeca91f85e73",
 	);
 	expect(first.artifact).toMatchObject({
 		format: "questpie.opentelemetry-effective-config",
@@ -97,7 +97,7 @@ test("rejects only the safe configuration path and closes sampler and queue comb
 	).toThrow("QP-OTEL-002 projectionMismatch");
 	expect(() =>
 		buildEffectiveConfig(
-			{ ...metadata, questpieVersion: "4.0.0-beta.2" },
+			{ ...metadata, questpieVersion: "4.0.0-beta.1" },
 			decodeOpenTelemetryConfiguration(undefined, {}),
 		),
 	).toThrow("QP-OTEL-002 input.questpieVersion");

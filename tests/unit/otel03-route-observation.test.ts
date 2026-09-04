@@ -41,7 +41,7 @@ test("owns one matched Route through credential work, nested Execution, and resp
 	const observation = createApplicationObservation({
 		applicationIdentity: "application:routes",
 		runtimeBuildDigest: "d".repeat(64),
-		questpieVersion: "4.0.0-beta.1",
+		questpieVersion: "4.0.0-beta.2",
 		signalProjectionDigest: "e".repeat(64),
 		observability: createObservationHandle(adapter),
 		events: (event) => events.push(event),

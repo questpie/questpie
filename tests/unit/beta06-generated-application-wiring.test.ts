@@ -234,7 +234,7 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 			format: "questpie.observation-runtime-metadata",
 			version: 1,
 			applicationIdentity: "application:collaboration",
-			questpieVersion: "4.0.0-beta.1",
+			questpieVersion: "4.0.0-beta.2",
 		});
 	} finally {
 		await rm(temporary, { force: true, recursive: true });

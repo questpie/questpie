@@ -42,7 +42,7 @@ const PRODUCER = 3;
 const CONSUMER = 4;
 const UNSET = 0;
 const ERROR = 2;
-const releaseVersion = "4.0.0-beta.1";
+const releaseVersion = "4.0.0-beta.2";
 
 test("projects adapter attributes only through compiler-owned scope authority", () => {
 	const attributes = projectSpanAttributes({

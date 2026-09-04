@@ -154,7 +154,7 @@ describe("BETA-01 generated contract", () => {
 		expect(buildInput).toMatchObject({
 			format: "questpie.build-input",
 			version: 1,
-			inputs: { compilerVersion: "4.0.0-beta.1", bunVersion: "1.3.14" },
+			inputs: { compilerVersion: "4.0.0-beta.2", bunVersion: "1.3.14" },
 		});
 		expect(originMap).toMatchObject({
 			format: "questpie.origin-map",

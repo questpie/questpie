@@ -69,7 +69,7 @@ export interface RuntimeContractProjection {
 
 export function projectCompilerRuntimeBuild(buildInputDigest: string) {
 	const compiler = Object.freeze({
-		version: "4.0.0-beta.1",
+		version: "4.0.0-beta.2",
 		bunVersion: Bun.version,
 		buildInputDigest,
 		executableFormat: "bun-esm-bundle-v1",

@@ -1,6 +1,6 @@
 import type { QuestpieObservability } from "../observability";
 
-export const QUESTPIE_OBSERVABILITY_PACKAGE_VERSION = "4.0.0-beta.1" as const;
+export const QUESTPIE_OBSERVABILITY_PACKAGE_VERSION = "4.0.0-beta.2" as const;
 
 export type QuestpieObservationRuntimeMetadataV1 = Readonly<{
 	format: "questpie.observation-runtime-metadata";

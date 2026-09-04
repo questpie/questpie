@@ -1,13 +1,13 @@
 {
 	"format": "questpie.release-artifacts",
 	"version": 1,
-	"release": "4.0.0-beta.1",
+	"release": "4.0.0-beta.2",
 	"packages": [
 		{
 			"name": "questpie",
-			"version": "4.0.0-beta.1",
-			"filename": "questpie-4.0.0-beta.1.tgz",
-			"sha256": "15f189f0bd7dddfc6e1f9e250acf9d46b0ef8ff58d1626c0c5d9ec0542c77490",
+			"version": "4.0.0-beta.2",
+			"filename": "questpie-4.0.0-beta.2.tgz",
+			"sha256": "4fbba9dccad07a56c89d819d56e7d0040fa63746dde48e0abb5905021ae03e64",
 			"declarations": [
 				{
 					"export": ".",
@@ -17,7 +17,7 @@
 				{
 					"export": "./internal/observability",
 					"target": "./dist/internal/observability.d.ts",
-					"sha256": "2261904a4ad312220fd003dbc943f094dae9c37d3be5e6e37eba1bd6efbd66d0"
+					"sha256": "8aa857e7eed4e6c0aa014122f39bcde447e40695d82628ad00de979b5901e030"
 				},
 				{
 					"export": "./react",
@@ -28,9 +28,9 @@
 		},
 		{
 			"name": "questpie-opentelemetry",
-			"version": "4.0.0-beta.1",
-			"filename": "questpie-opentelemetry-4.0.0-beta.1.tgz",
-			"sha256": "7abd7a36a900944bbae7d96f2102b9986c4de304cb5076c53ce0462752cc3081",
+			"version": "4.0.0-beta.2",
+			"filename": "questpie-opentelemetry-4.0.0-beta.2.tgz",
+			"sha256": "0c84e8b805a65058efb31e28bac9a143a8390d8780132fced3ff9b7c29c4861f",
 			"declarations": [
 				{
 					"export": ".",
