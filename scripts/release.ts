@@ -389,6 +389,7 @@ if (dryRun) {
 					"@questpie/runtime",
 					"@questpie/react",
 					"@questpie/opentelemetry",
+					"questpie/opentelemetry",
 				],
 				profile.name,
 			);
@@ -486,7 +487,7 @@ if (dryRun) {
 		);
 		verifyNegativeImports(
 			combinedConsumer,
-			["@questpie/react", "@questpie/opentelemetry"],
+			["@questpie/react", "@questpie/opentelemetry", "questpie/opentelemetry"],
 			"questpie",
 		);
 		console.log("release dry-run: exact-two-package combined-import");
