@@ -8,12 +8,6 @@ import type { Principal } from "questpie";
 import { compileApplication } from "@questpie/compiler";
 
 import { decodeRuntimeCodecDescriptor } from "../../../../packages/runtime/src/codec";
-import {
-	createPostgresDatabaseDurableAttemptObservation,
-	createPostgresDatabaseDurableKernel,
-	linkJobProjection,
-	linkReactionProjection,
-} from "../../../../packages/runtime/src/durable";
 import type { RuntimePostgres } from "../../../../packages/runtime/src/postgres/runtime";
 import {
 	beta05Ids,
@@ -165,6 +159,16 @@ postgresTest(
 				realtime: { hmacKey: new Uint8Array(32).fill(43) },
 				maintenance: { authorize: () => false },
 			});
+			// Load source Runtime owners after the independently bundled generated
+			// Runtime so Bun does not initialize both pg copies concurrently.
+			const {
+				createMutationCheckpointRun,
+				createPostgresDatabaseDurableAttemptObservation,
+				createPostgresDatabaseDurableKernel,
+				createPostgresMutationCheckpointStore,
+				linkJobProjection,
+				linkReactionProjection,
+			} = await import("../../../../packages/runtime/src/durable");
 			const framework = prepared.generated.framework as Readonly<{
 				principal: Readonly<{
 					user(input: Readonly<{ id: string }>): Principal;
@@ -211,7 +215,11 @@ postgresTest(
 			const mutationProjection = JSON.parse(
 				await readFile(join(generatedRoot, "mutation-projection.json"), "utf8"),
 			) as {
-				mutations: readonly { identity: string; input: unknown }[];
+				mutations: readonly {
+					identity: string;
+					input: unknown;
+					output: unknown;
+				}[];
 			};
 			const inputCodec = decodeRuntimeCodecDescriptor(
 				mutationProjection.mutations.find(
@@ -560,6 +568,79 @@ postgresTest(
 				expect(
 					(await checkpoint.inspect(sequentialRunId, ordinal))?.state,
 				).toBe("completed");
+
+			// The candidate Runtime owner must preserve the same safe input failure
+			// as direct Mutation execution, with an actual Job lease and SQL store.
+			const codecJob = await application.execution(execution, ({ jobs }) =>
+				jobs.reports.companyDigest.accept(
+					{ companyId: beta05Ids.company },
+					{ idempotencyKey: `checkpoint-codec-${suffix}` },
+				),
+			);
+			const codecClaim = await kernel.claim({
+				runId: codecJob.runId,
+				workerId: `checkpoint-codec-${suffix}`,
+				leaseMilliseconds: 30_000,
+			});
+			if (codecClaim.status !== "claimed")
+				throw new Error("codec proof Job was not claimed");
+			let dispatches = 0;
+			const codecRun = await createMutationCheckpointRun({
+				store: createPostgresMutationCheckpointStore({
+					database: runtimeDatabase,
+					application: "application:collaboration",
+				}),
+				claim: codecClaim.claim,
+				signal: new AbortController().signal,
+				bindings: [
+					{
+						identity: command.operation,
+						input: inputCodec,
+						output: decodeRuntimeCodecDescriptor(
+							mutationProjection.mutations.find(
+								(mutation) => mutation.identity === command.operation,
+							)?.output,
+						),
+						contractDigest: command.contractDigest,
+						runtimeGraphDigest: command.runtimeGraphDigest,
+					},
+				],
+				invoke: (_binding, input, reservation) => {
+					dispatches += 1;
+					return invoke(input as MutationInput, reservation.callId);
+				},
+			});
+			const codecInput = { ...hostileInput, body: `codec-hostile-${suffix}` };
+			const codecFailure = await codecRun.step
+				.mutation(
+					"reject-codec",
+					codecRun.reference(command.operation),
+					codecInput,
+				)
+				.catch((error: unknown) => error);
+			expect(codecFailure).toMatchObject({
+				code: "PROTOCOL_UNSUPPORTED",
+				retryable: false,
+			});
+			expect(codecFailure).toBeInstanceOf(Error);
+			expect((codecFailure as Error).message).toBe("PROTOCOL_UNSUPPORTED");
+			expect(Object.getOwnPropertyNames(codecFailure).sort()).toEqual([
+				"code",
+				"retryable",
+			]);
+			await expect(
+				codecRun.step.mutation(
+					"must-not-dispatch",
+					codecRun.reference(command.operation),
+					mutationInput,
+				),
+			).rejects.toBe(codecFailure);
+			await expect(codecRun.finish()).rejects.toBe(codecFailure);
+			expect(dispatches).toBe(0);
+			const [codecFacts] = await setupDatabase`SELECT
+				(SELECT count(*)::integer FROM collaboration.messages WHERE body = ${codecInput.body}) AS writes,
+				(SELECT count(*)::integer FROM questpie_internal.mutation_checkpoints WHERE run_id = ${codecJob.runId}) AS history`;
+			expect(codecFacts).toEqual({ writes: 0, history: 0 });
 		} catch (error) {
 			failures.push(error);
 		} finally {

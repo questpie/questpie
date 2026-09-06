@@ -2,8 +2,10 @@ import {
 	decodeRuntimeCodec,
 	encodeRuntimeCodec,
 	type RuntimeCodec,
+	RuntimeCodecError,
 } from "../codec";
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
+import { OperationFailure } from "../operation";
 import { createMutationCheckpointAttemptOwner } from "./checkpoint-attempt";
 import { DurableCheckpointError } from "./checkpoint-contract";
 import {
@@ -77,10 +79,17 @@ export async function createMutationCheckpointRun(
 			const binding = bindings.get(raw.reference);
 			if (!binding || !/^[A-Za-z0-9_-]{1,64}$/u.test(raw.name))
 				throw new DurableCheckpointError();
-			const input = encodeRuntimeCodec(
-				binding.input,
-				decodeRuntimeCodec(binding.input, raw.input),
-			);
+			let input: unknown;
+			try {
+				input = encodeRuntimeCodec(
+					binding.input,
+					decodeRuntimeCodec(binding.input, raw.input),
+				);
+			} catch (error) {
+				if (error instanceof RuntimeCodecError)
+					throw new OperationFailure("PROTOCOL_UNSUPPORTED");
+				throw error;
+			}
 			if (canonicalMutationBytes(input).byteLength > 1_048_576)
 				throw new DurableCheckpointError("RESOURCE_LIMIT");
 			return Object.freeze({ name: raw.name, binding, input });
