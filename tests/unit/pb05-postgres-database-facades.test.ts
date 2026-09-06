@@ -32,6 +32,7 @@ import {
 } from "../../packages/runtime/src/postgres";
 
 const application = "application:collaboration";
+const runtimeBuildDigest = "a".repeat(64);
 const runId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200";
 const commandId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201";
 const reactions = {
@@ -67,6 +68,7 @@ test("database Durable admission combines exact Job and Reaction digests", async
 	};
 	const kernel = createPostgresDatabaseDurableKernel({
 		application,
+		runtimeBuildDigest,
 		reactions: projectedReactions,
 		jobs,
 		database,
@@ -120,6 +122,7 @@ test("database-mode Durable facades share only the injected transaction runner",
 			database,
 		}).database,
 		application,
+		runtimeBuildDigest,
 		reactions,
 	});
 	const effects = createPostgresDatabaseDurableEffectLedger({
@@ -186,6 +189,7 @@ test("database-mode facades preserve runner errors and cancellation identity", a
 			database: cancellationDatabase,
 		}).database,
 		application,
+		runtimeBuildDigest,
 		reactions,
 	});
 	const effects = createPostgresDatabaseDurableEffectLedger({

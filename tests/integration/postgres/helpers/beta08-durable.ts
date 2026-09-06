@@ -175,6 +175,7 @@ export type Beta08Harness = Readonly<{
 		options: Readonly<{ random?: () => number; claimBatch?: number }>,
 	): DurableKernel;
 	reactionProjectionBytes: string;
+	runtimeBuildDigest: string;
 	principal: Principal;
 	readerPrincipal: Principal;
 }>;
@@ -350,6 +351,7 @@ async function buildBeta08Durable(
 		options: Readonly<{ random?: () => number; claimBatch?: number }> = {},
 	) =>
 		createPostgresDatabaseDurableKernel({
+			runtimeBuildDigest: String(currentRuntimeBuild.digest),
 			database: runtimeDatabase,
 			attemptDatabase: attemptPostgres.database,
 			application: beta08Application,
@@ -414,6 +416,7 @@ async function buildBeta08Durable(
 		// the same object an operator would.
 		maintenance: app.durable,
 		reactionProjectionBytes,
+		runtimeBuildDigest: String(currentRuntimeBuild.digest),
 		principal,
 		readerPrincipal,
 	});
@@ -457,6 +460,7 @@ export async function disposeBeta08Harness(): Promise<void> {
 export function retiredDurableKernel(
 	database: PostgresTransactionRunner,
 	reactionProjectionBytes: string,
+	runtimeBuildDigest: string,
 ): DurableKernel {
 	const projection = JSON.parse(reactionProjectionBytes) as Readonly<{
 		reactions: Array<{ contractDigest: string }>;
@@ -467,6 +471,7 @@ export function retiredDurableKernel(
 		database,
 	});
 	const kernel = createPostgresDatabaseDurableKernel({
+		runtimeBuildDigest,
 		database,
 		attemptDatabase: attemptPostgres.database,
 		application: beta08Application,

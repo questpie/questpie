@@ -850,10 +850,20 @@ ADR-0016/0017/0026 own the accepted direction. Proposed ADR-0043 now records the
 candidate producer, UTC calendar, explicit revision-fenced activation/removal,
 and minimum Mutation checkpoint contract. It still needs focused proof and
 formal acceptance; no production schedule or checkpoint implementation exists.
-The source audit in that research directory's `EXECUTABLE-PINNING.md` exposes a
-blocking existing gap: durable claim compares a contract digest rather than
-verified executable bytes. Resolve it before checkpoint resume claims; a
-separate two-build PostgreSQL regression is still required.
+The existing executable-pinning gap is repaired: generated workers filter
+admission by their verified Runtime Build and recheck it under the run lock.
+The two-build PostgreSQL regression proves Job and Reaction isolation, no
+attempt consumption for another build, and recovery through retained artifacts.
+`EXECUTABLE-PINNING.md` records the reproduced defect, regression matrix, and
+whole-build retention cost. Pre-repair candidate workers must be drained and
+stopped before new work; overlapping unguarded workers remain unsafe.
+The repair passes the affected PostgreSQL 17 and both Firefox tracers,
+`quality:release`, and two byte-identical forced-build release dry-runs.
+Checkpoint commit/result recovery is the next blocking proof. The activation
+model under
+`docs/v4/prototypes/static-job-schedules` has 11 passing PostgreSQL tests and
+independent synthetic-model review; it does not prove calendar evaluation or
+real Job acceptance. Keep ADR-0043 Proposed.
 
 The behavior-preserving DX cleanup #360 through #363 is complete. The preserved
 pre-schedule candidate `863120698` has final `quality:release` PASS and a valid

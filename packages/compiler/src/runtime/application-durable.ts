@@ -18,6 +18,7 @@ export function renderDurableWorkerOwner(
 		database,
 		attemptDatabase: durableAttemptPostgres.database,
 		application: durableApplication,
+		runtimeBuildDigest: loaded.artifacts.runtimeBuild.digest,
 		reactions: mutationArtifacts.reactions,
 		jobs: mutationArtifacts.jobs,
 	});

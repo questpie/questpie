@@ -239,6 +239,7 @@ test("keeps every non-success terminal branch on the active Attempt PostgreSQL c
 		});
 		const databaseKernel = createPostgresDatabaseDurableKernel({
 			application: "application:terminal-matrix",
+			runtimeBuildDigest: digest("a"),
 			attemptDatabase: attemptPostgres.database,
 			database,
 			jobs,

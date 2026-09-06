@@ -160,6 +160,7 @@ test("refuses a raw runner in Attempt-owned Durable adapters", () => {
 	expect(() =>
 		createPostgresDatabaseDurableKernel({
 			application: "application:durable-attempt-test",
+			runtimeBuildDigest: "d".repeat(64),
 			attemptDatabase: database as never,
 			database,
 			reactions: { byIdentity: new Map() } as never,

@@ -63,6 +63,14 @@ type GeneratedApplication = Readonly<{
 						}>;
 					}>;
 				}>;
+				mutations: Readonly<{
+					pin: Readonly<{
+						accept(
+							input: Readonly<{ key: string; notBefore: Date }>,
+							options: Readonly<{ callId: string }>,
+						): Promise<Readonly<{ runId: string }>>;
+					}>;
+				}>;
 			}>,
 		) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
@@ -204,7 +212,7 @@ async function writeApplication(
 		writeFile(
 			join(root, "package.json"),
 			`${JSON.stringify({
-				name: `@questpie/executable-pin-${input.marker.toLowerCase()}`,
+				name: "executable-pin-tracer",
 				private: true,
 				type: "module",
 				imports: { "#questpie/app": "./.questpie/generated/app.ts" },
@@ -227,6 +235,36 @@ export const records = defineCollection({
 `,
 		),
 		writeFile(join(root, "src/job.ts"), jobSource(input.marker)),
+		writeFile(
+			join(root, "src/reaction.ts"),
+			jobSource(input.marker)
+				.replaceAll("defineJob", "defineReaction")
+				.replace('name: "pin.worker"', 'name: "pinReaction"')
+				.replace(
+					"runAs: durable.caller",
+					"effects: [],\n\trunAs: durable.caller",
+				),
+		),
+		writeFile(
+			join(root, "src/accept.ts"),
+			`import { codec, policy } from "questpie";
+import { defineMutation } from "#questpie/app";
+export const accept = defineMutation({
+	name: "pin.accept",
+	input: codec.object({ key: codec.text(), notBefore: codec.timestamp() }),
+	output: codec.object({ runId: codec.uuid() }),
+	policy: policy.authenticated(),
+	errors: {},
+	handler: async ({ input, ctx }) => {
+		await ctx.dispatch.pinReaction({});
+		const receipt = await ctx.jobs.pin.worker.accept({}, {
+			idempotencyKey: input.key, notBefore: input.notBefore,
+		});
+		return { runId: receipt.runId };
+	},
+});
+`,
+		),
 	]);
 	await installQuestpieForTracer(root);
 	if (!process.env.QUESTPIE_PACKED_TARBALL) {
@@ -246,6 +284,7 @@ async function importBuild(root: string): Promise<
 		principal: Principal;
 		runtimeBuildDigest: string;
 		jobContractDigest: string;
+		reactionContractDigest: string;
 	}>
 > {
 	const generatedRoot = join(root, ".questpie/generated");
@@ -268,11 +307,15 @@ async function importBuild(root: string): Promise<
 	) as Readonly<{
 		jobs: readonly Readonly<{ contractDigest: string }>[];
 	}>;
+	const reactionProjection = JSON.parse(
+		await readFile(join(generatedRoot, "reaction-projection.json"), "utf8"),
+	) as Readonly<{ reactions: readonly Readonly<{ contractDigest: string }>[] }>;
 	return Object.freeze({
 		internal,
 		principal: framework.principal.user({ id: "pin-worker-user" }),
 		runtimeBuildDigest: runtimeBuild.digest,
 		jobContractDigest: projection.jobs[0]!.contractDigest,
+		reactionContractDigest: reactionProjection.reactions[0]!.contractDigest,
 	});
 }
 
@@ -298,9 +341,11 @@ postgresTest(
 		const databaseName = `qp_pin_${suffix}`;
 		const connectionUrl = postgresUrl(databaseName);
 		let database: SQL | undefined;
-		const rootA = await mkdtemp(join(tmpdir(), "questpie-pin-a-"));
-		const rootB = await mkdtemp(join(tmpdir(), "questpie-pin-b-"));
-		const applications: GeneratedApplication[] = [];
+		const temporaryRoot = await mkdtemp(join(tmpdir(), "questpie-pin-"));
+		const rootA = join(temporaryRoot, "a");
+		const rootB = join(temporaryRoot, "b");
+		const applications = new Set<GeneratedApplication>();
+		const failures: unknown[] = [];
 		const previousDatabaseName = process.env.PGDATABASE;
 		let ownsDatabase = false;
 		try {
@@ -353,6 +398,7 @@ postgresTest(
 				importBuild(rootB),
 			]);
 			expect(buildA.jobContractDigest).toBe(buildB.jobContractDigest);
+			expect(buildA.reactionContractDigest).toBe(buildB.reactionContractDigest);
 			expect(buildA.runtimeBuildDigest).not.toBe(buildB.runtimeBuildDigest);
 
 			const create = async (build: typeof buildA) => {
@@ -364,7 +410,7 @@ postgresTest(
 					realtime: { hmacKey: new Uint8Array(32).fill(43) },
 					maintenance: { authorize: () => false },
 				});
-				applications.push(application);
+				applications.add(application);
 				return application;
 			};
 			const appA = await create(buildA);
@@ -384,6 +430,22 @@ postgresTest(
 				);
 			const first = await acceptA(`first-${suffix}`);
 			const second = await acceptA(`second-${suffix}`);
+			const third = await appA.execution(
+				{
+					principal: buildA.principal,
+					context: { tenantId: `tenant-${suffix}` },
+				},
+				({ mutations }) =>
+					mutations.pin.accept(
+						{ key: `mutation-${suffix}`, notBefore: dueAt },
+						{ callId: `mutation-${suffix}` },
+					),
+			);
+			const [reactionRun] = await database`SELECT run_id::text AS id,
+				runtime_build_digest AS build FROM questpie_internal.durable_runs
+				WHERE application_name = ${applicationIdentity} AND resource_identity = 'reaction:pinReaction'`;
+			expect(reactionRun.build).toBe(buildA.runtimeBuildDigest);
+			const fourth = await acceptA(`fourth-${suffix}`);
 			await Bun.sleep(300);
 
 			const bTrace = await appB.durable.poll({
@@ -407,6 +469,61 @@ postgresTest(
 				[applicationIdentity, probeRun],
 			);
 			const aView = await appA.durable.inspect(retainedRun);
+			await appA.close();
+			applications.delete(appA);
+			const backlog = [
+				first,
+				second,
+				third,
+				fourth,
+				{ runId: reactionRun.id as string },
+			].filter(({ runId }) => runId !== bRun && runId !== retainedRun);
+			expect(backlog.length).toBeGreaterThan(1);
+			const acceptedB = await appB.execution(
+				{
+					principal: buildB.principal,
+					context: { tenantId: `tenant-${suffix}` },
+				},
+				({ jobs }) =>
+					jobs.pin.worker.accept(
+						{},
+						{
+							idempotencyKey: `build-b-${suffix}`,
+							notBefore: new Date(Date.now() + 250),
+						},
+					),
+			);
+			await Bun.sleep(300);
+			const bBacklogTrace = await appB.durable.poll({
+				claimBatch: 1,
+				workerId: `worker-b-backlog-${suffix}`,
+			});
+			expect(bBacklogTrace.outcomes.map(({ runId }) => runId)).toEqual([
+				acceptedB.runId,
+			]);
+			expect(marker(await appB.durable.inspect(acceptedB.runId))).toBe("B");
+			for (const { runId } of backlog)
+				expect(await appB.durable.inspect(runId)).toMatchObject({
+					attemptCount: 0,
+				});
+			const restartedA = await create(await importBuild(rootA));
+			const restartTrace = await restartedA.durable.poll({
+				claimBatch: 1,
+				workerId: `worker-a-restarted-${suffix}`,
+			});
+			expect(restartTrace.claimed).toBe(1);
+			const recoveredRun = restartTrace.outcomes[0]!.runId;
+			expect(backlog.map(({ runId }) => runId)).toContain(recoveredRun);
+			expect(marker(await restartedA.durable.inspect(recoveredRun))).toBe("A");
+			// Complete all retained A work, including the Mutation-owned Job and Reaction.
+			await restartedA.durable.poll({
+				claimBatch: 64,
+				workerId: `worker-a-drain-${suffix}`,
+			});
+			expect(marker(await restartedA.durable.inspect(third.runId))).toBe("A");
+			expect(marker(await restartedA.durable.inspect(reactionRun.id))).toBe(
+				"A",
+			);
 
 			expect({
 				buildsDiffer: buildA.runtimeBuildDigest !== buildB.runtimeBuildDigest,
@@ -430,23 +547,47 @@ postgresTest(
 				aClaimed: 1,
 				aMarker: "A",
 			});
+		} catch (error) {
+			failures.push(error);
 		} finally {
-			await Promise.allSettled(
-				applications.map((application) => application.close()),
+			const cleanupErrors = failures;
+			const closeResults = await Promise.allSettled(
+				[...applications].map((application) => application.close()),
 			);
+			for (const result of closeResults)
+				if (result.status === "rejected") cleanupErrors.push(result.reason);
 			try {
-				await database?.close({ timeout: 0 });
-				if (ownsDatabase)
-					await admin!.unsafe(`DROP DATABASE "${databaseName}"`);
+				try {
+					await database?.close({ timeout: 0 });
+				} catch (error) {
+					cleanupErrors.push(error);
+				} finally {
+					if (ownsDatabase) {
+						try {
+							await admin!.unsafe(
+								`DROP DATABASE "${databaseName}" WITH (FORCE)`,
+							);
+						} catch (error) {
+							cleanupErrors.push(error);
+						}
+					}
+				}
 			} finally {
 				if (previousDatabaseName === undefined) delete process.env.PGDATABASE;
 				else process.env.PGDATABASE = previousDatabaseName;
-				await Promise.all([
-					rm(rootA, { recursive: true, force: true }),
-					rm(rootB, { recursive: true, force: true }),
+				const removed = await Promise.allSettled([
+					rm(temporaryRoot, { recursive: true, force: true }),
 				]);
+				for (const result of removed)
+					if (result.status === "rejected") cleanupErrors.push(result.reason);
 			}
 		}
+		if (failures.length === 1) throw failures[0];
+		if (failures.length > 1)
+			throw new AggregateError(
+				failures,
+				"executable-pin tracer and cleanup failures",
+			);
 	},
 	120_000,
 );

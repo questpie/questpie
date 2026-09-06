@@ -57,6 +57,7 @@ function rows(
 export type DurableAdmissionSelectInput = Readonly<{
 	application: string;
 	executableDigests: readonly string[];
+	runtimeBuildDigest: string;
 	batch: number;
 }>;
 
@@ -74,6 +75,7 @@ export const durableAdmissionSelect: PostgresStatement<
     AND executable_digest IN (
       SELECT pg_catalog.jsonb_array_elements_text(($2::text)::jsonb)
     )
+    AND runtime_build_digest = $3
     AND NOT cancellation_requested
     AND ((state IN ('delayed', 'ready') AND available_at <= pg_catalog.transaction_timestamp())
       OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
@@ -82,8 +84,8 @@ SELECT run_id::text AS "runId", resource_identity AS "resource",
        executable_digest AS "executableDigest"
 FROM eligible
 ORDER BY tenant_turn, available_at, run_id
-LIMIT $3`,
-	parameterCount: 3,
+LIMIT $4`,
+	parameterCount: 4,
 	parameters(input) {
 		const executableDigests = input.executableDigests.map((value) =>
 			digest(value, "executable digest"),
@@ -99,6 +101,7 @@ LIMIT $3`,
 		return [
 			text(input.application, "application identity"),
 			JSON.stringify(executableDigests),
+			digest(input.runtimeBuildDigest, "Runtime Build digest"),
 			batch(input.batch),
 		];
 	},

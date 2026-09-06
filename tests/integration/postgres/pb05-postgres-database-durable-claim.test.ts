@@ -55,7 +55,11 @@ function configuration() {
 	} as const;
 }
 
-type PreparedRun = Readonly<{ runIds: readonly string[]; projection: unknown }>;
+type PreparedRun = Readonly<{
+	runIds: readonly string[];
+	projection: unknown;
+	runtimeBuildDigest: string;
+}>;
 
 async function prepareRun(outputPath: string): Promise<PreparedRun> {
 	const helper = new URL("./helpers/beta08-durable.ts", import.meta.url).href;
@@ -93,6 +97,7 @@ WHERE runs.application_name = 'application:collaboration' AND intents.call_id = 
   await Bun.write(${JSON.stringify(outputPath)}, JSON.stringify({
     runIds,
     projection: JSON.parse(prepared.reactionProjectionBytes),
+    runtimeBuildDigest: prepared.runtimeBuildDigest,
   }));
 } finally {
   await disposeBeta08Harness();
@@ -260,6 +265,7 @@ postgres(
 					),
 				].sort();
 				const scheduling = createPostgresDatabaseDurableScheduling({
+					runtimeBuildDigest: prepared.runtimeBuildDigest,
 					database,
 					application: "application:collaboration",
 					executableDigests,
@@ -302,6 +308,7 @@ postgres(
 						}),
 				};
 				const faulted = createPostgresDatabaseDurableClaim({
+					runtimeBuildDigest: prepared.runtimeBuildDigest,
 					database: faulting,
 					application: "application:collaboration",
 					reactions,
@@ -343,6 +350,7 @@ postgres(
 				});
 				await locked;
 				const claim = createPostgresDatabaseDurableClaim({
+					runtimeBuildDigest: prepared.runtimeBuildDigest,
 					database,
 					application: "application:collaboration",
 					reactions,

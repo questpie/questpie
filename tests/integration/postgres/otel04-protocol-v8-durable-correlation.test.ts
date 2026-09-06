@@ -659,6 +659,7 @@ VALUES ($1, $2::uuid, $3::uuid, 'reaction:reports.created', 1, $4, 'user', $5,
 				idempotencyKey: "job:reclaim",
 			});
 			const firstClaim = createPostgresDatabaseDurableClaim({
+				runtimeBuildDigest,
 				database: firstDatabase,
 				application,
 				reactions,
@@ -689,6 +690,7 @@ VALUES ($1, $2::uuid, $3::uuid, 'reaction:reports.created', 1, $4, 'user', $5,
 				`;
 			});
 			const secondClaim = createPostgresDatabaseDurableClaim({
+				runtimeBuildDigest,
 				database: secondDatabase,
 				application,
 				reactions,

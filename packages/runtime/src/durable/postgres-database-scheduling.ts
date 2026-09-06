@@ -15,6 +15,7 @@ export function createPostgresDatabaseDurableScheduling(
 	input: Readonly<{
 		database: PostgresTransactionRunner;
 		application: string;
+		runtimeBuildDigest: string;
 		executableDigests: readonly string[];
 		maximumBatch: number;
 	}>,
@@ -40,6 +41,7 @@ export function createPostgresDatabaseDurableScheduling(
 					transaction.execute(durableAdmissionSelect, {
 						application: input.application,
 						executableDigests,
+						runtimeBuildDigest: input.runtimeBuildDigest,
 						batch: limit,
 					}),
 			});

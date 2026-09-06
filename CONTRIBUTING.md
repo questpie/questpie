@@ -41,6 +41,11 @@ micro lane, multi-instance/fanout/worker/deployment scenarios in the load lane,
 and crash/leak/retention matrices in soak. Every performance scenario names the
 implementation slice that owns its budget.
 
+The two-build durable executable-pin PostgreSQL tracer creates and drops its
+own uniquely named database. Its local/CI PostgreSQL role needs `CREATEDB`.
+Connection credentials stay in the process environment. The test verifies the
+selected database before migration and never drops the configured base database.
+
 Public behavior changes update the accepted ADR/workbench and
 `apps/docs/content/docs/v4/` projection. Report vulnerabilities through
 `SECURITY.md`, not a public issue. Pull requests explain the accepted guarantee,

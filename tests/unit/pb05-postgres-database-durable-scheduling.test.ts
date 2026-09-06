@@ -20,6 +20,7 @@ import type {
 const runId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200";
 const dispatchId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201";
 const executableDigest = "a".repeat(64);
+const runtimeBuildDigest = "b".repeat(64);
 
 function harness(
 	input?: Readonly<{
@@ -76,6 +77,7 @@ function harness(
 			database,
 			application: "application:collaboration",
 			executableDigests: [executableDigest],
+			runtimeBuildDigest,
 			maximumBatch: 8,
 		}),
 	};
@@ -97,9 +99,23 @@ test("admits through one read-only static statement", async () => {
 			value: {
 				application: "application:collaboration",
 				executableDigests: [executableDigest],
+				runtimeBuildDigest,
 				batch: 4,
 			},
 		},
+	]);
+	expect(
+		durableAdmissionSelect.parameters({
+			application: "application:collaboration",
+			executableDigests: [executableDigest],
+			runtimeBuildDigest,
+			batch: 4,
+		}),
+	).toEqual([
+		"application:collaboration",
+		JSON.stringify([executableDigest]),
+		runtimeBuildDigest,
+		4,
 	]);
 });
 
@@ -130,6 +146,7 @@ test("does not normalize an unclassified driver-shaped error", async () => {
 		} as PostgresTransactionRunner,
 		application: "application:collaboration",
 		executableDigests: [executableDigest],
+		runtimeBuildDigest,
 		maximumBatch: 8,
 	});
 	await expect(scheduling.reapCancelled()).rejects.toBe(cause);
@@ -150,6 +167,14 @@ test("scheduling contracts reject bounds and malformed database results", async 
 	const { scheduling } = harness();
 	await expect(scheduling.admit(0)).rejects.toThrow("between 1 and 8");
 	await expect(scheduling.reapCancelled(9)).rejects.toThrow("between 1 and 8");
+	expect(() =>
+		durableAdmissionSelect.parameters({
+			application: "application:collaboration",
+			executableDigests: [executableDigest],
+			runtimeBuildDigest: "not-a-digest",
+			batch: 1,
+		}),
+	).toThrow("Runtime Build digest");
 	expect(() =>
 		durableAdmissionSelect.decode({
 			command: "SELECT",

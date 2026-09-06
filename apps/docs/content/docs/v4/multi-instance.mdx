@@ -24,9 +24,17 @@ buffers, and Services. Another instance can reclaim expired work or resume the
 client.
 
 During a rolling deployment, an instance claims only work whose pinned
-executable bytes it carries. Old and new compatible builds may overlap.
+executable bytes it carries. Old and new compatible builds may run at the same
+time, each claiming its own pinned runs. Every participating worker must enforce
+this build check.
 Nonterminal runs and retained Resume Tokens can block retirement when they
 still require the old bytes.
+
+Durable workers require an exact match with the accepted Runtime Build, in
+addition to the Job or Reaction contract checks. This build check does not
+replace the separate schema, wire, Policy/Context, realtime, or internal-protocol
+compatibility checks. Keep old workers and generated artifacts while their runs
+still need them; see [deploying without stranding a run](./durable-reactions#deploy-without-stranding-a-run).
 
 ## Use one multiplexed realtime transport
 

@@ -116,6 +116,7 @@ export function createPostgresDatabaseDurableClaim(
 	input: Readonly<{
 		database: PostgresTransactionRunner;
 		application: string;
+		runtimeBuildDigest: string;
 		reactions: LinkedReactionProjection;
 		jobs?: LinkedJobProjection;
 		randomUUID?: () => string;
@@ -151,12 +152,14 @@ export function createPostgresDatabaseDurableClaim(
 						return Object.freeze({ status: "skipped" as const });
 					const reaction = input.reactions.byIdentity.get(row.resource);
 					const job = input.jobs?.byIdentity.get(row.resource);
-					const compatible = reaction
-						? row.semanticVersion === 1 &&
-							reaction.contractDigest === row.executableDigest
-						: job !== undefined &&
-							job.semanticVersion === row.semanticVersion &&
-							job.contractDigest === row.executableDigest;
+					const compatible =
+						row.runtimeBuildDigest === input.runtimeBuildDigest &&
+						(reaction
+							? row.semanticVersion === 1 &&
+								reaction.contractDigest === row.executableDigest
+							: job !== undefined &&
+								job.semanticVersion === row.semanticVersion &&
+								job.contractDigest === row.executableDigest);
 					if (!compatible)
 						return Object.freeze({
 							status: "refused" as const,

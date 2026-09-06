@@ -17,6 +17,7 @@ export function createPostgresDatabaseDurableKernel(
 		database: PostgresTransactionRunner;
 		attemptDatabase: DurableAttemptPostgresTransactionRunner;
 		application: string;
+		runtimeBuildDigest: string;
 		reactions: LinkedReactionProjection;
 		jobs?: LinkedJobProjection;
 		claimBatch?: number;
@@ -44,6 +45,7 @@ export function createPostgresDatabaseDurableKernel(
 	const scheduling = createPostgresDatabaseDurableScheduling({
 		database: input.database,
 		application: input.application,
+		runtimeBuildDigest: input.runtimeBuildDigest,
 		executableDigests,
 		maximumBatch,
 	});
@@ -64,6 +66,7 @@ export function createPostgresDatabaseDurableKernel(
 		claim: createPostgresDatabaseDurableClaim({
 			database: input.database,
 			application: input.application,
+			runtimeBuildDigest: input.runtimeBuildDigest,
 			reactions: input.reactions,
 			jobs: input.jobs,
 		}),

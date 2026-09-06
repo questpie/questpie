@@ -30,6 +30,7 @@ const runId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200";
 const dispatchId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201";
 const attemptId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202";
 const leaseToken = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6203";
+const runtimeBuildDigest = "a".repeat(64);
 const retryBytes = new TextEncoder().encode(
 	JSON.stringify({
 		maximumAttempts: 3,
@@ -66,6 +67,7 @@ function selectedRun(
 		attemptCount?: number;
 		executableDigest?: string;
 		resource?: string;
+		runtimeBuildDigest?: string;
 		semanticVersion?: number;
 	}> = {},
 ) {
@@ -81,7 +83,7 @@ function selectedRun(
 		contextInputBytes: new Uint8Array([1]),
 		payloadBytes: new Uint8Array([2]),
 		retryBytes,
-		runtimeBuildDigest: "a".repeat(64),
+		runtimeBuildDigest: input.runtimeBuildDigest ?? runtimeBuildDigest,
 		executableDigest: input.executableDigest ?? "b".repeat(64),
 		causationId: "cause:one",
 		correlationId: "correlation:one",
@@ -133,6 +135,7 @@ test("claims through one exact static database transaction", async () => {
 	const claim = createPostgresDatabaseDurableClaim({
 		database,
 		application: "application:collaboration",
+		runtimeBuildDigest,
 		reactions,
 		jobs,
 		randomUUID: (() => {
@@ -186,11 +189,18 @@ test("claims through one exact static database transaction", async () => {
 	});
 });
 
-test("skips unavailable and refuses incompatible executable work before mutation", async () => {
+test("skips unavailable and refuses incompatible executable or Runtime Build work before mutation", async () => {
 	for (const selection of [
 		null,
+		selectedRun({ runtimeBuildDigest: "f".repeat(64) }),
 		selectedRun({ executableDigest: "c".repeat(64) }),
 		selectedRun({ semanticVersion: 2 }),
+		selectedRun({
+			resource: "job:reports.companyDigest",
+			executableDigest: "d".repeat(64),
+			runtimeBuildDigest: "f".repeat(64),
+			semanticVersion: 2,
+		}),
 		selectedRun({
 			resource: "job:reports.companyDigest",
 			executableDigest: "d".repeat(64),
@@ -213,6 +223,7 @@ test("skips unavailable and refuses incompatible executable work before mutation
 		const claim = createPostgresDatabaseDurableClaim({
 			database,
 			application: "application:collaboration",
+			runtimeBuildDigest,
 			reactions,
 			jobs,
 		});
@@ -264,6 +275,7 @@ test("terminalizes an exhausted claim and records one failed event", async () =>
 	const claim = createPostgresDatabaseDurableClaim({
 		database,
 		application: "application:collaboration",
+		runtimeBuildDigest,
 		reactions,
 		jobs,
 	});
@@ -290,6 +302,7 @@ test("normalizes only database serialization failure to a skipped claim", async 
 	const claim = createPostgresDatabaseDurableClaim({
 		database: { transaction: () => Promise.reject(failure) },
 		application: "application:collaboration",
+		runtimeBuildDigest,
 		reactions,
 		jobs,
 	});
@@ -304,6 +317,7 @@ test("normalizes only database serialization failure to a skipped claim", async 
 	const failing = createPostgresDatabaseDurableClaim({
 		database: { transaction: () => Promise.reject(ordinary) },
 		application: "application:collaboration",
+		runtimeBuildDigest,
 		reactions,
 		jobs,
 	});

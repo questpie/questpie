@@ -353,10 +353,29 @@ causation, correlation, terminal, and audit identities.
 
 ## Deploy without stranding a run
 
-Each accepted run pins its Runtime Build and the digest of the executable bytes
-it needs. Readiness fails when those bytes are missing or incompatible. Drain
-stops new claims, then lets current claims finish or their leases expire. A
-deployment cannot silently replace code that a pending run still references.
+Each accepted run records its Runtime Build and executable contract. A worker
+claims it only when the verified build digest and the executable contract both
+match. Matching Job or Reaction input/output types alone is not sufficient.
+Runs pinned to another build are excluded before the claim batch limit and do
+not consume an attempt. The worker checks the same binding again under the
+run's row lock. A mismatch there refuses the claim with `EXECUTABLE_RETIRED`
+before an attempt starts.
+
+Keep the original generated build and a compatible worker available until its
+nonterminal runs finish or are cancelled. The digest covers the whole build,
+so even a change outside the handler can require keeping the old worker. A Job
+with a distant `notBefore` can extend that period. If the old build is
+unavailable, its work stays unclaimed. The Runtime does not substitute the
+latest handler. Restart a worker from the
+original build to resume work through a fresh Execution using that build's
+Context and Policy. This does not combine an old handler with the newest
+deployment's Policy code. Each Execution still resolves current authorization
+data through the retained build's definitions.
+
+Readiness verifies the build being loaded; a ready new Runtime does not prove
+that it can execute every older pending run. Calling the generated App's
+`close()` stops new claims, then lets current claims finish or their leases
+expire; see [readiness and drain](./runtime-and-studio#understand-readiness-and-drain).
 
 Protocol v8 is a non-rolling cutover from v7. Stop every v7 Runtime before
 running `questpie migration apply --allow-non-rolling-protocol-v8`. Without that

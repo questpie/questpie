@@ -293,6 +293,7 @@ test("one injected runner reaches every database-mode bundle arm without a Pool"
 			database,
 		}).database,
 		application,
+		runtimeBuildDigest: "d".repeat(64),
 		reactions: { byIdentity: new Map() } as never,
 	});
 	const effects = core.createPostgresDatabaseDurableEffectLedger({

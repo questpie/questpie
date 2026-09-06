@@ -465,6 +465,7 @@ postgresTest(
 		const retired = retiredDurableKernel(
 			prepared.database,
 			prepared.reactionProjectionBytes,
+			prepared.runtimeBuildDigest,
 		);
 		expect(await retired.claim({ runId, workerId: "worker:retired" })).toEqual({
 			status: "refused",

@@ -664,6 +664,7 @@ test("keeps automatic heartbeat and terminal SQL inside the active Job Attempt",
 	});
 	const databaseKernel = createPostgresDatabaseDurableKernel({
 		application: "application:test",
+		runtimeBuildDigest: digest("a"),
 		database,
 		attemptDatabase: attemptPostgres.database,
 		reactions,
