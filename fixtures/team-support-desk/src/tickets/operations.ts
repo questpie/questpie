@@ -2,10 +2,12 @@ import { defineCollectionOperations } from "questpie";
 
 import { tickets } from "../tickets";
 import { ticketPolicy } from "./policy";
+import { dueTickets } from "./sla-query";
 
 export const ticketOperations = defineCollectionOperations(tickets, {
 	name: "tickets",
 	policy: ticketPolicy,
+	list: { data: dueTickets },
 	get: {
 		describe: {
 			summary: "Get one ticket through the Collection kernel",
@@ -34,6 +36,7 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 			updatedAt: true,
 			closedAt: true,
 			lastSlaFollowUpAt: true,
+			slaFollowUpDueAt: true,
 		},
 	},
 });

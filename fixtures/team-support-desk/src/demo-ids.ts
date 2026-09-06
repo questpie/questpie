@@ -7,12 +7,14 @@ export const demoIds = Object.freeze({
 		agent: `${prefix}7102`,
 		admin: `${prefix}7103`,
 		integration: `${prefix}7104`,
+		sweep: `${prefix}7105`,
 	}),
 	memberships: Object.freeze({
 		customer: `${prefix}7111`,
 		agent: `${prefix}7112`,
 		admin: `${prefix}7113`,
 		integration: `${prefix}7114`,
+		sweep: `${prefix}7115`,
 	}),
 	team: `${prefix}7121`,
 	tickets: Object.freeze({

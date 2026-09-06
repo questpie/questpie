@@ -78,6 +78,11 @@ export const tickets = defineCollection({
 			withTimezone: true,
 			server: true,
 		}),
+		slaFollowUpDueAt: field.timestamp({
+			nullable: true,
+			withTimezone: true,
+			server: true,
+		}),
 	},
 	issues: {
 		invalidReference: collection.issue(),
@@ -188,6 +193,9 @@ export const tickets = defineCollection({
 		}),
 	},
 	indexes: {
+		slaDue: index({
+			fields: ["organizationId", "status", "slaFollowUpDueAt", "id"],
+		}),
 		tenantUpdated: index({
 			fields: [
 				"organizationId",

@@ -67,8 +67,8 @@ function jobCapabilityContract(ctx: JobContext): void {
 	void ctx.jobs;
 	// @ts-expect-error Job handlers have no generated Query callers.
 	void ctx.queries;
-	// @ts-expect-error Job handlers have no generated Mutation callers.
-	void ctx.mutations;
+	// @ts-expect-error Mutation references are non-callable outside a named checkpoint.
+	void ctx.mutations.ticket.sweepSla({});
 	// @ts-expect-error Job handlers cannot execute external-effect Actions.
 	void ctx.actions;
 }

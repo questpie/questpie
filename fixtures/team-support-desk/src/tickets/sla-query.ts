@@ -1,0 +1,18 @@
+import { codec, expr } from "questpie";
+
+import { tickets } from "../tickets";
+
+export const dueTickets = tickets.list({
+	parameters: {
+		first: codec.integer({ minimum: 1, maximum: 10 }),
+		after: codec.nullable(codec.cursor()),
+	},
+	where: ({ row }) =>
+		expr.and(row.status.equal("open"), expr.not(row.slaFollowUpDueAt.isNull())),
+	orderBy: { slaFollowUpDueAt: { direction: "asc", nulls: "last" }, id: "asc" },
+	select: { id: true },
+	page: ({ parameters }) => ({
+		first: parameters.first,
+		after: parameters.after,
+	}),
+});

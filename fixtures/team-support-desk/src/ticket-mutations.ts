@@ -99,6 +99,7 @@ export const createTicket = defineMutation({
 				organizationId: ctx.tenant.id,
 				requesterMembershipId: ctx.values.membershipId,
 				status: "open",
+				slaFollowUpDueAt: ctx.now,
 			},
 		});
 		return ticketResult(ticket);

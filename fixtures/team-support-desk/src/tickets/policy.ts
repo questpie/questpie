@@ -159,6 +159,17 @@ export const ticketPolicy = definePolicy(tickets, {
 							candidate.closedAt.isNull(),
 							expr.or(
 								expr.and(
+									candidate.slaFollowUpDueAt.isNull(),
+									current.slaFollowUpDueAt.isNull(),
+								),
+								expr.and(
+									expr.not(candidate.slaFollowUpDueAt.isNull()),
+									expr.not(current.slaFollowUpDueAt.isNull()),
+									candidate.slaFollowUpDueAt.equal(current.slaFollowUpDueAt),
+								),
+							),
+							expr.or(
+								expr.and(
 									candidate.assigneeMembershipId.isNull(),
 									current.assigneeMembershipId.isNull(),
 								),
@@ -234,6 +245,7 @@ export const ticketPolicy = definePolicy(tickets, {
 				status: staff,
 				closedAt: staff,
 				lastSlaFollowUpAt: expr.not(expr.always()),
+				slaFollowUpDueAt: expr.not(expr.always()),
 				updatedAt: expr.not(expr.always()),
 			};
 		},
