@@ -13,6 +13,7 @@ export type {
 	SchemaProjectionV1,
 } from "./contracts";
 export { createMigrationPlan } from "./migration-plan";
+export { assertProjection } from "./projection";
 export type {
 	MigrationPlanningResult,
 	NoChangesMigration,

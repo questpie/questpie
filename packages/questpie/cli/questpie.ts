@@ -12,6 +12,11 @@ import {
 	requestedPort,
 } from "./artifacts";
 import {
+	activateScheduleFromDirectory,
+	requestedScheduleRevision,
+	scheduleFailureMessage,
+} from "./schedule";
+import {
 	createStartShutdown,
 	createTelemetryApplication,
 	loadOpenTelemetry,
@@ -93,6 +98,20 @@ async function main(): Promise<void> {
 	const root = process.cwd();
 	const cliArguments = Bun.argv.slice(2);
 	const [command, subcommand] = cliArguments;
+	if (command === "schedule") {
+		try {
+			const expectedRevision = requestedScheduleRevision(cliArguments.slice(1));
+			const receipt = await activateScheduleFromDirectory({
+				root,
+				connectionString: databaseUrl(),
+				expectedRevision,
+			});
+			console.log(JSON.stringify(receipt));
+		} catch (error) {
+			fail(scheduleFailureMessage(error));
+		}
+		return;
+	}
 	if (command === "build") {
 		await (await compiler()).compileApplication({ applicationRoot: root });
 		console.log("questpie: application build complete");
@@ -244,7 +263,9 @@ async function main(): Promise<void> {
 		console.log(`questpie: listening on ${server.url}`);
 		return;
 	}
-	fail("use build, check, migration apply, seed apply, or start");
+	fail(
+		"use build, check, migration apply, seed apply, schedule activate --expect-revision <decimal>, or start",
+	);
 }
 
 await main();
