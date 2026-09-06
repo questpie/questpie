@@ -850,6 +850,10 @@ ADR-0016/0017/0026 own the accepted direction. Proposed ADR-0043 now records the
 candidate producer, UTC calendar, explicit revision-fenced activation/removal,
 and minimum Mutation checkpoint contract. It still needs focused proof and
 formal acceptance; no production schedule or checkpoint implementation exists.
+The source audit in that research directory's `EXECUTABLE-PINNING.md` exposes a
+blocking existing gap: durable claim compares a contract digest rather than
+verified executable bytes. Resolve it before checkpoint resume claims; a
+separate two-build PostgreSQL regression is still required.
 
 The behavior-preserving DX cleanup #360 through #363 is complete. The preserved
 pre-schedule candidate `863120698` has final `quality:release` PASS and a valid

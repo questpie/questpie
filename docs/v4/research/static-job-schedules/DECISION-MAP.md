@@ -152,6 +152,14 @@ committed even if a later attempt cannot recover/disclose its result. The
 proposed history cap and all remaining byte/work/time bounds still require
 executable proof; the 100-Job acceptance cap is not a checkpoint limit.
 
+The next compiler/worker blocker is recorded in
+[EXECUTABLE-PINNING.md](./EXECUTABLE-PINNING.md): current durable acceptance and
+claim use a contract digest as the executable digest. A body-only change can
+preserve that value. First falsify a conservative pin to the already stored,
+verified Runtime Build and the Accepted retained-build operation; do not assume
+a new historical-handler loader or strip schedule text out of source hashes.
+This is an existing Accepted-guarantee repair, not another lifecycle decision.
+
 ## Review reconciliation
 
 Independent Codex authority and runtime audits agree on the missing producer,
