@@ -108,6 +108,15 @@ bun test /home/drepkovsky/code/questpie-v4-static-schedule-checkpoint-proof/docs
 This is focused executable evidence only. It is not formal acceptance or proof
 that a production checkpoint implementation exists.
 
+The canonical worktree subsequently ran all five current proof suites together
+on PostgreSQL 17: activation, calendar, PostgreSQL calendar oracle, attempt
+control, and this checkpoint integration. Result: 46 passed, 0 failed, 0 skipped,
+180 assertions. The shared strict TypeScript project now includes these files
+and the DOM library used by the imported production Runtime. Warning-denying
+lint, formatting, and `git diff --check` pass. A final SELECT-only cleanup audit
+found no remaining `qp_pin_`/`qp_checkpoint_` databases or `qp_schedule_proof_`
+schemas. The existing PostgreSQL container and preview were preserved.
+
 ## Deliberate limits
 
 This slice does not prove or implement the public Job Context projection,

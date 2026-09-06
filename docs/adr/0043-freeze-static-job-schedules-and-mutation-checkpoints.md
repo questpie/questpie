@@ -26,8 +26,8 @@ linked decision map records source findings and the proof still required.
 
 ### One authored schedule, existing execution authority
 
-A Job may declare one optional static `schedule` with exactly `cron`,
-`execution`, and `input`, all required when the schedule is present. `execution`
+An application-owned Job may declare one optional static `schedule` with exactly
+`cron`, `execution`, and `input`, all required when the schedule is present. `execution`
 has exactly `principal` and `context`: a statically authored
 `principal.service({ name })` and the exact input of the application's existing
 Context. `input` uses the Job's existing codec. Empty inputs are explicit `{}`;
@@ -48,6 +48,9 @@ authority. A service actor must receive ordinary application permissions.
 The compiled schedule artifact is server/deployment data. It is not projected
 to the browser client, OpenAPI, MCP, public examples, or observation payloads.
 Static values are not a place to store credentials.
+The first slice does not add Package-owned Job factories or a Package binding
+for application Context. Unsupported Package schedule authoring is rejected;
+it must not widen Context input to `unknown` or ask for a duplicate schema.
 
 ### Calendar and one latest catch-up
 
@@ -172,6 +175,8 @@ Names are unique within a run and ordered by invocation. The proposed first
 history cap is 64 checkpoints per run, with one in-flight command. Concurrent
 step calls fail before the second command is dispatched. Ordinary Jobs that
 never use a checkpoint allocate no checkpoint history.
+The private command captures the verified reference and codec-canonical input
+before its first await; later author mutation cannot change dispatched material.
 
 Before dispatch, a short lease-fenced transaction reserves or verifies the next
 ordered checkpoint. Its canonical command digest binds the named Mutation,
@@ -194,11 +199,32 @@ duplicate, or truncated history fails closed. A returned handler must have
 consumed its recorded history before it may settle successfully. No automatic
 latest-code replay or fallback command is allowed.
 
-Fresh Context and the executor's current Policy/disclosure rules also apply to
-receipt recovery. If permissions are revoked after the Mutation committed but
-before checkpoint completion, recovery may be denied and the Job may fail
-without a completed checkpoint. The committed application write stays committed.
-The framework does not elevate authority to recover or disclose a result.
+Receipt recovery enters the same Mutation executor with fresh Context and
+Operation admission. It returns the originally authorized immutable result
+without rerunning the handler, lifecycle, or Collection row/Field Policy,
+preserving ADR-0011 exact-result replay. A Context or Operation-admission denial
+can prevent recovery after commit; the write remains committed even if the Job
+cannot complete its checkpoint. A Collection-only permission change does not
+retroactively hide that stored result while Context and admission still allow
+replay. This is historical result recovery, not a newly authorized Collection
+read. No raw-receipt shortcut, System elevation, or new disclosure gate is added.
+
+A declared Mutation failure rolls back and has no committed result receipt.
+This minimum slice rejects with the same declared error and dooms further
+checkpoint progress and successful settlement of that Physical Attempt, even
+if the handler catches the error. Reservation, dispatch, completion-unknown,
+concurrency, cancellation, and incomplete-history failures likewise prevent
+later checkpoint dispatch and successful settlement in that attempt. An already
+dispatched Mutation may still commit. The reserved command and stable Call
+Identity remain for the existing bounded Job retry, which re-enters in order
+with fresh Context; no retry loop runs inside the helper. Completion never
+stores a second copy of a success or failure result. Catch-and-continue after a
+failed Mutation step is outside this minimum slice.
+The worker owns every started step promise, including an unawaited one. It
+closes step admission and joins pending work before terminal settlement and
+Execution cleanup. An already-observed cancellation keeps its original reason;
+synthetic incomplete-history failures cannot replace it. Joining still uses
+the existing bounded execution and transaction cancellation owners.
 
 Failed fenced reservation or observed lease loss/cancellation prevents new
 command dispatch. A dispatch racing an unobserved loss/cancellation may still
@@ -269,8 +295,9 @@ Fable reviewer exception does not apply to this ticket.
   loss, A-to-B-to-A, both removal lock orders, changed recipe, first activation,
   retained unchanged frontier, rollback, cancellation, and missing wakes.
 - Existing Mutation kernel: crash after commit before checkpoint completion,
-  one write/receipt, revoked authority, stale lease, replay mismatch, truncated
-  history, command bounds, byte bounds, and receipt retention.
+  one write/receipt, revoked Context/admission, explicit Collection-only
+  revocation replay behavior, stale lease, replay mismatch, caught step failure,
+  truncated history, command bounds, byte bounds, and receipt retention.
 - Team Support Desk and Collaboration through generated execution, real worker
   restart and PostgreSQL/browser tracers; no generic browser Job surface.
 

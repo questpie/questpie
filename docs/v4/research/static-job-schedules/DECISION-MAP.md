@@ -147,9 +147,20 @@ proved rather than copied from the old compile-only prototype.
 
 The source audit confirms Mutation receipts have no expiry/pruner today.
 Checkpoint recovery should reuse that receipt, not copy a second result ledger.
-ADR-0043 explicitly preserves revoked-after-commit denial: the write remains
-committed even if a later attempt cannot recover/disclose its result. The
-proposed history cap and all remaining byte/work/time bounds still require
+ADR-0043 now distinguishes fresh Context/Operation admission from Collection
+Policy. Exact receipt replay does not rerun the handler or Collection Policy;
+Context/admission revocation may deny recovery without undoing a committed
+write, but a Collection-only permission change does not hide the historical
+result. The current executor source and ADR-0011 own this distinction; a live
+characterization must retain both a same-call replay and a denied fresh-call
+control. Do not silently introduce a raw receipt lookup or a new authorization
+mechanism to claim a stronger guarantee.
+
+A declared Mutation failure has no receipt. The narrowed candidate dooms
+checkpoint progress and successful settlement for the attempt even if the Job
+catches that error. The next bounded Job attempt re-enters the reserved command;
+there is no failure-result ledger or catch-and-continue workflow in this slice.
+The proposed history cap and all remaining byte/work/time bounds still require
 executable proof; the 100-Job acceptance cap is not a checkpoint limit.
 
 The compiler/worker prerequisite is repaired and documented in
@@ -173,6 +184,13 @@ warnings were retained; these suggestions are not adopted:
 - a callable uncheckpointed Mutation violates the accepted effect boundary;
 - coalescing is not automatically authorized merely because a sweep tolerates it.
 
+A second ordinary Fable 5.1 consultation covered receipt replay and caught step
+failures. It supported preserving the existing receipt contract and the
+minimum reject-and-doom attempt rule. Its invented repository citations,
+Operation-role checks, System Context wording, and raw-receipt recovery
+suggestion were discarded after source review. Recovery must enter the existing
+executor; consultation output is neither repository authority nor acceptance.
+
 ## Delivery order
 
 The current proof frontier is below. A passing model does not accept ADR-0043
@@ -183,13 +201,18 @@ or count as a shipped schedule/checkpoint capability.
 | Executable pinning | Real two-build Job/Reaction regression and repair; PostgreSQL/Firefox, release gates and two dry-runs pass | Schedule catalog and retirement integration |
 | Activation/removal | PostgreSQL synthetic model: ten contenders, CAS/replay, ABA, both lock orders and rollback | Verified catalog and real Job acceptance in the same owner |
 | UTC latest-only calendar | Standalone parser/search plus PostgreSQL SELECT-only oracle; combined activation/calendar suite passes 28 tests / 110 assertions | Compiler diagnostics/cross-pins and clock capture within tick transaction |
-| Mutation checkpoint | Existing receipt/lease seams under focused integration proof | Commit/completion crash, stale lease, revoked disclosure, ordered history and bounds |
+| Mutation checkpoint | Real generated Mutation/lease prototype: one write/receipt across takeover, stale completion refused, precise revocation controls; attempt-control model passes 17 tests / 53 assertions | Connect the invocation owner and codec-normalized snapshot; generated worker, ordered-history hostiles and byte bounds |
 | Generated authoring | Compiler seams under audit | Exact schedule input and non-callable Mutation reference types; hostile artifact proof |
 | Acceptance and delivery | ADR-0043 and ADR-0039 remain Proposed | Complete deterministic proof, formal PASS, projection, tickets and production tracers |
 
 Next, prove the Mutation commit/result crash boundary with the existing
-executor and receipt. Then connect verified authoring/artifacts and real tick
-acceptance. Do not submit the pre-schedule beta.2 manifest.
+executor and receipt through the generated Job checkpoint entry, not just the
+proof adapter. The current string-input fixture does not prove codec-normalized
+command bytes, and the proof's raw completion method does not itself require
+successful authorized replay. Those are explicit blockers for wider claims,
+not permission to expose a raw receipt shortcut. Then connect verified
+authoring/artifacts and real tick acceptance. Do not submit the pre-schedule
+beta.2 manifest.
 
 1. Close the focused decisions in #365 and write an additive Proposed ADR.
 2. Build compiler/type and PostgreSQL falsification, including ten-instance
