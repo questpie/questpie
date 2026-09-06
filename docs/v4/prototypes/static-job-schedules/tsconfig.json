@@ -14,6 +14,8 @@
 		"activation.test.ts",
 		"calendar.ts",
 		"calendar.test.ts",
-		"calendar-postgres.test.ts"
+		"calendar-postgres.test.ts",
+		"checkpoint-attempt.ts",
+		"checkpoint-attempt.test.ts"
 	]
 }
