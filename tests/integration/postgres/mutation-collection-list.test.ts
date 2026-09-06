@@ -10,6 +10,7 @@ import {
 	beta05Ids,
 	prepareBeta05PostgresApplication,
 } from "./helpers/beta05-runtime";
+import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const postgresTest = process.env.PGHOST ? test.serial : test.skip;
 function connectionUrl(database: string) {
@@ -62,7 +63,7 @@ postgresTest(
 			const [connected] =
 				await database`SELECT current_database() AS name, current_setting('server_version_num')::integer AS version`;
 			expect(connected.name).toBe(name);
-			expect(Math.floor(connected.version / 10_000)).toBe(17);
+			expectPostgresMajor(connected.version);
 			prepared = await prepareBeta05PostgresApplication(database);
 			const root = resolve(prepared.generated.generatedRoot, "../..");
 			await copyFile(

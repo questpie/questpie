@@ -7,6 +7,7 @@ import type { GeneratedApp } from "../../../fixtures/team-support-desk/.questpie
 import { demoIds } from "../../../fixtures/team-support-desk/src/demo-ids";
 import { principal } from "../../../packages/questpie/src";
 import { startTeamSlaBrowser } from "../../support/team-support-sla-browser";
+import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const fixture = resolve(import.meta.dir, "../../../fixtures/team-support-desk");
 const cli = resolve(import.meta.dir, "../../../packages/questpie/dist/cli.js");
@@ -56,7 +57,7 @@ postgresTest(
 			const [connected] =
 				await database`SELECT current_database() AS name, current_setting('server_version_num')::integer AS version`;
 			expect(connected.name).toBe(name);
-			expect(Math.floor(connected.version / 10_000)).toBe(17);
+			expectPostgresMajor(connected.version);
 			command(["build"]);
 			command(["migration", "apply", "--allow-non-rolling-protocol-v9"]);
 			command(["seed", "apply"]);
