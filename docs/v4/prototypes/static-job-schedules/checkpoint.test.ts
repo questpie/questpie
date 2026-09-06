@@ -1,10 +1,13 @@
 import { afterAll, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { copyFile, readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 import { SQL } from "bun";
 import type { Principal } from "questpie";
 
+import { compileApplication } from "@questpie/compiler";
+
+import { decodeRuntimeCodecDescriptor } from "../../../../packages/runtime/src/codec";
 import {
 	createPostgresDatabaseDurableAttemptObservation,
 	createPostgresDatabaseDurableKernel,
@@ -20,6 +23,7 @@ import {
 	CHECKPOINT_PROOF_SCHEMA_SQL,
 	createMutationCheckpointProof,
 } from "./checkpoint";
+import { createMutationCheckpointInvocationProof } from "./checkpoint-invocation";
 
 const admin = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const postgresTest = process.env.PGHOST ? test.serial : test.skip;
@@ -27,6 +31,12 @@ const postgresTest = process.env.PGHOST ? test.serial : test.skip;
 afterAll(async () => {
 	await admin?.close({ timeout: 0 });
 });
+
+type MutationInput = Readonly<{
+	channelId: string;
+	body: string;
+	metadata: Readonly<{ at: Date; note?: string }>;
+}>;
 
 type MutationResult = Readonly<{
 	id: string;
@@ -56,7 +66,7 @@ type GeneratedApplication = Readonly<{
 				mutations: Readonly<{
 					message: Readonly<{
 						publish(
-							input: Readonly<{ channelId: string; body: string }>,
+							input: MutationInput,
 							options: Readonly<{ callId: string }>,
 						): Promise<MutationResult>;
 					}>;
@@ -138,6 +148,15 @@ postgresTest(
 			expect(connected.version).toBeLessThan(180_000);
 
 			prepared = await prepareBeta05PostgresApplication(setupDatabase);
+			const applicationRoot = resolve(
+				prepared.generated.generatedRoot,
+				"../..",
+			);
+			await copyFile(
+				join(import.meta.dir, "checkpoint-publish.fixture.ts"),
+				join(applicationRoot, "src/message-publish.ts"),
+			);
+			await compileApplication({ applicationRoot });
 			await setupDatabase.unsafe(CHECKPOINT_PROOF_SCHEMA_SQL);
 			const internal =
 				(await prepared.generated.loadInternal()) as GeneratedInternal;
@@ -157,7 +176,9 @@ postgresTest(
 				context: Object.freeze({ companyId: beta05Ids.company }),
 			});
 			const generatedRoot = prepared.generated.generatedRoot;
-			const runtimeBuild = JSON.parse(prepared.runtimeBuildBytes) as Readonly<{
+			const runtimeBuild = JSON.parse(
+				await readFile(join(generatedRoot, "runtime-build.json"), "utf8"),
+			) as Readonly<{
 				digest: string;
 			}>;
 			const jobs = linkJobProjection(
@@ -187,6 +208,16 @@ postgresTest(
 			);
 			if (!mutationExecutable)
 				throw new TypeError("generated Mutation executable is unavailable");
+			const mutationProjection = JSON.parse(
+				await readFile(join(generatedRoot, "mutation-projection.json"), "utf8"),
+			) as {
+				mutations: readonly { identity: string; input: unknown }[];
+			};
+			const inputCodec = decodeRuntimeCodecDescriptor(
+				mutationProjection.mutations.find(
+					(mutation) => mutation.identity === "mutation:message.publish",
+				)?.input,
+			);
 
 			// Load the generated bundle before the runtime PostgreSQL implementation;
 			// this preserves the repository's Bun/pg module initialization order.
@@ -228,15 +259,34 @@ postgresTest(
 			const mutationInput = Object.freeze({
 				channelId: beta05Ids.channel,
 				body: `checkpoint-write-${suffix}`,
+				metadata: { at: new Date("2026-09-06T12:34:56.789Z") },
 			});
 			const command = Object.freeze({
 				ordinal: 1,
 				name: "publish-message",
 				operation: "mutation:message.publish",
 				input: mutationInput,
+				inputCodec,
 				contractDigest: mutationExecutable.contractDigest,
 				runtimeGraphDigest: mutationExecutable.runtimeGraphDigest,
 			});
+			const invoke = (input: MutationInput, callId: string) =>
+				application!.execution(execution, ({ mutations }) =>
+					mutations.message.publish(input, { callId }),
+				);
+			const bindAttempt = (claim: typeof firstClaim, historyLength = 1) =>
+				createMutationCheckpointInvocationProof({
+					checkpoint,
+					claim,
+					historyLength,
+					binding: {
+						operation: command.operation,
+						inputCodec,
+						contractDigest: command.contractDigest,
+						runtimeGraphDigest: command.runtimeGraphDigest,
+						invoke,
+					},
+				});
 			const reserved = await checkpoint.reserve(firstClaim, command);
 			expect(reserved.status).toBe("reserved");
 			if (reserved.status !== "reserved")
@@ -249,6 +299,9 @@ postgresTest(
 					}),
 			);
 			expect(committed.body).toBe(mutationInput.body);
+			expect(committed.createdAt.toISOString()).toBe(
+				"2026-09-06T12:34:56.789Z",
+			);
 			// Deliberate crash window: Mutation committed, checkpoint not completed.
 			expect((await checkpoint.inspect(accepted.runId, 1))?.state).toBe(
 				"reserved",
@@ -259,13 +312,29 @@ postgresTest(
 				SET status = 'revoked'
 				WHERE id = ${beta05Ids.membership}
 			`;
+			const deniedAttempt = bindAttempt(firstClaim);
 			await expect(
-				application.execution(execution, ({ mutations }) =>
-					mutations.message.publish(mutationInput, {
-						callId: reserved.callId,
-					}),
+				deniedAttempt.mutation(
+					"publish-message",
+					deniedAttempt.reference,
+					mutationInput,
 				),
 			).rejects.toMatchObject({ code: "notFound", resource: "tenant" });
+			expect((await checkpoint.inspect(accepted.runId, 1))?.state).toBe(
+				"reserved",
+			);
+			await expect(
+				deniedAttempt.mutation(
+					"must-not-dispatch",
+					deniedAttempt.reference,
+					mutationInput,
+				),
+			).rejects.toMatchObject({ code: "notFound", resource: "tenant" });
+			await expect(deniedAttempt.finish()).rejects.toMatchObject({
+				code: "notFound",
+				resource: "tenant",
+			});
+			expect(await checkpoint.inspect(accepted.runId, 2)).toBeNull();
 			const [afterContextDenial] = await setupDatabase`
 				SELECT count(*)::integer AS writes
 				FROM collaboration.messages
@@ -322,15 +391,27 @@ postgresTest(
 				status: "reserved",
 				callId: reserved.callId,
 			});
-			const replayed = await application.execution(execution, ({ mutations }) =>
-				mutations.message.publish(mutationInput, {
-					callId: reserved.callId,
-				}),
+			const successor = bindAttempt(successorClaim);
+			const replayInput = {
+				...mutationInput,
+				body: mutationInput.body as string,
+				metadata: { at: new Date("2026-09-06T12:34:56.789Z") },
+			};
+			const replayPromise = successor.mutation(
+				"publish-message",
+				successor.reference,
+				replayInput,
 			);
+			replayInput.metadata.at.setUTCFullYear(2030);
+			replayInput.body = "must-not-change-command";
+			const replayed = await replayPromise;
 			expect(replayed).toEqual(committed);
-			expect(await checkpoint.complete(successorClaim, command)).toMatchObject({
-				status: "completed",
-			});
+			await successor.finish();
+			expect(Object.keys(successor).sort()).toEqual([
+				"finish",
+				"mutation",
+				"reference",
+			]);
 			expect(await checkpoint.complete(firstClaim, command)).toEqual({
 				status: "fenced",
 			});
@@ -354,6 +435,127 @@ postgresTest(
 				callId: reserved.callId,
 			});
 			expect(completed?.receiptTransactionId).not.toBeNull();
+
+			const freshAttempt = async (label: string) => {
+				const accepted = await application!.execution(execution, ({ jobs }) =>
+					jobs.reports.companyDigest.accept(
+						{ companyId: beta05Ids.company },
+						{ idempotencyKey: `checkpoint-${label}-${suffix}` },
+					),
+				);
+				const outcome = await kernel.claim({
+					runId: accepted.runId,
+					workerId: `checkpoint-${label}-${suffix}`,
+					leaseMilliseconds: 30_000,
+				});
+				if (outcome.status !== "claimed")
+					throw new Error("proof Job was not claimed");
+				return { owner: bindAttempt(outcome.claim, 0), runId: accepted.runId };
+			};
+			const hostileInput = {
+				...mutationInput,
+				body: `hostile-${suffix}`,
+				metadata: { ...mutationInput.metadata, note: 42 },
+			} as unknown as MutationInput;
+			await expect(
+				invoke(hostileInput, `direct-hostile-${suffix}`),
+			).rejects.toMatchObject({
+				code: "PROTOCOL_UNSUPPORTED",
+				retryable: false,
+			});
+			const { owner: hostile, runId: hostileRunId } =
+				await freshAttempt("invalid");
+			await expect(
+				hostile.mutation("reject-invalid", hostile.reference, hostileInput),
+			).rejects.toMatchObject({
+				code: "PROTOCOL_UNSUPPORTED",
+				retryable: false,
+			});
+			await expect(hostile.finish()).rejects.toThrow();
+			expect(await checkpoint.inspect(hostileRunId, 1)).toBeNull();
+			for (const [label, reference] of [
+				["forged", {}],
+				["borrowed", successor.reference],
+				[
+					"callable",
+					() => {
+						throw new Error("must not execute caller callback");
+					},
+				],
+			] as const) {
+				const { owner, runId } = await freshAttempt(label);
+				await expect(
+					owner.mutation("invalid-reference", reference, mutationInput),
+				).rejects.toThrow("CHECKPOINT_REFERENCE_INVALID");
+				await expect(owner.finish()).rejects.toThrow(
+					"CHECKPOINT_REFERENCE_INVALID",
+				);
+				expect(await checkpoint.inspect(runId, 1)).toBeNull();
+			}
+			const { owner: rejected, runId: rejectedRunId } =
+				await freshAttempt("declared-error");
+			const unavailable = {
+				...mutationInput,
+				channelId: "00000000-0000-4000-8000-000000000099",
+			};
+			const declaredFailure = await rejected
+				.mutation("unavailable-channel", rejected.reference, unavailable)
+				.catch((error: unknown) => error);
+			expect(declaredFailure).toMatchObject({
+				code: "CHANNEL_UNAVAILABLE",
+				status: 404,
+			});
+			await expect(
+				rejected.mutation(
+					"must-not-continue",
+					rejected.reference,
+					mutationInput,
+				),
+			).rejects.toBe(declaredFailure);
+			await expect(rejected.finish()).rejects.toBe(declaredFailure);
+			const rejectedCheckpoint = await checkpoint.inspect(rejectedRunId, 1);
+			expect(rejectedCheckpoint?.state).toBe("reserved");
+			expect(await checkpoint.inspect(rejectedRunId, 2)).toBeNull();
+			const [failedReceipt] =
+				await setupDatabase`SELECT count(*)::integer AS count FROM questpie_internal.mutation_call_receipts WHERE call_id = ${rejectedCheckpoint!.callId}`;
+			expect(failedReceipt.count).toBe(0);
+			const { owner: oversized, runId: oversizedRunId } =
+				await freshAttempt("byte-limit");
+			await expect(
+				oversized.mutation("too-large", oversized.reference, {
+					...mutationInput,
+					body: "é".repeat(524_288),
+				}),
+			).rejects.toThrow("CHECKPOINT_INPUT_LIMIT");
+			await expect(oversized.finish()).rejects.toThrow(
+				"CHECKPOINT_INPUT_LIMIT",
+			);
+			expect(await checkpoint.inspect(oversizedRunId, 1)).toBeNull();
+
+			const { owner: sequential, runId: sequentialRunId } =
+				await freshAttempt("sequential");
+			const firstSequential = await sequential.mutation(
+				"first",
+				sequential.reference,
+				{
+					...mutationInput,
+					body: `first-${suffix}`,
+					metadata: { ...mutationInput.metadata, note: "present" },
+				},
+			);
+			const secondSequential = await sequential.mutation(
+				"second",
+				sequential.reference,
+				{ ...mutationInput, body: `second-${suffix}` },
+			);
+			await sequential.finish();
+			expect(firstSequential.body).toBe(`first-${suffix}`);
+			expect(secondSequential.body).toBe(`second-${suffix}`);
+			expect(firstSequential.id).not.toBe(secondSequential.id);
+			for (const ordinal of [1, 2])
+				expect(
+					(await checkpoint.inspect(sequentialRunId, ordinal))?.state,
+				).toBe("completed");
 		} catch (error) {
 			failures.push(error);
 		} finally {

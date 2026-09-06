@@ -1,4 +1,9 @@
 import {
+	decodeRuntimeCodec,
+	encodeRuntimeCodec,
+	type RuntimeCodec,
+} from "../../../../packages/runtime/src/codec";
+import {
 	durableEffectFence,
 	durableKernelMarker,
 } from "../../../../packages/runtime/src/durable/postgres-statements";
@@ -56,6 +61,7 @@ type Command = Readonly<{
 	name: string;
 	operation: `mutation:${string}`;
 	input: unknown;
+	inputCodec: RuntimeCodec;
 	contractDigest: string;
 	runtimeGraphDigest: string;
 }>;
@@ -320,7 +326,14 @@ function prepare(runId: string, command: Command): PreparedCommand {
 		command.runtimeGraphDigest,
 		"Runtime Graph digest",
 	);
-	const inputDigest = mutationDigest(canonicalMutationBytes(command.input));
+	const encodedInput = encodeRuntimeCodec(
+		command.inputCodec,
+		decodeRuntimeCodec(command.inputCodec, command.input),
+	);
+	const inputBytes = canonicalMutationBytes(encodedInput);
+	if (inputBytes.byteLength > 1_048_576)
+		throw new Error("CHECKPOINT_INPUT_LIMIT");
+	const inputDigest = mutationDigest(inputBytes);
 	const callId = `checkpoint:${mutationDigest(
 		canonicalMutationBytes({ name, ordinal: position, runId }),
 	)}`;

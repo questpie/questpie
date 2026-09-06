@@ -17,6 +17,7 @@
 		"calendar-postgres.test.ts",
 		"checkpoint-attempt.ts",
 		"checkpoint-attempt.test.ts",
+		"checkpoint-invocation.ts",
 		"checkpoint.ts",
 		"checkpoint.test.ts"
 	]

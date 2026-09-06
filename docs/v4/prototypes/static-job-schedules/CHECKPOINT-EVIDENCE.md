@@ -13,11 +13,11 @@ copying the Mutation result or repeating the application write?
 `checkpoint.ts` adds proof-only PostgreSQL checkpoint storage and three private
 operations: reserve, complete, and inspect. Reservation derives one stable Call
 Identity from the Durable Run plus ordered checkpoint name and ordinal. The
-canonical command digest separately binds the Mutation identity, the proof's
-raw canonical-JSON input digest, contract digest, and Runtime Graph digest. For
-this fixture, the Mutation input contains only codec-preserved strings, so that
-raw digest agrees with the generated codec representation. This prototype does
-not prove general codec-first normalization or byte agreement.
+canonical command digest separately binds the Mutation identity, codec-encoded
+input digest, contract digest, and Runtime Graph digest. The current tracer
+uses the generated input codec with nested timestamps and optional text. Raw
+JSON hashing was falsified by a real committed receipt that completion could
+not locate; the codec repair and expanded proof are recorded below.
 
 Both history mutations execute the production Durable attempt fence. Completion
 requires the exact committed receipt locator retained by the checkpoint:
@@ -55,15 +55,15 @@ Call Identity is denied through the declared
 against interpreting Proposed ADR-0043 as a promise to rerun Collection Policy
 on an existing receipt.
 
-The test orchestration always calls the generated Mutation executor before
-checkpoint completion. Raw receipt lookup is used only by fenced checkpoint
-completion to bind the receipt; it never returns a Mutation result. The
-low-level exported proof primitive does not itself prove that its caller just
-performed an authorized generated invocation: a caller could invoke `complete`
-after a denied replay while an earlier committed receipt exists. Production
-therefore still requires an uncallable executor-owned composition boundary
-that invokes the Mutation and completes the checkpoint as one framework
-operation without exposing raw completion to Job code.
+Raw receipt lookup is used only by fenced checkpoint completion to bind the
+receipt; it never returns a Mutation result. The low-level proof primitive
+still permits raw completion and is not suitable for Job authoring. The added
+`checkpoint-invocation.ts` composition owns reservation, generated invocation,
+and completion without exposing completion through its caller interface. The
+test now routes denied recovery and successful successor recovery through that
+owner. The initial commit-before-completion window deliberately still uses the
+low-level primitive. Production must bind this composition inside the generated
+Job execution, not expose either proof factory to authors.
 
 ## TDD and deterministic checks
 
@@ -121,12 +121,93 @@ schemas. The existing PostgreSQL container and preview were preserved.
 
 This slice does not prove or implement the public Job Context projection,
 generated checkpoint types or artifact decoders, the production checkpoint
-schema/statements, codec-aware normalized command snapshot, uncallable
-executor/completion owner, attempt-local doom, declared-error behavior, Action
+schema/statements, Action
 steps, sleep, signals, child work, schedules, receipt retention changes,
 observation, or release readiness. It also does not exercise a second
-concurrent in-flight reservation, ordinal two, or a separate Operation-admission
+concurrent in-flight PostgreSQL reservation or a separate Operation-admission
 denial. Lease expiry simulates the recovery boundary; it is not an
 operating-system process-kill tracer. The synthetic checkpoint completion
 adapter is not proof that production Job acceptance, Context construction, or
 checkpoint compilation already exists.
+
+## Codec and invocation-owner extension
+
+The disposable application now replaces only its copied `message.publish`
+source with `checkpoint-publish.fixture.ts` and recompiles before loading the
+generated Runtime. Its input adds nested `metadata.at: timestamp` and optional
+`metadata.note: text`; no canonical fixture or generated file is edited.
+The test reads the new Mutation input descriptor and executable pins from that
+compilation. The fixture does not add a Collection or a second write kernel.
+
+The first semantic RED reached a real Mutation commit and exact replay but
+checkpoint completion returned `receiptUnavailable` instead of `completed`:
+0 pass, 1 fail, 14 assertions. The previous raw JSON input digest could not
+identify the timestamp-bearing receipt. Decode/encode through the existing
+Runtime codec before canonical hashing made the same tracer pass (1/18).
+A missing transitive Collection Issue mapping was corrected before this RED;
+that initial compiler setup error was not semantic evidence.
+
+The next RED was the absent invocation module. The composition now binds one
+compiled Mutation to an inert attempt-local reference and the existing attempt
+coordinator. Reference identity is checked before snapshotting. The coordinator
+detaches the input before any await; the owner retains codec-encoded values and
+gives the generated Mutation separately decoded Date objects. Later caller
+changes cannot alter the reservation, dispatch, or completion command.
+The caller cannot supply an Operation identity, executable digest, Call Identity,
+or a completion callback.
+
+The expanded PostgreSQL tracer checks:
+
+- denied Context replay leaves the existing receipt committed and checkpoint
+  reserved; catching the error permits neither another reservation nor success;
+- successor recovery returns the exact original result even when the caller
+  changes the input body and Date immediately after starting the step;
+- malformed optional input fails before reservation, with the same safe
+  `PROTOCOL_UNSUPPORTED` class as direct execution;
+- forged, borrowed, and callable references fail before reservation;
+- a real declared `CHANNEL_UNAVAILABLE` failure rolls back, leaves no receipt,
+  retains its error object through caught-error doom, and cannot dispatch step two;
+- a UTF-8 input exceeding the existing 1 MiB Mutation bound is rejected before
+  history allocation; two valid sequential commands complete distinct writes
+  and ordered history, with optional input both present and absent.
+
+The malformed-input check produced another semantic RED: direct execution
+returned `PROTOCOL_UNSUPPORTED`, but the owner exposed `RuntimeCodecError`
+with a field path (0/1, 24 assertions). The owner now uses the existing safe
+Operation failure class for codec failures. An exploratory fixture using
+unavailable `codec.json()` was rejected by compilation and removed; it proves
+no JSON capability or JSON snapshot behavior.
+
+This remains a one-Mutation proof composition, not the generated nested
+reference projection. The caller supplies a trusted binding and history length;
+the compiler/worker must eventually own and validate both. Handwritten test
+types describe the loaded generated executor; they are not generated Job type
+evidence. Arbitrary codec/prototype combinations, artifact tampering, exact
+checkpoint failure projection, cancellation during real dispatch, worker
+terminal settlement, process kill, and retained-receipt corruption remain open.
+Attempt-model tests do not substitute for those integrated cases.
+
+Current deterministic run (Bun 1.3.14, PostgreSQL 17, process-only connection
+environment):
+
+```sh
+bun test docs/v4/prototypes/static-job-schedules/activation.test.ts \
+  docs/v4/prototypes/static-job-schedules/calendar.test.ts \
+  docs/v4/prototypes/static-job-schedules/calendar-postgres.test.ts \
+  docs/v4/prototypes/static-job-schedules/checkpoint-attempt.test.ts \
+  docs/v4/prototypes/static-job-schedules/checkpoint.test.ts
+bunx --no-install tsc -p docs/v4/prototypes/static-job-schedules/tsconfig.json
+bun run lint -- --deny-warnings \
+  docs/v4/prototypes/static-job-schedules/checkpoint.ts \
+  docs/v4/prototypes/static-job-schedules/checkpoint.test.ts \
+  docs/v4/prototypes/static-job-schedules/checkpoint-invocation.ts \
+  docs/v4/prototypes/static-job-schedules/checkpoint-publish.fixture.ts
+git diff --check
+```
+
+The five suites pass: 46 tests, 212 assertions, zero failures or skips (7.98 s).
+The checkpoint tracer accounts for 49 assertions. Strict proof types and
+warning-denying lint pass. The authored fixture is compiled in the disposable
+application, not included in the proof's standalone TypeScript project.
+No production export, public authority, package version, or release artifact
+changed; the previous release gates are not claimed as rerun for this proof.
