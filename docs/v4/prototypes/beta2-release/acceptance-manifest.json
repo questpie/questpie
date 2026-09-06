@@ -1,6 +1,7 @@
 {
 	"protocolVersion": 2,
 	"ticket": "BETA2-ACCEPTANCE",
+	"reviewerProfile": "claude-fable-5-1-medium-beta2-exception-v1",
 	"proof": "Accept the exceptional 4.0.0-beta.2 release boundary as one exact two-package, compiler-derived DX contract spanning lifecycle, inverse relations, Query Resource and React, canonical HTTP and OpenAPI, operation documentation, MCP, discriminated-value helpers, OpenTelemetry, PostgreSQL 17, browser consumers, and the public agent skill without compatibility paths, duplicated author metadata, or a second execution kernel.",
 	"diffBase": "b355bc62472ffc7f5cdec26a9c006cff5958b75d",
 	"reviewOutput": "docs/v4/prototypes/beta2-release/REVIEW.json",
@@ -8,23 +9,29 @@
 		"accepted beta.1 release projection": "cc1916f304fc9f75f776e3eaffe4a47eb9fbd48d",
 		"accepted public package identity projection": "14e5958a088c1a9bd87140f3502c8627bda511a4",
 		"accepted basic MCP authority projection": "8f8864c22d1e87daeb29ff76cc2edf2c5872160d",
-		"deterministic beta.2 release evidence before manifest binding": "f794330485b21471ed4de6b80e39215ffaf728b7"
+		"deterministic beta.2 release evidence before manifest binding": "f794330485b21471ed4de6b80e39215ffaf728b7",
+		"deterministic behavior-preserving beta.2 closure": "493cfc7cedcba0be095e0f71ff19ca8893116f2a"
 	},
 	"authorityDocuments": [
 		{
 			"name": "proof and acceptance procedure",
 			"path": ".agents/skills/questpie-v4/references/proof.md",
-			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+			"sha256": "23aa3acf1bc2671279b10b890e965d3c7be598a07e82f20af3ff672a229487a9"
+		},
+		{
+			"name": "repository quality and packet secret policy",
+			"path": ".agents/skills/questpie-v4/references/repository-quality.md",
+			"sha256": "087e6420a3d3a9965d80f270abd9d2fc0abc1e8573e5676c87117e36fb43f1e0"
 		},
 		{
 			"name": "tracer-led delivery flow",
 			"path": "docs/v4/DELIVERY-FLOW.md",
-			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+			"sha256": "4041c0f4f7f450928a33a51c0c096211d851c255a319f009a64be3fe6ab74cfc"
 		},
 		{
 			"name": "canonical product specification",
 			"path": "SPEC.md",
-			"sha256": "2d8142a150d9d5616ee33e4d57aae92cde5e68c32877de8487387603b2d5113c"
+			"sha256": "8cd06c68afee320cef230ca8da9b9e7f5f5293e5268423562a9d26bc47ce257b"
 		},
 		{
 			"name": "canonical product language",
@@ -40,6 +47,16 @@
 			"name": "accepted delivery and review policy",
 			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
 			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "accepted Collection provenance and trusted values",
+			"path": "docs/adr/0030-freeze-collection-provenance-and-trusted-values.md",
+			"sha256": "ee07668e17fcfceae0b8e92a3063a77b54cc087249dc76774dd97460b29cee21"
+		},
+		{
+			"name": "accepted Collection lifecycle programs and issue mapping",
+			"path": "docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md",
+			"sha256": "fe5dd7ece8168e7a2405035b0f6352b35ba1f822afb12ac3d808696c2e648dae"
 		},
 		{
 			"name": "accepted bounded inverse to-many projection",
@@ -94,7 +111,17 @@
 		{
 			"name": "candidate beta.2 release inventory",
 			"path": "docs/v4/beta2-release-scope.md",
-			"sha256": "7e028d575073df00c5be995101a5ed667719780e0de5f1dc24430d9091c5fe5f"
+			"sha256": "d084605ade28e9495ea3ad00f3d9ff0794937a90a083ff3934a3ff2dfe4af40d"
+		},
+		{
+			"name": "human-confirmed behavior-preserving beta.2 closure",
+			"path": "docs/v4/implementation/beta2-closure/SPEC.md",
+			"sha256": "7771a07537df5642f387ecfb9bf0f253a9167f30650cc9b6f15f121d5ae6bbea"
+		},
+		{
+			"name": "public beta.2 preview inventory",
+			"path": "apps/docs/content/docs/v4/beta2-release.mdx",
+			"sha256": "cb2eb939e9a25643b5dcaae1f92301ce110be4bf7c5257a390313c232f18c03f"
 		},
 		{
 			"name": "accepted proof history",
@@ -116,11 +143,11 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run release -- --dry-run (first isolated build: questpie SHA-256 79befee8da77a3b794fe9d262eaeffefa595648a0d9ad0a3305e97588687a180; questpie-opentelemetry SHA-256 0c84e8b805a65058efb31e28bac9a143a8390d8780132fced3ff9b7c29c4861f; exact-two-package combined-import PASS)",
+			"command": "bun run build --force && bun run release -- --dry-run (first isolated build: questpie SHA-256 b4423a6c26ba8e7f6a09864597d2379713ea6bf3a252d2db9d470b57240a5023; questpie-opentelemetry SHA-256 0c84e8b805a65058efb31e28bac9a143a8390d8780132fced3ff9b7c29c4861f; exact-two-package combined-import PASS)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run release -- --dry-run (second isolated build: byte-identical archive names and SHA-256 values; exact-two-package combined-import PASS)",
+			"command": "bun run build --force && bun run release -- --dry-run (second isolated build: byte-identical archive names and SHA-256 values; exact-two-package combined-import PASS)",
 			"result": "PASS"
 		},
 		{
@@ -129,6 +156,10 @@
 		},
 		{
 			"command": "independent Standards and Spec reviews over the complete beta.2 closure range",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:negative-control",
 			"result": "PASS"
 		},
 		{
