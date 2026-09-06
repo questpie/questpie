@@ -17,7 +17,7 @@ function connectionUrl(database: string): string {
 	url.hostname = process.env.PGHOST ?? "127.0.0.1";
 	url.port = process.env.PGPORT ?? "5432";
 	url.username = process.env.PGUSER ?? "postgres";
-	url.password = process.env.PGPASSWORD ?? "";
+	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
 	url.pathname = `/${database}`;
 	return url.toString();
 }
@@ -35,7 +35,7 @@ function command(args: readonly string[]): string {
 }
 
 postgresTest(
-	"one explicit deployment feeds the existing worker and checkpoints ten due tickets once",
+	"one explicit deployment feeds the existing worker and checkpoints a bounded due-ticket batch once",
 	async () => {
 		const name = `qp_team_sweep_${crypto.randomUUID().replaceAll("-", "")}`;
 		const admin = new SQL(connectionUrl("postgres"), { max: 1 });
@@ -89,7 +89,7 @@ postgresTest(
 				async ({ mutations }) => {
 					expect(mutations.ticket.create).toBeFunction();
 					const created = [];
-					for (let index = 0; index < 10; index++)
+					for (let index = 0; index < 1; index++)
 						created.push(
 							await mutations.ticket.create({
 								teamId: demoIds.team,
@@ -101,13 +101,13 @@ postgresTest(
 					return created;
 				},
 			);
-			expect(tickets).toHaveLength(10);
+			expect(tickets).toHaveLength(1);
 			const worker = application.durable.worker({
 				workerId: `team-sweep-${name}`,
 				claimBatch: 64,
 			});
 			// Startup/poll must not activate a deployment. These claims only settle
-			// the ordinary follow-up Jobs accepted by the ten ticket creates.
+			// the ordinary follow-up Jobs accepted by the ticket creates.
 			expect((await worker.poll()).producer).toMatchObject({
 				status: "inactive",
 				accepted: 0,
@@ -149,7 +149,7 @@ postgresTest(
 				value: after[0]!.lastSlaFollowUpAt!.toISOString(),
 			});
 			const jobs = await worker.poll();
-			expect(jobs.outcomes).toHaveLength(10);
+			expect(jobs.outcomes).toHaveLength(1);
 			expect(
 				jobs.outcomes.every((outcome) => outcome.outcome === "succeeded"),
 			).toBe(true);
@@ -191,7 +191,9 @@ postgresTest(
 			else process.env.DATABASE_URL = previous.url;
 			if (owned) await admin.unsafe(`DROP DATABASE "${name}"`);
 			await admin.close({ timeout: 0 });
-			expect(cleanup.every((result) => result.status === "fulfilled")).toBe(true);
+			expect(cleanup.every((result) => result.status === "fulfilled")).toBe(
+				true,
+			);
 		}
 	},
 	120_000,

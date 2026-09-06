@@ -17,7 +17,7 @@ function connectionUrl(database: string) {
 	url.hostname = process.env.PGHOST ?? "127.0.0.1";
 	url.port = process.env.PGPORT ?? "5432";
 	url.username = process.env.PGUSER ?? "postgres";
-	url.password = process.env.PGPASSWORD ?? "";
+	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
 	url.pathname = `/${database}`;
 	return url.toString();
 }
@@ -40,9 +40,7 @@ postgresTest(
 						use: (scope: {
 							mutations: {
 								message: {
-									probeList(
-										input: unknown,
-									): Promise<{
+									probeList(input: unknown): Promise<{
 										nodes: { id: string; createdAt: Date }[];
 										pageInfo: {
 											endCursor: string | null;
