@@ -196,14 +196,14 @@ executor; consultation output is neither repository authority nor acceptance.
 The current proof frontier is below. A passing model does not accept ADR-0043
 or count as a shipped schedule/checkpoint capability.
 
-| Obligation | Current evidence | Remaining |
-| --- | --- | --- |
-| Executable pinning | Real two-build Job/Reaction regression and repair; PostgreSQL/Firefox, release gates and two dry-runs pass | Schedule catalog and retirement integration |
-| Activation/removal | PostgreSQL synthetic model: ten contenders, CAS/replay, ABA, both lock orders and rollback | Verified catalog and real Job acceptance in the same owner |
-| UTC latest-only calendar | Standalone parser/search plus PostgreSQL SELECT-only oracle; combined activation/calendar suite passes 28 tests / 110 assertions | Compiler diagnostics/cross-pins and clock capture within tick transaction |
-| Mutation checkpoint | Real generated Mutation/lease prototype: one write/receipt across takeover, stale completion refused, precise revocation controls; attempt-control model passes 17 tests / 53 assertions | Connect the invocation owner and codec-normalized snapshot; generated worker, ordered-history hostiles and byte bounds |
-| Generated authoring | Compiler seams under audit | Exact schedule input and non-callable Mutation reference types; hostile artifact proof |
-| Acceptance and delivery | ADR-0043 and ADR-0039 remain Proposed | Complete deterministic proof, formal PASS, projection, tickets and production tracers |
+| Obligation               | Current evidence                                                                                                                                                                         | Remaining                                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Executable pinning       | Real two-build Job/Reaction regression and repair; PostgreSQL/Firefox, release gates and two dry-runs pass                                                                               | Schedule catalog and retirement integration                                                                            |
+| Activation/removal       | PostgreSQL synthetic model: ten contenders, CAS/replay, ABA, both lock orders and rollback                                                                                               | Verified catalog and real Job acceptance in the same owner                                                             |
+| UTC latest-only calendar | Standalone parser/search plus PostgreSQL SELECT-only oracle; combined activation/calendar suite passes 28 tests / 110 assertions                                                         | Compiler diagnostics/cross-pins and clock capture within tick transaction                                              |
+| Mutation checkpoint      | Real generated Mutation/lease prototype: one write/receipt across takeover, stale completion refused, precise revocation controls; attempt-control model passes 17 tests / 53 assertions | Connect the invocation owner and codec-normalized snapshot; generated worker, ordered-history hostiles and byte bounds |
+| Generated authoring      | Compiler seams under audit                                                                                                                                                               | Exact schedule input and non-callable Mutation reference types; hostile artifact proof                                 |
+| Acceptance and delivery  | ADR-0043 and ADR-0039 remain Proposed                                                                                                                                                    | Complete deterministic proof, formal PASS, projection, tickets and production tracers                                  |
 
 Next, prove the Mutation commit/result crash boundary with the existing
 executor and receipt through the generated Job checkpoint entry, not just the
