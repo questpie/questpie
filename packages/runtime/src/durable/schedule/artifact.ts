@@ -113,6 +113,8 @@ export function verifyStaticScheduleArtifact(
 				schedule.principal.kind !== "service" ||
 				typeof schedule.principal.id !== "string" ||
 				!schedule.principal.id ||
+				schedule.principal.id.length > 255 ||
+				schedule.principal.id.trim() !== schedule.principal.id ||
 				schedule.principal.id.includes("\0")
 			)
 				throw new Error();

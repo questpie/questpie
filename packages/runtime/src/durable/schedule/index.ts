@@ -87,7 +87,10 @@ export function createPostgresStaticSchedules(
 			request: Readonly<{ expectedRevision: string; signal?: AbortSignal }>,
 		): Promise<StaticScheduleActivationReceipt> {
 			const expectedRevision = revision(request.expectedRevision);
-			const signal = request.signal ?? new AbortController().signal;
+			const signal = AbortSignal.any([
+				request.signal ?? new AbortController().signal,
+				AbortSignal.timeout(10000),
+			]);
 			signal.throwIfAborted();
 			const requestIdentity = scheduleDigest(
 				"questpie-schedule-activation-v1",
@@ -216,7 +219,10 @@ export function createPostgresStaticSchedules(
 			});
 		},
 		async reconcile(request: Readonly<{ signal?: AbortSignal }> = {}) {
-			const signal = request.signal ?? new AbortController().signal;
+			const signal = AbortSignal.any([
+				request.signal ?? new AbortController().signal,
+				AbortSignal.timeout(10000),
+			]);
 			signal.throwIfAborted();
 			return input.database.transaction({
 				mode: { isolation: "readCommitted", access: "readWrite" },
