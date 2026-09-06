@@ -95,6 +95,11 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		expect(runtimeBuild.inventory).toContainEqual(
 			expect.objectContaining({ path: "durable-kernel.json" }),
 		);
+		const durableKernel = JSON.parse(
+			first.generatedFiles["durable-kernel.json"]!,
+		);
+		expect(durableKernel.failureCodes).toContain("CHECKPOINT_INVALID");
+		expect(durableKernel.permanentFailureCodes).toContain("CHECKPOINT_INVALID");
 		expect(runtimeBuild.compilerRuntimeBuildDigest).toMatch(/^[0-9a-f]{64}$/);
 		expect(runtimeBuild.schemaFingerprint).toMatch(/^[0-9a-f]{64}$/);
 		expect(runtimeBuild.serverBundleDigest).toBe(

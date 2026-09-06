@@ -52,7 +52,7 @@ was introduced.
 
 ## Still blocking
 
-The expanded generated-worker tracer passes 1 test / 50 assertions. It covers
+The expanded generated-worker tracer passes 1 test / 54 assertions. It covers
 caught forged-reference failure, unawaited and concurrent commands, duplicate
 names, synchronously detached mutable input, truncated/renamed/changed history,
 and transient failure before replay followed by successful recovery. Independent
@@ -60,16 +60,21 @@ review reproduced the transient failure being replaced by a synthetic history
 failure; a failing worker test preceded its repair. The original handler failure
 now survives joining and uses the existing bounded Job retry.
 
-The same generated application has a static service recipe. Explicit candidate
-activation and exact receipt replay precede ten real Runtime instances contending
-to accept one latest tick. Its Job executes the named checkpoint successfully.
+The same generated application has a static service recipe. Built CLI activation
+and exact receipt replay precede ten real Runtime instances contending through
+their ordinary worker polls to accept one latest tick. Its Job executes the
+named checkpoint successfully.
 Denied service Context leaves the frontier unchanged and produces the safe,
-separate producer failure while the worker remains usable. Temporary proof-only
-access to activation must be removed once the CLI is integrated; it is not a
-proposed public schedule-management API.
+separate producer failure while the worker remains usable. The temporary
+proof-only `durable.schedules` access is deleted. Activation is deployment CLI
+work, not a public Runtime management API. The combined worker and PostgreSQL
+schedule-owner run passes 2 tests / 99 assertions without skips.
+
+The generated durable-kernel artifact now pins `CHECKPOINT_INVALID` in both its
+known and permanent failure sets. A failing compiler artifact test preceded this
+repair; the focused artifact test passes 31 assertions.
 
 Integrated authority changes during replay, lease takeover and cancellation;
-fully autonomous scheduled acceptance without a direct reconciliation call;
-explicit activation CLI; beginner/browser tracer; final artifact and authority
+beginner/browser tracer; final artifact and authority
 reconciliation; independent review and manifest-bound formal acceptance remain
 required. Historical model proofs do not substitute for generated-path checks.

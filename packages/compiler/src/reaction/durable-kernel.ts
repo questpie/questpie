@@ -91,6 +91,7 @@ const withoutDigest = {
 		"succeeded",
 	] as const,
 	failureCodes: [
+		"CHECKPOINT_INVALID",
 		"EFFECT_AMBIGUOUS",
 		"EFFECT_CONFLICT",
 		"HANDLER_FAILED",
@@ -101,6 +102,7 @@ const withoutDigest = {
 		"VALIDATION_FAILED",
 	] as const,
 	permanentFailureCodes: [
+		"CHECKPOINT_INVALID",
 		"EFFECT_AMBIGUOUS",
 		"EFFECT_CONFLICT",
 		"REACTION_ERROR",

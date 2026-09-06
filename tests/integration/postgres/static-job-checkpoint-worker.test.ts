@@ -40,14 +40,9 @@ type LoadedApplication = Readonly<{
 		) => Promise<Result>,
 	): Promise<Result>;
 	durable: Readonly<{
-		schedules: Readonly<{
-			activate(
-				input: Readonly<{ expectedRevision: string }>,
-			): Promise<Readonly<{ acceptedRevision: string; replayed: boolean }>>;
-			reconcile(): Promise<Readonly<{ accepted: number; status: string }>>;
-		}>;
 		poll(options: Readonly<{ workerId: string; claimBatch: number }>): Promise<
 			Readonly<{
+				producer?: Readonly<{ status: string; accepted?: number }>;
 				outcomes: readonly Readonly<{
 					runId: string;
 					outcome: string;
@@ -89,6 +84,14 @@ postgresTest(
 			| undefined;
 		const failures: unknown[] = [];
 		try {
+			const build = Bun.spawn(["bun", "run", "build"], {
+				cwd: resolve(import.meta.dir, "../../../packages/questpie"),
+				stdout: "ignore",
+				stderr: "pipe",
+			});
+			const buildError = await new Response(build.stderr).text();
+			if ((await build.exited) !== 0)
+				throw new Error(`candidate CLI build failed: ${buildError}`);
 			await admin!.unsafe(`CREATE DATABASE "${name}"`);
 			owned = true;
 			process.env.PGDATABASE = name;
@@ -260,16 +263,40 @@ postgresTest(
 					mode === "duplicate" || mode === "captured" ? 1 : 0,
 				);
 			}
-			const activation = await application.durable.schedules.activate({
-				expectedRevision: "0",
-			});
+			const activate = async () => {
+				const child = Bun.spawn(
+					[
+						"bun",
+						resolve(import.meta.dir, "../../../packages/questpie/dist/cli.js"),
+						"schedule",
+						"activate",
+						"--expect-revision",
+						"0",
+					],
+					{
+						cwd: applicationRoot,
+						env: { ...process.env, DATABASE_URL: url },
+						stdout: "pipe",
+						stderr: "pipe",
+					},
+				);
+				const [output, diagnostic] = await Promise.all([
+					new Response(child.stdout).text(),
+					new Response(child.stderr).text(),
+				]);
+				expect(await child.exited).toBe(0);
+				expect(diagnostic).toBe("");
+				return JSON.parse(output);
+			};
+			const activation = await activate();
 			expect(activation).toMatchObject({
 				acceptedRevision: "1",
 				replayed: false,
 			});
-			expect(
-				await application.durable.schedules.activate({ expectedRevision: "0" }),
-			).toMatchObject({ acceptedRevision: "1", replayed: true });
+			expect(await activate()).toMatchObject({
+				acceptedRevision: "1",
+				replayed: true,
+			});
 			await database`UPDATE questpie_internal.schedule_frontiers SET frontier_minute = date_trunc('minute', clock_timestamp()) - interval '10 minutes'`;
 			const [frontier] =
 				await database`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`;
@@ -294,11 +321,19 @@ postgresTest(
 					}),
 				);
 			const producers = await Promise.all(
-				[application, ...contenders].map((candidate) =>
-					candidate.durable.schedules.reconcile(),
+				[application, ...contenders].map((candidate, index) =>
+					candidate.durable.poll({
+						workerId: `contender-${index}-${suffix}`,
+						claimBatch: 64,
+					}),
 				),
 			);
-			expect(producers.reduce((sum, value) => sum + value.accepted, 0)).toBe(1);
+			expect(
+				producers.reduce(
+					(sum, value) => sum + (value.producer?.accepted ?? 0),
+					0,
+				),
+			).toBe(1);
 			const ticks =
 				await database`SELECT tick.run_id, run.principal_kind, run.principal_id FROM questpie_internal.schedule_ticks tick JOIN questpie_internal.durable_runs run USING (application_name, run_id)`;
 			expect(ticks).toHaveLength(1);
@@ -306,12 +341,14 @@ postgresTest(
 				principal_kind: "service",
 				principal_id: beta05Ids.principal,
 			});
-			const scheduled = await application.durable.poll({
-				workerId: `scheduled-${suffix}`,
-				claimBatch: 64,
-			});
 			expect(
-				scheduled.outcomes.find((outcome) => outcome.runId === ticks[0].run_id),
+				producers
+					.flatMap((trace) => trace.outcomes)
+					.find(
+						(outcome) =>
+							outcome.runId === ticks[0].run_id &&
+							outcome.outcome === "succeeded",
+					),
 			).toMatchObject({ outcome: "succeeded", failureCode: null });
 			const [scheduledWrites] =
 				await database`SELECT count(*)::integer AS count FROM collaboration.messages WHERE body = 'scheduled-checkpoint'`;

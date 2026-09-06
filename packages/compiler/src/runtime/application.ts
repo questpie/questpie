@@ -717,7 +717,6 @@ export async function createApplication(input) {
 	${renderDurableWorkerOwner({ application: `application:${input.configuration.application.name}`, directQueries, directMutations, checkpointMutations })}
 	let defaultWorker;
 	const durable = Object.freeze({
-		schedules,
 		worker: createWorker,
 		poll: (options) => {
 			// An option-bearing poll is its own worker; it must not rebind the
