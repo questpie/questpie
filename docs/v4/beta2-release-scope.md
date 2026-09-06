@@ -27,7 +27,7 @@ into public documentation.
 
 ## Current aggregate evidence
 
-The accepted beta.2 package inventory is `questpie`, including
+The accepted package-identity inventory for the beta.2 candidate is `questpie`, including
 `questpie/react`, and `questpie-opentelemetry`. Both packages advance at the
 same version. The two-package migration must produce new measured archive and
 declaration digests; the previous three-package digests do not describe this

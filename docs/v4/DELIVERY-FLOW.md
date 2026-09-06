@@ -56,6 +56,12 @@ and tracer work does not invoke it. When it applies, use
 `bun run review:accept:v2` and retain its generated SHA-256 bindings. Record a
 `BLOCKED` result, repair on a new clean head, and run one replacement review.
 
+The sole owner-authorized reviewer exception is the fresh `BETA2-ACCEPTANCE`
+replacement: its committed manifest may pin Fable 5.1 at medium effort through
+the exact profile in `.agents/skills/questpie-v4/references/proof.md`. The same
+wrapper, proof gates, provenance bindings, and terminal `NO_RESULT` rule apply;
+this is not a fallback or permission to choose a reviewer for other tickets.
+
 ## 4. Optionally measure downstream adoption
 
 When an issue names a concrete downstream repository and owner, it may record:

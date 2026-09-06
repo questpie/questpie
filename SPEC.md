@@ -751,6 +751,15 @@ deterministic repository gates, and normal review. The first current milestone
 establishes the browser-runnable backend journey; later capabilities must land
 inside it before further contract breadth.
 
+For the owner-authorized `BETA2-ACCEPTANCE` replacement only, the manifest may
+select the exact `claude-fable-5-1-medium-beta2-exception-v1` reviewer profile
+documented in `.agents/skills/questpie-v4/references/proof.md`. This overrides
+only the Opus reviewer identity in ADR-0020/0027 for that ticket, not the proof
+gates, stateless execution, manifest binding, terminal `NO_RESULT`, or
+PASS-before-projection rule. It adds no fallback or caller-selected model.
+Historical acceptance records and all other tickets retain their existing
+reviewer contract. ADR-0039 remains Proposed pending its own acceptance.
+
 ADR-0022 freezes the generated authoring ergonomics and Operation projection.
 ADR-0023 supersedes ADR-0014's incomplete post-commit Mutation outcome with
 Operation Wire v2 while retaining v1 Query compatibility.
