@@ -227,3 +227,8 @@ unmapped `AFTER_WRITE_REJECTED` error. The test requires that exact error, zero
 matching business rows, zero receipts, reserved history, and caught-error doom.
 The full green result above includes that control. Neither review is formal
 acceptance of ADR-0043.
+
+Both reviewers rechecked the rollback-control follow-up: the Spec qualification
+is closed, and Standards found no new hard issue. After integration, the
+canonical `feat/v4` worktree reran the five suites with the same 46 tests / 213
+assertions and no skips (10.14 s), plus strict types and warning-denying lint.

@@ -196,23 +196,26 @@ executor; consultation output is neither repository authority nor acceptance.
 The current proof frontier is below. A passing model does not accept ADR-0043
 or count as a shipped schedule/checkpoint capability.
 
-| Obligation               | Current evidence                                                                                                                                                                         | Remaining                                                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Executable pinning       | Real two-build Job/Reaction regression and repair; PostgreSQL/Firefox, release gates and two dry-runs pass                                                                               | Schedule catalog and retirement integration                                                                            |
-| Activation/removal       | PostgreSQL synthetic model: ten contenders, CAS/replay, ABA, both lock orders and rollback                                                                                               | Verified catalog and real Job acceptance in the same owner                                                             |
-| UTC latest-only calendar | Standalone parser/search plus PostgreSQL SELECT-only oracle; combined activation/calendar suite passes 28 tests / 110 assertions                                                         | Compiler diagnostics/cross-pins and clock capture within tick transaction                                              |
-| Mutation checkpoint      | Real generated Mutation/lease prototype: one write/receipt across takeover, stale completion refused, precise revocation controls; attempt-control model passes 17 tests / 53 assertions | Connect the invocation owner and codec-normalized snapshot; generated worker, ordered-history hostiles and byte bounds |
-| Generated authoring      | Compiler seams under audit                                                                                                                                                               | Exact schedule input and non-callable Mutation reference types; hostile artifact proof                                 |
-| Acceptance and delivery  | ADR-0043 and ADR-0039 remain Proposed                                                                                                                                                    | Complete deterministic proof, formal PASS, projection, tickets and production tracers                                  |
+| Obligation               | Current evidence                                                                                                                                                                                                                                                    | Remaining                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Executable pinning       | Real two-build Job/Reaction regression and repair; PostgreSQL/Firefox, release gates and two dry-runs pass                                                                                                                                                          | Schedule catalog and retirement integration                                                                       |
+| Activation/removal       | PostgreSQL synthetic model: ten contenders, CAS/replay, ABA, both lock orders and rollback                                                                                                                                                                          | Verified catalog and real Job acceptance in the same owner                                                        |
+| UTC latest-only calendar | Standalone parser/search plus PostgreSQL SELECT-only oracle; combined activation/calendar suite passes 28 tests / 110 assertions                                                                                                                                    | Compiler diagnostics/cross-pins and clock capture within tick transaction                                         |
+| Mutation checkpoint      | Generated Mutation/lease prototype plus private invocation owner: codec-bound Date/optional input, takeover, revoked Context, caught-error rollback, reference refusal, sequential writes and input byte bound; five combined suites pass 46 tests / 213 assertions | Generated worker/reference integration, trusted history, cancellation/concurrency and retained-receipt corruption |
+| Generated authoring      | Compiler seams under audit                                                                                                                                                                                                                                          | Exact schedule input and non-callable Mutation reference types; hostile artifact proof                            |
+| Acceptance and delivery  | ADR-0043 and ADR-0039 remain Proposed                                                                                                                                                                                                                               | Complete deterministic proof, formal PASS, projection, tickets and production tracers                             |
 
-Next, prove the Mutation commit/result crash boundary with the existing
-executor and receipt through the generated Job checkpoint entry, not just the
-proof adapter. The current string-input fixture does not prove codec-normalized
-command bytes, and the proof's raw completion method does not itself require
-successful authorized replay. Those are explicit blockers for wider claims,
-not permission to expose a raw receipt shortcut. Then connect verified
-authoring/artifacts and real tick acceptance. Do not submit the pre-schedule
-beta.2 manifest.
+Next, connect the proven invocation composition to the actual generated Job
+checkpoint entry and worker settlement. The expanded disposable fixture uses
+nested Date and optional text input; it falsified raw JSON digesting, then
+proved byte agreement through the generated codec. Private composition now
+requires successful generated invocation before completion, but its trusted
+binding and history length are still supplied by the test. Generated nested
+references/types, artifact cross-pins, authoritative history loading, real worker
+cancellation/concurrency, and retained-receipt corruption remain proof gaps.
+Do not expose the lower-level proof completion method to Job authors. Then
+connect verified authoring/artifacts and real tick acceptance. Do not submit
+the pre-schedule beta.2 manifest.
 
 1. Close the focused decisions in #365 and write an additive Proposed ADR.
 2. Build compiler/type and PostgreSQL falsification, including ten-instance

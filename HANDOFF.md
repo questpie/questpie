@@ -864,16 +864,25 @@ write and receipt survive takeover, stale completion is fenced, and Context
 denial versus Collection-only historical replay is distinguished. A separate
 attempt-control model proves caught-error doom, one in-flight command, owned
 promise joining, cancellation-reason preservation, and detached command input.
-Neither is the generated Job checkpoint entry: codec-normalized command bytes,
-private invocation/completion ownership, artifact/type linkage, and real worker
-terminal settlement remain blocking proof. The activation
+A proof-only invocation owner now connects that coordinator to the generated
+Mutation and private receipt completion. Nested Date/optional input uses the
+generated codec; denied replay cannot complete history, input mutation cannot
+change the captured command, forged/borrowed/callable references fail before
+reservation, and write-then-declared-error rolls back without a receipt or
+later dispatch. Two sequential writes and the 1 MiB UTF-8 input bound also pass.
+Independent Standards and Spec reviews found no blocking issue; the Spec
+rollback-evidence qualification was repaired with a red/green control.
+This remains a one-Mutation proof binding, not the generated Job checkpoint
+entry. Generated reference/type and artifact linkage, trusted history loading,
+real worker terminal settlement, integrated cancellation/concurrency, and
+retained-receipt corruption remain blocking proof. The activation
 model under `docs/v4/prototypes/static-job-schedules` has 11 passing PostgreSQL
 tests and independent synthetic-model review. The separate UTC calendar proof
 has bounded latest-match search and a PostgreSQL 17 oracle; it does not prove
 compiler artifacts or clock capture inside real tick acceptance. Neither model
 proves real scheduled Job acceptance or checkpoint execution. Keep ADR-0043
 Proposed.
-The combined five-suite PostgreSQL 17 proof run passes 46 tests / 180 assertions
+The combined five-suite PostgreSQL 17 proof run passes 46 tests / 213 assertions
 with no skips; focused strict types, lint, format and cleanup checks pass.
 
 The behavior-preserving DX cleanup #360 through #363 is complete. The preserved
