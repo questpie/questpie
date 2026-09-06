@@ -30,7 +30,7 @@ try {
 	const columns =
 		await database`select c.relname, a.attname, pg_catalog.format_type(a.atttypid, a.atttypmod), a.attnotnull from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='questpie_internal' and (c.relname like 'schedule_%' or c.relname='mutation_checkpoints') and c.relkind='r' and a.attnum>0 and not a.attisdropped order by c.relname,a.attnum`;
 	const constraints =
-		await database`select c.relname, con.conname, con.contype::text, pg_get_constraintdef(con.oid,true) from pg_constraint con join pg_class c on c.oid=con.conrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='questpie_internal' and (c.relname like 'schedule_%' or c.relname='mutation_checkpoints' or con.conname='durable_run_failure_code_known') and con.contype<>'n' order by c.relname,con.conname`;
+		await database`select c.relname, con.conname, con.contype::text, pg_get_constraintdef(con.oid,true) from pg_constraint con join pg_class c on c.oid=con.conrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='questpie_internal' and (c.relname like 'schedule_%' or c.relname='mutation_checkpoints' or con.conname IN ('durable_run_failure_code_known', 'durable_event_error_code_known')) and con.contype<>'n' order by c.relname,con.conname`;
 	const indexes =
 		await database`select t.relname, i.relname as indexname, am.amname, x.indisunique, x.indisprimary, pg_get_indexdef(i.oid) from pg_index x join pg_class i on i.oid=x.indexrelid join pg_class t on t.oid=x.indrelid join pg_namespace n on n.oid=t.relnamespace join pg_am am on am.oid=i.relam where n.nspname='questpie_internal' and (t.relname like 'schedule_%' or t.relname='mutation_checkpoints') order by t.relname,i.relname`;
 	const parts = [

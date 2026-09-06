@@ -59,7 +59,9 @@ export const internalProtocolV9Catalog: InternalProtocolCatalog = Object.freeze(
 		constraints: Object.freeze(
 			[
 				...internalProtocolV8Catalog.constraints.filter(
-					(row) => row[1] !== "durable_run_failure_code_known",
+					(row) =>
+						row[1] !== "durable_run_failure_code_known" &&
+						row[1] !== "durable_event_error_code_known",
 				),
 				...internalProtocolV9Constraints,
 			].sort(compare),

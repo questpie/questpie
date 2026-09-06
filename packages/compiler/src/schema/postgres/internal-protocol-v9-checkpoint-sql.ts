@@ -41,4 +41,11 @@ ALTER TABLE questpie_internal.durable_runs ADD CONSTRAINT durable_run_failure_co
     'RESOURCE_LIMIT', 'RETRY_EXHAUSTED', 'RUN_AS_DENIED', 'VALIDATION_FAILED'
   )
 );
+ALTER TABLE questpie_internal.durable_run_events DROP CONSTRAINT durable_event_error_code_known;
+ALTER TABLE questpie_internal.durable_run_events ADD CONSTRAINT durable_event_error_code_known CHECK (
+  error_code IS NULL OR error_code IN (
+    'CHECKPOINT_INVALID', 'EFFECT_AMBIGUOUS', 'EFFECT_CONFLICT', 'HANDLER_FAILED', 'REACTION_ERROR',
+    'RESOURCE_LIMIT', 'RETRY_EXHAUSTED', 'RUN_AS_DENIED', 'VALIDATION_FAILED'
+  )
+);
 `;

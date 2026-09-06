@@ -67,6 +67,11 @@ postgres(
 				{ allowNonRollingProtocolV9: true },
 			);
 			await verifyInternalProtocolV9(sql);
+			const failureCatalog =
+				await sql`SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE connamespace = 'questpie_internal'::regnamespace AND pg_get_constraintdef(oid) LIKE '%HANDLER_FAILED%' ORDER BY conname`;
+			expect(failureCatalog).toHaveLength(2);
+			for (const constraint of failureCatalog)
+				expect(constraint.definition).toContain("CHECKPOINT_INVALID");
 			database = createRuntimePostgres({
 				connectionUrl: url.toString(),
 				directConnectionUrl: url.toString(),

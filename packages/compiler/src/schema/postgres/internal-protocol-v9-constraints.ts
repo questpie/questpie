@@ -1,6 +1,12 @@
 /** Candidate protocol delta generated from its isolated PostgreSQL 17 catalog. */
 export const internalProtocolV9Constraints = [
 	[
+		"durable_run_events",
+		"durable_event_error_code_known",
+		"c",
+		"CHECK (error_code IS NULL OR (error_code = ANY (ARRAY['CHECKPOINT_INVALID'::text, 'EFFECT_AMBIGUOUS'::text, 'EFFECT_CONFLICT'::text, 'HANDLER_FAILED'::text, 'REACTION_ERROR'::text, 'RESOURCE_LIMIT'::text, 'RETRY_EXHAUSTED'::text, 'RUN_AS_DENIED'::text, 'VALIDATION_FAILED'::text])))",
+	],
+	[
 		"durable_runs",
 		"durable_run_failure_code_known",
 		"c",
