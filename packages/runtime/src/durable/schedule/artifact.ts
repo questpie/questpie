@@ -101,7 +101,9 @@ export function verifyStaticScheduleArtifact(
 				"inputJson",
 			]);
 			if (
-				!/^job:[^\0]+$/u.test(schedule.jobIdentity) ||
+				!schedule.jobIdentity.startsWith("job:") ||
+				schedule.jobIdentity.length <= 4 ||
+				schedule.jobIdentity.includes("\0") ||
 				(index > 0 &&
 					value.schedules[index - 1]!.jobIdentity >= schedule.jobIdentity)
 			)
