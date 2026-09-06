@@ -6,6 +6,7 @@ import {
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
 import {
 	definePostgresStatement,
+	QuestpiePostgresError,
 	type PostgresTransactionRunner,
 } from "../postgres/contract";
 import { DurableCheckpointError } from "./checkpoint-contract";
@@ -371,6 +372,19 @@ function matchesLocator(row: CheckpointRow, claim: DurableClaim): boolean {
 	);
 }
 
+function storedResultFailure(error: unknown): never {
+	if (
+		error instanceof QuestpiePostgresError &&
+		error.code === "invalidResult" &&
+		error.phase === "statement" &&
+		(error.statementName === readCheckpointHistory.name ||
+			error.statementName === readCheckpoint.name ||
+			error.statementName === readCommittedReceipt.name)
+	)
+		throw new DurableCheckpointError();
+	throw error;
+}
+
 export function createPostgresMutationCheckpointStore(
 	input: Readonly<{
 		database: PostgresTransactionRunner;
@@ -391,68 +405,72 @@ export function createPostgresMutationCheckpointStore(
 	});
 	return Object.freeze({
 		load(claim: DurableClaim) {
-			return input.database.transaction({
-				control: control(),
-				mode: { isolation: "readCommitted", access: "readWrite" },
-				use: async (transaction) => {
-					await transaction.execute(durableKernelMarker, undefined);
-					if (!(await transaction.execute(durableEffectFence, fence(claim))))
-						throw new DurableLeaseLost();
-					const history = await transaction.execute(readCheckpointHistory, {
-						application: input.application,
-						runId: claim.runId,
-					});
-					if (
-						history.some(
-							(row, index) =>
-								row.ordinal !== index + 1 ||
-								!matchesLocator(row, claim) ||
-								(index < history.length - 1 && row.state !== "completed"),
+			return input.database
+				.transaction({
+					control: control(),
+					mode: { isolation: "readCommitted", access: "readWrite" },
+					use: async (transaction) => {
+						await transaction.execute(durableKernelMarker, undefined);
+						if (!(await transaction.execute(durableEffectFence, fence(claim))))
+							throw new DurableLeaseLost();
+						const history = await transaction.execute(readCheckpointHistory, {
+							application: input.application,
+							runId: claim.runId,
+						});
+						if (
+							history.some(
+								(row, index) =>
+									row.ordinal !== index + 1 ||
+									!matchesLocator(row, claim) ||
+									(index < history.length - 1 && row.state !== "completed"),
+							)
 						)
-					)
-						throw new DurableCheckpointError();
-					return history.length;
-				},
-			});
+							throw new DurableCheckpointError();
+						return history.length;
+					},
+				})
+				.catch(storedResultFailure);
 		},
 		async reserve(claim: DurableClaim, rawCommand: MutationCheckpointCommand) {
 			const command = prepare(claim.runId, rawCommand);
-			return input.database.transaction({
-				control: control(),
-				mode: { isolation: "readCommitted", access: "readWrite" },
-				use: async (transaction) => {
-					await transaction.execute(durableKernelMarker, undefined);
-					if (!(await transaction.execute(durableEffectFence, fence(claim))))
-						return Object.freeze({ status: "fenced" as const });
-					await transaction.execute(reserveCheckpoint, {
-						application: input.application,
-						runId: claim.runId,
-						command,
-						tenantId: claim.tenantId,
-						principalKind: claim.principal.kind,
-						principalId: claim.principal.id,
-					});
-					const stored = await transaction.execute(readCheckpoint, {
-						application: input.application,
-						runId: claim.runId,
-						ordinal: command.ordinal,
-					});
-					if (
-						!stored ||
-						!matches(stored, command) ||
-						!matchesLocator(stored, claim)
-					)
-						return Object.freeze({ status: "conflict" as const });
-					return Object.freeze({
-						status: "reserved" as const,
-						callId: command.callId,
-						commandDigest: command.commandDigest,
-						state: stored.state,
-						receiptTransactionId: stored.receiptTransactionId,
-						receiptResultDigest: stored.receiptResultDigest,
-					});
-				},
-			});
+			return input.database
+				.transaction({
+					control: control(),
+					mode: { isolation: "readCommitted", access: "readWrite" },
+					use: async (transaction) => {
+						await transaction.execute(durableKernelMarker, undefined);
+						if (!(await transaction.execute(durableEffectFence, fence(claim))))
+							return Object.freeze({ status: "fenced" as const });
+						await transaction.execute(reserveCheckpoint, {
+							application: input.application,
+							runId: claim.runId,
+							command,
+							tenantId: claim.tenantId,
+							principalKind: claim.principal.kind,
+							principalId: claim.principal.id,
+						});
+						const stored = await transaction.execute(readCheckpoint, {
+							application: input.application,
+							runId: claim.runId,
+							ordinal: command.ordinal,
+						});
+						if (
+							!stored ||
+							!matches(stored, command) ||
+							!matchesLocator(stored, claim)
+						)
+							return Object.freeze({ status: "conflict" as const });
+						return Object.freeze({
+							status: "reserved" as const,
+							callId: command.callId,
+							commandDigest: command.commandDigest,
+							state: stored.state,
+							receiptTransactionId: stored.receiptTransactionId,
+							receiptResultDigest: stored.receiptResultDigest,
+						});
+					},
+				})
+				.catch(storedResultFailure);
 		},
 		async complete(
 			claim: DurableClaim,
@@ -460,75 +478,66 @@ export function createPostgresMutationCheckpointStore(
 			resultDigest: string,
 		) {
 			const command = prepare(claim.runId, rawCommand);
-			return input.database.transaction({
-				control: control(),
-				mode: { isolation: "readCommitted", access: "readWrite" },
-				use: async (transaction) => {
-					await transaction.execute(durableKernelMarker, undefined);
-					if (!(await transaction.execute(durableEffectFence, fence(claim))))
-						return Object.freeze({ status: "fenced" as const });
-					const stored = await transaction.execute(readCheckpoint, {
-						application: input.application,
-						runId: claim.runId,
-						ordinal: command.ordinal,
-					});
-					if (
-						!stored ||
-						!matches(stored, command) ||
-						!matchesLocator(stored, claim)
-					)
-						return Object.freeze({ status: "conflict" as const });
-					if (
-						stored.state === "completed" &&
-						stored.receiptResultDigest !== resultDigest
-					)
-						return Object.freeze({ status: "conflict" as const });
-					if (stored.state === "completed")
+			return input.database
+				.transaction({
+					control: control(),
+					mode: { isolation: "readCommitted", access: "readWrite" },
+					use: async (transaction) => {
+						await transaction.execute(durableKernelMarker, undefined);
+						if (!(await transaction.execute(durableEffectFence, fence(claim))))
+							return Object.freeze({ status: "fenced" as const });
+						const stored = await transaction.execute(readCheckpoint, {
+							application: input.application,
+							runId: claim.runId,
+							ordinal: command.ordinal,
+						});
+						if (
+							!stored ||
+							!matches(stored, command) ||
+							!matchesLocator(stored, claim)
+						)
+							return Object.freeze({ status: "conflict" as const });
+						if (
+							stored.state === "completed" &&
+							stored.receiptResultDigest !== resultDigest
+						)
+							return Object.freeze({ status: "conflict" as const });
+						if (stored.state === "completed")
+							return Object.freeze({
+								status: "completed" as const,
+								receiptTransactionId: stored.receiptTransactionId!,
+							});
+						const receipt = await transaction.execute(readCommittedReceipt, {
+							application: input.application,
+							tenantId: stored.tenantId,
+							operation: command.operation,
+							principalKind: stored.principalKind,
+							principalId: stored.principalId,
+							callId: command.callId,
+							inputDigest: command.inputDigest,
+						});
+						if (receipt === null || receipt.resultDigest !== resultDigest)
+							return Object.freeze({ status: "receiptUnavailable" as const });
+						const receiptTransactionId = receipt.transactionId;
+						const completed = await transaction.execute(completeCheckpoint, {
+							application: input.application,
+							runId: claim.runId,
+							ordinal: command.ordinal,
+							commandDigest: command.commandDigest,
+							receiptTransactionId,
+							receiptResultDigest: resultDigest,
+						});
+						if (completed !== receiptTransactionId)
+							throw new TypeError(
+								"Mutation checkpoint completion did not advance",
+							);
 						return Object.freeze({
 							status: "completed" as const,
-							receiptTransactionId: stored.receiptTransactionId!,
+							receiptTransactionId,
 						});
-					const receipt = await transaction.execute(readCommittedReceipt, {
-						application: input.application,
-						tenantId: stored.tenantId,
-						operation: command.operation,
-						principalKind: stored.principalKind,
-						principalId: stored.principalId,
-						callId: command.callId,
-						inputDigest: command.inputDigest,
-					});
-					if (receipt === null || receipt.resultDigest !== resultDigest)
-						return Object.freeze({ status: "receiptUnavailable" as const });
-					const receiptTransactionId = receipt.transactionId;
-					const completed = await transaction.execute(completeCheckpoint, {
-						application: input.application,
-						runId: claim.runId,
-						ordinal: command.ordinal,
-						commandDigest: command.commandDigest,
-						receiptTransactionId,
-						receiptResultDigest: resultDigest,
-					});
-					if (completed !== receiptTransactionId)
-						throw new TypeError(
-							"Mutation checkpoint completion did not advance",
-						);
-					return Object.freeze({
-						status: "completed" as const,
-						receiptTransactionId,
-					});
-				},
-			});
-		},
-		inspect(runId: string, position: number) {
-			return input.database.transaction({
-				mode: { isolation: "readCommitted", access: "readOnly" },
-				use: (transaction) =>
-					transaction.execute(readCheckpoint, {
-						application: input.application,
-						runId,
-						ordinal: ordinal(position),
-					}),
-			});
+					},
+				})
+				.catch(storedResultFailure);
 		},
 	});
 }

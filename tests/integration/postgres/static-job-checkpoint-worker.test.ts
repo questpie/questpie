@@ -166,6 +166,7 @@ postgresTest(
 			(SELECT count(*)::integer FROM questpie_internal.mutation_checkpoints WHERE run_id = ${receipt.runId} AND state = 'completed') AS completed`;
 			expect(facts).toEqual({ writes: 1, completed: 1 });
 			for (const corruption of [
+				"empty-operation",
 				"transient",
 				"missing",
 				"changed",
@@ -195,6 +196,8 @@ postgresTest(
 					await database`DELETE FROM questpie_internal.mutation_call_receipts WHERE call_id = ${checkpoint.call_id}`;
 				else if (corruption === "changed")
 					await database`UPDATE questpie_internal.mutation_call_receipts SET result_bytes = ${new TextEncoder().encode('{"id":"018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2"}')} WHERE call_id = ${checkpoint.call_id}`;
+				else if (corruption === "empty-operation")
+					await database`UPDATE questpie_internal.mutation_checkpoints SET operation_name = '' WHERE run_id = ${retryReceipt.runId}`;
 				await Bun.sleep(1100);
 				const resumed = await application.durable.poll({
 					workerId: `resumed-${corruption}-${suffix}`,
