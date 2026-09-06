@@ -39,7 +39,21 @@ export const ACCEPTANCE_PRIMARY_PROFILE_V2 = Object.freeze({
 		"--permission-mode",
 		"--tools",
 	] as const),
+	recordProfile: "claude-opus-medium-v1" as const,
 });
+
+export const FABLE_BETA2_PRIMARY_PROFILE_V2 = Object.freeze({
+	...ACCEPTANCE_PRIMARY_PROFILE_V2,
+	model: "claude-fable-5-1" as const,
+	recordProfile: "claude-fable-5-1-medium-beta2-exception-v1" as const,
+});
+
+export type AcceptancePrimaryProfileV2 =
+	| typeof ACCEPTANCE_PRIMARY_PROFILE_V2
+	| typeof FABLE_BETA2_PRIMARY_PROFILE_V2;
+
+export type AcceptancePrimaryRecordProfileV2 =
+	AcceptancePrimaryProfileV2["recordProfile"];
 
 export type PrimaryReviewerProbe = (args: readonly string[]) => {
 	exitCode: number;
@@ -60,14 +74,16 @@ export class PrimaryReviewerUnavailable extends Error {
 	}
 }
 
-export function primaryReviewerCommand(): string[] {
+export function primaryReviewerCommand(
+	profile: AcceptancePrimaryProfileV2 = ACCEPTANCE_PRIMARY_PROFILE_V2,
+): string[] {
 	return [
-		ACCEPTANCE_PRIMARY_PROFILE_V2.executable,
+		profile.executable,
 		"--print",
 		"--model",
-		ACCEPTANCE_PRIMARY_PROFILE_V2.model,
+		profile.model,
 		"--effort",
-		ACCEPTANCE_PRIMARY_PROFILE_V2.effort,
+		profile.effort,
 		"--no-session-persistence",
 		"--permission-mode",
 		"dontAsk",
@@ -186,11 +202,12 @@ export async function runPrimaryAcceptanceReview(input: {
 	packet: string;
 	cwd: string;
 	timeoutMs: number;
+	profile?: AcceptancePrimaryProfileV2;
 }): Promise<PrimaryAcceptanceReviewV2> {
 	let completed: BoundedReviewProcessResult;
 	try {
 		completed = await runBoundedReviewProcess({
-			command: primaryReviewerCommand(),
+			command: primaryReviewerCommand(input.profile),
 			cwd: input.cwd,
 			stdin: input.packet,
 			timeoutMs: input.timeoutMs,

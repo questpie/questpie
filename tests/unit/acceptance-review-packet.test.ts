@@ -79,6 +79,80 @@ function fixture() {
 }
 
 describe("acceptance packet v2", () => {
+	test("binds the human-authorized beta2 Fable profile into packet bytes", () => {
+		const input = fixture();
+		input.manifest.ticket = "BETA2-ACCEPTANCE";
+		(input.manifest as Record<string, unknown>).reviewerProfile =
+			"claude-fable-5-1-medium-beta2-exception-v1";
+		writeFileSync(
+			join(input.repositoryPath, input.manifestPath),
+			`${JSON.stringify(input.manifest, null, 2)}\n`,
+		);
+		run(input.repositoryPath, ["git", "add", "."]);
+		run(input.repositoryPath, ["git", "commit", "--quiet", "-m", "fable"]);
+		input.reviewedHead = run(input.repositoryPath, [
+			"git",
+			"rev-parse",
+			"HEAD",
+		]);
+
+		const prepared = prepareAcceptancePacket(input);
+		expect(prepared.reviewerProfile).toBe(
+			"claude-fable-5-1-medium-beta2-exception-v1",
+		);
+		expect(prepared.packet).toContain(
+			"<primary_model>claude-fable-5-1</primary_model>",
+		);
+		expect(prepared.packet).toContain(
+			"<primary_effort>medium</primary_effort>",
+		);
+	});
+
+	test("keeps the historical manifest profile and packet metadata unchanged", () => {
+		const prepared = prepareAcceptancePacket(fixture());
+		expect(prepared.reviewerProfile).toBe("claude-opus-medium-v1");
+		expect(prepared.packet).toContain("<primary_model>opus</primary_model>");
+		expect(prepared.packet).not.toContain("<primary_profile>");
+	});
+
+	test("rejects the Fable exception outside the exact beta2 ticket", () => {
+		const input = fixture();
+		(input.manifest as Record<string, unknown>).reviewerProfile =
+			"claude-fable-5-1-medium-beta2-exception-v1";
+		writeFileSync(
+			join(input.repositoryPath, input.manifestPath),
+			`${JSON.stringify(input.manifest, null, 2)}\n`,
+		);
+		run(input.repositoryPath, ["git", "add", "."]);
+		run(input.repositoryPath, ["git", "commit", "--quiet", "-m", "invalid"]);
+		input.reviewedHead = run(input.repositoryPath, [
+			"git",
+			"rev-parse",
+			"HEAD",
+		]);
+
+		expect(() => prepareAcceptancePacket(input)).toThrow(AcceptancePacketError);
+	});
+
+	test("rejects an unknown reviewer profile on the beta2 ticket", () => {
+		const input = fixture();
+		input.manifest.ticket = "BETA2-ACCEPTANCE";
+		(input.manifest as Record<string, unknown>).reviewerProfile =
+			"claude-fable-latest";
+		writeFileSync(
+			join(input.repositoryPath, input.manifestPath),
+			`${JSON.stringify(input.manifest, null, 2)}\n`,
+		);
+		run(input.repositoryPath, ["git", "add", "."]);
+		run(input.repositoryPath, ["git", "commit", "--quiet", "-m", "invalid"]);
+		input.reviewedHead = run(input.repositoryPath, [
+			"git",
+			"rev-parse",
+			"HEAD",
+		]);
+		expect(() => prepareAcceptancePacket(input)).toThrow(AcceptancePacketError);
+	});
+
 	test("rejects an empty review diff", () => {
 		expect(() => requireNonEmptyReviewDiff("")).toThrow(AcceptancePacketError);
 	});

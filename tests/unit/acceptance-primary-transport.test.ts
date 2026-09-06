@@ -6,6 +6,7 @@ import {
 } from "../../.agents/skills/questpie-v4/scripts/acceptance-review-record";
 import {
 	ACCEPTANCE_PRIMARY_PROFILE_V2,
+	FABLE_BETA2_PRIMARY_PROFILE_V2,
 	classifyPrimaryReviewResult,
 	PRIMARY_DIAGNOSTIC_LIMIT,
 	primaryReviewerCommand,
@@ -50,6 +51,14 @@ describe("pinned primary reviewer verification", () => {
 		expect(used).toEqual([...ACCEPTANCE_PRIMARY_PROFILE_V2.options].sort());
 		expect(command).toContain(ACCEPTANCE_PRIMARY_PROFILE_V2.model);
 		expect(command).toContain(ACCEPTANCE_PRIMARY_PROFILE_V2.effort);
+	});
+
+	test("the beta2 exception pins the exact Fable 5.1 model without fallback", () => {
+		const command = primaryReviewerCommand(FABLE_BETA2_PRIMARY_PROFILE_V2);
+		expect(command).toContain("claude-fable-5-1");
+		expect(command).toContain("medium");
+		expect(command).not.toContain("--fallback-model");
+		expect(command).not.toContain("opus");
 	});
 
 	test("an absent primary executable fails closed", () => {

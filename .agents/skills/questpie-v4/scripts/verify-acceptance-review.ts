@@ -92,6 +92,7 @@ try {
 		reviewedHead,
 		diffBase: prepared.manifest.diffBase,
 		packetDigest: prepared.packetDigest,
+		reviewerProfile: prepared.reviewerProfile,
 	});
 	requirePassingAcceptanceRecord(record.verdict);
 } catch (error) {

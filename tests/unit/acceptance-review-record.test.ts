@@ -51,11 +51,41 @@ function record(): Record<string, unknown> {
 	};
 }
 
+function fableRecord(): Record<string, unknown> {
+	const value = record();
+	value.ticket = "BETA2-ACCEPTANCE";
+	(value.primary as Record<string, unknown>).profile =
+		"claude-fable-5-1-medium-beta2-exception-v1";
+	return value;
+}
+
 describe("acceptance record binding", () => {
 	test("accepts a record bound to its prepared packet", () => {
 		expect(() =>
 			decodeAcceptanceReviewRecord(record(), expected),
 		).not.toThrow();
+	});
+
+	test("accepts only the exact beta2-bound Fable exception record", () => {
+		const beta2Expected = {
+			...expected,
+			ticket: "BETA2-ACCEPTANCE",
+			reviewerProfile: "claude-fable-5-1-medium-beta2-exception-v1" as const,
+		};
+		expect(() =>
+			decodeAcceptanceReviewRecord(fableRecord(), beta2Expected),
+		).not.toThrow();
+		expect(() =>
+			decodeAcceptanceReviewRecord(fableRecord(), {
+				...expected,
+				ticket: "BETA2-ACCEPTANCE",
+			}),
+		).toThrow(AcceptanceRecordError);
+		const wrongTicket = fableRecord();
+		wrongTicket.ticket = "#317";
+		expect(() => decodeAcceptanceReviewRecord(wrongTicket, expected)).toThrow(
+			AcceptanceRecordError,
+		);
 	});
 
 	test("rejects a substitution in every bound field", () => {
@@ -146,7 +176,10 @@ describe("acceptance record binding", () => {
 });
 
 describe("credential-free record verification", () => {
-	function fixture(verdict: "PASS" | "BLOCKED") {
+	function fixture(
+		verdict: "PASS" | "BLOCKED",
+		reviewerProfile?: "claude-fable-5-1-medium-beta2-exception-v1",
+	) {
 		const repositoryPath = mkdtempSync(join(tmpdir(), "qp-verify-"));
 		run(repositoryPath, ["git", "init", "--quiet"]);
 		run(repositoryPath, ["git", "config", "user.email", "agent@example.test"]);
@@ -174,10 +207,11 @@ describe("credential-free record verification", () => {
 			`${JSON.stringify(
 				{
 					protocolVersion: 2,
-					ticket: "#fixture",
+					ticket: reviewerProfile ? "BETA2-ACCEPTANCE" : "#fixture",
 					proof: "verification fixture",
 					diffBase,
 					reviewOutput: "proof/REVIEW.json",
+					...(reviewerProfile ? { reviewerProfile } : {}),
 					authorityHeads: { foundation: diffBase },
 					authorityDocuments: [
 						{
@@ -217,14 +251,14 @@ describe("credential-free record verification", () => {
 			`${JSON.stringify(
 				{
 					protocolVersion: 2,
-					ticket: "#fixture",
+					ticket: reviewerProfile ? "BETA2-ACCEPTANCE" : "#fixture",
 					profile: "questpie.acceptance.v2",
 					manifestPath,
 					reviewedHead,
 					diffBase,
 					packetDigest: digest,
 					primary: {
-						profile: "claude-opus-medium-v1",
+						profile: reviewerProfile ?? "claude-opus-medium-v1",
 						disposition: verdict,
 						findings: `VERDICT: ${verdict}\nfixture`,
 					},
@@ -256,6 +290,16 @@ describe("credential-free record verification", () => {
 		expect(result.stdout.toString()).toContain(
 			"acceptance review verification",
 		);
+	});
+
+	test("verifies the committed beta2 Fable profile from its manifest", () => {
+		const { repositoryPath, recordPath } = fixture(
+			"PASS",
+			"claude-fable-5-1-medium-beta2-exception-v1",
+		);
+		const result = verify(repositoryPath, recordPath);
+		expect(result.stderr.toString()).toBe("");
+		expect(result.exitCode).toBe(0);
 	});
 
 	test("fails closed on a blocked record", () => {

@@ -6,6 +6,14 @@ import {
 	findAcceptanceGitDiffSecret,
 	findAcceptancePacketSecret,
 } from "./acceptance-packet-secrets";
+import {
+	ACCEPTANCE_PRIMARY_PROFILE_V2,
+	type AcceptancePrimaryProfileV2,
+	FABLE_BETA2_PRIMARY_PROFILE_V2,
+} from "./claude-acceptance-primary";
+
+export type AcceptanceReviewerProfileV2 =
+	typeof FABLE_BETA2_PRIMARY_PROFILE_V2.recordProfile;
 
 export type AcceptanceManifestV2 = {
 	protocolVersion: 2;
@@ -13,6 +21,7 @@ export type AcceptanceManifestV2 = {
 	proof: string;
 	diffBase: string;
 	reviewOutput: string;
+	reviewerProfile?: AcceptanceReviewerProfileV2;
 	authorityHeads: Record<string, string>;
 	authorityDocuments: Array<{
 		name: string;
@@ -31,6 +40,10 @@ export type PreparedAcceptancePacketV2 = {
 	packetDigest: string;
 	diffBytes: number;
 	documents: number;
+	reviewerProfile:
+		| typeof ACCEPTANCE_PRIMARY_PROFILE_V2.recordProfile
+		| AcceptanceReviewerProfileV2;
+	primaryProfile: AcceptancePrimaryProfileV2;
 };
 
 const MANIFEST_KEYS = [
@@ -44,6 +57,21 @@ const MANIFEST_KEYS = [
 	"ticket",
 	"verification",
 ] as const;
+
+const FABLE_BETA2_TICKET = "BETA2-ACCEPTANCE";
+
+function primaryProfileForManifest(
+	manifest: Pick<AcceptanceManifestV2, "reviewerProfile" | "ticket">,
+): AcceptancePrimaryProfileV2 {
+	if (manifest.reviewerProfile === undefined)
+		return ACCEPTANCE_PRIMARY_PROFILE_V2;
+	if (
+		manifest.reviewerProfile === FABLE_BETA2_PRIMARY_PROFILE_V2.recordProfile &&
+		manifest.ticket === FABLE_BETA2_TICKET
+	)
+		return FABLE_BETA2_PRIMARY_PROFILE_V2;
+	invalid("reviewer profile is not authorized for this acceptance ticket");
+}
 
 export class AcceptancePacketError extends Error {
 	constructor(message: string) {
@@ -112,7 +140,15 @@ function decodeManifest(source: string): AcceptanceManifestV2 {
 		typeof manifest !== "object" ||
 		manifest === null ||
 		Array.isArray(manifest) ||
-		!exactKeys(manifest, MANIFEST_KEYS)
+		!exactKeys(
+			manifest,
+			[
+				...MANIFEST_KEYS,
+				...(Object.hasOwn(manifest, "reviewerProfile")
+					? ["reviewerProfile"]
+					: []),
+			].sort(),
+		)
 	)
 		invalid("manifest does not match acceptance protocol v2");
 	const candidate = manifest as AcceptanceManifestV2;
@@ -125,6 +161,7 @@ function decodeManifest(source: string): AcceptanceManifestV2 {
 	)
 		invalid("manifest lacks exact protocol, ticket, proof, base, or output");
 	checkedPath(candidate.reviewOutput, "review output");
+	primaryProfileForManifest(candidate);
 	if (
 		typeof candidate.authorityHeads !== "object" ||
 		candidate.authorityHeads === null ||
@@ -295,7 +332,11 @@ export function prepareAcceptancePacket(input: {
 	if (diffSecret)
 		invalid(`review diff contains a prohibited ${diffSecret.name}`);
 
-	const packet = `<documents>\n${documents}\n<document index="${manifest.authorityDocuments.length + 1}"><source>${xml(manifestPath)}</source><document_content>${xml(JSON.stringify(manifest, null, 2))}</document_content></document>\n<document index="${manifest.authorityDocuments.length + 2}"><source>exact git diff ${xml(manifest.diffBase)}..${xml(input.reviewedHead)}</source><document_content>${xml(diff)}</document_content></document>\n</documents>\n<review_metadata><protocol_version>2</protocol_version><reviewed_head>${xml(input.reviewedHead)}</reviewed_head><diff_base>${xml(manifest.diffBase)}</diff_base><primary_model>opus</primary_model><primary_effort>medium</primary_effort></review_metadata>\n<review_task>\nYou are the independent acceptance reviewer for QUESTPIE v4 ticket ${xml(manifest.ticket)}. Review only the exact packet against its fixed authority, proof manifest, verification results, and acceptance criteria. Look for contradictions, missing evidence, invalid ownership, unsafe review behavior, false quality or performance gates, and scope creep. Return exactly one verdict line first: VERDICT: PASS or VERDICT: BLOCKED. A PASS means no blocking finding remains. For BLOCKED, list every concrete blocker with the affected file and required evidence or repair, followed by non-blocking observations.\n</review_task>\n`;
+	const primaryProfile = primaryProfileForManifest(manifest);
+	const profileMetadata = manifest.reviewerProfile
+		? `<primary_profile>${xml(primaryProfile.recordProfile)}</primary_profile>`
+		: "";
+	const packet = `<documents>\n${documents}\n<document index="${manifest.authorityDocuments.length + 1}"><source>${xml(manifestPath)}</source><document_content>${xml(JSON.stringify(manifest, null, 2))}</document_content></document>\n<document index="${manifest.authorityDocuments.length + 2}"><source>exact git diff ${xml(manifest.diffBase)}..${xml(input.reviewedHead)}</source><document_content>${xml(diff)}</document_content></document>\n</documents>\n<review_metadata><protocol_version>2</protocol_version><reviewed_head>${xml(input.reviewedHead)}</reviewed_head><diff_base>${xml(manifest.diffBase)}</diff_base><primary_model>${xml(primaryProfile.model)}</primary_model><primary_effort>${xml(primaryProfile.effort)}</primary_effort>${profileMetadata}</review_metadata>\n<review_task>\nYou are the independent acceptance reviewer for QUESTPIE v4 ticket ${xml(manifest.ticket)}. Review only the exact packet against its fixed authority, proof manifest, verification results, and acceptance criteria. Look for contradictions, missing evidence, invalid ownership, unsafe review behavior, false quality or performance gates, and scope creep. Return exactly one verdict line first: VERDICT: PASS or VERDICT: BLOCKED. A PASS means no blocking finding remains. For BLOCKED, list every concrete blocker with the affected file and required evidence or repair, followed by non-blocking observations.\n</review_task>\n`;
 	return Object.freeze({
 		manifest,
 		manifestPath,
@@ -304,5 +345,7 @@ export function prepareAcceptancePacket(input: {
 		packetDigest: sha256(packet),
 		diffBytes: Buffer.byteLength(diff),
 		documents: manifest.authorityDocuments.length + 2,
+		reviewerProfile: primaryProfile.recordProfile,
+		primaryProfile,
 	});
 }

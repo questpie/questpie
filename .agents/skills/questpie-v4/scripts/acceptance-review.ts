@@ -136,6 +136,7 @@ const primary = await runPrimaryAcceptanceReview({
 	packet: prepared.packet,
 	cwd: process.cwd(),
 	timeoutMs: options.timeoutMs,
+	profile: prepared.primaryProfile,
 });
 // One reviewer, one disposition. A timeout, transport failure, empty response,
 // or unparsable response is a no result and writes no artifact, so an outage
@@ -156,7 +157,7 @@ const record = {
 	reviewedHead: head,
 	diffBase: prepared.manifest.diffBase,
 	packetDigest: prepared.packetDigest,
-	primary: { profile: "claude-opus-medium-v1" as const, ...primary },
+	primary: { profile: prepared.reviewerProfile, ...primary },
 	verdict,
 	recordedAt: new Date().toISOString(),
 };
@@ -166,6 +167,7 @@ decodeAcceptanceReviewRecord(record, {
 	reviewedHead: head,
 	diffBase: prepared.manifest.diffBase,
 	packetDigest: prepared.packetDigest,
+	reviewerProfile: prepared.reviewerProfile,
 });
 const recordSecret = findAcceptancePacketSecret(JSON.stringify(record));
 if (recordSecret)

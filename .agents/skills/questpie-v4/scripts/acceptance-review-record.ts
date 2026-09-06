@@ -1,10 +1,11 @@
 import {
+	type AcceptancePrimaryRecordProfileV2,
 	PRIMARY_DIAGNOSTIC_LIMIT,
 	type PrimaryAcceptanceReviewV2,
 } from "./claude-acceptance-primary";
 
 type PrimaryRecord = PrimaryAcceptanceReviewV2 & {
-	profile: "claude-opus-medium-v1";
+	profile: AcceptancePrimaryRecordProfileV2;
 };
 
 export type AcceptanceReviewRecordV2 = {
@@ -63,8 +64,13 @@ function validFindings(
 	);
 }
 
-function decodePrimary(value: unknown): PrimaryRecord {
-	if (!isRecord(value) || value.profile !== "claude-opus-medium-v1")
+function decodePrimary(value: unknown, ticket: string): PrimaryRecord {
+	if (
+		!isRecord(value) ||
+		(value.profile !== "claude-opus-medium-v1" &&
+			(value.profile !== "claude-fable-5-1-medium-beta2-exception-v1" ||
+				ticket !== "BETA2-ACCEPTANCE"))
+	)
 		invalid("record has an invalid primary profile");
 	if (value.disposition === "NO_RESULT") {
 		const hasDiagnostic = Object.hasOwn(value, "diagnostic");
@@ -107,6 +113,7 @@ export function decodeAcceptanceReviewRecord(
 		reviewedHead: string;
 		diffBase: string;
 		packetDigest: string;
+		reviewerProfile?: AcceptancePrimaryRecordProfileV2;
 	},
 ): AcceptanceReviewRecordV2 {
 	if (!isRecord(value)) invalid("acceptance record is not an object");
@@ -137,7 +144,9 @@ export function decodeAcceptanceReviewRecord(
 	)
 		invalid("acceptance record is not bound to the prepared packet");
 
-	const primary = decodePrimary(value.primary);
+	const primary = decodePrimary(value.primary, expected.ticket);
+	if (primary.profile !== (expected.reviewerProfile ?? "claude-opus-medium-v1"))
+		invalid("record primary profile does not match the prepared packet");
 	// `NO_RESULT` is terminal here. There is one reviewer, so a record that
 	// carries no verdict cannot also carry an aggregate one.
 	if (primary.disposition === "NO_RESULT")

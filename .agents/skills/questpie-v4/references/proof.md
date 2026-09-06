@@ -48,6 +48,18 @@ A reviewer that could have answered and did not is a terminal `NO_RESULT` that
 writes no artifact and carries a bounded secret-scanned diagnostic. There is one
 reviewer and one verdict; no fallback transport exists.
 
+The project owner authorizes one narrow exception for the exact
+`BETA2-ACCEPTANCE` ticket after its Opus attempt ended in terminal transport
+`NO_RESULT`. A fresh committed beta.2 manifest may select only
+`reviewerProfile: "claude-fable-5-1-medium-beta2-exception-v1"`. The same
+wrapper then pins `claude-fable-5-1` at medium effort, no tools, no session
+persistence, and no fallback; the packet, generated record, and credential-free
+verifier bind that exact profile. No command-line model or provider choice is
+added, existing manifests remain Opus-medium, and no other ticket may select the
+exception. The exception permits one review of the fresh replacement candidate;
+its `NO_RESULT` remains terminal and its `BLOCKED` result permits only the usual
+finding-scoped replacement.
+
 The manifest hashes are generated packet-integrity bindings, not a manually
 maintained documentation digest table. Retain them. Runtime semantic and
 integrity digests are also outside the documentation-diet rule and remain
