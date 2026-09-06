@@ -54,11 +54,13 @@ export function renderDurableWorkerOwner(
 					},
 				),
 			});
+			let handlerFailure;
 			try { return await binding.execute({
 				input: request.input,
 				ctx: Object.freeze({ ...createDurableJobContext(execution, Object.freeze({ ...request.run, step: checkpoints.step }), request.attempt), mutations: ${input.checkpointMutations} }),
 				errors: request.errors,
-			}); } finally { await checkpoints.finish(); }
+			}); } catch (reason) { handlerFailure = { reason }; throw reason; }
+			finally { await checkpoints.finish(handlerFailure); }
 		}
 		const binding = reactionBindings.get(request.reaction.identity);
 		if (!binding) throw new TypeError("Reaction executable is unavailable");
@@ -132,6 +134,7 @@ export function renderDurableWorkerOwner(
 	const createWorker = (options) => {
 		const worker = createDurableWorker({
 			...options,
+			scheduleProducer: createStaticScheduleProducer({ signal: postgresController.signal, reconcile: (request) => schedules.reconcile(request) }),
 			kernel: durableKernel,
 			ledger: durableLedger,
 			reactions: mutationArtifacts.reactions,

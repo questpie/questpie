@@ -1,9 +1,22 @@
-import { codec, durable } from "questpie";
+import { codec, durable, principal } from "questpie";
 
 import { defineJob } from "#questpie/app";
 
 export const companyDigest = defineJob({
 	name: "reports.companyDigest",
+	schedule: {
+		cron: "* * * * *",
+		execution: {
+			principal: principal.service({
+				name: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+			}),
+			context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+		},
+		input: {
+			companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+			restartProbe: "scheduled-checkpoint",
+		},
+	},
 	input: codec.object({
 		companyId: codec.uuid(),
 		restartProbe: codec.optional(codec.text()),
@@ -25,14 +38,84 @@ export const companyDigest = defineJob({
 		horizon: "1h",
 	}),
 	handler: async ({ input, ctx }) => {
+		const result = (invocationId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2") => ({
+			attemptNumber: ctx.attempt.number,
+			companyId: input.companyId,
+			contextResolutionId: ctx.values.contextResolutionId,
+			invocationId,
+			role: ctx.values.selectedRole,
+		});
+		const command = {
+			channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
+			body: input.restartProbe ?? "checkpoint-worker",
+		};
+		if (input.restartProbe?.startsWith("forged")) {
+			await ctx.run.step
+				.mutation("publish", { ...ctx.mutations.message.publish }, command)
+				.catch(() => undefined);
+			await ctx.run.step
+				.mutation("later", ctx.mutations.message.publish, command)
+				.catch(() => undefined);
+			return result();
+		}
+		if (input.restartProbe?.startsWith("unawaited")) {
+			void ctx.run.step.mutation(
+				"publish",
+				ctx.mutations.message.publish,
+				command,
+			);
+			return result();
+		}
+		if (input.restartProbe?.startsWith("concurrent")) {
+			const first = ctx.run.step.mutation(
+				"publish",
+				ctx.mutations.message.publish,
+				command,
+			);
+			await ctx.run.step
+				.mutation("second", ctx.mutations.message.publish, command)
+				.catch(() => undefined);
+			await first.catch(() => undefined);
+			return result();
+		}
+		if (input.restartProbe?.startsWith("captured")) {
+			const pending = ctx.run.step.mutation(
+				"publish",
+				ctx.mutations.message.publish,
+				command,
+			);
+			command.body = "changed-after-capture";
+			return result((await pending).id);
+		}
+		if (
+			input.restartProbe?.startsWith("retry-after-checkpoint-truncated") &&
+			ctx.attempt.number > 1
+		)
+			return result();
+		if (
+			input.restartProbe?.startsWith("retry-after-checkpoint-transient") &&
+			ctx.attempt.number === 2
+		)
+			throw new Error("transient before replay");
 		const message = await ctx.run.step.mutation(
-			"publish",
+			input.restartProbe?.startsWith("retry-after-checkpoint-renamed") &&
+				ctx.attempt.number > 1
+				? "renamed"
+				: "publish",
 			ctx.mutations.message.publish,
 			{
 				channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
-				body: input.restartProbe ?? "checkpoint-worker",
+				body:
+					input.restartProbe?.startsWith("retry-after-checkpoint-changed") &&
+					ctx.attempt.number > 1
+						? `${input.restartProbe}-changed`
+						: (input.restartProbe ?? "checkpoint-worker"),
 			},
 		);
+		if (input.restartProbe?.startsWith("duplicate"))
+			await ctx.run.step
+				.mutation("publish", ctx.mutations.message.publish, command)
+				.catch(() => undefined);
 		if (
 			input.restartProbe?.startsWith("retry-after-checkpoint") &&
 			ctx.attempt.number === 1

@@ -77,9 +77,14 @@ export function createMutationCheckpointAttemptOwner<
 			);
 			return work;
 		},
-		async finish(): Promise<void> {
+		async finish(
+			handlerFailure?: Readonly<{ reason: unknown }>,
+		): Promise<void> {
 			finished = true;
 			if (adapter.signal?.aborted) failed ??= { reason: adapter.signal.reason };
+			// Incomplete history prevents successful settlement, not the ordinary
+			// retry of a handler that failed before reaching its recorded steps.
+			failed ??= handlerFailure;
 			const reason = inFlight
 				? "INCOMPLETE_STEP"
 				: consumed < historyLength

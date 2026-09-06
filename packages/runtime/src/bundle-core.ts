@@ -46,6 +46,7 @@ export {
 	createMutationCheckpointRun,
 	createPostgresMutationCheckpointStore,
 	createPostgresStaticSchedules,
+	createStaticScheduleProducer,
 	createDurableReactionContext,
 	createJobAcceptance,
 	createPostgresDatabaseDurableAttemptObservation,

@@ -510,6 +510,7 @@ export async function createApplication(input) {
 		createMutationCheckpointRun,
 		createPostgresMutationCheckpointStore,
 		createPostgresStaticSchedules,
+		createStaticScheduleProducer,
 		decodeRuntimeCodec,
 		withRequiredMutationReceipt,
 		createDurableReactionContext,

@@ -40,6 +40,12 @@ type LoadedApplication = Readonly<{
 		) => Promise<Result>,
 	): Promise<Result>;
 	durable: Readonly<{
+		schedules: Readonly<{
+			activate(
+				input: Readonly<{ expectedRevision: string }>,
+			): Promise<Readonly<{ acceptedRevision: string; replayed: boolean }>>;
+			reconcile(): Promise<Readonly<{ accepted: number; status: string }>>;
+		}>;
 		poll(options: Readonly<{ workerId: string; claimBatch: number }>): Promise<
 			Readonly<{
 				outcomes: readonly Readonly<{
@@ -77,6 +83,7 @@ postgresTest(
 		let owned = false;
 		let database: SQL | undefined;
 		let application: LoadedApplication | undefined;
+		const contenders: LoadedApplication[] = [];
 		let prepared:
 			| Awaited<ReturnType<typeof prepareBeta05PostgresApplication>>
 			| undefined;
@@ -155,7 +162,14 @@ postgresTest(
 			(SELECT count(*)::integer FROM collaboration.messages WHERE body = ${body}) AS writes,
 			(SELECT count(*)::integer FROM questpie_internal.mutation_checkpoints WHERE run_id = ${receipt.runId} AND state = 'completed') AS completed`;
 			expect(facts).toEqual({ writes: 1, completed: 1 });
-			for (const corruption of ["missing", "changed"] as const) {
+			for (const corruption of [
+				"transient",
+				"missing",
+				"changed",
+				"truncated",
+				"renamed",
+				"changed-input",
+			] as const) {
 				const restartProbe = `retry-after-checkpoint-${corruption}-${suffix}`;
 				const retryReceipt = await application.execution(root, ({ jobs }) =>
 					jobs.reports.companyDigest.accept(
@@ -176,29 +190,137 @@ postgresTest(
 				expect(checkpoint.state).toBe("completed");
 				if (corruption === "missing")
 					await database`DELETE FROM questpie_internal.mutation_call_receipts WHERE call_id = ${checkpoint.call_id}`;
-				else
+				else if (corruption === "changed")
 					await database`UPDATE questpie_internal.mutation_call_receipts SET result_bytes = ${new TextEncoder().encode('{"id":"018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2"}')} WHERE call_id = ${checkpoint.call_id}`;
 				await Bun.sleep(1100);
 				const resumed = await application.durable.poll({
 					workerId: `resumed-${corruption}-${suffix}`,
 					claimBatch: 64,
 				});
-				expect(
-					resumed.outcomes.find(
-						(outcome) => outcome.runId === retryReceipt.runId,
-					),
-				).toMatchObject({
-					outcome: "failed",
-					failureCode: "CHECKPOINT_INVALID",
-				});
+				if (corruption === "transient") {
+					expect(
+						resumed.outcomes.find(
+							(outcome) => outcome.runId === retryReceipt.runId,
+						),
+					).toMatchObject({
+						outcome: "retryScheduled",
+						failureCode: "HANDLER_FAILED",
+					});
+					await Bun.sleep(2100);
+					const recovered = await application.durable.poll({
+						workerId: `recovered-${suffix}`,
+						claimBatch: 64,
+					});
+					expect(
+						recovered.outcomes.find(
+							(outcome) => outcome.runId === retryReceipt.runId,
+						),
+					).toMatchObject({ outcome: "succeeded", failureCode: null });
+				} else
+					expect(
+						resumed.outcomes.find(
+							(outcome) => outcome.runId === retryReceipt.runId,
+						),
+					).toMatchObject({
+						outcome: "failed",
+						failureCode: "CHECKPOINT_INVALID",
+					});
 				const [writes] =
 					await database`SELECT count(*)::integer AS count FROM collaboration.messages WHERE body = ${restartProbe}`;
 				expect(writes.count).toBe(1);
 			}
+			for (const mode of [
+				"forged",
+				"unawaited",
+				"concurrent",
+				"duplicate",
+				"captured",
+			] as const) {
+				const restartProbe = `${mode}-${suffix}`;
+				const hostile = await application.execution(root, ({ jobs }) =>
+					jobs.reports.companyDigest.accept(
+						{ companyId: beta05Ids.company, restartProbe },
+						{ idempotencyKey: restartProbe },
+					),
+				);
+				const run = await application.durable.poll({
+					workerId: restartProbe,
+					claimBatch: 64,
+				});
+				expect(
+					run.outcomes.find((outcome) => outcome.runId === hostile.runId),
+				).toMatchObject(
+					mode === "captured"
+						? { outcome: "succeeded", failureCode: null }
+						: { outcome: "failed", failureCode: "CHECKPOINT_INVALID" },
+				);
+				const [writes] =
+					await database`SELECT count(*)::integer AS count FROM collaboration.messages WHERE body = ${restartProbe}`;
+				expect(writes.count).toBe(
+					mode === "duplicate" || mode === "captured" ? 1 : 0,
+				);
+			}
+			const activation = await application.durable.schedules.activate({
+				expectedRevision: "0",
+			});
+			expect(activation).toMatchObject({
+				acceptedRevision: "1",
+				replayed: false,
+			});
+			expect(
+				await application.durable.schedules.activate({ expectedRevision: "0" }),
+			).toMatchObject({ acceptedRevision: "1", replayed: true });
+			await database`UPDATE questpie_internal.schedule_frontiers SET frontier_minute = date_trunc('minute', clock_timestamp()) - interval '10 minutes'`;
+			const [frontier] =
+				await database`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`;
+			await database`UPDATE collaboration.memberships SET status = 'inactive' WHERE id = ${beta05Ids.membership}`;
+			const denied = await application.durable.poll({
+				workerId: `denied-producer-${suffix}`,
+				claimBatch: 1,
+			});
+			expect(denied).toMatchObject({
+				producer: { status: "failed", code: "SCHEDULE_PRODUCER_FAILED" },
+			});
+			const [unchanged] =
+				await database`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`;
+			expect(unchanged.frontier_minute).toEqual(frontier.frontier_minute);
+			await database`UPDATE collaboration.memberships SET status = 'active' WHERE id = ${beta05Ids.membership}`;
+			for (let index = 0; index < 9; index++)
+				contenders.push(
+					await internal.createApplication({
+						postgres: { connectionUrl: url, directConnectionUrl: url },
+						realtime: { hmacKey: new Uint8Array(32).fill(45) },
+						maintenance: { authorize: () => false },
+					}),
+				);
+			const producers = await Promise.all(
+				[application, ...contenders].map((candidate) =>
+					candidate.durable.schedules.reconcile(),
+				),
+			);
+			expect(producers.reduce((sum, value) => sum + value.accepted, 0)).toBe(1);
+			const ticks =
+				await database`SELECT tick.run_id, run.principal_kind, run.principal_id FROM questpie_internal.schedule_ticks tick JOIN questpie_internal.durable_runs run USING (application_name, run_id)`;
+			expect(ticks).toHaveLength(1);
+			expect(ticks[0]).toMatchObject({
+				principal_kind: "service",
+				principal_id: beta05Ids.principal,
+			});
+			const scheduled = await application.durable.poll({
+				workerId: `scheduled-${suffix}`,
+				claimBatch: 64,
+			});
+			expect(
+				scheduled.outcomes.find((outcome) => outcome.runId === ticks[0].run_id),
+			).toMatchObject({ outcome: "succeeded", failureCode: null });
+			const [scheduledWrites] =
+				await database`SELECT count(*)::integer AS count FROM collaboration.messages WHERE body = 'scheduled-checkpoint'`;
+			expect(scheduledWrites.count).toBe(1);
 		} catch (error) {
 			failures.push(error);
 		} finally {
 			for (const close of [
+				...contenders.map((candidate) => () => candidate.close()),
 				() => application?.close(),
 				() => prepared?.dispose(),
 				() => database?.close({ timeout: 0 }),

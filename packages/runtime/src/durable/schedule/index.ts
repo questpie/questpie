@@ -15,6 +15,7 @@ import {
 import * as statements from "./statements";
 
 export { verifyStaticScheduleArtifact } from "./artifact";
+export { createStaticScheduleProducer } from "./producer";
 export type {
 	StaticJobScheduleArtifact,
 	StaticJobSchedule,

@@ -22,6 +22,10 @@ import type {
 	LinkedReactionProjection,
 } from "./projection";
 import type { DurableClaim, DurableFailureCode, DurableKernel } from "./rows";
+import type {
+	StaticScheduleProducer,
+	StaticScheduleProducerOutcome,
+} from "./schedule/producer";
 
 export type DurableAttemptHandle = Readonly<{
 	number: number;
@@ -121,6 +125,7 @@ export type DurableWorkerOutcome = DurableWorkerOutcomeBase &
 	);
 
 export type DurableWorkerTrace = Readonly<{
+	producer?: StaticScheduleProducerOutcome;
 	workerId: string;
 	admitted: number;
 	cancelled: number;
@@ -219,6 +224,7 @@ export function createDurableWorker<Execution>(
 		heartbeatMilliseconds?: number;
 		attemptDeadlineMilliseconds?: number;
 		resultBytesLimit?: number;
+		scheduleProducer?: StaticScheduleProducer;
 	}>,
 ): DurableWorker {
 	const workerId = input.workerId ?? `worker:${crypto.randomUUID()}`;
@@ -478,6 +484,7 @@ export function createDurableWorker<Execution>(
 		},
 		beginDrain() {
 			draining = true;
+			input.scheduleProducer?.beginDrain();
 		},
 		async poll() {
 			if (draining)
@@ -488,6 +495,17 @@ export function createDurableWorker<Execution>(
 					claimed: 0,
 					refusedIncompatible: 0,
 					outcomes: Object.freeze([]),
+				});
+			const producer = await input.scheduleProducer?.poll();
+			if (draining || producer?.status === "draining")
+				return Object.freeze({
+					workerId,
+					admitted: 0,
+					cancelled: 0,
+					claimed: 0,
+					refusedIncompatible: 0,
+					outcomes: Object.freeze([]),
+					producer,
 				});
 			const cancelled = await input.kernel.reapCancelled(claimBatch);
 			const admissions = await input.kernel.admit(claimBatch);
@@ -550,6 +568,7 @@ export function createDurableWorker<Execution>(
 			return Object.freeze({
 				workerId,
 				admitted: admissions.length,
+				...(producer ? { producer } : {}),
 				cancelled,
 				claimed,
 				refusedIncompatible,
