@@ -1,0 +1,13 @@
+{
+	"extends": "../../../../tsconfig.base.json",
+	"compilerOptions": {
+		"lib": ["ESNext"],
+		"module": "Preserve",
+		"moduleResolution": "Bundler",
+		"noEmit": true,
+		"strict": true,
+		"target": "ESNext",
+		"types": ["bun"]
+	},
+	"include": ["activation.ts", "activation.test.ts"]
+}
