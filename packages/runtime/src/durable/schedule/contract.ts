@@ -1,5 +1,5 @@
-import type { JobAcceptanceReceipt } from "../acceptance";
 import type { PostgresTransaction } from "../../postgres/contract";
+import type { JobAcceptanceReceipt } from "../acceptance";
 import type { UtcCronCalendar } from "./calendar";
 
 export { parseUtcCron, evaluateLatestCronMatch } from "./calendar";
@@ -24,14 +24,16 @@ export type StaticJobScheduleArtifact = Readonly<{
 	schedules: readonly StaticJobSchedule[];
 }>;
 
-export type StaticScheduleAcceptance = (request: Readonly<{
-	transaction: PostgresTransaction;
-	schedule: StaticJobSchedule;
-	tickId: string;
-	scheduledMinute: Date;
-	observedAt: Date;
-	signal: AbortSignal;
-}>) => Promise<JobAcceptanceReceipt>;
+export type StaticScheduleAcceptance = (
+	request: Readonly<{
+		transaction: PostgresTransaction;
+		schedule: StaticJobSchedule;
+		tickId: string;
+		scheduledMinute: Date;
+		observedAt: Date;
+		signal: AbortSignal;
+	}>,
+) => Promise<JobAcceptanceReceipt>;
 
 export type StaticScheduleHead = Readonly<{
 	revision: string;
@@ -50,8 +52,15 @@ export type StaticScheduleActivationReceipt = Readonly<{
 
 export class StaticScheduleFailure extends Error {
 	constructor(
-		readonly code: "SCHEDULE_ARTIFACT_INVALID" | "SCHEDULE_ACTIVATION_STALE" | "SCHEDULE_REVISION_OVERFLOW" | "SCHEDULE_STATE_INVALID",
-		readonly currentHead?: Pick<StaticScheduleHead, "revision" | "targetDigest">,
+		readonly code:
+			| "SCHEDULE_ARTIFACT_INVALID"
+			| "SCHEDULE_ACTIVATION_STALE"
+			| "SCHEDULE_REVISION_OVERFLOW"
+			| "SCHEDULE_STATE_INVALID",
+		readonly currentHead?: Pick<
+			StaticScheduleHead,
+			"revision" | "targetDigest"
+		>,
 	) {
 		super(code);
 		this.name = "StaticScheduleFailure";
