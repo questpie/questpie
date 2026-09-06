@@ -318,7 +318,7 @@ function renderCollectionLifecycleDeclarations(
 	);
 	const entries = collections
 		.map((resource) => {
-			const row = renderCollectionRow(resource);
+			const row = `LifecycleRows[${JSON.stringify(resource.name)}]`;
 			const issues = Object.keys(record(resource.value.issues ?? {}))
 				.sort(compareAscii)
 				.map(
@@ -331,7 +331,18 @@ function renderCollectionLifecycleDeclarations(
 		})
 		.sort(compareAscii)
 		.join("\n\t");
-	return `export interface LifecycleReadCollection<Row, Key> {
+	const rows = collections
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}: ${renderCollectionRow(resource)};`,
+		)
+		.sort(compareAscii)
+		.join("\n\t");
+	return `interface LifecycleRows {
+	${rows}
+}
+
+export interface LifecycleReadCollection<Row, Key> {
 	get<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ readonly key: Key; readonly select: Select & (keyof Select extends never ? never : unknown) & Readonly<Record<Exclude<keyof Select, keyof Row>, never>>; }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
 }
 

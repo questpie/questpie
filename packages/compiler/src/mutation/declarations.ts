@@ -50,7 +50,7 @@ export function renderMutationDeclarations(
 		.map((resource) => {
 			const contract = resource.contract;
 			const jsdoc = documentation[resource.identity];
-			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; declaredError: ${renderDeclaredError(resource)}; issueMappings: ${renderIssueMappings(resource)}; }>;`;
+			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: GeneratedMutations[${JSON.stringify(resource.name)}]["output"]; declaredError: ${renderDeclaredError(resource)}; issueMappings: ${renderIssueMappings(resource)}; }>;`;
 		})
 		.join("\n\t");
 	const operations = renderServerOperationType(
@@ -58,7 +58,7 @@ export function renderMutationDeclarations(
 		mutations(resources).map((resource) => ({
 			name: resource.name,
 			origin: resource.origin,
-			value: `(input: ${renderCodecType(resource.contract.input)}, options?: OperationCallOptions) => Promise<${renderCodecType(resource.contract.output)}>`,
+			value: `NamedMutationOperation<${JSON.stringify(resource.name)}>`,
 		})),
 	);
 	return `export interface GeneratedMutations {
@@ -70,6 +70,8 @@ export interface OperationCallOptions {
 	readonly signal?: AbortSignal;
 	readonly deadline?: number;
 }
+
+type NamedMutationOperation<Name extends keyof GeneratedMutations> = (input: GeneratedMutations[Name]["input"], options?: OperationCallOptions) => Promise<GeneratedMutations[Name]["output"]>;
 
 export type GeneratedMutationOperations = ${operations};
 

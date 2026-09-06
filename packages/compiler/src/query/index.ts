@@ -11,7 +11,7 @@ export function renderQueryDeclarations(
 		.map((resource) => {
 			const contract = resource.contract;
 			const jsdoc = documentation[resource.identity];
-			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; }>;`;
+			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: GeneratedQueries[${JSON.stringify(resource.name)}]["output"]; }>;`;
 		})
 		.join("\n\t");
 }
@@ -26,7 +26,7 @@ export function renderQueryOperations(
 			.map((resource) => ({
 				name: resource.name,
 				origin: resource.origin,
-				value: `(input: ${renderCodecType(resource.contract.input)}) => Promise<${renderCodecType(resource.contract.output)}>`,
+				value: `(input: GeneratedQueries[${JSON.stringify(resource.name)}]["input"]) => Promise<GeneratedQueries[${JSON.stringify(resource.name)}]["output"]>`,
 			})),
 	);
 }

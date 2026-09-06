@@ -30,14 +30,20 @@ test("candidate generated checkpoint uses inert named references and exact Mutat
 			join(root, "src/checkpoint-proof.ts"),
 			`import {codec, operation, policy} from "questpie";
 import {defineMutation} from "#questpie/app";
-import type {JobContext, MutationCheckpointError} from "#questpie/app";
+import type {JobContext, MutationCheckpointError, GeneratedMutationOperations} from "#questpie/app";
 export const checkpoint = defineMutation({
   name: "schedule.checkpoint", input: codec.object({at: codec.timestamp(), nested: codec.object({label: codec.optional(codec.text())})}),
   output: codec.object({count: codec.integer()}), policy: policy.authenticated(),
   errors: { blocked: operation.error({code:"BLOCKED", status:409, payload:codec.object({reason:codec.text()})}) },
   handler: () => ({count:1}),
 });
-async function typeProof(ctx: JobContext, at: Date) {
+async function typeProof(ctx: JobContext, at: Date, mutations: GeneratedMutationOperations) {
+	const direct = await mutations.schedule.checkpoint({at, nested:{}});
+	const directCount: number = direct.count;
+	// @ts-expect-error ordinary Mutation output still comes from its named codec
+	const wrongDirect: string = direct.count;
+	// @ts-expect-error ordinary Mutation input still rejects Date text
+	await mutations.schedule.checkpoint({at:"2026-09-06T00:00:00.000Z",nested:{}});
   const ref = ctx.mutations.schedule.checkpoint;
   const result = await ctx.run.step.mutation("sweep", ref, {at, nested:{}});
   const count: number = result.count;
@@ -59,7 +65,7 @@ async function typeProof(ctx: JobContext, at: Date) {
   const reason: string = declared.payload.reason;
   // @ts-expect-error declared error codec remains exact
   const wrongReason: number = declared.payload.reason;
-  return {count,wrong,reason,wrongReason};
+  return {count,wrong,reason,wrongReason,directCount,wrongDirect};
 }
 void typeProof;
 `,
