@@ -1,5 +1,8 @@
 import { compareAscii } from "../canonical";
-import { projectOperationCodecSchema, type DocumentationEntry } from "../http";
+import {
+	projectOperationCodecSchema,
+	type DocumentationEntry,
+} from "../operation-projection";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 type OperationContract = Readonly<{

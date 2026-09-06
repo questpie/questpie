@@ -1,15 +1,12 @@
 import { principal, type Principal } from "questpie";
 
-import {
-	awaitExecutionPhase,
-	RuntimeCredentialMalformed,
-	RuntimeCredentialUnavailable,
-} from "../execution";
+import { awaitExecutionPhase } from "../execution";
 import {
 	canonicalOperationFailure,
 	isOperationCallId,
 	OperationFailure,
 } from "../operation";
+import { classifyOperationCredentialFailure } from "./operation-carrier";
 
 export const HTTP_JSON_MEDIA_TYPE = "application/json; charset=utf-8";
 
@@ -173,25 +170,9 @@ export async function resolveHttpPrincipal(
 			input.resolvePrincipal(input.request, input.signal),
 		);
 	} catch (error) {
-		if (input.signal.aborted)
-			return {
-				response: httpFailure("DEADLINE_EXCEEDED", {
-					callId: input.callId,
-					cacheControl: input.cacheControl,
-				}),
-			};
-		if (error instanceof RuntimeCredentialMalformed)
-			return {
-				response: httpFailure("UNAUTHENTICATED", {
-					callId: input.callId,
-					cacheControl: input.cacheControl,
-				}),
-			};
 		return {
 			response: httpFailure(
-				error instanceof RuntimeCredentialUnavailable
-					? "RUNTIME_UNAVAILABLE"
-					: "INTERNAL",
+				classifyOperationCredentialFailure(error, input.signal) ?? "INTERNAL",
 				{ callId: input.callId, cacheControl: input.cacheControl },
 			),
 		};

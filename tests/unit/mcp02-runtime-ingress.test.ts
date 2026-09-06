@@ -30,6 +30,38 @@ function request(
 	});
 }
 
+test("MCP rejects malformed and escaped duplicate JSON as parse errors", async () => {
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 4096,
+		tools: [],
+		execute: async () => {
+			throw new Error("malformed JSON must not execute");
+		},
+	});
+	for (const body of [
+		'{"jsonrpc":"2.0","params":{"value":1,"v\\u0061lue":2}}',
+		'{"jsonrpc":"2.0","params":{"items":[{"key":1,"key":2}]}}',
+		'{"jsonrpc":"2.0","params":{"value":}}',
+		'{"jsonrpc":"2.0","params":[1,]}',
+		'{"jsonrpc":"2.0","params":{}} false',
+	]) {
+		const template = request("tools/list", { _meta: requestMeta });
+		const response = await ingress.fetch(
+			new Request(template.url, {
+				method: "POST",
+				headers: template.headers,
+				body,
+			}),
+		);
+		expect(response?.status).toBe(400);
+		expect(await response?.json()).toEqual({
+			jsonrpc: "2.0",
+			error: { code: -32700, message: "Parse error" },
+		});
+	}
+});
+
 test("discovers only one stateless MCP 2026-07-28 Tools capability", async () => {
 	const ingress = createMcpIngress({
 		serverInfo: { name: "support", version: "4.0.0-beta.2" },

@@ -79,6 +79,34 @@ function canonicalPostTransport(
 	} as never);
 }
 
+test("canonical POST rejects malformed and escaped duplicate JSON before execution", async () => {
+	const transport = canonicalPostTransport({
+		executeMutation: async () => {
+			throw new Error("malformed JSON must not execute");
+		},
+	});
+	for (const body of [
+		'{"context":{},"input":{"value":"one","v\\u0061lue":"two"}}',
+		'{"context":{},"input":{"items":[{"key":1,"key":2}]}}',
+		'{"context":{},"input":{"value":}}',
+		'{"context":{},"input":[1,]}',
+		'{"context":{},"input":{}} false',
+	]) {
+		const response = await transport.fetch(
+			post(
+				"/_questpie/mutation/messages.publish",
+				{ "Idempotency-Key": "invalid-json" },
+				body,
+			),
+		);
+		expect(response?.status).toBe(400);
+		expect(await response?.json()).toEqual({
+			callId: "invalid-json",
+			error: { code: "PROTOCOL_UNSUPPORTED", retryable: false },
+		});
+	}
+});
+
 test("canonical POST maps typed credential outcomes without disclosure", async () => {
 	for (const [error, status, code, retryable] of [
 		[new RuntimeCredentialMalformed(), 401, "UNAUTHENTICATED", false],

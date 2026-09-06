@@ -216,8 +216,10 @@ export type RuntimeOperationContract = Readonly<{
 	issueMappings?: RuntimeIssueMappings;
 }>;
 
-export function encodeDeclaredOperationError<View>(
-	operation: PreparedOperation<View>,
+export function encodeDeclaredOperationError(
+	operation: Readonly<{
+		declaredErrors: readonly RuntimeDeclaredErrorContract[];
+	}>,
 	error: DeclaredOperationError,
 ): Readonly<{ code: string; status: number; payload: unknown }> {
 	const contract = operation.declaredErrors.find(

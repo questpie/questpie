@@ -7,22 +7,22 @@ import {
 	type RuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
-import {
-	awaitExecutionPhase,
-	RuntimeCredentialMalformed,
-	RuntimeCredentialUnavailable,
-} from "../execution";
+import { awaitExecutionPhase } from "../execution";
 import {
 	canonicalOperationFailure,
 	CommittedResultUnavailable,
 	DeclaredOperationError,
-	encodeDeclaredOperationError,
 	isOperationCallId,
 	OperationFailure,
 	type PreparedOperation,
 	type RuntimeOperationContract,
 } from "../operation";
 import type { McpExecutionResult, McpToolBinding } from "./mcp";
+import {
+	classifyOperationCredentialFailure,
+	encodeOperationResult,
+	encodeOperationDeclaredOutcome,
+} from "./operation-carrier";
 import { isOperationAbort } from "./operation-error";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
@@ -147,12 +147,11 @@ export function createMcpOperationAdapter<ContextInput, View>(
 					input.resolvePrincipal(invocation.request, invocation.signal),
 				);
 			} catch (error) {
-				if (invocation.signal.aborted)
-					throw new OperationFailure("DEADLINE_EXCEEDED");
-				if (error instanceof RuntimeCredentialMalformed)
-					throw new OperationFailure("UNAUTHENTICATED");
-				if (error instanceof RuntimeCredentialUnavailable)
-					throw new OperationFailure("RUNTIME_UNAVAILABLE");
+				const code = classifyOperationCredentialFailure(
+					error,
+					invocation.signal,
+				);
+				if (code) throw new OperationFailure(code);
 				throw error;
 			}
 			if (!caller || !principal.is(caller))
@@ -197,14 +196,13 @@ export function createMcpOperationAdapter<ContextInput, View>(
 						actionDispatched = true;
 					},
 				});
-				const structuredContent = {
+				const structuredContent = encodeOperationResult(
+					contract.output,
+					result,
 					callId,
-					result: encodeRuntimeCodec(contract.output, result),
-				};
-				if (
-					Buffer.byteLength(JSON.stringify(structuredContent), "utf8") >
-					input.maximumResponseBytes
-				)
+					input.maximumResponseBytes,
+				);
+				if (structuredContent === null)
 					return frameworkFailure(
 						new OperationFailure(
 							"RESOURCE_LIMIT",
@@ -234,17 +232,13 @@ export function createMcpOperationAdapter<ContextInput, View>(
 					};
 				if (error instanceof DeclaredOperationError) {
 					try {
-						const declared = encodeDeclaredOperationError(
-							(prepared ?? {
-								declaredErrors: contract.declaredErrors,
-							}) as PreparedOperation<View>,
+						const declared = encodeOperationDeclaredOutcome(
+							prepared ?? contract,
 							error,
+							callId,
 						);
 						return {
-							structuredContent: {
-								callId,
-								error: { code: declared.code, payload: declared.payload },
-							},
+							structuredContent: declared.body,
 							isError: true,
 						};
 					} catch {

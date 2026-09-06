@@ -3,15 +3,9 @@ import type { EvaluatedExport, NormalizedResource, SourceSpan } from "../types";
 
 export {
 	projectOperationProjection,
-	projectOperationJsDoc,
-	projectOperationCodecSchema,
 	type OperationProjection,
 	type OperationProjectionInput,
 } from "./operation-projection";
-export {
-	projectOperationDocumentationEntries,
-	type DocumentationEntry,
-} from "./operation-metadata";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 

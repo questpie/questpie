@@ -119,6 +119,7 @@ test("MCP adapter preserves typed credential outcomes without disclosure", async
 	for (const [error, code, retryable] of [
 		[new RuntimeCredentialMalformed(), "UNAUTHENTICATED", false],
 		[new RuntimeCredentialUnavailable(), "RUNTIME_UNAVAILABLE", true],
+		[new OperationFailure("UNAUTHENTICATED"), "UNAUTHENTICATED", false],
 		[new Error("credential secret"), "INTERNAL", false],
 	] as const) {
 		let executions = 0;

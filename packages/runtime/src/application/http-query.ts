@@ -8,7 +8,6 @@ import {
 } from "../codec";
 import {
 	DeclaredOperationError,
-	encodeDeclaredOperationError,
 	OperationFailure,
 	type PreparedOperation,
 	type RuntimeOperationContract,
@@ -25,6 +24,10 @@ import {
 	readHttpHeader as header,
 	resolveHttpPrincipal,
 } from "./http-carrier";
+import {
+	encodeOperationResult,
+	encodeOperationDeclaredOutcome,
+} from "./operation-carrier";
 
 const QUERY_PREFIX = "/_questpie/query/";
 const QUERY_CACHE_CONTROL = "private, no-store";
@@ -300,27 +303,23 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 					});
 					if (execution.signal.aborted)
 						return failure("DEADLINE_EXCEEDED", callId);
-					const body = {
+					const body = encodeOperationResult(
+						operation.output,
+						value,
 						callId,
-						result: encodeRuntimeCodec(operation.output, value),
-					};
-					if (
-						Buffer.byteLength(JSON.stringify(body), "utf8") >
-						input.maximumResponseBytes
-					)
-						return failure("RESOURCE_LIMIT", callId);
+						input.maximumResponseBytes,
+					);
+					if (body === null) return failure("RESOURCE_LIMIT", callId);
 					return queryResponse(body, 200);
 				} catch (error) {
 					if (error instanceof DeclaredOperationError) {
 						try {
-							const declared = encodeDeclaredOperationError(operation, error);
-							return queryResponse(
-								{
-									callId,
-									error: { code: declared.code, payload: declared.payload },
-								},
-								declared.status,
+							const declared = encodeOperationDeclaredOutcome(
+								operation,
+								error,
+								callId,
 							);
+							return queryResponse(declared.body, declared.status);
 						} catch {
 							return failure("INTERNAL", callId);
 						}

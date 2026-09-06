@@ -14,7 +14,7 @@ import {
 	projectExecutionComposition,
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
-import { projectOperationJsDoc, projectOperationProjection } from "./http";
+import { projectOperationProjection } from "./http";
 import {
 	bindCollectionLifecyclePrograms,
 	projectCollectionLifecyclePrograms,
@@ -38,6 +38,7 @@ import {
 } from "./mutation";
 import { projectObservationSignalProjection } from "./observation";
 import { compileApplicationOperationDocumentation } from "./operation-documentation";
+import { projectOperationJsDoc } from "./operation-projection";
 import {
 	lowerPostgresQueryPlans,
 	projectPostgresContextBootstrapPlans,

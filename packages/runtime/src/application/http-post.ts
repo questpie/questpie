@@ -10,7 +10,6 @@ import {
 import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
-	encodeDeclaredOperationError,
 	OperationFailure,
 	type PreparedOperation,
 	readBoundedRequestBody,
@@ -28,7 +27,12 @@ import {
 	readHttpHeader as header,
 	resolveHttpPrincipal,
 } from "./http-carrier";
+import {
+	encodeOperationResult,
+	encodeOperationDeclaredOutcome,
+} from "./operation-carrier";
 import { isOperationAbort } from "./operation-error";
+import { parseJsonWithoutDuplicateKeys } from "./strict-json";
 
 const MUTATION_PREFIX = "/_questpie/mutation/";
 const ACTION_PREFIX = "/_questpie/action/";
@@ -38,88 +42,6 @@ function contentType(value: string | null): boolean {
 		value !== null &&
 		/^application\/json(?:\s*;\s*charset\s*=\s*utf-8)?$/iu.test(value)
 	);
-}
-
-function parseJsonWithoutDuplicateKeys(source: string): unknown {
-	let offset = 0;
-	const whitespace = () => {
-		while (/\s/u.test(source[offset] ?? "")) offset += 1;
-	};
-	const string = (): string => {
-		const start = offset;
-		offset += 1;
-		while (offset < source.length) {
-			const character = source[offset]!;
-			offset += 1;
-			if (character === "\\") {
-				offset += 1;
-				continue;
-			}
-			if (character === '"')
-				return JSON.parse(source.slice(start, offset)) as string;
-		}
-		return protocol();
-	};
-	const value = (): void => {
-		whitespace();
-		if (source[offset] === "{") {
-			offset += 1;
-			whitespace();
-			const keys = new Set<string>();
-			if (source[offset] === "}") {
-				offset += 1;
-				return;
-			}
-			while (offset < source.length) {
-				whitespace();
-				if (source[offset] !== '"') protocol();
-				const key = string();
-				if (keys.has(key)) protocol();
-				keys.add(key);
-				whitespace();
-				if (source[offset] !== ":") protocol();
-				offset += 1;
-				value();
-				whitespace();
-				if (source[offset] === "}") {
-					offset += 1;
-					return;
-				}
-				if (source[offset] !== ",") protocol();
-				offset += 1;
-			}
-			return protocol();
-		}
-		if (source[offset] === "[") {
-			offset += 1;
-			whitespace();
-			if (source[offset] === "]") {
-				offset += 1;
-				return;
-			}
-			while (offset < source.length) {
-				value();
-				whitespace();
-				if (source[offset] === "]") {
-					offset += 1;
-					return;
-				}
-				if (source[offset] !== ",") protocol();
-				offset += 1;
-			}
-			return protocol();
-		}
-		if (source[offset] === '"') {
-			string();
-			return;
-		}
-		while (offset < source.length && !/[\s,\]}]/u.test(source[offset] ?? ""))
-			offset += 1;
-	};
-	value();
-	whitespace();
-	if (offset !== source.length) protocol();
-	return JSON.parse(source) as unknown;
 }
 
 function failure(code: string, callId?: string, retryable?: boolean): Response {
@@ -333,15 +255,13 @@ export function createCanonicalPostHttp<ContextInput, View>(
 							committedResultUnavailable ??
 							new OperationFailure("DEADLINE_EXCEEDED", true)
 						);
-					const body = {
+					const body = encodeOperationResult(
+						contract.output,
+						value,
 						callId,
-						result: encodeRuntimeCodec(contract.output, value),
-					};
-					if (
-						Buffer.byteLength(JSON.stringify(body), "utf8") >
-						input.maximumResponseBytes
-					)
-						return failure("RESOURCE_LIMIT", callId, !action);
+						input.maximumResponseBytes,
+					);
+					if (body === null) return failure("RESOURCE_LIMIT", callId, !action);
 					return response(body, 200);
 				} catch (error) {
 					if (error instanceof CommittedResultUnavailable && !action)
@@ -358,24 +278,12 @@ export function createCanonicalPostHttp<ContextInput, View>(
 						);
 					if (error instanceof DeclaredOperationError) {
 						try {
-							const declared = encodeDeclaredOperationError(
-								(action
-									? {
-											declaredErrors: contract.declaredErrors,
-										}
-									: prepared!) as PreparedOperation<View>,
+							const declared = encodeOperationDeclaredOutcome(
+								action ? contract : prepared!,
 								error,
+								callId,
 							);
-							return response(
-								{
-									callId,
-									error: {
-										code: declared.code,
-										payload: declared.payload,
-									},
-								},
-								declared.status,
-							);
+							return response(declared.body, declared.status);
 						} catch {
 							return failure("INTERNAL", callId);
 						}

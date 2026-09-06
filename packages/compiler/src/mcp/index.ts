@@ -4,7 +4,7 @@ import {
 	projectOperationDocumentationEntries,
 	projectOperationCodecSchema,
 	type DocumentationEntry,
-} from "../http";
+} from "../operation-projection";
 import { projectMcpOutcomeSchema } from "./schema";
 
 type JsonRecord = Readonly<Record<string, unknown>>;

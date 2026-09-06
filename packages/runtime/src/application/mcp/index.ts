@@ -1,4 +1,5 @@
 import { readBoundedRequestBody } from "../../operation";
+import { parseJsonWithoutDuplicateKeys } from "../strict-json";
 import {
 	MCP_PROTOCOL_VERSION,
 	type McpExecutionResult,
@@ -38,94 +39,6 @@ function record(value: unknown): JsonRecord {
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new TypeError("invalid MCP record");
 	return value as JsonRecord;
-}
-
-function parseJson(source: string): unknown {
-	let offset = 0;
-	const whitespace = () => {
-		while (/\s/u.test(source[offset] ?? "")) offset += 1;
-	};
-	const string = (): string => {
-		const start = offset;
-		offset += 1;
-		while (offset < source.length) {
-			const character = source[offset]!;
-			offset += 1;
-			if (character === "\\") {
-				offset += 1;
-				continue;
-			}
-			if (character === '"')
-				return JSON.parse(source.slice(start, offset)) as string;
-		}
-		throw new TypeError("invalid MCP JSON string");
-	};
-	const value = (): void => {
-		whitespace();
-		if (source[offset] === "{") {
-			offset += 1;
-			whitespace();
-			const keys = new Set<string>();
-			if (source[offset] === "}") {
-				offset += 1;
-				return;
-			}
-			while (offset < source.length) {
-				whitespace();
-				if (source[offset] !== '"')
-					throw new TypeError("invalid MCP JSON object");
-				const key = string();
-				if (keys.has(key)) throw new TypeError("duplicate MCP JSON key");
-				keys.add(key);
-				whitespace();
-				if (source[offset] !== ":")
-					throw new TypeError("invalid MCP JSON object");
-				offset += 1;
-				value();
-				whitespace();
-				if (source[offset] === "}") {
-					offset += 1;
-					return;
-				}
-				if (source[offset] !== ",")
-					throw new TypeError("invalid MCP JSON object");
-				offset += 1;
-			}
-			throw new TypeError("invalid MCP JSON object");
-		}
-		if (source[offset] === "[") {
-			offset += 1;
-			whitespace();
-			if (source[offset] === "]") {
-				offset += 1;
-				return;
-			}
-			while (offset < source.length) {
-				value();
-				whitespace();
-				if (source[offset] === "]") {
-					offset += 1;
-					return;
-				}
-				if (source[offset] !== ",")
-					throw new TypeError("invalid MCP JSON array");
-				offset += 1;
-			}
-			throw new TypeError("invalid MCP JSON array");
-		}
-		if (source[offset] === '"') {
-			string();
-			return;
-		}
-		const start = offset;
-		while (offset < source.length && !/[\s,\]}]/u.test(source[offset] ?? ""))
-			offset += 1;
-		if (start === offset) throw new TypeError("invalid MCP JSON value");
-	};
-	value();
-	whitespace();
-	if (offset !== source.length) throw new TypeError("invalid MCP JSON");
-	return JSON.parse(source) as unknown;
 }
 
 function canonicalJson(value: unknown): string {
@@ -235,7 +148,7 @@ export function createMcpIngress(
 				return protocolError(undefined, -32600, "Invalid request", 400);
 			let parsed: unknown;
 			try {
-				parsed = parseJson(body.text);
+				parsed = parseJsonWithoutDuplicateKeys(body.text);
 			} catch {
 				return protocolError(undefined, -32700, "Parse error", 400);
 			}
