@@ -39,7 +39,9 @@ test("activation diagnostics retain only safe revisions and digests, including a
 		),
 	).toBe("SCHEDULE_ACTIVATION_STALE");
 	expect(
-		scheduleFailureMessage(new Error("postgres://secret@server/database")),
+		scheduleFailureMessage(
+			new Error("postgres://localhost/private-diagnostic"),
+		),
 	).toBe("SCHEDULE_ACTIVATION_FAILED");
 	expect(
 		scheduleFailureMessage(

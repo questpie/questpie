@@ -193,8 +193,11 @@ for(;;){const view=await app.durable.inspect(receipt.runId);if(view?.state==="su
 				},
 			});
 			try {
+				const trapUrl = new URL("postgres://localhost/unreachable");
+				trapUrl.hostname = "127.0.0.1";
+				trapUrl.port = String(trap.port);
 				const environment = {
-					DATABASE_URL: `postgres://postgres@127.0.0.1:${trap.port}/unreachable`,
+					DATABASE_URL: trapUrl.href,
 				};
 				const invalid = await run(
 					[cli, "schedule", "activate"],
