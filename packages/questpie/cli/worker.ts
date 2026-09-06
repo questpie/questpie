@@ -1,5 +1,7 @@
+import type { DurableWorkerTrace } from "../../runtime/src/durable";
+
 export type CliDurableWorker = Readonly<{
-	poll(): Promise<unknown>;
+	poll(): Promise<Pick<DurableWorkerTrace, "producer">>;
 	beginDrain(): void;
 }>;
 
@@ -13,7 +15,9 @@ export function startDurableWorkerPolling(worker: CliDurableWorker) {
 		for (;;) {
 			if (stopping) return;
 			try {
-				await worker.poll();
+				const trace = await worker.poll();
+				if (!stopping && trace.producer?.status === "failed")
+					console.error("questpie: SCHEDULE_PRODUCER_FAILED");
 			} catch {
 				if (!stopping) console.error("questpie: durable worker poll failed");
 			}

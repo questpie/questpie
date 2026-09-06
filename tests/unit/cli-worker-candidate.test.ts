@@ -3,13 +3,37 @@ import { expect, spyOn, test } from "bun:test";
 import { createStartShutdown } from "../../packages/questpie/cli/telemetry";
 import { startDurableWorkerPolling } from "../../packages/questpie/cli/worker";
 
+test("CLI exposes failed schedule production without logging the trace payload", async () => {
+	const output = spyOn(console, "error").mockImplementation(() => {});
+	const polling = startDurableWorkerPolling({
+		async poll() {
+			return {
+				producer: {
+					status: "failed" as const,
+					code: "SCHEDULE_PRODUCER_FAILED" as const,
+				},
+				privateInput: "must-not-be-printed",
+			};
+		},
+		beginDrain() {},
+	});
+	try {
+		await Bun.sleep(0);
+		await polling.stop(Date.now() + 1000);
+		expect(output.mock.calls).toEqual([["questpie: SCHEDULE_PRODUCER_FAILED"]]);
+	} finally {
+		await polling.stop(Date.now() + 1000);
+		output.mockRestore();
+	}
+});
+
 test("CLI shutdown drains the pending worker but starts application close before joining it", async () => {
 	const order: string[] = [];
 	const pending = Promise.withResolvers<void>();
 	const polling = startDurableWorkerPolling({
 		poll() {
 			order.push("worker.poll");
-			return pending.promise;
+			return pending.promise.then(() => ({}));
 		},
 		beginDrain() {
 			order.push("worker.drain");
@@ -52,7 +76,7 @@ test("CLI poll joining has a deadline without claiming to cancel noncooperative 
 	const polling = startDurableWorkerPolling({
 		poll() {
 			calls += 1;
-			return pending.promise;
+			return pending.promise.then(() => ({}));
 		},
 		beginDrain() {
 			drains += 1;
@@ -78,6 +102,7 @@ test("CLI resumes the same worker after poll failure with a fixed nondisclosing 
 			calls += 1;
 			if (calls === 1) throw new Error("secret authored input");
 			resumed.resolve();
+			return {};
 		},
 		beginDrain() {},
 	});

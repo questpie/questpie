@@ -138,7 +138,7 @@ export async function createApplication(input) {
     questpieVersion: "${releaseVersion}",
   });
   return {
-    durable: { worker: () => ({ poll: async () => undefined, beginDrain() {} }) },
+    durable: { worker: () => ({ poll: async () => ({}), beginDrain() {} }) },
     async fetch() {
       if (adapter === null) return new Response("ok-no-telemetry");
       const execution = adapter.begin({ entry: "fetch", kind: "execution", principalKind: "anonymous", trace: { kind: "root" } });
