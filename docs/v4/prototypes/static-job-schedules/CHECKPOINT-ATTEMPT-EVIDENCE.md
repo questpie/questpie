@@ -1,5 +1,13 @@
 # Checkpoint attempt control-flow evidence
 
+This page preserves the prototype's historical results. Its executable owner
+and tests have been removed after porting the cases to the candidate Runtime:
+[attempt admission and joining](../../../../tests/unit/checkpoint-attempt-owner.test.ts)
+and [codec capture and references](../../../../tests/unit/checkpoint-run-boundary.test.ts).
+The Runtime owns codec capture; no `structuredClone` checkpoint model remains.
+The commands below describe the historical checkout, not the current tree.
+ADR-0043 remains Proposed.
+
 This is a proof-only coordinator for Proposed ADR-0043, not a public Job
 Context, durable store, or acceptance record. `checkpoint-attempt.ts` owns only
 one attempt's command cursor, in-flight work, failure state, and final join.

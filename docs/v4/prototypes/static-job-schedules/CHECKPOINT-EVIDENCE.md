@@ -1,5 +1,14 @@
 # Minimum Mutation checkpoint falsification evidence
 
+This page preserves the prototype's historical results. Its storage, invocation,
+and attempt models have been removed after equivalent cases passed against the
+candidate Runtime owners. Current evidence lives in the
+[generated-worker tracer](../../../../tests/integration/postgres/static-job-checkpoint-worker.test.ts),
+[PostgreSQL recovery, rollback, codec, and stale-completion tests](../../../../tests/integration/postgres/static-job-checkpoint-recovery.test.ts),
+and [command-boundary tests](../../../../tests/unit/checkpoint-run-boundary.test.ts).
+Worker fixtures now live under `tests/support`. The commands below describe the
+historical checkout, not the current tree. This port does not accept ADR-0043.
+
 Status: proof scaffold; not production code, product authority, acceptance, or a
 formal PASS.
 

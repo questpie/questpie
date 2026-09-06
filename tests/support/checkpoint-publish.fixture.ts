@@ -2,7 +2,7 @@ import { codec, operation, policy } from "questpie";
 
 import { defineMutation } from "#questpie/app";
 
-// Copied only into the disposable Collaboration application by the proof.
+// Compiled only inside the disposable PostgreSQL checkpoint tracer.
 export const publishMessage = defineMutation({
 	name: "message.publish",
 	network: true,
@@ -54,7 +54,11 @@ export const publishMessage = defineMutation({
 		return {
 			id: message.id,
 			channelId: message.channelId,
-			body: message.body,
+			// The fixed UUID/timestamp output frame is 146 canonical UTF-8 bytes.
+			body: input.metadata.note?.startsWith("result-limit")
+				? "é".repeat(524_215) +
+					(input.metadata.note === "result-limit-over" ? "x" : "")
+				: message.body,
 			createdAt: message.createdAt,
 		};
 	},

@@ -131,7 +131,7 @@ async function withApplication(
 			fixtures?.job ??
 				resolve(
 					import.meta.dir,
-					"../../../docs/v4/prototypes/static-job-schedules/checkpoint-recovery-job.fixture.ts",
+					"../../support/checkpoint-recovery-job.fixture.ts",
 				),
 			join(applicationRoot, "src/company-digest-job.ts"),
 		);
@@ -290,8 +290,8 @@ postgresTest(
 					[1, "first", "completed"],
 					[2, "second", "completed"],
 				]);
-				expect(history[0].call_id).not.toBe(history[1].call_id);
-				expect(history[0].transaction_id).not.toBe(history[1].transaction_id);
+				expect(history[0]!.call_id).not.toBe(history[1]!.call_id);
+				expect(history[0]!.transaction_id).not.toBe(history[1]!.transaction_id);
 				const [localResult] =
 					await database`SELECT count(*)::integer AS count FROM information_schema.columns WHERE table_schema = 'questpie_internal' AND table_name = 'mutation_checkpoints' AND column_name = 'result_bytes'`;
 				expect(localResult.count).toBe(0);
@@ -338,6 +338,30 @@ postgresTest(
 					(SELECT count(*)::integer FROM collaboration.messages WHERE body = ${invalidBody}) AS writes,
 					(SELECT count(*)::integer FROM questpie_internal.mutation_checkpoints WHERE run_id = ${invalidId}) AS history`;
 				expect(invalidFacts).toEqual({ writes: 0, history: 0 });
+				for (const size of ["at", "over"] as const) {
+					const boundedBody = `result-limit-${size}-${crypto.randomUUID()}`;
+					const boundedId = await accept(boundedBody);
+					const bounded = await app.durable.poll({
+						workerId: "result-limit",
+						claimBatch: 1,
+					});
+					expect(
+						bounded.outcomes.find((outcome) => outcome.runId === boundedId),
+					).toMatchObject(
+						size === "at"
+							? { outcome: "succeeded", failureCode: null }
+							: { outcome: "failed", failureCode: "HANDLER_FAILED" },
+					);
+					const [boundedFacts] = await database`SELECT
+						(SELECT count(*)::integer FROM collaboration.messages WHERE body = ${boundedBody}) AS writes,
+						(SELECT state FROM questpie_internal.mutation_checkpoints WHERE run_id = ${boundedId}) AS state,
+						(SELECT octet_length(result_bytes) FROM questpie_internal.mutation_call_receipts WHERE call_id = (SELECT call_id FROM questpie_internal.mutation_checkpoints WHERE run_id = ${boundedId})) AS bytes`;
+					expect(boundedFacts).toEqual(
+						size === "at"
+							? { writes: 1, state: "completed", bytes: 1_048_576 }
+							: { writes: 0, state: "reserved", bytes: null },
+					);
+				}
 			},
 			{
 				job: resolve(
@@ -346,7 +370,7 @@ postgresTest(
 				),
 				mutation: resolve(
 					import.meta.dir,
-					"../../../docs/v4/prototypes/static-job-schedules/checkpoint-publish.fixture.ts",
+					"../../support/checkpoint-publish.fixture.ts",
 				),
 			},
 		);

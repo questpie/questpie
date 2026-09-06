@@ -28,6 +28,15 @@ export const companyDigest = defineJob({
 			body: input.restartProbe ?? "nested-checkpoint",
 			metadata: { at: new Date("2026-09-06T12:34:56.789Z"), note: "present" },
 		};
+		if (command.body.startsWith("result-limit")) {
+			command.metadata.note = command.body.startsWith("result-limit-over")
+				? "result-limit-over"
+				: "result-limit-at";
+			await ctx.run.step
+				.mutation("result-limit", ctx.mutations.message.publish, command)
+				.catch(() => undefined);
+			return { firstAt: command.metadata.at, secondAt: command.metadata.at };
+		}
 		if (command.body.startsWith("invalid-codec")) {
 			await Reflect.apply(ctx.run.step.mutation, undefined, [
 				"invalid-codec",

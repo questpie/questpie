@@ -14,10 +14,10 @@
 		"activation.test.ts",
 		"../../../../tests/unit/static-schedule-calendar.test.ts",
 		"../../../../tests/integration/postgres/static-schedule-calendar.test.ts",
-		"checkpoint-attempt.ts",
-		"checkpoint-attempt.test.ts",
-		"checkpoint-invocation.ts",
-		"checkpoint.ts",
-		"checkpoint.test.ts"
+		"../../../../tests/unit/checkpoint-attempt-owner.test.ts",
+		"../../../../tests/unit/checkpoint-run-boundary.test.ts",
+		"../../../../tests/unit/checkpoint-store-failure.test.ts",
+		"../../../../tests/integration/postgres/static-job-checkpoint-worker.test.ts",
+		"../../../../tests/integration/postgres/static-job-checkpoint-recovery.test.ts"
 	]
 }

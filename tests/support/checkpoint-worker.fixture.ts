@@ -2,6 +2,7 @@ import { codec, durable, principal } from "questpie";
 
 import { defineJob } from "#questpie/app";
 
+/** Compiled only inside the disposable PostgreSQL checkpoint tracer. */
 export const companyDigest = defineJob({
 	name: "reports.companyDigest",
 	schedule: {

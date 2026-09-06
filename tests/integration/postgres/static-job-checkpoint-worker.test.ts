@@ -46,6 +46,8 @@ type LoadedApplication = Readonly<{
 				producer?: Readonly<{ status: string; accepted?: number }>;
 				outcomes: readonly Readonly<{
 					runId: string;
+					resource: string;
+					attemptNumber: number;
 					outcome: string;
 					failureCode?: string | null;
 				}>[];
@@ -107,10 +109,7 @@ postgresTest(
 				"../..",
 			);
 			await copyFile(
-				resolve(
-					import.meta.dir,
-					"../../../docs/v4/prototypes/static-job-schedules/checkpoint-worker.fixture.ts",
-				),
+				resolve(import.meta.dir, "../../support/checkpoint-worker.fixture.ts"),
 				join(applicationRoot, "src/company-digest-job.ts"),
 			);
 			await compileApplication({ applicationRoot });

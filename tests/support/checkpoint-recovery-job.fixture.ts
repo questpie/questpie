@@ -2,7 +2,7 @@ import { codec, durable } from "questpie";
 
 import { defineJob } from "#questpie/app";
 
-/** Copied only into the disposable application for worker recovery races. */
+/** Compiled only inside the disposable application for worker recovery races. */
 export const companyDigest = defineJob({
 	name: "reports.companyDigest",
 	input: codec.object({
