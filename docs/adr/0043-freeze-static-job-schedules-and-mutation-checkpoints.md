@@ -198,6 +198,9 @@ committed application write. Changed input/command, renamed, reordered,
 duplicate, or truncated history fails closed. A returned handler must have
 consumed its recorded history before it may settle successfully. No automatic
 latest-code replay or fallback command is allowed.
+An ordinary handler failure before reaching its recorded steps keeps its original
+failure and existing retry policy. Incomplete history prevents a successful
+return; it does not replace a failed handler with a permanent history error.
 
 Receipt recovery enters the same Mutation executor with fresh Context and
 Operation admission. It returns the originally authorized immutable result
@@ -243,6 +246,12 @@ needed to identify its receipt. Completed history still refers to that receipt;
 there is no second stored result copy. Any future retention change must preserve
 receipts needed for replay of incomplete or completed retained history; retry
 horizon is not a receipt expiry or permission to erase unresolved history.
+Completion retains a digest of the canonical successful receipt bytes as well
+as its transaction identity. Replaying completed history requires that exact
+receipt inside the existing Mutation transaction, after fresh Context and
+admission and before any receipt claim. A missing or changed receipt fails
+closed; it cannot be treated as permission to rerun the Mutation. No application,
+network, or generated client call option exposes this private replay requirement.
 
 ### Failure, limits, and observation
 
@@ -256,10 +265,64 @@ exception messages do not enter framework failures or telemetry.
 Durable operational facts record activation revisions, frontier progress,
 selected scheduled instants, accepted run links, and checkpoint transitions.
 They use existing operational authorization; observation cannot become scheduler
-truth. This decision does not widen Execution Envelope v2 or its OTel allowlist.
-Producer failures must remain distinguishable from failures of accepted runs.
+truth. The existing durable failure-code enum gains only `CHECKPOINT_INVALID`;
+there are no new observation fields, actor/input payloads, or OTel attributes.
+Producer failures remain distinguishable from failures of accepted runs.
 
-Acceptance is blocked until executable evidence pins finite calendar-search,
+The existing worker poll reconciles its verified active schedule set before
+ordinary run admission. There is no new timer owner, elected leader, or second
+worker. Same-worker overlapping producer polls join one in-flight reconciliation.
+Worker drain and Runtime cancellation abort producer work, and admission checks
+drain again after joining it. A producer failure does not prevent already
+accepted Jobs and Reactions from running. The next ordinary poll may reconcile
+again; the producer has no nested retry loop.
+
+The server worker trace adds a separate `producer` result: `active` or `inactive`
+with bounded `accepted`/`examined` counts; `failed` with only
+`SCHEDULE_PRODUCER_FAILED`; or `draining`. It contains no failed Principal,
+Context, input, SQL state, or exception message. `questpie start` drives the
+existing worker poll loop. A custom host owns that same loop and its shutdown,
+as it already does for ordinary Jobs. Neither host activates schedules at boot.
+
+The candidate's fixed work bounds are:
+
+| Boundary                                                | Limit                                                                   |
+| ------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Static desired set                                      | 64 scheduled Jobs; 262,144 canonical artifact bytes                     |
+| Calendar search                                         | At most 146,097 UTC days; at most 1,440 minute-of-day candidates        |
+| Activation or producer transaction                      | 10 seconds, including lock wait; caller cancellation may end it earlier |
+| One reconciliation                                      | At most 64 programs and one accepted tick per program                   |
+| Checkpoint history                                      | 64 ordered unique names; one in-flight command                          |
+| Checkpoint reservation, load, or completion transaction | 5 seconds; attempt cancellation may end it earlier                      |
+| Checkpoint input and Mutation receipt result            | 1 MiB canonical UTF-8 bytes each, preserving existing Mutation limits   |
+
+These are finite first-slice bounds, not throughput promises or new authoring
+configuration. The Job's existing attempt deadline, retry horizon and result
+bound still apply. A reconciliation timeout rolls back its entire frontier/tick/
+acceptance transaction; it cannot publish partial acceptance.
+
+Reference, history, command compatibility and required-receipt corruption produce
+the permanent durable code `CHECKPOINT_INVALID`. The history/input size cap uses
+`RESOURCE_LIMIT`. Invalid input still rejects the authored checkpoint promise
+with the same safe `PROTOCOL_UNSUPPORTED` Operation failure as direct invocation.
+Declared Mutation errors retain their declared type and doom that attempt.
+Activation's safe classes are `SCHEDULE_ARTIFACT_INVALID`,
+`SCHEDULE_ACTIVATION_STALE`, `SCHEDULE_REVISION_OVERFLOW`, and
+`SCHEDULE_STATE_INVALID`; only the stale class may include the current revision
+and desired-set digest. The deployment CLI also returns only
+`SCHEDULE_ARGUMENTS_INVALID`, `SCHEDULE_DATABASE_NOT_READY`, or
+`SCHEDULE_ACTIVATION_FAILED` for argument, readiness, or other activation failure.
+PostgreSQL failures are not printed as diagnostics.
+
+Activation verifies complete generated checksums and the existing Runtime Build
+inventory before opening a database connection. It treats generated executable
+files as bytes, not code to execute. It then verifies application, schema,
+migration and protocol readiness and calls the same activation owner once.
+It requires the deployment database connection, not an unrelated realtime HMAC
+key, ingress Principal, Context execution, or application Service startup.
+There is no generated `durable.schedules` management API.
+
+Acceptance is blocked until executable evidence verifies finite calendar-search,
 schedule-count, transaction-time, history/result-byte, and reconciliation-work
 bounds and the exact safe failure projections. Existing Mutation and Job bounds
 remain in force; the Mutation's 100 accepted-Job-command cap is not a checkpoint
