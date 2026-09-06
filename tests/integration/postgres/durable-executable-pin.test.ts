@@ -24,6 +24,7 @@ import {
 } from "@questpie/compiler";
 
 import { installQuestpieForTracer } from "../../support/beta12-packed-questpie";
+import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const admin = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
@@ -357,8 +358,7 @@ postgresTest(
 			const [connected] = await database`SELECT current_database() AS name`;
 			expect(connected.name).toBe(databaseName);
 			const [version] = await database`SHOW server_version_num`;
-			expect(Number(version.server_version_num)).toBeGreaterThanOrEqual(170000);
-			expect(Number(version.server_version_num)).toBeLessThan(180000);
+			expectPostgresMajor(version.server_version_num);
 			await writeApplication(rootA, { name, schema, marker: "A" });
 			const initial = await compileApplication({ applicationRoot: rootA });
 			const targetSchema = JSON.parse(

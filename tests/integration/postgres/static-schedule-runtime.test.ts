@@ -20,6 +20,7 @@ import { createPostgresJobAcceptanceTransaction } from "../../../packages/runtim
 import { linkPostgresMutationTransactionStatements } from "../../../packages/runtime/src/mutation/postgres-transaction-statements";
 import { createRuntimePostgres } from "../../../packages/runtime/src/postgres";
 import type { PostgresTransactionRunner } from "../../../packages/runtime/src/postgres/contract";
+import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const postgres = process.env.PGHOST ? test : test.skip;
 
@@ -41,14 +42,13 @@ postgres(
 			url.hostname = process.env.PGHOST!;
 			url.port = process.env.PGPORT ?? "5432";
 			url.username = process.env.PGUSER ?? "postgres";
-			url.password = process.env.PGPASSWORD ?? "";
+			if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
 			url.pathname = `/${ownedDatabase}`;
 			sql = new SQL(url.toString(), { max: 1 });
 			const [environment] =
 				await sql`SELECT current_database() AS database, current_setting('server_version_num')::int AS version, pg_backend_pid() AS pid`;
 			expect(environment.database).toBe(ownedDatabase);
-			expect(environment.version).toBeGreaterThanOrEqual(170000);
-			expect(environment.version).toBeLessThan(180000);
+			expectPostgresMajor(environment.version);
 			await ensureInternalProtocolV8(sql, ownedDatabase, environment.pid, {
 				lockTimeoutMs: 2000,
 				statementTimeoutMs: 10000,

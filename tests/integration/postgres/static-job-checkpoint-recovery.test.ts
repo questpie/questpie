@@ -12,6 +12,7 @@ import {
 	beta05Ids,
 	prepareBeta05PostgresApplication,
 } from "./helpers/beta05-runtime";
+import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const admin = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const postgresTest = admin ? test.serial : test.skip;
@@ -79,7 +80,7 @@ function connectionUrl(name: string) {
 	url.hostname = process.env.PGHOST ?? "127.0.0.1";
 	url.port = process.env.PGPORT ?? "5432";
 	url.username = process.env.PGUSER ?? "postgres";
-	url.password = process.env.PGPASSWORD ?? "";
+	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
 	url.pathname = `/${name}`;
 	return url.toString();
 }
@@ -120,8 +121,7 @@ async function withApplication(
 		const [connected] =
 			await database`SELECT current_database() AS name, current_setting('server_version_num')::integer AS version`;
 		expect(connected.name).toBe(name);
-		expect(connected.version).toBeGreaterThanOrEqual(170_000);
-		expect(connected.version).toBeLessThan(180_000);
+		expectPostgresMajor(connected.version);
 		prepared = await prepareBeta05PostgresApplication(database);
 		const applicationRoot = resolve(prepared.generated.generatedRoot, "../..");
 		await copyFile(

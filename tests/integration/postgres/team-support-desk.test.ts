@@ -33,6 +33,7 @@ import {
 	type CurrentProtocolMcpCall,
 } from "../../support/mcp-2026-07-28-client";
 import { normalizeOtlpSpanGraph } from "../../support/otel-protobuf";
+import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const repositoryRoot = resolve(import.meta.dir, "../../..");
 const fixtureRoot = resolve(repositoryRoot, "fixtures/team-support-desk");
@@ -362,9 +363,7 @@ postgresTest(
 			const versionRows = (await database!.unsafe(
 				"SHOW server_version_num",
 			)) as Array<Readonly<{ server_version_num: string }>>;
-			expect(
-				Math.trunc(Number(versionRows[0]?.server_version_num) / 10_000),
-			).toBe(17);
+			expectPostgresMajor(versionRows[0]!.server_version_num);
 			// Repository PostgreSQL setup/cleanup only. No application assertion below
 			// reads framework or application tables.
 			await database!.unsafe(

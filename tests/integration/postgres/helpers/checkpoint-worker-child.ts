@@ -7,7 +7,7 @@ const url = new URL("postgres://localhost/");
 url.hostname = process.env.PGHOST ?? "127.0.0.1";
 url.port = process.env.PGPORT ?? "5432";
 url.username = process.env.PGUSER ?? "postgres";
-url.password = process.env.PGPASSWORD ?? "";
+if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
 url.pathname = `/${process.env.PGDATABASE}`;
 try {
 	const internal = await import(pathToFileURL(modulePath).href);

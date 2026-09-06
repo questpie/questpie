@@ -14,6 +14,7 @@ import { join, resolve } from "node:path";
 import { Client } from "pg";
 
 import { waitForOutputLine } from "../../../packages/testkit/src";
+import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const repository = resolve(import.meta.dir, "../../..");
 const postgres = process.env.PGHOST ? test : test.skip;
@@ -30,7 +31,7 @@ postgres(
 		url.hostname = process.env.PGHOST!;
 		url.port = process.env.PGPORT ?? "5432";
 		url.username = process.env.PGUSER ?? "postgres";
-		url.password = process.env.PGPASSWORD ?? "";
+		if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
 		url.pathname = `/${name}`;
 		async function run(
 			command: string[],
@@ -72,8 +73,7 @@ postgres(
 					"SELECT current_database() AS name, current_setting('server_version_num')::integer AS version",
 				);
 				expect(facts.rows[0].name).toBe(name);
-				expect(facts.rows[0].version).toBeGreaterThanOrEqual(170000);
-				expect(facts.rows[0].version).toBeLessThan(180000);
+				expectPostgresMajor(facts.rows[0].version);
 			} finally {
 				await probe.end();
 			}
