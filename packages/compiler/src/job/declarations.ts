@@ -29,6 +29,16 @@ export function renderJobDeclarations(
 		)
 		.join("\n\t");
 	const acceptances = renderJobAcceptances(resources);
+	const references = renderServerOperationType(
+		"Mutation",
+		resources
+			.filter((resource) => resource.kind === "mutation")
+			.map((resource) => ({
+				name: resource.name,
+				origin: resource.origin,
+				value: `MutationCheckpointReference<${JSON.stringify(resource.name)}>`,
+			})),
+	);
 	return `export interface GeneratedJobs {
 \t${definitions}
 }
@@ -42,8 +52,22 @@ export interface JobAcceptanceOptions {
 
 export type JobRunReceipt<Name extends keyof GeneratedJobs> = Readonly<{ readonly runId: string; readonly resource: \`job:\${Name & string}\` }>;
 
+declare const mutationCheckpointReference: unique symbol;
+
+export type MutationCheckpointReference<Name extends keyof GeneratedMutations> = Readonly<{
+\treadonly identity: \`mutation:\${Name & string}\`;
+\treadonly [mutationCheckpointReference]: Name;
+}>;
+
+export type MutationCheckpointError<Reference extends MutationCheckpointReference<keyof GeneratedMutations>> = GeneratedMutations[Reference[typeof mutationCheckpointReference]]["declaredError"];
+
+export type GeneratedJobMutationReferences = ${references};
+
 export type JobContext = Omit<RootExecution, "services"> & Readonly<{
-\trun: Readonly<{ id: string }>;
+\tmutations: GeneratedJobMutationReferences;
+\trun: Readonly<{ id: string; step: Readonly<{
+\t\tmutation<const Name extends keyof GeneratedMutations>(name: string, reference: MutationCheckpointReference<Name>, input: GeneratedMutations[NoInfer<Name>]["input"]): Promise<GeneratedMutations[Name]["output"]>;
+\t}> }>;
 \tattempt: Readonly<{ number: number; heartbeat(): Promise<void> }>;
 }>;
 
@@ -58,8 +82,14 @@ export type JobDefinition<Name extends keyof GeneratedJobs, Errors extends Opera
 \treadonly retry: DurableRetryDefinition;
 \treadonly errors: Errors;
 \treadonly signals: Readonly<Record<never, never>>;
-\treadonly schedule: null;
+\treadonly schedule: JobSchedule<Name> | null;
 \treadonly handler: (input: Readonly<{ input: GeneratedJobs[Name]["input"]; ctx: JobContext; errors: OperationErrorFactories<Errors> }>) => GeneratedJobs[Name]["output"] | Promise<GeneratedJobs[Name]["output"]>;
+}>;
+
+export type JobSchedule<Name extends keyof GeneratedJobs> = Readonly<{
+\tcron: string;
+\texecution: Readonly<{ principal: Principal; context: AppContextInput }>;
+\tinput: GeneratedJobs[Name]["input"];
 }>;
 
 export type JobFactory = <const Name extends keyof GeneratedJobs, const Errors extends OperationErrorMap>(definition: Readonly<{
@@ -71,7 +101,7 @@ export type JobFactory = <const Name extends keyof GeneratedJobs, const Errors e
 \tretry: DurableRetryDefinition;
 \terrors?: Errors;
 \tsignals?: Readonly<Record<never, never>>;
-\tschedule?: null;
+\tschedule?: JobSchedule<Name> | null;
 \thandler(input: Readonly<{ input: GeneratedJobs[Name]["input"]; ctx: JobContext; errors: OperationErrorFactories<Errors> }>): GeneratedJobs[Name]["output"] | Promise<GeneratedJobs[Name]["output"]>;
 }> ) => JobDefinition<Name, Errors>;
 

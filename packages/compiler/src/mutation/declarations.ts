@@ -6,6 +6,20 @@ function mutations(resources: readonly NormalizedResource[]) {
 	return resources.filter((resource) => resource.kind === "mutation");
 }
 
+function renderDeclaredError(resource: NormalizedResource): string {
+	const errors = Object.values(
+		resource.contract.declaredErrors ?? {},
+	) as readonly Readonly<{ code: string; status: number; payload: unknown }>[];
+	return errors.length === 0
+		? "never"
+		: errors
+				.map(
+					(error) =>
+						`Error & Readonly<{ code: ${JSON.stringify(error.code)}; status: ${error.status}; payload: ${error.payload === null ? "null" : renderCodecType(error.payload)}; }>`,
+				)
+				.join(" | ");
+}
+
 function renderIssueMappings(resource: NormalizedResource): string {
 	const mappings = resource.contract.issueMappings as
 		| Readonly<Record<string, Readonly<Record<string, string>>>>
@@ -36,7 +50,7 @@ export function renderMutationDeclarations(
 		.map((resource) => {
 			const contract = resource.contract;
 			const jsdoc = documentation[resource.identity];
-			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; issueMappings: ${renderIssueMappings(resource)}; }>;`;
+			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; declaredError: ${renderDeclaredError(resource)}; issueMappings: ${renderIssueMappings(resource)}; }>;`;
 		})
 		.join("\n\t");
 	const operations = renderServerOperationType(
