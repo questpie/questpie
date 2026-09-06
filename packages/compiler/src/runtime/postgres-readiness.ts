@@ -8,7 +8,7 @@ import type {
 import { digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import {
-	internalProtocolV8Checksum,
+	internalProtocolV9Checksum,
 	type SchemaProjectionV1,
 	verifyPostgresDatabaseSchemaReadiness,
 } from "../schema";
@@ -151,7 +151,7 @@ export async function verifyPostgresDatabaseRuntimeReadiness(
 			try {
 				await input.runtime.verifyReadinessPrerequisites({
 					transaction,
-					protocol: { version: 8, checksum: internalProtocolV8Checksum },
+					protocol: { version: 9, checksum: internalProtocolV9Checksum },
 					application: input.schema.application.name,
 					postgresSchema: input.schema.application.postgresSchema,
 					migrationHead: committed.head,

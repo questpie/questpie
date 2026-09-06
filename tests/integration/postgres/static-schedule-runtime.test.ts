@@ -7,7 +7,10 @@ import { codec, defineContext, principal } from "questpie";
 import { digest } from "../../../packages/compiler/src/canonical";
 import { projectPostgresMutationTransactionStatements } from "../../../packages/compiler/src/mutation/postgres-transaction-statements";
 import { ensureInternalProtocolV8 } from "../../../packages/compiler/src/schema/postgres/internal-protocol-v8";
-import { internalProtocolV9ScheduleSql } from "../../../packages/compiler/src/schema/postgres/internal-protocol-v9-schedule-sql";
+import {
+	ensureInternalProtocolV9,
+	verifyInternalProtocolV9,
+} from "../../../packages/compiler/src/schema/postgres/internal-protocol-v9";
 import { createJobAcceptance } from "../../../packages/runtime/src/durable/acceptance";
 import type { LinkedJobMember } from "../../../packages/runtime/src/durable/job-projection";
 import { createPostgresStaticSchedules } from "../../../packages/runtime/src/durable/schedule";
@@ -50,7 +53,20 @@ postgres(
 				lockTimeoutMs: 2000,
 				statementTimeoutMs: 10000,
 			});
-			await sql.unsafe(internalProtocolV9ScheduleSql);
+			await expect(
+				ensureInternalProtocolV9(sql, ownedDatabase, environment.pid, {
+					lockTimeoutMs: 2000,
+					statementTimeoutMs: 10000,
+				}),
+			).rejects.toThrow();
+			await ensureInternalProtocolV9(
+				sql,
+				ownedDatabase,
+				environment.pid,
+				{ lockTimeoutMs: 2000, statementTimeoutMs: 10000 },
+				{ allowNonRollingProtocolV9: true },
+			);
+			await verifyInternalProtocolV9(sql);
 			database = createRuntimePostgres({
 				connectionUrl: url.toString(),
 				directConnectionUrl: url.toString(),
@@ -185,9 +201,13 @@ postgres(
 										sourceOperation: "schedule:accept",
 										callId: request.tickId,
 									}),
-								}).accept(job, JSON.parse(request.schedule.inputJson), {
-									idempotencyKey: request.tickId,
-								});
+								}).accept(
+									{ ...job, identity: request.schedule.jobIdentity },
+									JSON.parse(request.schedule.inputJson),
+									{
+										idempotencyKey: request.tickId,
+									},
+								);
 								if (failAfterAcceptance) throw new Error("ACCEPTANCE_ROLLBACK");
 								return receipt;
 							},
@@ -252,7 +272,6 @@ postgres(
 					"questpie-job-schedule-program-v1",
 					freshBytes,
 				);
-				job.identity = "job:rollback";
 				const rollback = owner(artifact([freshProgram]));
 				await rollback.activate({ expectedRevision: "3" });
 				await sql`UPDATE questpie_internal.schedule_frontiers SET frontier_minute = date_trunc('minute', clock_timestamp(), 'UTC') - interval '3 minutes'`;
@@ -311,6 +330,104 @@ postgres(
 						await sql`SELECT count(*)::int AS count FROM questpie_internal.durable_runs`
 					)[0].count,
 				).toBe(2);
+				enteredAcceptance = undefined;
+				acceptanceHold = undefined;
+				const removalProgram = {
+					...program(),
+					jobIdentity: "job:removal-first",
+				};
+				const { programDigest: _removedDigest, ...removalBytes } =
+					removalProgram;
+				removalProgram.programDigest = digest(
+					"questpie-job-schedule-program-v1",
+					removalBytes,
+				);
+				const removalTarget = owner(artifact([removalProgram]));
+				await removalTarget.activate({ expectedRevision: "5" });
+				await sql`UPDATE questpie_internal.schedule_frontiers SET frontier_minute = date_trunc('minute', clock_timestamp(), 'UTC') - interval '1 day'`;
+				const retained = (
+					await sql`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`
+				)[0].frontier_minute;
+				await removalTarget.activate({ expectedRevision: "6" });
+				expect(
+					(
+						await sql`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`
+					)[0].frontier_minute,
+				).toEqual(retained);
+				const removalLocked = Promise.withResolvers<void>();
+				const removalRelease = Promise.withResolvers<void>();
+				const removalRunner: PostgresTransactionRunner = {
+					transaction: (input) =>
+						database!.transaction({
+							...input,
+							use: (transaction) =>
+								input.use({
+									...transaction,
+									execute: async (statement, parameters) => {
+										const result = await transaction.execute(
+											statement,
+											parameters,
+										);
+										if (statement.name === "durable.schedule.head.lock") {
+											removalLocked.resolve();
+											await removalRelease.promise;
+										}
+										return result;
+									},
+								}),
+						}),
+				};
+				const removalFirst = owner(artifact([]), removalRunner).activate({
+					expectedRevision: "7",
+				});
+				await removalLocked.promise;
+				const queuedTick = removalTarget.reconcile();
+				removalRelease.resolve();
+				await removalFirst;
+				expect((await queuedTick).status).toBe("inactive");
+				expect(
+					(
+						await sql`SELECT count(*)::int AS count FROM questpie_internal.durable_runs`
+					)[0].count,
+				).toBe(2);
+				const corruptRunner: PostgresTransactionRunner = {
+					transaction: (input) =>
+						database!.transaction({
+							...input,
+							use: (transaction) =>
+								input.use({
+									...transaction,
+									execute: async (statement, parameters) => {
+										const result = await transaction.execute(
+											statement,
+											parameters,
+										);
+										if (statement.name === "durable.schedule.head.update")
+											throw new Error("ACTIVATION_ROLLBACK");
+										return result;
+									},
+								}),
+						}),
+				};
+				await expect(
+					owner(artifact([removalProgram]), corruptRunner).activate({
+						expectedRevision: "8",
+					}),
+				).rejects.toThrow("ACTIVATION_ROLLBACK");
+				expect(
+					(
+						await sql`SELECT revision::text AS revision FROM questpie_internal.schedule_heads`
+					)[0].revision,
+				).toBe("8");
+				expect(
+					(
+						await sql`SELECT count(*)::int AS count FROM questpie_internal.schedule_frontiers`
+					)[0].count,
+				).toBe(0);
+				await sql`UPDATE questpie_internal.schedule_heads SET revision = 9223372036854775807`;
+				await expect(
+					active.activate({ expectedRevision: "9223372036854775807" }),
+				).rejects.toThrow("SCHEDULE_REVISION_OVERFLOW");
 			} finally {
 				await runtime.close();
 			}

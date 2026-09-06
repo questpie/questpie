@@ -27,6 +27,7 @@ type Compiler = Readonly<{
 	applyCommittedMigrations(
 		input: Readonly<{
 			allowNonRollingProtocolV8?: boolean;
+			allowNonRollingProtocolV9?: boolean;
 			connectionString?: string;
 			migrations: readonly unknown[];
 		}>,
@@ -139,6 +140,9 @@ async function main(): Promise<void> {
 		const result = await api.applyCommittedMigrations({
 			allowNonRollingProtocolV8: cliArguments.includes(
 				"--allow-non-rolling-protocol-v8",
+			),
+			allowNonRollingProtocolV9: cliArguments.includes(
+				"--allow-non-rolling-protocol-v9",
 			),
 			connectionString: databaseUrl(),
 			migrations,
