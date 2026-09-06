@@ -9,6 +9,10 @@ framework-neutral client value. The generated client owns Query identity,
 input validation and encoding, Context partitioning, and Live Query transport.
 A UI adapter only subscribes to that value.
 
+Version availability: This page documents the beta.2 preview. Beta.2 is not
+published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
+released package contract.
+
 ## Observe a generated Query
 
 Create one immutable Context scope and use it for ordinary Query, Mutation, and
@@ -124,7 +128,8 @@ state or prevent peer notification.
 
 ## Use the optional React adapter
 
-Install QUESTPIE with its compatible optional React 19 peer:
+The preview package set uses QUESTPIE with its compatible optional React 19
+peer:
 
 ```sh
 bun add questpie@4.0.0-beta.2 react@^19.2.0

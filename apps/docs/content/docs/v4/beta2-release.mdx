@@ -1,0 +1,73 @@
+---
+title: Review the beta.2 preview inventory
+description: See the exact package, capability, limit, and exclusion boundary prepared for QUESTPIE 4.0.0-beta.2.
+kind: reference
+---
+
+This page is the beta.2 preview. Beta.2 is not published. The
+[frozen beta.1 inventory](/docs/v4/beta1-release) remains the released package
+contract.
+
+## Package inventory
+
+Beta.2 has two npm packages at one exact version. The React adapter is a
+subpath, not a third package.
+
+| Package or subpath                    | Contract                                                               |
+| ------------------------------------- | ---------------------------------------------------------------------- |
+| `questpie@4.0.0-beta.2`               | Compiler, generated contracts and clients, Runtime, and CLI            |
+| `questpie/react`                      | Optional `useQueryResource` adapter with optional React `^19.2.0` peer |
+| `questpie-opentelemetry@4.0.0-beta.2` | Official adapter with exact `questpie@4.0.0-beta.2` peer               |
+
+The package graph contains no scoped compatibility package, forwarding alias,
+or third publishable archive.
+
+## Included capability inventory
+
+| Capability                                                                  | Public contract                                                                                 |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Beta.1 compiler, PostgreSQL, Policy, Mutation, Live Query, and durable core | [Frozen beta.1 inventory](/docs/v4/beta1-release)                                               |
+| Four-phase Collection lifecycle and Operation issue mapping                 | [Queries and Mutations](/docs/v4/queries-and-mutations)                                         |
+| Query, Mutation, Action, Route, Reaction, and Job Definitions               | [Executable application behavior](/docs/v4/executable-definitions)                              |
+| Bounded inverse Relation selection                                          | [Data and structural Queries](/docs/v4/data-and-queries)                                        |
+| Query Resource and optional React adapter                                   | [Reactive Query state](/docs/v4/reactive-query-resources)                                       |
+| Canonical Operation HTTP, shared documentation, and OpenAPI 3.1             | [Operation HTTP and OpenAPI](/docs/v4/operation-http-and-openapi)                               |
+| Stateless MCP Tools projection                                              | [Basic MCP](/docs/v4/basic-mcp)                                                                 |
+| Runtime observation and the official OpenTelemetry adapter                  | [OpenTelemetry](/docs/v4/opentelemetry)                                                         |
+| Ordinary TypeScript discriminated-value helpers                             | [Discriminated values](/docs/v4/reactive-query-resources#model-a-discriminated-reference-value) |
+| Portable QUESTPIE Agent Skill                                               | Framework authoring guidance for the exact beta.2 contract                                      |
+
+Every projection uses the compiler-owned App Contract. Authors do not repeat
+HTTP paths, MCP tool names, schemas, nullability, bounds, results, errors, or
+projection-specific descriptions.
+
+## Fixed limits
+
+| Boundary                                    | Limit                   |
+| ------------------------------------------- | ----------------------- |
+| Inverse child lists per Query               | 1                       |
+| Relation edges per Query                    | 4                       |
+| Inverse child `first`                       | 1 through 50            |
+| Root `first`                                | At most 100             |
+| Materialized root and child positions       | At most 5,050           |
+| Complete Operation or Live result           | 1 MiB (1,048,576 bytes) |
+| Query Resource identities per Context scope | 128                     |
+| Active Live Query watches per Principal     | 64                      |
+| Dependency tokens per Live Query plan       | 256                     |
+
+Policy filters child rows before order and limit. A failed Live Query
+recomputation publishes no partial result and leaves the last successful
+snapshot in place.
+
+## Excluded from beta.2
+
+Beta.2 adds no polymorphic Relation, polymorphic codec, descriptor, registry,
+or Runtime traversal kernel. Heterogeneous values use the ordinary TypeScript
+helpers.
+
+Beta.2 also adds no Workflow Resource, Cron, trigger system, generic browser
+Job control, application-generated skill, broad explain command, or expanded
+OpenTelemetry authority. Job remains the owner of checkpointed durable work.
+
+No new Files, Search, Studio, split Runtime roles, Autopilot, or landing-page
+surface is part of this package release.

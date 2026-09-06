@@ -17,6 +17,7 @@
 		"operation-http-and-openapi",
 		"basic-mcp",
 		"beta1-release",
+		"beta2-release",
 		"runtime-and-studio",
 		"opentelemetry"
 	]

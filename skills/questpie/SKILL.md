@@ -46,7 +46,7 @@ credentials out of source, commands, logs, and generated examples.
 
 ## Beta.2 boundary
 
-Use the released generated contracts instead of parallel wrappers or copied
+Use the installed version's generated contracts instead of parallel wrappers or copied
 schemas. Beta.2 has no Workflow Resource, polymorphic Relation or codec,
 application-generated skill, Files, Search, Studio, split Runtime roles,
 compatibility endpoint, or fallback execution path. Durable checkpointed work

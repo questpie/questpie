@@ -51,15 +51,24 @@ branch reference only for stable cross-task procedure.
 
 ## Acceptance packet secret scan
 
-The stateless acceptance wrapper permits only credential-free
-`postgres://localhost/` or `postgresql://localhost/` test literals, optionally
-with a simple database path or numeric port, and the exact source assignment
-`url.password = process.env.PGPASSWORD`. These describe local configuration;
-they do not place a credential value in the packet. Embedded URL credentials,
-remote hosts, query strings, fragments, fallback values, alternate environment
-variables, and all other credential patterns remain prohibited. Retained diffs
-may contain the equivalent computed-property PGPASSWORD spelling, but authored
-source uses the readable direct property. Synthetic rejection probes are
-masked only on explicitly marked lines in the exact scanner test path; the
-marker has no effect elsewhere. Every allowlist change requires positive
-fixtures and negative controls for real URL credentials and real assignments.
+The stateless acceptance wrapper permits only these credential-free source
+forms, not the values produced when the source runs:
+
+- PostgreSQL localhost URL literals with an optional simple database path or
+  numeric port, without a username, password, query, or fragment.
+- Assignment of process-only PGPASSWORD or a freshly generated UUID to the
+  password property of the local `url` variable. Direct and computed-property
+  spelling are recognized; authored source uses direct property spelling.
+- The exact retained PostgreSQL URL template that combines a role variable
+  with PGHOST, PGPORT (default port 5432), and PGDATABASE, without a password.
+  The scanner recognizes this source form wherever it occurs in packet text;
+  it does not resolve the environment or claim the resulting endpoint is local.
+- Documentation placeholders describing password forwarding without a value.
+
+The executable spellings live in `acceptance-packet-secrets.ts` and its positive
+and negative fixtures. Embedded credentials, literal remote endpoints, URL
+queries/fragments, alternate password environment variables, and password
+fallback expressions remain prohibited. Synthetic rejection probes are masked
+only on marked lines in the exact scanner test path, including retained diff
+context. The marker has no effect in other files. Every allowlist change must
+preserve negative controls for real URL credentials and real assignments.
