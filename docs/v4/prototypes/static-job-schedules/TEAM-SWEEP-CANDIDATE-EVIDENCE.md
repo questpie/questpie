@@ -46,9 +46,12 @@ application shortcut was added.
 
 The structural list definition also initially omitted its ordered timestamp
 from select. Runtime refused that malformed cursor projection; selecting the
-existing order Field fixes the fixture. The compiler validation gap is tracked
-separately at `fixtures/team-support-desk/src/tickets/sla-query.ts`, export
-`dueTickets`; it is not an arbitrary Mutation request.
+existing order Field fixes the fixture. The missing compiler validation is now
+closed in the existing Query normalizer with `QP-DATA-008`, preserving the
+source Origin and Field path. The focused test evaluates real authored source
+before normalization and proves rejection plus the valid selected counterpart.
+The original gap was at `fixtures/team-support-desk/src/tickets/sla-query.ts`,
+export `dueTickets`; it was not an arbitrary Mutation request.
 
 The scheduled Job completes its named Mutation checkpoint, advances the due time,
 and accepts the ordinary follow-up Job in that transaction. Firefox observes the

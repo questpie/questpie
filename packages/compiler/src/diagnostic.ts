@@ -125,7 +125,7 @@ export function orderFieldNotSelected(
 	return new CompilerDiagnosticError(
 		"QP-DATA-008",
 		"orderFieldNotSelected",
-		"an inverse child order Field must be directly and unconditionally selected",
+		"an order Field must be directly selected and eligible for cursor ordering",
 		details,
 	);
 }

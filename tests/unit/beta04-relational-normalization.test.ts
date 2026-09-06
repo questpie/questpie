@@ -215,12 +215,13 @@ describe("BETA-04 relational normalization", () => {
 					},
 				],
 			},
+			...queryInput().select.filter((selection) => selection.kind === "field"),
 		];
 		const template = normalizeDataQueryTemplate(input, {
 			schemaProjectionDigest: "a".repeat(64),
 			dataContractProjectionDigest: "b".repeat(64),
 		});
-		const team = template.select[0];
+		const team = template.select.find((selection) => selection.key === "team");
 		expect(team?.kind).toBe("toOne");
 		if (team?.kind !== "toOne") throw new Error("expected team Relation");
 		const organization = team.select[0];

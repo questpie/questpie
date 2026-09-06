@@ -1,6 +1,7 @@
 import { compareAscii } from "../canonical";
 import {
 	CompilerDiagnosticError,
+	orderFieldNotSelected,
 	unsupportedExpressionCapability,
 } from "../diagnostic";
 import {
@@ -186,6 +187,21 @@ export function normalizeDataQueryTemplate(
 	const select = array(input.select, "Query selection")
 		.map((selection) => normalizeSelection(selection, 0, [], origin))
 		.sort((left, right) => compareAscii(left.key, right.key));
+	const order = cloneJson(
+		array(input.order, "Query order"),
+	) as DataQueryTemplateV1["order"];
+	for (const term of order) {
+		if (
+			!select.some(
+				(selection) =>
+					selection.kind === "field" && selection.field === term.field,
+			)
+		)
+			throw orderFieldNotSelected({
+				path: term.field.slice(term.field.indexOf("/field:") + 7),
+				...(origin ? { origin } : {}),
+			});
+	}
 	const version = select.some(function containsInverse(selection): boolean {
 		return (
 			selection.kind === "inverseList" ||
@@ -202,9 +218,7 @@ export function normalizeDataQueryTemplate(
 		parameters,
 		select,
 		filter: input.filter === null ? null : normalizeFilter(input.filter, false),
-		order: cloneJson(
-			array(input.order, "Query order"),
-		) as DataQueryTemplateV1["order"],
+		order,
 		page: cloneJson(
 			record(input.page, "Query page"),
 		) as DataQueryTemplateV1["page"],
