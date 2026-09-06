@@ -251,6 +251,16 @@ postgres(
 						await sql`SELECT count(*)::int AS count FROM questpie_internal.schedule_ticks`
 					)[0].count,
 				).toBe(1);
+				await sql`UPDATE questpie_internal.schedule_frontiers SET frontier_minute = date_trunc('minute', clock_timestamp(), 'UTC') + interval '1 day'`;
+				const futureFrontier = (
+					await sql`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`
+				)[0].frontier_minute;
+				expect((await active.reconcile()).accepted).toBe(0);
+				expect(
+					(
+						await sql`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`
+					)[0].frontier_minute,
+				).toEqual(futureFrontier);
 				const removed = await empty.activate({ expectedRevision: "1" });
 				expect(removed.acceptedRevision).toBe("2");
 				expect((await active.reconcile()).status).toBe("inactive");

@@ -10,9 +10,11 @@ const admin = new Client({ database: "postgres" });
 await admin.connect();
 let created = false;
 let database: SQL | undefined;
+const previousDatabase = process.env.PGDATABASE;
 try {
 	await admin.query(`CREATE DATABASE "${name}"`);
 	created = true;
+	process.env.PGDATABASE = name;
 	database = new SQL({ database: name, max: 1 });
 	const [env] =
 		await database`SELECT current_database() AS name, current_setting('server_version_num')::int AS version, pg_backend_pid() AS pid`;
@@ -58,6 +60,8 @@ try {
 	console.log("*** End Patch");
 } finally {
 	await database?.close({ timeout: 2 });
+	if (previousDatabase === undefined) delete process.env.PGDATABASE;
+	else process.env.PGDATABASE = previousDatabase;
 	if (created) await admin.query(`DROP DATABASE "${name}"`);
 	await admin.end();
 }
