@@ -93,3 +93,27 @@ command, real worker/restart/checkpoint tracers, and protocol-dependent
 regression gates. The compiler candidate separately tests actual generated
 artifacts through this verifier. Neither focused result substitutes for those
 integrated gates or a formal acceptance PASS.
+
+## Existing worker polling candidate
+
+`schedule/producer.ts` now owns only the existing worker's producer cancellation
+and result projection. It creates no timer, worker, lease, leader, or activation.
+The existing worker must invoke its `poll()` before ordinary claims and invoke
+`beginDrain()` when that worker drains. Runtime root cancellation also aborts
+the producer. Overlapping polls on one worker join the same in-flight producer
+transaction; PostgreSQL remains the cross-instance serialization authority.
+
+The candidate operational `trace.producer` is disjoint from accepted-run
+outcomes: `{ status: "active" | "inactive", accepted, examined }`,
+`{ status: "failed", code: "SCHEDULE_PRODUCER_FAILED" }`, or
+`{ status: "draining" }`. It exposes no original error, Principal, Context,
+input, or SQL. A failed producer does not prevent ordinary accepted-run claims;
+the next normal poll may reconcile again. Draining must stop claims after the
+producer finishes. This is a candidate safe projection pending integrated
+tests and ADR-0043 formal acceptance, not a public authority update.
+
+The fixture hosts already loop over the ordinary worker. `questpie start` needs
+the same existing worker loop; merely exposing manual schedule reconciliation
+does not complete autonomous production. The CLI/compiler agent owns that host
+loop and its join during shutdown. The main candidate owns the worker splice.
+The focused producer lifecycle test passes four tests and twelve assertions.

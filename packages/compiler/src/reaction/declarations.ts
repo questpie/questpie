@@ -158,12 +158,28 @@ export type DurableMaintenanceAuthorization = (request: Readonly<{
 	runId: string;
 }>) => boolean | Promise<boolean>;
 
+export type DurableFailureCode =
+	| "CHECKPOINT_INVALID"
+	| "EFFECT_AMBIGUOUS"
+	| "EFFECT_CONFLICT"
+	| "HANDLER_FAILED"
+	| "REACTION_ERROR"
+	| "RESOURCE_LIMIT"
+	| "RETRY_EXHAUSTED"
+	| "RUN_AS_DENIED"
+	| "VALIDATION_FAILED";
+
+export type StaticScheduleProducerOutcome =
+	| Readonly<{ status: "active" | "inactive"; accepted: number; examined: number }>
+	| Readonly<{ status: "failed"; code: "SCHEDULE_PRODUCER_FAILED" }>
+	| Readonly<{ status: "draining" }>;
+
 export type DurableWorkerOutcome = Readonly<{
 	runId: string;
 	resource: string;
 	attemptNumber: number;
 	outcome: "cancelled" | "failed" | "fenced" | "refusedIncompatible" | "retryScheduled" | "skipped" | "succeeded";
-	failureCode: string | null;
+	failureCode: DurableFailureCode | "EXECUTABLE_RETIRED" | null;
 }>;
 
 export type DurableWorkerTrace = Readonly<{
@@ -173,6 +189,7 @@ export type DurableWorkerTrace = Readonly<{
 	claimed: number;
 	refusedIncompatible: number;
 	outcomes: readonly DurableWorkerOutcome[];
+	producer?: StaticScheduleProducerOutcome;
 }>;
 
 export type DurableRunView = Readonly<{
@@ -185,7 +202,7 @@ export type DurableRunView = Readonly<{
 	currentAttemptId: string | null;
 	cancellationRequested: boolean;
 	deadLetter: boolean;
-	failureCode: string | null;
+	failureCode: DurableFailureCode | null;
 	resultBytes: Uint8Array | null;
 	availableAt: Date;
 	terminalAt: Date | null;
@@ -196,7 +213,7 @@ export type DurableRunEventView = Readonly<{
 	kind: string;
 	attemptId: string | null;
 	leaseTokenDigest: string | null;
-	errorCode: string | null;
+	errorCode: DurableFailureCode | null;
 }>;
 
 export type DurableEffectView = Readonly<{
