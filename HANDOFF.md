@@ -846,8 +846,10 @@ checkpoint needed by a minute sweep, tracked in #365 and
 keeps dynamic schedules as application-owned data, not framework schedule CRUD.
 The human also selected one catch-up run after downtime, rather than replaying
 every missed minute; preserve already accepted runs and their independent retries.
-ADR-0016/0017/0026 own the accepted direction; the unresolved producer,
-calendar, activation/removal, and checkpoint contracts need focused proof.
+ADR-0016/0017/0026 own the accepted direction. Proposed ADR-0043 now records the
+candidate producer, UTC calendar, explicit revision-fenced activation/removal,
+and minimum Mutation checkpoint contract. It still needs focused proof and
+formal acceptance; no production schedule or checkpoint implementation exists.
 
 The behavior-preserving DX cleanup #360 through #363 is complete. The preserved
 pre-schedule candidate `863120698` has final `quality:release` PASS and a valid

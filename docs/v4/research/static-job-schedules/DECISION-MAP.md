@@ -7,6 +7,7 @@ input, not Accepted authority or a shipping claim.
 - Owner request: static schedules attached to Jobs. Dynamic schedules remain
   application-owned rows processed by a minute sweep; no framework schedule CRUD.
 - Tracker: #365. Aggregate beta.2 acceptance #364 is blocked by this work.
+- Candidate: [Proposed ADR-0043](../../../adr/0043-freeze-static-job-schedules-and-mutation-checkpoints.md).
 - Baseline: the pre-schedule beta.2 candidate remains preserved in Git. Its
   manifest excludes Cron and must not be reviewed as evidence for this extension.
 
@@ -70,12 +71,23 @@ Proof must cover invalid Context/input, revoked service authority, tenant
 mismatch, fresh attempt authorization, and failure before durable acceptance.
 Exact member spelling and omission rules remain candidate work.
 
+The shown `schedule: { cron, execution, input }` and
+`ctx.run.step.mutation(name, reference, input)` direction received the owner's
+go-ahead. ADR-0043 records that shape without claiming generated declarations
+or an executable schedule/checkpoint path exists today.
+
 ### 2. Calendar and missed ticks
 
 Primary-source research is in [CRON-SEMANTICS.md](./CRON-SEMANTICS.md).
 The smallest candidates are a numeric five-field cron with steps evaluated in
 UTC only, or the same grammar with PostgreSQL-owned named-zone resolution.
 Importing an entire third-party scheduler or its broader dialect is not needed.
+
+ADR-0043 selects UTC-only for the first proof candidate. The minute sweep needs
+no civil-time conversion, so named-zone resolution remains an additive later
+decision rather than a hidden dependency of this release. It also selects
+canonical complete-day-field validation rather than implicit DOM/DOW OR.
+These are candidate choices to falsify, not claims of accepted cron behavior.
 
 The named-zone candidate must pin DOM/DOW matching, DST gaps/folds, zone-name
 validation, database time, and what a database tzdb update means for future
@@ -109,6 +121,16 @@ a schedule edit can unnecessarily strand already accepted runs. Decide logical
 tick uniqueness separately from generation fencing. Including or excluding a
 configuration digest alone is not a proof against duplicate transition ticks.
 
+The candidate now uses one explicit deployment activation with a mandatory
+expected monotonic revision. Content digests may repeat on rollback; revisions
+must not. Automatic request identity derives from application, expected
+revision, and target content, so authors need no extra activation key. Exact
+receipt replay never changes the current head. Runtime boot stays read-only;
+producer/removal ordering shares the activation lock. Unchanged program
+frontiers survive, changed/new programs start after activation, and logical
+tick uniqueness excludes the generation. Independent review exposed the
+A-to-B-to-A stale-deployment case that a content-digest CAS would miss.
+
 ### 4. The smallest useful sweep
 
 Use ADR-0026's Accepted named-Mutation checkpoint, to be implemented by EB-06.
@@ -122,6 +144,13 @@ This dependency does not require Action checkpoints, signals, durable sleep,
 child Jobs, compensation, or a general workflow vertical. The exact generated
 command-reference spelling and current receipt/retention compatibility must be
 proved rather than copied from the old compile-only prototype.
+
+The source audit confirms Mutation receipts have no expiry/pruner today.
+Checkpoint recovery should reuse that receipt, not copy a second result ledger.
+ADR-0043 explicitly preserves revoked-after-commit denial: the write remains
+committed even if a later attempt cannot recover/disclose its result. The
+proposed history cap and all remaining byte/work/time bounds still require
+executable proof; the 100-Job acceptance cap is not a checkpoint limit.
 
 ## Review reconciliation
 
