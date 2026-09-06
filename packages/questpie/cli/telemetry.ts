@@ -109,6 +109,7 @@ export function createStartShutdown(
 	input: Readonly<{
 		application: Closeable;
 		stopIngress(): void;
+		stopWorker?(): Promise<void>;
 		telemetry: LoadedTelemetry | null;
 	}>,
 ): () => Promise<void> {
@@ -123,6 +124,13 @@ export function createStartShutdown(
 				failed = true;
 				failure = error;
 			}
+			// Drain synchronously, but let application.close start cancellation before joining.
+			const workerClosing = (async () => {
+				await input.stopWorker?.();
+			})().then(
+				() => ({ ok: true as const }),
+				(error: unknown) => ({ ok: false as const, error }),
+			);
 			try {
 				await input.application.close();
 			} catch (error) {
@@ -130,6 +138,11 @@ export function createStartShutdown(
 					failed = true;
 					failure = error;
 				}
+			}
+			const workerResult = await workerClosing;
+			if (!workerResult.ok && !failed) {
+				failed = true;
+				failure = workerResult.error;
 			}
 			try {
 				await input.telemetry?.close();

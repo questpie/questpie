@@ -13,6 +13,8 @@ import { join, resolve } from "node:path";
 
 import { Client } from "pg";
 
+import { waitForOutputLine } from "../../../packages/testkit/src";
+
 const repository = resolve(import.meta.dir, "../../..");
 const postgres = process.env.PGHOST ? test : test.skip;
 
@@ -124,6 +126,47 @@ export const cliSweep=defineJob({name:"cli.sweep",input:codec.object({}),output:
 				[cli, "migration", "apply", "--allow-non-rolling-protocol-v9"],
 				consumer,
 			);
+			await ok([cli, "seed", "apply"], consumer);
+			// Only the CLI host polls. The second generated application accepts and inspects.
+			await writeFile(
+				join(consumer, "worker-probe.ts"),
+				`import {principal} from "questpie";
+import {createApplication} from "./.questpie/generated/internal/application.js";
+const app=await createApplication({postgres:{connectionUrl:process.env.DATABASE_URL,directConnectionUrl:process.env.DATABASE_URL},realtime:{hmacKey:new Uint8Array(32)},maintenance:{authorize:()=>false}});
+try {
+const receipt=await app.execution({principal:principal.user({id:"018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4"}),context:{companyId:"018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0"}},({jobs})=>jobs.reports.companyDigest.accept({companyId:"018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0"},{idempotencyKey:"cli-worker-proof"}));
+const deadline=Date.now()+10000;
+for(;;){const view=await app.durable.inspect(receipt.runId);if(view?.state==="succeeded"){console.log("CLI_WORKER_SUCCEEDED");break;}if(Date.now()>=deadline)throw new Error("CLI_WORKER_DID_NOT_POLL");await Bun.sleep(100);}
+} finally {await app.close();}
+`,
+			);
+			const host = Bun.spawn([cli, "start", "--port", "0"], {
+				cwd: consumer,
+				env: {
+					...process.env,
+					DATABASE_URL: url.href,
+					QUESTPIE_REALTIME_HMAC_KEY: "a".repeat(64),
+				},
+				stdout: "pipe",
+				stderr: "pipe",
+			});
+			try {
+				await waitForOutputLine(host.stdout, {
+					accept: (line) => line.includes("questpie: listening on"),
+					timeoutMilliseconds: 30000,
+				});
+				expect(await ok(["bun", "worker-probe.ts"], consumer)).toContain(
+					"CLI_WORKER_SUCCEEDED",
+				);
+				host.kill("SIGTERM");
+				expect(await host.exited).toBe(0);
+			} finally {
+				if (host.exitCode === null) {
+					host.kill("SIGKILL");
+					await host.exited;
+				}
+			}
+			// Starting an ordinary worker did not activate the schedule: revision is still zero.
 			const receipt = JSON.parse(await ok(command, consumer));
 			expect(receipt.acceptedRevision).toBe("1");
 			expect(receipt.replayed).toBe(false);

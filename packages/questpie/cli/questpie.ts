@@ -22,6 +22,7 @@ import {
 	loadOpenTelemetry,
 	requestedTelemetry,
 } from "./telemetry";
+import { startDurableWorkerPolling, type CliDurableWorker } from "./worker";
 
 type Compiler = Readonly<{
 	compileApplication(
@@ -51,6 +52,7 @@ type Compiler = Readonly<{
 type GeneratedApplication = Readonly<{
 	fetch(request: Request): Promise<Response>;
 	close(): Promise<void>;
+	durable: Readonly<{ worker(): CliDurableWorker }>;
 }>;
 
 type GeneratedInternal = Readonly<{
@@ -221,7 +223,12 @@ async function main(): Promise<void> {
 				? await createApplication()
 				: await createTelemetryApplication(telemetry, createApplication);
 		let server: ReturnType<typeof Bun.serve>;
+		let polling: ReturnType<typeof startDurableWorkerPolling> | undefined;
+		const stopWorker = async () => {
+			await polling?.stop(Date.now() + 30_000);
+		};
 		try {
+			polling = startDurableWorkerPolling(application.durable.worker());
 			server = Bun.serve({
 				port,
 				fetch: (request) =>
@@ -237,6 +244,7 @@ async function main(): Promise<void> {
 				await createStartShutdown({
 					application,
 					stopIngress: () => undefined,
+					stopWorker,
 					telemetry,
 				})();
 			} catch {
@@ -247,6 +255,7 @@ async function main(): Promise<void> {
 		const shutdown = createStartShutdown({
 			application,
 			stopIngress: () => server.stop(false),
+			stopWorker,
 			telemetry,
 		});
 		const close = () => {
