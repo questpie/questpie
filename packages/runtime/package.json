@@ -6,6 +6,7 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./codec": "./src/codec/index.ts",
+		"./durable-schedule-contract": "./src/durable/schedule/contract.ts",
 		"./operation": "./src/operation/index.ts",
 		"./bundle-core": "./src/bundle-core.ts",
 		"./bundle-core-types": "./src/bundle-core-types.d.ts",
