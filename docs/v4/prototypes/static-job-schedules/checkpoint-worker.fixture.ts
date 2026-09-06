@@ -49,6 +49,15 @@ export const companyDigest = defineJob({
 			channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
 			body: input.restartProbe ?? "checkpoint-worker",
 		};
+		if (input.restartProbe?.startsWith("non-text-name")) {
+			// Deliberately untyped JavaScript ingress; generated callers require text.
+			await Reflect.apply(ctx.run.step.mutation, undefined, [
+				12,
+				ctx.mutations.message.publish,
+				command,
+			]).catch(() => undefined);
+			return result();
+		}
 		if (input.restartProbe?.startsWith("forged")) {
 			await ctx.run.step
 				.mutation("publish", { ...ctx.mutations.message.publish }, command)

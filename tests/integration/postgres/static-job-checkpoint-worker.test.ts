@@ -236,6 +236,7 @@ postgresTest(
 				expect(writes.count).toBe(1);
 			}
 			for (const mode of [
+				"non-text-name",
 				"forged",
 				"unawaited",
 				"concurrent",
@@ -265,6 +266,11 @@ postgresTest(
 				expect(writes.count).toBe(
 					mode === "duplicate" || mode === "captured" ? 1 : 0,
 				);
+				if (mode === "non-text-name") {
+					const [history] =
+						await database`SELECT count(*)::integer AS count FROM questpie_internal.mutation_checkpoints WHERE run_id = ${hostile.runId}`;
+					expect(history.count).toBe(0);
+				}
 			}
 			const activate = async () => {
 				const child = Bun.spawn(

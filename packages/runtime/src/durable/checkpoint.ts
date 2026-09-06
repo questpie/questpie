@@ -77,7 +77,11 @@ export async function createMutationCheckpointRun(
 		signal: options.signal,
 		capture(raw) {
 			const binding = bindings.get(raw.reference);
-			if (!binding || !/^[A-Za-z0-9_-]{1,64}$/u.test(raw.name))
+			if (
+				!binding ||
+				typeof raw.name !== "string" ||
+				!/^[A-Za-z0-9_-]{1,64}$/u.test(raw.name)
+			)
 				throw new DurableCheckpointError();
 			let input: unknown;
 			try {

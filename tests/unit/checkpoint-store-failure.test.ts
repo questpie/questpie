@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { createMutationCheckpointRun } from "../../packages/runtime/src/durable/checkpoint";
 import { DurableCheckpointError } from "../../packages/runtime/src/durable/checkpoint-contract";
 import { createPostgresMutationCheckpointStore } from "../../packages/runtime/src/durable/checkpoint-postgres";
 import type { DurableClaim } from "../../packages/runtime/src/durable/rows";
@@ -106,4 +107,68 @@ test("checkpoint reads preserve database failure identity outside their stored-r
 	}
 	const cancelled = new DOMException("cancelled", "AbortError");
 	await expect(loadFailure(cancelled)).rejects.toBe(cancelled);
+});
+
+test("checkpoint ingress rejects non-text names and primitive references without coercion or reservation", async () => {
+	let coercions = 0;
+	for (const invalid of [
+		...[
+			12,
+			null,
+			undefined,
+			true,
+			["publish"],
+			{
+				toString() {
+					coercions++;
+					return "publish";
+				},
+			},
+		].map((name) => ({ name })),
+		...[null, undefined, 12, "publish", true, Symbol("reference")].map(
+			(reference) => ({ reference }),
+		),
+	]) {
+		let reservations = 0;
+		const run = await createMutationCheckpointRun({
+			claim,
+			signal: new AbortController().signal,
+			bindings: [
+				{
+					identity: "mutation:publish",
+					input: { kind: "object", properties: {} },
+					output: { kind: "object", properties: {} },
+					contractDigest: "a".repeat(64),
+					runtimeGraphDigest: "b".repeat(64),
+				},
+			],
+			store: {
+				async load() {
+					return 0;
+				},
+				async reserve() {
+					reservations++;
+					throw new Error("unexpected reservation");
+				},
+				async complete() {
+					throw new Error("unexpected completion");
+				},
+			},
+			async invoke() {
+				throw new Error("unexpected Mutation dispatch");
+			},
+		});
+		const failure = await Reflect.apply(run.step.mutation, undefined, [
+			"name" in invalid ? invalid.name : "publish",
+			"reference" in invalid
+				? invalid.reference
+				: run.reference("mutation:publish"),
+			{},
+		]).catch((error: unknown) => error);
+		expect(failure).toBeInstanceOf(DurableCheckpointError);
+		expect(failure).toMatchObject({ code: "CHECKPOINT_INVALID" });
+		await expect(run.finish()).rejects.toBe(failure);
+		expect(reservations).toBe(0);
+	}
+	expect(coercions).toBe(0);
 });
