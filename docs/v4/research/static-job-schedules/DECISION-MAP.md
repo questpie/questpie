@@ -152,13 +152,13 @@ committed even if a later attempt cannot recover/disclose its result. The
 proposed history cap and all remaining byte/work/time bounds still require
 executable proof; the 100-Job acceptance cap is not a checkpoint limit.
 
-The next compiler/worker blocker is recorded in
-[EXECUTABLE-PINNING.md](./EXECUTABLE-PINNING.md): current durable acceptance and
-claim use a contract digest as the executable digest. A body-only change can
-preserve that value. First falsify a conservative pin to the already stored,
-verified Runtime Build and the Accepted retained-build operation; do not assume
-a new historical-handler loader or strip schedule text out of source hashes.
-This is an existing Accepted-guarantee repair, not another lifecycle decision.
+The compiler/worker prerequisite is repaired and documented in
+[EXECUTABLE-PINNING.md](./EXECUTABLE-PINNING.md). A real two-build PostgreSQL test
+first reproduced a new handler executing an old run with an unchanged contract
+digest. Workers now filter admission and recheck locked claims against their
+verified Runtime Build. Retained builds execute their own Jobs and Reactions;
+there is no historical-handler loader or schedule-text exclusion from source
+hashes. This restores an Accepted guarantee, not a new lifecycle decision.
 
 ## Review reconciliation
 
@@ -175,6 +175,22 @@ warnings were retained; these suggestions are not adopted:
 
 ## Delivery order
 
+The current proof frontier is below. A passing model does not accept ADR-0043
+or count as a shipped schedule/checkpoint capability.
+
+| Obligation | Current evidence | Remaining |
+| --- | --- | --- |
+| Executable pinning | Real two-build Job/Reaction regression and repair; PostgreSQL/Firefox, release gates and two dry-runs pass | Schedule catalog and retirement integration |
+| Activation/removal | PostgreSQL synthetic model: ten contenders, CAS/replay, ABA, both lock orders and rollback | Verified catalog and real Job acceptance in the same owner |
+| UTC latest-only calendar | Standalone parser/search plus PostgreSQL SELECT-only oracle; combined activation/calendar suite passes 28 tests / 110 assertions | Compiler diagnostics/cross-pins and clock capture within tick transaction |
+| Mutation checkpoint | Existing receipt/lease seams under focused integration proof | Commit/completion crash, stale lease, revoked disclosure, ordered history and bounds |
+| Generated authoring | Compiler seams under audit | Exact schedule input and non-callable Mutation reference types; hostile artifact proof |
+| Acceptance and delivery | ADR-0043 and ADR-0039 remain Proposed | Complete deterministic proof, formal PASS, projection, tickets and production tracers |
+
+Next, prove the Mutation commit/result crash boundary with the existing
+executor and receipt. Then connect verified authoring/artifacts and real tick
+acceptance. Do not submit the pre-schedule beta.2 manifest.
+
 1. Close the focused decisions in #365 and write an additive Proposed ADR.
 2. Build compiler/type and PostgreSQL falsification, including ten-instance
    races and the named-Mutation commit/result crash window.
@@ -185,5 +201,7 @@ warnings were retained; these suggestions are not adopted:
 5. Implement test-first, prove Team Support Desk and Collaboration, then revise
    the beta.2 release scope and bind a fresh aggregate acceptance candidate.
 
-No source implementation, dependency installation, public schedule API, product
-authority projection, push, tag, publication, or deployment occurs in this audit.
+The initial audit made no implementation or authority changes. Current proof
+work remains separate from product acceptance; no public schedule API,
+dependency installation, authority projection, push, tag, publication, or
+deployment is implied by the evidence above.
