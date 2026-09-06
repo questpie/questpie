@@ -840,6 +840,16 @@ byte-identical release dry-runs pass.
 
 ## Immediate continuation
 
+The active beta.2 closure is tracked in GitHub issues #360 through #364 and
+`docs/v4/implementation/beta2-closure/SPEC.md`. The human confirmed a
+behavior-preserving cleanup: shared strict JSON parsing, neutral Operation
+projection ownership, shared carrier encoding/classification, and truthful
+documentation/proof staging. These repairs do not reopen any accepted DX
+decision. Preserve in-progress closure changes and finish their exact-head
+verification before requesting acceptance. ADR-0039 remains Proposed. The
+human authorized Fable 5.1 for this release review; preserve its explicit
+provenance rather than labeling it as the historical Opus reviewer.
+
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status. ADR-0030 provenance/trusted values and ADR-0031 lifecycle/issue
    mapping are closed; do not recreate their proof, re-grill settled lifecycle
