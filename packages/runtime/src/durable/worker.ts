@@ -3,8 +3,8 @@ import {
 	encodeRuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
-import { MutationReceiptUnavailable } from "../mutation";
 import { canonicalMutationBytes } from "../mutation/canonical";
+import { MutationReceiptUnavailable } from "../mutation/contract";
 import type { NeutralTraceContextV1 } from "../observation";
 import { DeclaredOperationError } from "../operation";
 import { DurableCheckpointError } from "./checkpoint-contract";

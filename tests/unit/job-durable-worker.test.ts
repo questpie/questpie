@@ -18,11 +18,13 @@ import {
 	type DurableAttemptExecution,
 	type DurableWorkAttemptRequest,
 } from "../../packages/runtime/src/durable/worker";
+import { MutationReceiptUnavailable } from "../../packages/runtime/src/mutation/contract";
 import {
 	createObservationKernel,
 	type ExecutionEventV2,
 	type ObservationAdapterV1,
 } from "../../packages/runtime/src/observation";
+import { normalizeOperationError } from "../../packages/runtime/src/operation";
 import {
 	transactionBrand,
 	type PostgresStatement,
@@ -443,6 +445,39 @@ test("settles a declared Job error permanently through the shared failure vocabu
 		failureCode: "REACTION_ERROR",
 	});
 	expect(state.failed).toEqual(["REACTION_ERROR"]);
+});
+
+test("settles a normalized missing Mutation receipt permanently through the contract seam", async () => {
+	const claimed = claim({
+		resource: "job:reports.companyDigest",
+		executableDigest: digest("b"),
+		semanticVersion: 2,
+		payload: { companyId: "company:one" },
+	});
+	const state = kernelFor(claimed, {
+		status: "applied",
+		state: "failed",
+		deadLetter: true,
+	});
+	const failure = new MutationReceiptUnavailable();
+	expect(normalizeOperationError(failure)).toBe(failure);
+	expect(Object.keys(failure).sort()).toEqual(["code", "retryable"]);
+	const worker = createDurableWorker({
+		attemptExecution,
+		kernel: state.kernel,
+		ledger: unusedLedger,
+		reactions,
+		jobs,
+		execute: async () => {
+			throw normalizeOperationError(failure);
+		},
+	});
+	expect((await worker.poll()).outcomes[0]).toMatchObject({
+		outcome: "failed",
+		failureCode: "CHECKPOINT_INVALID",
+	});
+	expect(state.failed).toEqual(["CHECKPOINT_INVALID"]);
+	expect(state.succeeded).toEqual([]);
 });
 
 test("refuses an incompatible Job before claim", async () => {

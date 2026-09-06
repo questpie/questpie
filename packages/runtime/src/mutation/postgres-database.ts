@@ -32,6 +32,7 @@ import {
 import { createCollectionMutationData } from "./collection";
 import { createDefaultCollectionExecutionBudget } from "./collection-budget";
 import { budgetPostgresTransaction } from "./collection-budget-postgres";
+import { MutationReceiptUnavailable } from "./contract";
 import { createDurableDispatch } from "./dispatch";
 import type { MutationInvoker } from "./index";
 import { createCollectionLifecycleDoom } from "./lifecycle";
@@ -44,7 +45,6 @@ import type {
 import type { LinkedCollectionMutationProgramsV1 } from "./program";
 import {
 	assertRequiredMutationReceipt,
-	MutationReceiptUnavailable,
 	requiredMutationReceipt,
 } from "./required-receipt";
 

@@ -1,18 +1,12 @@
-import { isPostgresTransactionId, OperationFailure } from "../operation";
+import { isPostgresTransactionId } from "../operation";
 import { mutationDigest } from "./canonical";
+import { MutationReceiptUnavailable } from "./contract";
 
 const requiredReceipt = Symbol("requiredMutationReceipt");
 type ReceiptExpectation = Readonly<{
 	transactionId: string;
 	resultDigest: string;
 }>;
-
-/** Private checkpoint failure; ordinary Operation normalization keeps its identity. */
-export class MutationReceiptUnavailable extends OperationFailure {
-	constructor() {
-		super("INTERNAL");
-	}
-}
 
 /** Preserve this private expectation across generated call-option spreads. */
 export function withRequiredMutationReceipt<Options extends object>(
