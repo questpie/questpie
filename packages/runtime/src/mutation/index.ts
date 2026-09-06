@@ -21,6 +21,10 @@ export {
 export { linkJobProjection, linkReactionProjection } from "../durable";
 export type { LinkedReactionProjection } from "../durable";
 export { createPostgresDatabaseMutationInvoker } from "./postgres-database";
+export {
+	MutationReceiptUnavailable,
+	withRequiredMutationReceipt,
+} from "./required-receipt";
 export { createPostgresJobAcceptanceTransaction } from "./postgres-job-acceptance";
 export { linkCollectionMutationPrograms } from "./program";
 export {

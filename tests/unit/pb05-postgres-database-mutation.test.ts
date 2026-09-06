@@ -13,6 +13,14 @@ import type {
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresMutationTransactionStatements,
 } from "../../packages/runtime/src/mutation";
+import {
+	MutationReceiptUnavailable,
+	withRequiredMutationReceipt,
+} from "../../packages/runtime/src/mutation";
+import {
+	canonicalMutationBytes,
+	mutationDigest,
+} from "../../packages/runtime/src/mutation/canonical";
 import { isCollectionLifecycleIssue } from "../../packages/runtime/src/mutation/lifecycle";
 import { createPostgresDatabaseMutationInvoker } from "../../packages/runtime/src/mutation/postgres-database";
 import {
@@ -24,6 +32,7 @@ import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
 	OperationFailure,
+	normalizeOperationError,
 	type PreparedOperation,
 } from "../../packages/runtime/src/operation";
 import {
@@ -1579,6 +1588,175 @@ test("wraps only a caller-resolvable commit outcome after learning the xid", asy
 						{ kind: "transaction", outcome: "framework_error" },
 					],
 		);
+	}
+});
+
+test("required receipt recovery cannot bypass Mutation admission or input validation", async () => {
+	let transactions = 0;
+	const database: PostgresTransactionRunner = {
+		async transaction() {
+			transactions += 1;
+			throw new Error("must not read receipts");
+		},
+	};
+	const invoke = createPostgresDatabaseMutationInvoker<View>({
+		database,
+		application: "application:generic",
+		transactionStatements: fixedStatements(),
+		collectionPlans,
+		reactions: emptyReactions,
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
+		facts,
+	});
+	const options = withRequiredMutationReceipt(
+		{},
+		{
+			transactionId: "904",
+			resultDigest: "a".repeat(64),
+		},
+	);
+	await expect(
+		invoke({ ...operation, admission: "system" }, "required-denied", options),
+	).rejects.toMatchObject({ code: "forbidden" });
+	await expect(
+		invoke(
+			{ ...operation, inputCodec: { kind: "uuid" }, input: "invalid" },
+			"required-invalid",
+			options,
+		),
+	).rejects.toThrow();
+	expect(transactions).toBe(0);
+});
+
+test("required completed receipts replay or fail before claim and handler work", async () => {
+	const resultBytes = canonicalMutationBytes({ id: widgetId });
+	const valid = {
+		inputDigest: mutationDigest(canonicalMutationBytes({})),
+		outcome: "committed",
+		resultBytes,
+		transactionId: "904",
+	};
+	const invalidResult = new QuestpiePostgresError({
+		code: "invalidResult",
+		phase: "statement",
+		retry: "never",
+	});
+	const unavailableDatabase = new QuestpiePostgresError({
+		code: "connectionLost",
+		phase: "statement",
+		retry: "never",
+	});
+	for (const scenario of [
+		{ name: "valid", rows: [valid] },
+		{ name: "missing", rows: [] },
+		{ name: "uncommitted", rows: [{ ...valid, outcome: "pending" }] },
+		{
+			name: "different input",
+			rows: [{ ...valid, inputDigest: "a".repeat(64) }],
+		},
+		{
+			name: "different transaction",
+			rows: [{ ...valid, transactionId: "905" }],
+		},
+		{
+			name: "changed bytes",
+			rows: [
+				{ ...valid, resultBytes: canonicalMutationBytes({ id: tenantId }) },
+			],
+		},
+		{ name: "missing bytes", rows: [{ ...valid, resultBytes: null }] },
+		{
+			name: "invalid JSON",
+			rows: [{ ...valid, resultBytes: new TextEncoder().encode("{") }],
+			pinActualBytes: true,
+		},
+		{
+			name: "invalid output",
+			rows: [
+				{ ...valid, resultBytes: canonicalMutationBytes({ id: "invalid" }) },
+			],
+			pinActualBytes: true,
+		},
+		{ name: "decoded row refusal", rows: [], error: invalidResult },
+		{ name: "database unavailable", rows: [], error: unavailableDatabase },
+	]) {
+		const linked = fixedStatements();
+		const calls: string[] = [];
+		let handlerCalls = 0;
+		const database: PostgresTransactionRunner = {
+			transaction: (input) =>
+				input.use({
+					[transactionBrand]: true,
+					async execute(candidate) {
+						calls.push(candidate.name);
+						if (candidate === linked.get("mutation.receipt.read")?.statement) {
+							if (scenario.error) throw scenario.error;
+							return scenario.rows as never;
+						}
+						if (candidate === linked.get("mutation.receipt.claim")?.statement)
+							return [{ transactionId: "999", operationTime }] as never;
+						return [] as never;
+					},
+				}),
+		};
+		const invoke = createPostgresDatabaseMutationInvoker<View>({
+			database,
+			application: "application:generic",
+			transactionStatements: linked,
+			collectionPlans,
+			reactions: emptyReactions,
+			contextInputCodec: { kind: "object", properties: {} },
+			runtimeBuildDigest: "d".repeat(64),
+			facts,
+		});
+		const replayOperation = {
+			...operation,
+			binding: {
+				...operation.binding,
+				execute: async () => {
+					handlerCalls += 1;
+					return { id: widgetId };
+				},
+			},
+		};
+		const required = {
+			transactionId: "904",
+			resultDigest: mutationDigest(
+				scenario.pinActualBytes
+					? (scenario.rows[0]!.resultBytes as Uint8Array)
+					: resultBytes,
+			),
+		};
+		// Existing direct invocation layers spread options; the private carrier
+		// must survive those copies and detach the caller's expectation.
+		const options = { ...withRequiredMutationReceipt({}, required) };
+		required.transactionId = "999";
+		if (scenario.name === "valid") {
+			await expect(
+				invoke(replayOperation, "required-replay", options),
+			).resolves.toEqual({
+				committed: true,
+				transactionId: "904",
+				value: { id: widgetId },
+			});
+		} else {
+			const error = await invoke(
+				replayOperation,
+				"required-replay",
+				options,
+			).catch((error: unknown) => error);
+			if (scenario.error === unavailableDatabase)
+				expect(error).toBe(unavailableDatabase);
+			else {
+				expect(error).toBeInstanceOf(MutationReceiptUnavailable);
+				expect(error).toMatchObject({ code: "INTERNAL", retryable: false });
+				expect(normalizeOperationError(error) === error).toBe(true);
+				expect(JSON.stringify(error)).not.toContain("904");
+			}
+		}
+		expect(calls).toEqual(["mutation.receipt.read"]);
+		expect(handlerCalls).toBe(0);
 	}
 });
 

@@ -42,6 +42,11 @@ import type {
 	LinkedPostgresMutationTransactionStatements,
 } from "./postgres-transaction-statements";
 import type { LinkedCollectionMutationProgramsV1 } from "./program";
+import {
+	assertRequiredMutationReceipt,
+	MutationReceiptUnavailable,
+	requiredMutationReceipt,
+} from "./required-receipt";
 
 const fixedIdentities = [
 	"mutation.dispatch.accept",
@@ -232,6 +237,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 		if (inputBytes.byteLength > 1_048_576)
 			throw new TypeError("Mutation input exceeds its byte limit");
 		const inputDigest = mutationDigest(inputBytes);
+		const requiredReceipt = requiredMutationReceipt(options);
 		const signals = [input.facts.signal, options?.signal].filter(
 			(signal): signal is AbortSignal => signal !== undefined,
 		);
@@ -288,32 +294,55 @@ export function createPostgresDatabaseMutationInvoker<View>(
 							facts.principal.id,
 							callId,
 						] as const;
-						const owners = await transaction.execute(
-							statements["mutation.receipt.claim"].statement,
-							[...scope, inputDigest],
-						);
+						const owners = requiredReceipt
+							? []
+							: await transaction.execute(
+									statements["mutation.receipt.claim"].statement,
+									[...scope, inputDigest],
+								);
 						if (owners.length === 0) {
-							const receipts = await transaction.execute(
-								statements["mutation.receipt.read"].statement,
-								scope,
-							);
+							const receipts = await transaction
+								.execute(statements["mutation.receipt.read"].statement, scope)
+								.catch((error: unknown) => {
+									// The fixed reader rejects absent or malformed rows itself.
+									if (
+										requiredReceipt &&
+										error instanceof QuestpiePostgresError &&
+										error.code === "invalidResult"
+									)
+										throw new MutationReceiptUnavailable();
+									throw error;
+								});
 							const receipt = receipts[0];
-							if (!receipt || receipt.outcome !== "committed")
+							if (!receipt || receipt.outcome !== "committed") {
+								if (requiredReceipt) throw new MutationReceiptUnavailable();
 								throw new TypeError(
 									"Mutation receipt is unavailable after conflict",
 								);
-							if (receipt.inputDigest !== inputDigest)
+							}
+							if (receipt.inputDigest !== inputDigest) {
+								if (requiredReceipt) throw new MutationReceiptUnavailable();
 								throw new DeclaredOperationError("IDEMPOTENCY_CONFLICT", 409, {
 									callId,
 								});
-							transactionId = transactionIdentity(receipt.transactionId);
+							}
+							let value: unknown;
+							try {
+								if (requiredReceipt)
+									assertRequiredMutationReceipt(requiredReceipt, receipt);
+								transactionId = transactionIdentity(receipt.transactionId);
+								value = replayResult(operation, receipt.resultBytes);
+							} catch (error) {
+								if (requiredReceipt) throw new MutationReceiptUnavailable();
+								throw error;
+							}
 							options?.observation?.mutation.event({
 								kind: "receipt.replayed",
 							});
 							return Object.freeze({
 								committed: true as const,
 								transactionId,
-								value: replayResult(operation, receipt.resultBytes),
+								value,
 							});
 						}
 						const owner = owners[0]!;
