@@ -115,6 +115,7 @@ export function controlledEvaluationFailure(
 		"QP-COMPOSE-013",
 		"structuralTypeError",
 		"controlled child evaluation failed",
+		details,
 	);
 }
 

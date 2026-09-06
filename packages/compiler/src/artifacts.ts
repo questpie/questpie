@@ -15,6 +15,7 @@ import {
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
 import { projectOperationProjection } from "./http";
+import { projectJobSchedules } from "./job";
 import {
 	bindCollectionLifecyclePrograms,
 	projectCollectionLifecyclePrograms,
@@ -558,6 +559,14 @@ export async function createArtifacts(
 	if (runtime.jobs.jobs.length > 0) {
 		generated["job-projection.json"] = canonicalBytes(runtime.jobs);
 	}
+	generated["job-schedules.json"] = canonicalBytes(
+		projectJobSchedules({
+			application: `application:${input.configuration.application.name}`,
+			compilerRuntimeBuildDigest: compilerRuntimeBuild,
+			jobProjectionDigest: runtime.jobDigest,
+			resources: input.resources,
+		}),
+	);
 	if (runtime.reactions.reactions.length > 0 || runtime.jobs.jobs.length > 0) {
 		generated["durable-kernel.json"] = canonicalBytes(runtime.durableKernel);
 	}

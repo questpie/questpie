@@ -109,6 +109,39 @@ function valueImportNames(node: ts.ImportDeclaration): string[] {
 	return names;
 }
 
+function isStaticScheduleDate(node: ts.NewExpression): boolean {
+	const argument = node.arguments?.[0];
+	if (
+		node.arguments?.length !== 1 ||
+		!argument ||
+		!ts.isStringLiteral(argument) ||
+		!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(argument.text)
+	)
+		return false;
+	for (
+		let ancestor: ts.Node | undefined = node.parent;
+		ancestor;
+		ancestor = ancestor.parent
+	) {
+		if (ts.isFunctionLike(ancestor)) return false;
+		if (
+			!ts.isPropertyAssignment(ancestor) ||
+			ancestor.name.getText() !== "schedule"
+		)
+			continue;
+		const definition = ancestor.parent;
+		const factory = definition.parent;
+		return (
+			ts.isObjectLiteralExpression(definition) &&
+			ts.isCallExpression(factory) &&
+			ts.isIdentifier(factory.expression) &&
+			factory.expression.text === "defineJob" &&
+			factory.arguments[0] === definition
+		);
+	}
+	return false;
+}
+
 export async function validateStructuralSources(
 	files: readonly string[],
 	scope: "application" | "package",
@@ -227,7 +260,8 @@ export async function validateStructuralSources(
 				ts.isIdentifier(node.expression) &&
 				(node.expression.text === "Function" ||
 					(node.expression.text === "Date" &&
-						(functionDepth === 0 || node.arguments?.length !== 1)))
+						(functionDepth === 0 || node.arguments?.length !== 1) &&
+						!isStaticScheduleDate(node)))
 			)
 				impure(
 					`${node.expression.text} construction is forbidden in structural source`,
@@ -458,7 +492,10 @@ export async function evaluateModules(
 			)
 			.join(",\n");
 		const entry = join(temporary, "entry.ts");
-		await writeFile(entry, `${imports}\nexport default [${records}];\n`);
+		await writeFile(
+			entry,
+			`${imports}\nimport { projectEvaluatedJobSchedule } from ${JSON.stringify(new URL(import.meta.resolve("./job/discovery")).pathname)};\nconst records = [${records}];\nexport default records;\nexport const projectJobValue = (value) => projectEvaluatedJobSchedule(value, records, ${JSON.stringify(input.packageId ?? null)});\n`,
+		);
 		const result = await Bun.build({
 			entrypoints: [entry],
 			format: "esm",
@@ -467,6 +504,10 @@ export async function evaluateModules(
 				{
 					name: "questpie-current-contract",
 					setup(build) {
+						build.onResolve({ filter: /^@questpie\/runtime\/codec$/ }, () => ({
+							path: new URL(import.meta.resolve("@questpie/runtime/codec"))
+								.pathname,
+						}));
 						build.onResolve({ filter: /^questpie$/ }, () => ({
 							path: input.frameworkEntry,
 						}));
@@ -508,7 +549,7 @@ export async function evaluateModules(
 Date.now = () => { throw new Error("QP-COMPOSE-010 Date.now"); };
 if (globalThis.crypto?.randomUUID) globalThis.crypto.randomUUID = () => { throw new Error("QP-COMPOSE-010 crypto.randomUUID"); };
 globalThis.fetch = () => { throw new Error("QP-COMPOSE-010 fetch"); };
-const { default: records } = await import(${JSON.stringify(`./${basename(bundlePath)}`)});
+const { default: records, projectJobValue } = await import(${JSON.stringify(`./${basename(bundlePath)}`)});
 const resourceIdentities = new Map();
 for (const record of records) for (const value of Object.values(record.exports)) {
   const metadata = value?.__questpie;
@@ -536,7 +577,7 @@ for (const list of candidates.values()) {
     return leftDirect - rightDirect || (left.logicalPath < right.logicalPath ? -1 : left.logicalPath > right.logicalPath ? 1 : left.exportName < right.exportName ? -1 : left.exportName > right.exportName ? 1 : 0);
   });
   try {
-    found.push({ ...list[0], value: projectMutationValue(list[0].value) });
+    found.push({ ...list[0], value: projectMutationValue(projectJobValue(list[0].value)) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "controlled evaluation failed";
     throw new Error(message + " QP-ORIGIN " + encodeURIComponent(list[0].logicalPath) + " " + encodeURIComponent(list[0].exportName));

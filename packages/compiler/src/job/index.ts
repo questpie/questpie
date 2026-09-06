@@ -4,6 +4,7 @@ import { normalizeDeclaredErrors } from "../operation-errors";
 import type { NormalizedResource } from "../types";
 
 export { renderJobAcceptances, renderJobDeclarations } from "./declarations";
+export { projectJobSchedules } from "./schedules";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 
@@ -114,8 +115,6 @@ export function normalizeJobContract(
 		Object.keys(signals).length > 0
 	)
 		structural("job.signals are deferred until the checkpoint slice");
-	if (value.schedule !== undefined && value.schedule !== null)
-		structural("job.schedule is deferred until the cron slice");
 	return {
 		format: "questpie.job-definition-contract",
 		version: 1,
