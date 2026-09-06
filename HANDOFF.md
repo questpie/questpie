@@ -840,15 +840,21 @@ byte-identical release dry-runs pass.
 
 ## Immediate continuation
 
-The active beta.2 closure is tracked in GitHub issues #360 through #364 and
-`docs/v4/implementation/beta2-closure/SPEC.md`. The human confirmed a
-behavior-preserving cleanup: shared strict JSON parsing, neutral Operation
-projection ownership, shared carrier encoding/classification, and truthful
-documentation/proof staging. These repairs do not reopen any accepted DX
-decision. Preserve in-progress closure changes and finish their exact-head
-verification before requesting acceptance. ADR-0039 remains Proposed. The
-human authorized Fable 5.1 for this release review; preserve its explicit
-provenance rather than labeling it as the historical Opus reviewer.
+The active frontier is static Job schedules and the minimum named-Mutation
+checkpoint needed by a minute sweep, tracked in #365 and
+`docs/v4/research/static-job-schedules/DECISION-MAP.md`. The human explicitly
+keeps dynamic schedules as application-owned data, not framework schedule CRUD.
+ADR-0016/0017/0026 own the accepted direction; the unresolved producer,
+calendar, activation/removal, and checkpoint contracts need focused proof.
+
+The behavior-preserving DX cleanup #360 through #363 is complete. The preserved
+pre-schedule candidate `863120698` has final `quality:release` PASS and a valid
+manifest preflight, but no acceptance review was invoked. PostgreSQL 17/Firefox
+and two forced-build dry-runs passed on the preceding implementation head.
+Aggregate acceptance #364 is now blocked by #365: the old manifest explicitly
+excludes Cron and must not be submitted for the extended scope. ADR-0039 remains
+Proposed. The human-authorized Fable 5.1 profile applies only to its exact beta.2
+release ticket; do not relabel another reviewer or reuse that exception elsewhere.
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status. ADR-0030 provenance/trusted values and ADR-0031 lifecycle/issue
@@ -901,7 +907,8 @@ provenance rather than labeling it as the historical Opus reviewer.
     two-package release candidate. Do not restore a v7/v8 Runtime
     compatibility path or add a second observation kernel. No publishability
     is implied without explicit release authority.
-12. Do not reopen the reference application by adding Cron, Collection triggers,
-    checkpoints, generic browser control or workflow orchestration without new
-    product authority.
+12. Static Job schedules and the required named-Mutation checkpoint are now
+    pulled by the confirmed sweep tracer. Collection triggers, dynamic schedule
+    CRUD, generic browser control, and broader checkpoint/workflow capabilities
+    remain outside that work. Preserve ordinary Policy and transaction ownership.
 13. Do not push, tag or publish without explicit authority.
