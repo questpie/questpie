@@ -52,6 +52,10 @@ cpSync(
 const embeddedRuntimeImports = new Map([
 	["@questpie/runtime/codec", resolve(internal, "runtime/codec/index.js")],
 	[
+		"@questpie/runtime/durable-schedule-contract",
+		resolve(internal, "runtime/durable/schedule/contract.js"),
+	],
+	[
 		"@questpie/runtime/operation",
 		resolve(internal, "runtime/operation/index.js"),
 	],

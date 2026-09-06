@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { compileApplication } from "../../packages/compiler/src";
+import { verifyRuntimeArtifactFiles } from "../../packages/runtime/src/application/artifact-files";
+import { decodeRuntimeArtifacts } from "../../packages/runtime/src/application/artifacts";
+import { verifyStaticScheduleArtifact } from "../../packages/runtime/src/durable/schedule";
 
 setDefaultTimeout(120_000);
 const fixture = resolve(import.meta.dir, "../../fixtures/collaboration");
@@ -79,6 +82,7 @@ test("candidate rejects forged and non-service Principals before JSON loses prov
 			'{ questpiePrincipal: true, kind: "service", id: "sweep" } as any',
 			'principal.user({ id: "sweep" })',
 			"principal.anonymous()",
+			'principal.service({ name: "sweep\\u0000" })',
 		]) {
 			await expect(
 				compile(root, source, "* * * * *", actor),
@@ -123,6 +127,10 @@ test("candidate validates static Context/Job values and exact schedule grammar a
 			valid.replace(`context:{companyId:"${companyId}"}`, "context:{}"),
 			valid.replace(`input:{companyId:"${companyId}"}`, "input:{companyId:1}"),
 			valid.replace(`input:{companyId:"${companyId}"}`, "input:{}"),
+			valid.replace(
+				`input:{companyId:"${companyId}"}`,
+				`input:{get companyId(){return "${companyId}";}}`,
+			),
 		]) {
 			await writeFile(
 				join(root, "src/company-digest-job.ts"),
@@ -235,5 +243,109 @@ test("candidate enforces the compiled schedule set byte bound", async () => {
 		await expect(
 			compileApplication({ applicationRoot: root }),
 		).rejects.toMatchObject({ code: "QP-COMPOSE-013" });
+	});
+});
+
+test("candidate generated schedule artifacts decode with independent Job/build cross-pins and reject tampering", async () => {
+	await candidate(async (root, source) => {
+		const files = await compile(root, source, "* * * * *");
+		const runtime = decodeRuntimeArtifacts({
+			runtimeBuild: JSON.parse(files["runtime-build.json"]!),
+			runtimeExecutables: JSON.parse(files["runtime-executables.json"]!),
+			operationContracts: JSON.parse(files["operation-contracts.json"]!),
+			httpContract: JSON.parse(files["operation-http-contract.json"]!),
+		});
+		const inventory = Object.fromEntries(
+			runtime.runtimeBuild.inventory.map(({ path }) => [path, files[path]!]),
+		);
+		verifyRuntimeArtifactFiles(runtime, inventory);
+		const artifact = JSON.parse(files["job-schedules.json"]!);
+		const bindings = {
+			application: runtime.runtimeBuild.application,
+			compilerRuntimeBuildDigest:
+				runtime.runtimeBuild.compilerRuntimeBuildDigest,
+			jobProjectionDigest: runtime.runtimeBuild.later.jobDigest!,
+		};
+		const decoded = verifyStaticScheduleArtifact(artifact, bindings);
+		expect(decoded.schedules[0]!.jobIdentity).toBe("job:reports.companyDigest");
+		expect(Object.isFrozen(decoded.schedules[0]!.cron.minute)).toBe(true);
+		for (const field of [
+			"application",
+			"compilerRuntimeBuildDigest",
+			"jobProjectionDigest",
+		] as const) {
+			expect(() =>
+				verifyStaticScheduleArtifact(artifact, {
+					...bindings,
+					[field]:
+						field === "application" ? "application:other" : "0".repeat(64),
+				}),
+			).toThrow("SCHEDULE_ARTIFACT_INVALID");
+		}
+		for (const mutate of [
+			(value: typeof artifact) => {
+				value.digest = "0".repeat(64);
+			},
+			(value: typeof artifact) => {
+				value.schedules[0].programDigest = "0".repeat(64);
+			},
+			(value: typeof artifact) => {
+				value.schedules[0].cron.minute = [1];
+			},
+			(value: typeof artifact) => {
+				value.schedules[0].contextJson = value.schedules[0].contextJson.trim();
+			},
+			(value: typeof artifact) => {
+				value.schedules[0].principal.kind = "user";
+			},
+			(value: typeof artifact) => {
+				value.schedules.push(value.schedules[0]);
+			},
+			(value: typeof artifact) => {
+				value.schedules[0].timeZone = "UTC";
+			},
+		]) {
+			const corrupted = structuredClone(artifact);
+			mutate(corrupted);
+			expect(() => verifyStaticScheduleArtifact(corrupted, bindings)).toThrow(
+				"SCHEDULE_ARTIFACT_INVALID",
+			);
+		}
+		expect(() =>
+			verifyRuntimeArtifactFiles(runtime, {
+				...inventory,
+				"job-schedules.json": files["job-schedules.json"]! + " ",
+			}),
+		).toThrow("digest does not match");
+		const later = await compile(
+			root,
+			source.replace(
+				"const invocationId = crypto.randomUUID();",
+				"const invocationId = crypto.randomUUID(); void input.companyId;",
+			),
+			"* * * * *",
+		);
+		expect(() =>
+			verifyStaticScheduleArtifact(
+				JSON.parse(later["job-schedules.json"]!),
+				bindings,
+			),
+		).toThrow("SCHEDULE_ARTIFACT_INVALID");
+	});
+});
+
+test("candidate caps the compiled static schedule set at 64 Jobs", async () => {
+	await candidate(async (root) => {
+		await writeFile(
+			join(root, "src/schedule-bound.ts"),
+			`import {codec,durable,principal} from "questpie";
+import {defineJob} from "#questpie/app";
+const recipe={input:codec.object({}),output:codec.object({}),runAs:durable.caller({whenDenied:"fail"}),retry:durable.retry({maximumAttempts:2,initialDelay:"1s",backoff:"exponential",maximumDelay:"60s",jitter:"full",horizon:"24h"}),schedule:{cron:"* * * * *",execution:{principal:principal.service({name:"sweep"}),context:{companyId:"${companyId}"}},input:{}},handler:()=>({})};
+${Array.from({ length: 65 }, (_, index) => `export const bound${index}=defineJob({...recipe,name:"schedule.bound${index}"});`).join("\n")}
+`,
+		);
+		await expect(compileApplication({ applicationRoot: root })).rejects.toThrow(
+			"static Job schedule set exceeds its finite bound",
+		);
 	});
 });

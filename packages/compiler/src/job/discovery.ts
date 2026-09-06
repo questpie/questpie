@@ -22,6 +22,55 @@ function exact(value: unknown, keys: readonly string[]): RecordValue {
 	return value as RecordValue;
 }
 
+function staticValue(value: unknown, active = new Set<object>()): unknown {
+	if (value === null || typeof value !== "object") {
+		if (typeof value === "function" || typeof value === "symbol") invalid();
+		return value;
+	}
+	if (
+		active.has(value) ||
+		active.size >= 128 ||
+		Object.getOwnPropertySymbols(value).length > 0
+	)
+		invalid();
+	const prototype = Object.getPrototypeOf(value);
+	if (value instanceof Date) {
+		if (prototype !== Date.prototype || Object.keys(value).length > 0)
+			invalid();
+		return new Date(value.getTime());
+	}
+	if (
+		prototype !== Object.prototype &&
+		prototype !== Array.prototype &&
+		prototype !== null
+	)
+		invalid();
+	active.add(value);
+	try {
+		const snapshot: Record<string, unknown> | unknown[] = Array.isArray(value)
+			? []
+			: Object.create(null);
+		for (const [key, descriptor] of Object.entries(
+			Object.getOwnPropertyDescriptors(value),
+		)) {
+			if (!Object.hasOwn(descriptor, "value")) invalid();
+			if (Array.isArray(snapshot) && key === "length") {
+				Object.defineProperty(snapshot, key, { value: descriptor.value });
+				continue;
+			}
+			Object.defineProperty(snapshot, key, {
+				value: staticValue(descriptor.value, active),
+				enumerable: true,
+				writable: true,
+				configurable: true,
+			});
+		}
+		return snapshot;
+	} finally {
+		active.delete(value);
+	}
+}
+
 /** Runs in the same isolated bundle as authoring, before JSON discards brands. */
 export function projectEvaluatedJobSchedule(
 	value: RecordValue,
@@ -40,6 +89,7 @@ export function projectEvaluatedJobSchedule(
 		typeof actor.id !== "string" ||
 		actor.id.length === 0 ||
 		actor.id.length > 255 ||
+		actor.id.includes("\0") ||
 		actor.id !== actor.id.normalize("NFC") ||
 		actor.id.trim() !== actor.id
 	)
@@ -70,10 +120,13 @@ export function projectEvaluatedJobSchedule(
 					principal: { kind: "service", id: actor.id },
 					context: encodeRuntimeCodec(
 						contextCodec as RuntimeCodec,
-						execution.context,
+						staticValue(execution.context),
 					),
 				},
-				input: encodeRuntimeCodec(value.input as RuntimeCodec, schedule.input),
+				input: encodeRuntimeCodec(
+					value.input as RuntimeCodec,
+					staticValue(schedule.input),
+				),
 			},
 		};
 	} catch {

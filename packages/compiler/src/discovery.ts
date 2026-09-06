@@ -9,6 +9,7 @@ import {
 	resolve,
 	sep,
 } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
@@ -494,7 +495,7 @@ export async function evaluateModules(
 		const entry = join(temporary, "entry.ts");
 		await writeFile(
 			entry,
-			`${imports}\nimport { projectEvaluatedJobSchedule } from ${JSON.stringify(new URL(import.meta.resolve("./job/discovery")).pathname)};\nconst records = [${records}];\nexport default records;\nexport const projectJobValue = (value) => projectEvaluatedJobSchedule(value, records, ${JSON.stringify(input.packageId ?? null)});\n`,
+			`${imports}\nimport { projectEvaluatedJobSchedule } from ${JSON.stringify(fileURLToPath(import.meta.resolve("./job/discovery")))};\nconst records = [${records}];\nexport default records;\nexport const projectJobValue = (value) => projectEvaluatedJobSchedule(value, records, ${JSON.stringify(input.packageId ?? null)});\n`,
 		);
 		const result = await Bun.build({
 			entrypoints: [entry],
@@ -505,8 +506,9 @@ export async function evaluateModules(
 					name: "questpie-current-contract",
 					setup(build) {
 						build.onResolve({ filter: /^@questpie\/runtime\/codec$/ }, () => ({
-							path: new URL(import.meta.resolve("@questpie/runtime/codec"))
-								.pathname,
+							path: fileURLToPath(
+								import.meta.resolve("@questpie/runtime/codec"),
+							),
 						}));
 						build.onResolve({ filter: /^questpie$/ }, () => ({
 							path: input.frameworkEntry,
