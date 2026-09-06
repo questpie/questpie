@@ -618,17 +618,7 @@ export async function createApplication(input) {
 					queryPlans = linkPostgresQueryPlans(queryPlanBytes, expectedQueryTemplates);
 				else if (structuralQueryDigests.size !== 0)
 					throw new TypeError("PostgreSQL Query plans are unavailable");
-				return verifyPostgresDatabaseRuntimeReadiness({
-					database,
-					runtime: {
-						definePostgresAdministrativeStatement,
-						definePostgresStatement,
-						verifyReadinessPrerequisites: verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
-					},
-					schema: schemaProjection,
-					committedMigrations,
-					expected: artifacts.runtimeBuild,
-				});
+				${postgresRuntimeTemplates.renderPostgresRuntimeReadiness()}
 			},
 			${renderDatabaseQueryProject()}
 			projectMutation: ({ facts }) => {

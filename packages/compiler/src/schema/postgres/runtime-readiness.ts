@@ -5,13 +5,10 @@ import type {
 	verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
 } from "@questpie/runtime/bundle-core-types";
 
-import { digest } from "../canonical";
-import { CompilerDiagnosticError } from "../diagnostic";
-import {
-	internalProtocolV9Checksum,
-	type SchemaProjectionV1,
-	verifyPostgresDatabaseSchemaReadiness,
-} from "../schema";
+import { digest } from "../../canonical";
+import { CompilerDiagnosticError } from "../../diagnostic";
+import type { SchemaProjectionV1 } from "../contracts";
+import { verifyPostgresDatabaseSchemaReadiness } from "./database-readiness";
 
 type RuntimeBuildReadiness = Readonly<{
 	migrationHead: string | null;
@@ -129,6 +126,7 @@ function decodeCommittedMigrations(value: unknown): CommittedMigrations {
 export async function verifyPostgresDatabaseRuntimeReadiness(
 	input: Readonly<{
 		database: PostgresTransactionRunner;
+		protocol: Readonly<{ version: 9; checksum: string }>;
 		runtime: Readonly<{
 			definePostgresAdministrativeStatement: typeof definePostgresAdministrativeStatement;
 			definePostgresStatement: typeof definePostgresStatement;
@@ -151,7 +149,7 @@ export async function verifyPostgresDatabaseRuntimeReadiness(
 			try {
 				await input.runtime.verifyReadinessPrerequisites({
 					transaction,
-					protocol: { version: 9, checksum: internalProtocolV9Checksum },
+					protocol: input.protocol,
 					application: input.schema.application.name,
 					postgresSchema: input.schema.application.postgresSchema,
 					migrationHead: committed.head,

@@ -1,3 +1,5 @@
+import { internalProtocolV9Checksum } from "../schema";
+
 export function renderPostgresRuntimeImports(): string {
 	return `createLinkedPostgresContextBootstrapFactory,
 		createPostgresDatabaseDurableAttemptObservation,
@@ -34,4 +36,19 @@ export function renderPostgresRuntimeOwnership(): string {
 
 export function renderPostgresRuntimeFacts(): string {
 	return `[Symbol.for("questpie.internal.postgres-facts")]: () => postgresRuntime.facts(),`;
+}
+
+export function renderPostgresRuntimeReadiness(): string {
+	return `return verifyPostgresDatabaseRuntimeReadiness({
+					database,
+					protocol: Object.freeze({ version: 9, checksum: ${JSON.stringify(internalProtocolV9Checksum)} }),
+					runtime: {
+						definePostgresAdministrativeStatement,
+						definePostgresStatement,
+						verifyReadinessPrerequisites: verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
+					},
+					schema: schemaProjection,
+					committedMigrations,
+					expected: artifacts.runtimeBuild,
+				});`;
 }

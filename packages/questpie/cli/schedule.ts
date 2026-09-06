@@ -8,7 +8,6 @@ type ArtifactFiles =
 type Postgres = typeof import("../../runtime/src/postgres");
 type Prerequisites =
 	typeof import("../../runtime/src/application/postgres-readiness-prerequisites");
-type Readiness = typeof import("../../compiler/src/runtime/postgres-readiness");
 type Schema = typeof import("../../compiler/src/schema");
 type Canonical = typeof import("../../compiler/src/canonical");
 type Schedules = typeof import("../../runtime/src/durable/schedule");
@@ -192,12 +191,6 @@ export async function activateScheduleFromDirectory(
 			import.meta.url,
 		).href
 	);
-	const readiness: Readiness = await import(
-		new URL(
-			"./internal/compiler/runtime/postgres-readiness.js",
-			import.meta.url,
-		).href
-	);
 	const database = postgres.createRuntimePostgres({
 		connectionUrl: input.connectionString,
 		directConnectionUrl: input.connectionString,
@@ -212,8 +205,12 @@ export async function activateScheduleFromDirectory(
 	});
 	try {
 		try {
-			await readiness.verifyPostgresDatabaseRuntimeReadiness({
+			await schemaApi.verifyPostgresDatabaseRuntimeReadiness({
 				database,
+				protocol: Object.freeze({
+					version: 9,
+					checksum: schemaApi.internalProtocolV9Checksum,
+				}),
 				runtime: {
 					definePostgresAdministrativeStatement:
 						postgres.definePostgresAdministrativeStatement,

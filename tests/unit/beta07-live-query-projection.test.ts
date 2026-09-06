@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { compileApplication, createMigrationPlan } from "@questpie/compiler";
 
 import { projectLiveQueryCompilation } from "../../packages/compiler/src/live-query";
+import { internalProtocolV9Checksum } from "../../packages/compiler/src/schema";
 import { renderMigrationSql } from "../../packages/compiler/src/schema/migration-renderer";
 import type { NormalizedResource } from "../../packages/compiler/src/types";
 
@@ -334,6 +335,16 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			),
 		).toBeLessThanOrEqual(beta07RealtimeBundleBudget);
 		expect(beta07RealtimeBundleBudget).toBe(1_048_576);
+		const applicationBundleText = applicationBundles
+			.map(([, bytes]) => bytes)
+			.join("\n");
+		expect(applicationBundleText).toContain(internalProtocolV9Checksum);
+		expect(applicationBundleText).not.toContain(
+			"CREATE TABLE questpie_internal.mutation_call_receipts",
+		);
+		expect(applicationBundleText).not.toContain(
+			"CREATE TABLE questpie_internal.mutation_checkpoints",
+		);
 		expect(
 			runtimeBuild.inventory
 				.map(({ path }: { path: string }) => path)

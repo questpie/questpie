@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { verifyPostgresDatabaseRuntimeReadiness } from "../../packages/compiler/src/runtime/postgres-readiness";
-import { internalProtocolV9Checksum } from "../../packages/compiler/src/schema";
+import {
+	internalProtocolV9Checksum,
+	verifyPostgresDatabaseRuntimeReadiness,
+} from "../../packages/compiler/src/schema";
 import type { SchemaProjectionV1 } from "../../packages/compiler/src/schema";
 import { verifyPostgresDatabaseReadinessPrerequisites } from "../../packages/runtime/src/application/postgres-readiness-prerequisites";
 import {
@@ -187,6 +189,10 @@ const rowsByStatement: Readonly<
 function readinessInput(database: PostgresTransactionRunner) {
 	return {
 		database,
+		protocol: Object.freeze({
+			version: 9,
+			checksum: internalProtocolV9Checksum,
+		}),
 		runtime: {
 			definePostgresAdministrativeStatement,
 			definePostgresStatement,
@@ -330,6 +336,28 @@ test("compiler database readiness owns one complete fixed snapshot", async () =>
 		[postgresSchema, ["messages"], triggerCatalog.map(({ name }) => name)],
 		[postgresSchema, [databaseOwnedUpdateField.triggerName]],
 	]);
+});
+
+test("compiler database readiness refuses a missing, old, or mismatched protocol before schema reads", async () => {
+	for (const protocolRows of [
+		[],
+		[[8, internalProtocolV9Checksum]],
+		[[9, "0".repeat(64)]],
+	]) {
+		const observed = observations();
+		await expect(
+			verifyPostgresDatabaseRuntimeReadiness(
+				readinessInput(
+					fakeDatabase(
+						{ ...rowsByStatement, "readiness.protocol.v9": protocolRows },
+						observed,
+					),
+				),
+			),
+		).rejects.toThrow("questpie_internal protocol v9 is not installed");
+		expect(observed.names).toEqual(["readiness.protocol.v9"]);
+		expect(observed.commits).toBe(0);
+	}
 });
 
 test("compiler database readiness closes descriptor rows and preserves diagnostics", async () => {

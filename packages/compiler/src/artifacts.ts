@@ -652,8 +652,9 @@ export async function createArtifacts(
 	);
 	const readinessEntry = join(
 		import.meta.dir,
-		"runtime",
-		`postgres-readiness${extname(fileURLToPath(import.meta.url))}`,
+		"schema",
+		"postgres",
+		`runtime-readiness${extname(fileURLToPath(import.meta.url))}`,
 	);
 	Object.assign(
 		generated,

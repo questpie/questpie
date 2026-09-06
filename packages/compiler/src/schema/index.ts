@@ -91,6 +91,7 @@ export {
 	validatePostgresProviderObservations,
 } from "./postgres/fingerprint";
 export { verifyPostgresDatabaseSchemaReadiness } from "./postgres/database-readiness";
+export { verifyPostgresDatabaseRuntimeReadiness } from "./postgres/runtime-readiness";
 export { expectedComparable } from "./postgres/expected-fingerprint";
 export { childRecords, fail } from "./postgres/shared";
 export type {
