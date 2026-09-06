@@ -12,9 +12,8 @@
 	"include": [
 		"activation.ts",
 		"activation.test.ts",
-		"calendar.ts",
-		"calendar.test.ts",
-		"calendar-postgres.test.ts",
+		"../../../../tests/unit/static-schedule-calendar.test.ts",
+		"../../../../tests/integration/postgres/static-schedule-calendar.test.ts",
 		"checkpoint-attempt.ts",
 		"checkpoint-attempt.test.ts",
 		"checkpoint-invocation.ts",

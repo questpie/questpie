@@ -1,10 +1,9 @@
 import { expect, test } from "bun:test";
 
 import {
-	GREGORIAN_CYCLE_DAYS,
 	evaluateLatestCronMatch,
 	parseUtcCron,
-} from "./calendar";
+} from "../../packages/runtime/src/durable/schedule/contract";
 
 test("canonicalizes complete numeric fields, lists, ranges, and anchored steps", () => {
 	const expanded = parseUtcCron("0,15,30,45 0,12 1-31 1-12 0,1,2,3,4,5,6");
@@ -77,7 +76,7 @@ test("bounds a centuries-long outage by Gregorian days, never missed minutes", (
 		new Date("2400-03-01T00:00:00.000Z"),
 	);
 	expect(result.match).toEqual(new Date("2400-02-29T23:59:00.000Z"));
-	expect(result.examinedDays).toBeLessThanOrEqual(GREGORIAN_CYCLE_DAYS);
+	expect(result.examinedDays).toBeLessThanOrEqual(146_097);
 	expect(result.examinedDays).toBeLessThan(370);
 });
 

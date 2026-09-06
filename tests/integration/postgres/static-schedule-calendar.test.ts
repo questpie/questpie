@@ -6,7 +6,8 @@ import {
 	evaluateLatestCronMatch,
 	parseUtcCron,
 	type UtcCronCalendar,
-} from "./calendar";
+} from "../../../packages/runtime/src/durable/schedule/contract";
+import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const database = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const postgresTest = process.env.PGHOST ? test.serial : test.skip;
@@ -88,13 +89,16 @@ async function expectPostgresAgreement(
 	return postgresMatch;
 }
 
-postgresTest("uses a PostgreSQL 17 SELECT-only calendar oracle", async () => {
-	const [row] = await database!.unsafe<
-		readonly Readonly<{ version: number }>[]
-	>("SELECT current_setting('server_version_num')::integer AS version");
-	expect(row?.version).toBeGreaterThanOrEqual(170_000);
-	expect(row?.version).toBeLessThan(180_000);
-});
+postgresTest(
+	"uses a SELECT-only calendar oracle on the exact PostgreSQL major",
+	async () => {
+		const [row] = await database!.unsafe<
+			readonly Readonly<{ version: number }>[]
+		>("SELECT current_setting('server_version_num')::integer AS version");
+		if (!row) throw new Error("PostgreSQL returned no version");
+		expectPostgresMajor(row.version);
+	},
+);
 
 postgresTest("chooses the latest of several PostgreSQL matches", async () => {
 	expect(

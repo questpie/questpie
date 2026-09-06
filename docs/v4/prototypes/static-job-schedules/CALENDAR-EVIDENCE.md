@@ -5,9 +5,26 @@
 - Scope: standalone parser/latest-match model and SELECT-only PostgreSQL oracle
 - Authority: none; this evidence does not accept or project ADR-0043
 
+## Current regression owner
+
+The duplicate calendar implementation has been deleted from this candidate.
+Its unchanged parser and latest-match tests now exercise the Runtime schedule
+contract at `tests/unit/static-schedule-calendar.test.ts`; the independent
+SELECT-only PostgreSQL oracle lives at
+`tests/integration/postgres/static-schedule-calendar.test.ts`.
+Both pass against the integrated candidate: 11 unit tests / 41 assertions and
+6 PostgreSQL 17 tests / 23 assertions, without skips. The PostgreSQL test now
+checks the exact CI-selected major, defaulting to 17 only when unset; no
+PostgreSQL 16 or 18 run is claimed here.
+
+The history below records construction of the deleted model, preserved in Git.
+Its old commands are historical, not the current regression commands. Compiler,
+activation and generated-worker evidence live in their candidate records;
+neither these tests nor deletion constitute formal acceptance.
+
 ## Falsified boundary
 
-[`calendar.ts`](./calendar.ts) models exactly five numeric UTC cron fields. It
+The historical `calendar.ts` models exactly five numeric UTC cron fields. It
 accepts numbers, ascending inclusive ranges, lists, and positive steps on `*`
 or a range. It emits sorted complete field sets, requires either normalized day
 of month or day of week to be complete, and rejects a program with no date in
