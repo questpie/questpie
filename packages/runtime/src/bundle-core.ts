@@ -1,4 +1,5 @@
 export { createRuntimeApplication } from "./application";
+export { decodeRuntimeCodec } from "./codec";
 export { verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction } from "./application/postgres-readiness-prerequisites";
 export type { ReadinessMigration } from "./application/postgres-readiness-prerequisites";
 export { failRuntimeApplicationStartup } from "./application/startup-cleanup";
@@ -28,6 +29,7 @@ export {
 	createCollectionOperationAdapterExecutor,
 	executeCollectionOperationAdapter,
 	createPostgresDatabaseMutationInvoker,
+	withRequiredMutationReceipt,
 	createPostgresJobAcceptanceTransaction,
 	linkCollectionOperationAdapters,
 	linkCollectionMutationPrograms,
@@ -41,6 +43,9 @@ export { linkPostgresMutationTransactionStatements } from "./mutation/postgres-t
 export {
 	createDurableWorker,
 	createDurableJobContext,
+	createMutationCheckpointRun,
+	createPostgresMutationCheckpointStore,
+	createPostgresStaticSchedules,
 	createDurableReactionContext,
 	createJobAcceptance,
 	createPostgresDatabaseDurableAttemptObservation,

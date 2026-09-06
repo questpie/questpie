@@ -16,6 +16,7 @@ import { leaseTokenDigest, retryDelayMilliseconds } from "./rows";
 const permanentFailureCodes: ReadonlySet<DurableFailureCode> = new Set([
 	"EFFECT_AMBIGUOUS",
 	"EFFECT_CONFLICT",
+	"CHECKPOINT_INVALID",
 	"REACTION_ERROR",
 	"RESOURCE_LIMIT",
 	"RUN_AS_DENIED",

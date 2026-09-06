@@ -19,6 +19,7 @@ export type DurableRunState =
 	| "succeeded";
 
 export type DurableFailureCode =
+	| "CHECKPOINT_INVALID"
 	| "EFFECT_AMBIGUOUS"
 	| "EFFECT_CONFLICT"
 	| "HANDLER_FAILED"

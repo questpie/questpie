@@ -15,6 +15,7 @@ import {
 } from "./application-jobs";
 import { renderDatabaseQueryProject } from "./application-query";
 import { expectedQueryTemplates } from "./application-query-artifacts";
+import { renderStaticScheduleOwner } from "./application-schedules";
 import * as emptyDurableProjections from "./empty-durable-projections";
 import * as postgresRuntimeTemplates from "./postgres-runtime-ownership";
 
@@ -236,6 +237,14 @@ function applicationEntry(
 	const actions = input.resources
 		.filter((resource) => resource.kind === "action")
 		.sort((left, right) => compareAscii(left.name, right.name));
+	const checkpointMutations = renderServerOperationValue(
+		"Mutation",
+		mutations.map((resource) => ({
+			name: resource.name,
+			origin: resource.origin,
+			value: `checkpoints.reference(${JSON.stringify(resource.identity)})`,
+		})),
+	);
 	const actionBindings = actions
 		.map((resource) => {
 			const slot = input.slots.find(
@@ -498,6 +507,11 @@ export async function createApplication(input) {
 	${input.realtime ? 'const realtimeModule = await import("questpie:runtime-realtime");' : ""}
 	const {
 		createDurableJobContext,
+		createMutationCheckpointRun,
+		createPostgresMutationCheckpointStore,
+		createPostgresStaticSchedules,
+		decodeRuntimeCodec,
+		withRequiredMutationReceipt,
 		createDurableReactionContext,
 		createDurableWorker,
 		createJobAcceptance,
@@ -544,6 +558,7 @@ export async function createApplication(input) {
 	let routeExecutor;
 	let createDirectActions;
 	let createDirectJobs;
+	let schedules;
 	const resolveApplicationPrincipal = async (request, executionSignal = request.signal) => {
 		${
 			credentialResolverDefinition
@@ -672,6 +687,7 @@ export async function createApplication(input) {
 			return ${directActions};
 		};
 		${renderDirectJobAcceptance({ application: `application:${input.configuration.application.name}`, contextDefinition, directJobOperations: directJobs })}
+		${renderStaticScheduleOwner({ application: `application:${input.configuration.application.name}`, contextDefinition })}
 		routeExecutor = createRuntimeRouteExecutor({
 			runtime,
 			bindings: [${routeBindings}],
@@ -697,9 +713,10 @@ export async function createApplication(input) {
 			closePostgres: (deadlineAt) => postgresRuntime.close({ deadlineAt }),
 		});
 	}
-	${renderDurableWorkerOwner({ application: `application:${input.configuration.application.name}`, directQueries, directMutations })}
+	${renderDurableWorkerOwner({ application: `application:${input.configuration.application.name}`, directQueries, directMutations, checkpointMutations })}
 	let defaultWorker;
 	const durable = Object.freeze({
+		schedules,
 		worker: createWorker,
 		poll: (options) => {
 			// An option-bearing poll is its own worker; it must not rebind the

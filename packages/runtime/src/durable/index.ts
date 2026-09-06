@@ -62,6 +62,9 @@ export type {
 export { linkJobProjection } from "./job-projection";
 export type { LinkedJobMember, LinkedJobProjection } from "./job-projection";
 export { createDurableJobContext } from "./job-context";
+export { createMutationCheckpointRun } from "./checkpoint";
+export { createPostgresMutationCheckpointStore } from "./checkpoint-postgres";
+export { createPostgresStaticSchedules } from "./schedule";
 export { createDurableReactionContext } from "./reaction-context";
 export { durablePrincipal } from "./principal";
 export { runObservedDurableAttempt } from "./observation";

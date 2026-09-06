@@ -61,6 +61,7 @@ export type ObservationOutcome =
 export type DurableFailureCode =
 	| "EFFECT_AMBIGUOUS"
 	| "EFFECT_CONFLICT"
+	| "CHECKPOINT_INVALID"
 	| "HANDLER_FAILED"
 	| "REACTION_ERROR"
 	| "RESOURCE_LIMIT"

@@ -3,9 +3,11 @@ import {
 	encodeRuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
+import { MutationReceiptUnavailable } from "../mutation";
 import { canonicalMutationBytes } from "../mutation/canonical";
 import type { NeutralTraceContextV1 } from "../observation";
 import { DeclaredOperationError } from "../operation";
+import { DurableCheckpointError } from "./checkpoint-contract";
 import type { DurableEffectLedger } from "./durable-effect-contract";
 import {
 	createDurableRunHandle,
@@ -189,6 +191,8 @@ function isRunAsDenial(error: unknown): boolean {
 }
 
 function classify(error: unknown): DurableFailureCode {
+	if (error instanceof DurableCheckpointError) return error.code;
+	if (error instanceof MutationReceiptUnavailable) return "CHECKPOINT_INVALID";
 	// A payload or result outside its compiled codec can never become valid on a
 	// later attempt, so it is permanent rather than retried to exhaustion.
 	if (error instanceof RuntimeCodecError) return "VALIDATION_FAILED";

@@ -4,6 +4,7 @@ export function renderDurableWorkerOwner(
 		application: string;
 		directQueries: string;
 		directMutations: string;
+		checkpointMutations: string;
 	}>,
 ): string {
 	return `const reactionBindings = new Map(slotBindings
@@ -28,16 +29,36 @@ export function renderDurableWorkerOwner(
 		application: durableApplication,
 		authorize: input.maintenance.authorize,
 	});
-	const durableExecute = (request, { execution, queryObservation, ...operations }) => {
+	const checkpointBindings = loaded.artifacts.operationContracts.operations
+		.filter((contract) => contract.identity.startsWith("mutation:"))
+		.map((contract) => {
+			const slot = loaded.artifacts.runtimeExecutables.slots.find((slot) => slot.identity === contract.identity && slot.slot === "handler");
+			if (!slot) throw new TypeError("Mutation checkpoint executable is unavailable");
+			return Object.freeze({ identity: contract.identity, input: contract.input, output: contract.output, contractDigest: slot.contractDigest, runtimeGraphDigest: slot.runtimeGraphDigest });
+		});
+	const durableExecute = async (request, { execution, queryObservation, ...operations }) => {
 		request.assertResolvedTenant(execution.tenant.id);
 		if (request.capability === "job") {
 			const binding = jobBindings.get(request.job.identity);
 			if (!binding) throw new TypeError("Job executable is unavailable");
-			return binding.execute({
-				input: request.input,
-				ctx: createDurableJobContext(execution, request.run, request.attempt),
-				errors: request.errors,
+			const checkpoints = await createMutationCheckpointRun({
+				store: createPostgresMutationCheckpointStore({ database, application: durableApplication, signal: request.signal }),
+				claim: request.claim, signal: request.signal, bindings: checkpointBindings,
+				invoke: (checkpointBinding, checkpointInput, reservation) => runtime.execution(
+					{ principal: durablePrincipal(request.principal), context: request.contextInput, signal: request.signal },
+					({ execution: fresh, invoke }) => {
+						request.assertResolvedTenant(fresh.tenant.id);
+						const call = { callId: reservation.callId, signal: request.signal };
+						return invoke(checkpointBinding.identity, checkpointInput, reservation.state === "completed"
+							? withRequiredMutationReceipt(call, { transactionId: reservation.receiptTransactionId, resultDigest: reservation.receiptResultDigest }) : call);
+					},
+				),
 			});
+			try { return await binding.execute({
+				input: request.input,
+				ctx: Object.freeze({ ...createDurableJobContext(execution, Object.freeze({ ...request.run, step: checkpoints.step }), request.attempt), mutations: ${input.checkpointMutations} }),
+				errors: request.errors,
+			}); } finally { await checkpoints.finish(); }
 		}
 		const binding = reactionBindings.get(request.reaction.identity);
 		if (!binding) throw new TypeError("Reaction executable is unavailable");

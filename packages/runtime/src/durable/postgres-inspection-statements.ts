@@ -26,6 +26,7 @@ const states: ReadonlySet<string> = new Set([
 const failures: ReadonlySet<string> = new Set([
 	"EFFECT_AMBIGUOUS",
 	"EFFECT_CONFLICT",
+	"CHECKPOINT_INVALID",
 	"HANDLER_FAILED",
 	"REACTION_ERROR",
 	"RESOURCE_LIMIT",

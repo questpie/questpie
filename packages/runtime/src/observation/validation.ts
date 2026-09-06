@@ -357,6 +357,7 @@ const EVENT_KEYS: Readonly<Record<ObservationEventKind, Shape>> = {
 const FAILURE_CODES = new Set<DurableFailureCode>([
 	"EFFECT_AMBIGUOUS",
 	"EFFECT_CONFLICT",
+	"CHECKPOINT_INVALID",
 	"HANDLER_FAILED",
 	"REACTION_ERROR",
 	"RESOURCE_LIMIT",

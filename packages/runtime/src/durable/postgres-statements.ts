@@ -107,6 +107,7 @@ const durableEventKinds: ReadonlySet<string> = new Set([
 const durableEventErrorCodes: ReadonlySet<string> = new Set([
 	"EFFECT_AMBIGUOUS",
 	"EFFECT_CONFLICT",
+	"CHECKPOINT_INVALID",
 	"HANDLER_FAILED",
 	"REACTION_ERROR",
 	"RESOURCE_LIMIT",
@@ -132,6 +133,7 @@ export type DurableEventKind =
 export type DurableEventErrorCode =
 	| "EFFECT_AMBIGUOUS"
 	| "EFFECT_CONFLICT"
+	| "CHECKPOINT_INVALID"
 	| "HANDLER_FAILED"
 	| "REACTION_ERROR"
 	| "RESOURCE_LIMIT"
