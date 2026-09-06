@@ -118,6 +118,14 @@ export function TicketDetailPanel({
 						<strong>Updated: </strong>
 						{dateTime(ticket.updatedAt)}
 					</span>
+					<span
+						data-sla-follow-up={ticket.lastSlaFollowUpAt?.toISOString() ?? ""}
+					>
+						<strong>Last SLA follow-up: </strong>
+						{ticket.lastSlaFollowUpAt === null
+							? "Not yet"
+							: dateTime(ticket.lastSlaFollowUpAt)}
+					</span>
 				</div>
 				<p className="description">{ticket.description}</p>
 				<div className="labels" aria-label="Ticket labels">

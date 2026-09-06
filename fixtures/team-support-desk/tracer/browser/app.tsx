@@ -9,6 +9,7 @@ import { CreateTicketDialog } from "./tickets/dialogs";
 import { TicketQueue } from "./tickets/queue";
 import { SelectedTicket } from "./tickets/selected";
 import { firefoxJourneyFromUrl, runFirefoxJourney } from "./tracer/journey";
+import { observeSlaFollowUp } from "./tracer/sla-observer";
 
 type DeskApplicationProps = Readonly<{
 	desk: SupportDesk;
@@ -40,6 +41,7 @@ export function DeskApplication({
 	const readyReported = useRef(false);
 	const failureReported = useRef(false);
 	const tracerStarted = useRef(false);
+	const slaObserverStarted = useRef(false);
 	const after = cursors[pageIndex] ?? null;
 
 	const queueResource = desk.queries["tickets.queue"].observe({
@@ -83,6 +85,17 @@ export function DeskApplication({
 							: `${queueSnapshot.value.nodes.length} ticket${queueSnapshot.value.nodes.length === 1 ? "" : "s"} on this page`;
 	const initiallyReady =
 		queueSnapshot.kind === "ready" && teamsSnapshot.kind === "ready";
+
+	useEffect(() => {
+		const ticketId = new URL(location.href).searchParams.get("tracerSlaTicket");
+		if (!initiallyReady || ticketId === null || slaObserverStarted.current)
+			return;
+		slaObserverStarted.current = true;
+		setSelectedTicketId(ticketId);
+		void observeSlaFollowUp().catch(async () => {
+			await reportFixturePhase({ phase: "sla-observer-failed" });
+		});
+	}, [initiallyReady]);
 
 	useEffect(() => {
 		if (!initiallyReady || readyReported.current) return;
