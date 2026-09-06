@@ -165,8 +165,9 @@ The expanded PostgreSQL tracer checks:
 - malformed optional input fails before reservation, with the same safe
   `PROTOCOL_UNSUPPORTED` class as direct execution;
 - forged, borrowed, and callable references fail before reservation;
-- a real declared `CHANNEL_UNAVAILABLE` failure rolls back, leaves no receipt,
-  retains its error object through caught-error doom, and cannot dispatch step two;
+- a real declared `AFTER_WRITE_REJECTED` failure after a successful Collection
+  create rolls back that write, leaves no receipt, retains its error object
+  through caught-error doom, and cannot dispatch step two;
 - a UTF-8 input exceeding the existing 1 MiB Mutation bound is rejected before
   history allocation; two valid sequential commands complete distinct writes
   and ordered history, with optional input both present and absent.
@@ -205,9 +206,24 @@ bun run lint -- --deny-warnings \
 git diff --check
 ```
 
-The five suites pass: 46 tests, 212 assertions, zero failures or skips (7.98 s).
-The checkpoint tracer accounts for 49 assertions. Strict proof types and
+The five suites pass: 46 tests, 213 assertions, zero failures or skips (8.31 s).
+The checkpoint tracer accounts for 50 assertions. Strict proof types and
 warning-denying lint pass. The authored fixture is compiled in the disposable
 application, not included in the proof's standalone TypeScript project.
 No production export, public authority, package version, or release artifact
 changed; the previous release gates are not claimed as rerun for this proof.
+
+Independent Standards review found no hard violation. Its one nonblocking
+maintainability observation is that the mutable captured command relies on the
+coordinator's single-in-flight invariant; production integration should carry
+the prepared command explicitly rather than widening that assumption.
+
+Independent Spec review found no blocker for the narrowed composition. It
+correctly distinguished the original missing-channel failure from rollback of
+an already successful write. A replacement control first failed with a committed
+message instead of the expected declared error (0/1, 36 assertions). The
+disposable fixture now awaits Collection creation and then throws its own
+unmapped `AFTER_WRITE_REJECTED` error. The test requires that exact error, zero
+matching business rows, zero receipts, reserved history, and caught-error doom.
+The full green result above includes that control. Neither review is formal
+acceptance of ADR-0043.

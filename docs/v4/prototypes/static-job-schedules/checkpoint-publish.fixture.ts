@@ -22,6 +22,10 @@ export const publishMessage = defineMutation({
 	}),
 	policy: policy.authenticated(),
 	errors: {
+		afterWriteRejected: operation.error({
+			code: "AFTER_WRITE_REJECTED",
+			status: 422,
+		}),
 		publicationRejected: operation.error({
 			code: "PUBLICATION_REJECTED",
 			status: 422,
@@ -45,6 +49,8 @@ export const publishMessage = defineMutation({
 			values: { createdAt: input.metadata.at },
 		});
 		if (message.body === undefined) throw errors.channelUnavailable();
+		if (input.metadata.note === "reject-after-write")
+			throw errors.afterWriteRejected();
 		return {
 			id: message.id,
 			channelId: message.channelId,

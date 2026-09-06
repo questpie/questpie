@@ -494,16 +494,17 @@ postgresTest(
 			}
 			const { owner: rejected, runId: rejectedRunId } =
 				await freshAttempt("declared-error");
-			const unavailable = {
+			const rejectedInput = {
 				...mutationInput,
-				channelId: "00000000-0000-4000-8000-000000000099",
+				body: `rolled-back-${suffix}`,
+				metadata: { ...mutationInput.metadata, note: "reject-after-write" },
 			};
 			const declaredFailure = await rejected
-				.mutation("unavailable-channel", rejected.reference, unavailable)
+				.mutation("write-then-reject", rejected.reference, rejectedInput)
 				.catch((error: unknown) => error);
 			expect(declaredFailure).toMatchObject({
-				code: "CHANNEL_UNAVAILABLE",
-				status: 404,
+				code: "AFTER_WRITE_REJECTED",
+				status: 422,
 			});
 			await expect(
 				rejected.mutation(
@@ -519,6 +520,9 @@ postgresTest(
 			const [failedReceipt] =
 				await setupDatabase`SELECT count(*)::integer AS count FROM questpie_internal.mutation_call_receipts WHERE call_id = ${rejectedCheckpoint!.callId}`;
 			expect(failedReceipt.count).toBe(0);
+			const [rolledBack] =
+				await setupDatabase`SELECT count(*)::integer AS count FROM collaboration.messages WHERE body = ${rejectedInput.body}`;
+			expect(rolledBack.count).toBe(0);
 			const { owner: oversized, runId: oversizedRunId } =
 				await freshAttempt("byte-limit");
 			await expect(
