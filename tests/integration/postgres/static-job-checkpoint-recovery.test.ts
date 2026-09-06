@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { copyFile } from "node:fs/promises";
+import { copyFile, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { SQL } from "bun";
@@ -90,6 +90,8 @@ async function withApplication(
 		app: Application;
 		database: SQL;
 		generatedModule: string;
+		generatedRoot: string;
+		connectionUrl: string;
 		root: { principal: Principal; context: { companyId: string } };
 		accept(body: string): Promise<string>;
 		hold(
@@ -100,6 +102,7 @@ async function withApplication(
 		): Promise<() => Promise<void>>;
 		children: ReturnType<typeof Bun.spawn>[];
 	}) => Promise<void>,
+	fixtures?: Readonly<{ job: string; mutation: string }>,
 ) {
 	const name = `qp_checkpoint_recovery_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
 	const url = connectionUrl(name);
@@ -125,12 +128,18 @@ async function withApplication(
 		prepared = await prepareBeta05PostgresApplication(database);
 		const applicationRoot = resolve(prepared.generated.generatedRoot, "../..");
 		await copyFile(
-			resolve(
-				import.meta.dir,
-				"../../../docs/v4/prototypes/static-job-schedules/checkpoint-recovery-job.fixture.ts",
-			),
+			fixtures?.job ??
+				resolve(
+					import.meta.dir,
+					"../../../docs/v4/prototypes/static-job-schedules/checkpoint-recovery-job.fixture.ts",
+				),
 			join(applicationRoot, "src/company-digest-job.ts"),
 		);
+		if (fixtures)
+			await copyFile(
+				fixtures.mutation,
+				join(applicationRoot, "src/message-publish.ts"),
+			);
 		await compileApplication({ applicationRoot });
 		const internal = (await prepared.generated.loadInternal()) as {
 			createApplication(input: {
@@ -157,6 +166,8 @@ async function withApplication(
 			database,
 			root,
 			children,
+			generatedRoot: prepared.generated.generatedRoot,
+			connectionUrl: url,
 			generatedModule: join(
 				prepared.generated.generatedRoot,
 				"internal/application.js",
@@ -242,6 +253,264 @@ async function waitingMutation(database: SQL, runId: string) {
 		},
 	);
 }
+
+postgresTest(
+	"generated worker rolls back a caught declared Mutation error and preserves two nested-codec checkpoints",
+	async () => {
+		await withApplication(
+			async ({ app, database, accept }) => {
+				const body = `nested-checkpoint-${crypto.randomUUID()}`;
+				const runId = await accept(body);
+				const trace = await app.durable.poll({
+					workerId: "nested-checkpoint",
+					claimBatch: 1,
+				});
+				expect(
+					trace.outcomes.find((outcome) => outcome.runId === runId),
+				).toMatchObject({ outcome: "succeeded", failureCode: null });
+				const result = await app.durable.inspect(runId);
+				expect(
+					JSON.parse(new TextDecoder().decode(result!.resultBytes!)),
+				).toMatchObject({
+					firstAt: "2026-09-06T12:34:56.789Z",
+					secondAt: "2026-09-07T12:34:56.789Z",
+				});
+				const history = await database<
+					{
+						ordinal: number;
+						checkpoint_name: string;
+						state: string;
+						call_id: string;
+						transaction_id: string;
+					}[]
+				>`SELECT c.ordinal, c.checkpoint_name, c.state, c.call_id, r.transaction_id::text AS transaction_id FROM questpie_internal.mutation_checkpoints c JOIN questpie_internal.mutation_call_receipts r USING (application_name, tenant_id, operation_name, principal_kind, principal_id, call_id, input_digest) WHERE c.run_id = ${runId} ORDER BY c.ordinal`;
+				expect(
+					history.map((row) => [row.ordinal, row.checkpoint_name, row.state]),
+				).toEqual([
+					[1, "first", "completed"],
+					[2, "second", "completed"],
+				]);
+				expect(history[0].call_id).not.toBe(history[1].call_id);
+				expect(history[0].transaction_id).not.toBe(history[1].transaction_id);
+				const [localResult] =
+					await database`SELECT count(*)::integer AS count FROM information_schema.columns WHERE table_schema = 'questpie_internal' AND table_name = 'mutation_checkpoints' AND column_name = 'result_bytes'`;
+				expect(localResult.count).toBe(0);
+				const writes = await database<
+					{ body: string; created_at: Date }[]
+				>`SELECT body, created_at FROM collaboration.messages WHERE body IN (${body}, ${`${body}-second`}) ORDER BY created_at`;
+				expect(
+					writes.map((row) => [row.body, row.created_at.toISOString()]),
+				).toEqual([
+					[body, "2026-09-06T12:34:56.789Z"],
+					[`${body}-second`, "2026-09-07T12:34:56.789Z"],
+				]);
+				const rejectedBody = `declared-rollback-${crypto.randomUUID()}`;
+				const rejectedId = await accept(rejectedBody);
+				const rejected = await app.durable.poll({
+					workerId: "declared-rollback",
+					claimBatch: 1,
+				});
+				expect(
+					rejected.outcomes.find((outcome) => outcome.runId === rejectedId),
+				).toMatchObject({ outcome: "failed", failureCode: "REACTION_ERROR" });
+				expect((await app.durable.inspect(rejectedId))?.state).toBe("failed");
+				const [facts] = await database`SELECT
+				(SELECT count(*)::integer FROM collaboration.messages WHERE body IN (${rejectedBody}, ${`${rejectedBody}-later`})) AS writes,
+				(SELECT count(*)::integer FROM questpie_internal.mutation_checkpoints WHERE run_id = ${rejectedId}) AS history,
+				(SELECT state FROM questpie_internal.mutation_checkpoints WHERE run_id = ${rejectedId}) AS state,
+				(SELECT count(*)::integer FROM questpie_internal.mutation_call_receipts WHERE call_id IN (SELECT call_id FROM questpie_internal.mutation_checkpoints WHERE run_id = ${rejectedId})) AS receipts`;
+				expect(facts).toEqual({
+					writes: 0,
+					history: 1,
+					state: "reserved",
+					receipts: 0,
+				});
+				const invalidBody = `invalid-codec-${crypto.randomUUID()}`;
+				const invalidId = await accept(invalidBody);
+				const invalid = await app.durable.poll({
+					workerId: "invalid-codec",
+					claimBatch: 1,
+				});
+				expect(
+					invalid.outcomes.find((outcome) => outcome.runId === invalidId),
+				).toMatchObject({ outcome: "failed", failureCode: "HANDLER_FAILED" });
+				const [invalidFacts] = await database`SELECT
+					(SELECT count(*)::integer FROM collaboration.messages WHERE body = ${invalidBody}) AS writes,
+					(SELECT count(*)::integer FROM questpie_internal.mutation_checkpoints WHERE run_id = ${invalidId}) AS history`;
+				expect(invalidFacts).toEqual({ writes: 0, history: 0 });
+			},
+			{
+				job: resolve(
+					import.meta.dir,
+					"../../support/checkpoint-nested-job.fixture.ts",
+				),
+				mutation: resolve(
+					import.meta.dir,
+					"../../../docs/v4/prototypes/static-job-schedules/checkpoint-publish.fixture.ts",
+				),
+			},
+		);
+	},
+	120_000,
+);
+
+postgresTest(
+	"superseded checkpoint holder cannot complete the successor's committed Mutation receipt",
+	async () => {
+		await withApplication(
+			async ({ app, database, root, accept, generatedRoot, connectionUrl }) => {
+				// Load the independent source owner only after the generated application
+				// has initialized its bundled pg module.
+				const { createRuntimePostgres } =
+					await import("../../../packages/runtime/src/postgres");
+				const {
+					createPostgresDatabaseDurableAttemptObservation,
+					createPostgresDatabaseDurableKernel,
+					createPostgresMutationCheckpointStore,
+					linkJobProjection,
+					linkReactionProjection,
+				} = await import("../../../packages/runtime/src/durable");
+				const { decodeRuntimeArtifacts } =
+					await import("../../../packages/runtime/src/application/artifacts");
+				const { verifyRuntimeArtifactFiles } =
+					await import("../../../packages/runtime/src/application/artifact-files");
+				const { encodeRuntimeCodec } =
+					await import("../../../packages/runtime/src/codec");
+				const { canonicalMutationBytes, mutationDigest } =
+					await import("../../../packages/runtime/src/mutation/canonical");
+				const json = async (path: string): Promise<unknown> =>
+					JSON.parse(await readFile(join(generatedRoot, path), "utf8"));
+				const artifacts = decodeRuntimeArtifacts({
+					runtimeBuild: await json("runtime-build.json"),
+					runtimeExecutables: await json("runtime-executables.json"),
+					operationContracts: await json("operation-contracts.json"),
+					httpContract: await json("operation-http-contract.json"),
+				});
+				const files = Object.fromEntries(
+					await Promise.all(
+						artifacts.runtimeBuild.inventory.map(async ({ path }) => [
+							path,
+							await readFile(join(generatedRoot, path), "utf8"),
+						]),
+					),
+				);
+				verifyRuntimeArtifactFiles(artifacts, files);
+				const executable = artifacts.runtimeExecutables.slots.find(
+					(slot) => slot.identity === "mutation:message.publish",
+				);
+				const contract = artifacts.operationContracts.operations.find(
+					(operation) => operation.identity === "mutation:message.publish",
+				);
+				if (!executable || !contract)
+					throw new Error("compiled checkpoint Mutation missing");
+				const runtimeDatabase = createRuntimePostgres({
+					connectionUrl,
+					directConnectionUrl: connectionUrl,
+					pool: {
+						max: 2,
+						connectTimeoutMs: 5000,
+						checkoutTimeoutMs: 5000,
+						idleTimeoutMs: 1000,
+						maxLifetimeSeconds: 60,
+					},
+					timeouts: {
+						statementMs: 10000,
+						lockMs: 2000,
+						idleInTransactionMs: 10000,
+					},
+				});
+				try {
+					const observation = createPostgresDatabaseDurableAttemptObservation({
+						database: runtimeDatabase,
+					});
+					const kernel = createPostgresDatabaseDurableKernel({
+						database: runtimeDatabase,
+						attemptDatabase: observation.database,
+						application: artifacts.runtimeBuild.application,
+						runtimeBuildDigest: artifacts.runtimeBuild.digest,
+						jobs: linkJobProjection(JSON.parse(files["job-projection.json"]!)),
+						reactions: linkReactionProjection(
+							JSON.parse(files["reaction-projection.json"]!),
+						),
+					});
+					const store = createPostgresMutationCheckpointStore({
+						database: runtimeDatabase,
+						application: artifacts.runtimeBuild.application,
+					});
+					const body = `stale-completion-${crypto.randomUUID()}`;
+					const runId = await accept(body);
+					const first = await kernel.claim({
+						runId,
+						workerId: "stale-holder",
+						leaseMilliseconds: 1000,
+					});
+					if (first.status !== "claimed")
+						throw new Error("first checkpoint claim missing");
+					const command = {
+						ordinal: 1,
+						name: "publish",
+						operation: "mutation:message.publish" as const,
+						input: { channelId: beta05Ids.channel, body },
+						inputCodec: contract.input,
+						contractDigest: executable.contractDigest,
+						runtimeGraphDigest: executable.runtimeGraphDigest,
+					};
+					expect(await store.load(first.claim)).toBe(0);
+					const reservation = await store.reserve(first.claim, command);
+					if (reservation.status !== "reserved")
+						throw new Error("checkpoint reservation missing");
+					const result = await app.execution(root, ({ mutations }) =>
+						mutations.message.publish(command.input, {
+							callId: reservation.callId,
+						}),
+					);
+					const digest = mutationDigest(
+						canonicalMutationBytes(encodeRuntimeCodec(contract.output, result)),
+					);
+					await eventually(
+						async () => {
+							const [row] =
+								await database`SELECT lease_expires_at < clock_timestamp() AS expired FROM questpie_internal.durable_runs WHERE run_id = ${runId}`;
+							return row.expired as boolean;
+						},
+						{
+							description: "old checkpoint holder lease expires",
+							timeoutMilliseconds: 4000,
+							accept: (expired) => expired,
+						},
+					);
+					const successor = await kernel.claim({
+						runId,
+						workerId: "successor-holder",
+						leaseMilliseconds: 30000,
+					});
+					if (successor.status !== "claimed")
+						throw new Error("successor checkpoint claim missing");
+					expect(await store.load(successor.claim)).toBe(1);
+					expect(await store.reserve(successor.claim, command)).toMatchObject({
+						status: "reserved",
+						callId: reservation.callId,
+					});
+					expect(await store.complete(first.claim, command, digest)).toEqual({
+						status: "fenced",
+					});
+					const [before] =
+						await database`SELECT state FROM questpie_internal.mutation_checkpoints WHERE run_id = ${runId}`;
+					expect(before.state).toBe("reserved");
+					expect(
+						await store.complete(successor.claim, command, digest),
+					).toMatchObject({ status: "completed" });
+					const [facts] =
+						await database`SELECT (SELECT count(*)::integer FROM collaboration.messages WHERE body = ${body}) AS writes, (SELECT count(*)::integer FROM questpie_internal.mutation_call_receipts WHERE call_id = ${reservation.callId}) AS receipts, (SELECT state FROM questpie_internal.mutation_checkpoints WHERE run_id = ${runId}) AS state`;
+					expect(facts).toEqual({ writes: 1, receipts: 1, state: "completed" });
+				} finally {
+					await runtimeDatabase.close({ deadlineAt: Date.now() + 5000 });
+				}
+			},
+		);
+	},
+	120_000,
+);
 
 postgresTest(
 	"worker cancellation joins its blocked checkpoint Mutation before returning terminal state",
