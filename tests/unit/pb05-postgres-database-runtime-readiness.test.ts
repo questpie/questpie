@@ -56,7 +56,7 @@ test("verifies protocol, binding, and receipts in one static read-only snapshot"
 	const observed = { transactions: 0, names: [] as string[] };
 	const measurement = createPb05OperationalMeasurement();
 	const unmeasured = runner((statement) => {
-		if (statement.name === "readiness.protocol.v8") return [[8, checksum]];
+		if (statement.name === "readiness.protocol.v9") return [[9, checksum]];
 		if (statement.name === "readiness.application-binding")
 			return [["application:collaboration", "collaboration"]];
 		if (statement.name === "readiness.migration-receipts")
@@ -72,7 +72,7 @@ test("verifies protocol, binding, and receipts in one static read-only snapshot"
 
 	await verifyPostgresDatabaseReadinessPrerequisites({
 		database,
-		protocol: { version: 8, checksum },
+		protocol: { version: 9, checksum },
 		application: "application:collaboration",
 		postgresSchema: "collaboration",
 		migrationHead: "000001_create-collaboration",
@@ -82,7 +82,7 @@ test("verifies protocol, binding, and receipts in one static read-only snapshot"
 	expect(observed).toEqual({
 		transactions: 1,
 		names: [
-			"readiness.protocol.v8",
+			"readiness.protocol.v9",
 			"readiness.application-binding",
 			"readiness.migration-receipts",
 		],
@@ -94,7 +94,7 @@ test("verifies protocol, binding, and receipts in one static read-only snapshot"
 	).toMatchObject({
 		statementExecutions: 3,
 		distinctStatements: [
-			"readiness.protocol.v8",
+			"readiness.protocol.v9",
 			"readiness.application-binding",
 			"readiness.migration-receipts",
 		],
@@ -104,7 +104,7 @@ test("verifies protocol, binding, and receipts in one static read-only snapshot"
 
 test("closed decoders refuse malformed protocol and receipt rows", async () => {
 	for (const malformed of [
-		{ name: "readiness.protocol.v8", rows: [["8", checksum]] },
+		{ name: "readiness.protocol.v9", rows: [["9", checksum]] },
 		{
 			name: "readiness.migration-receipts",
 			rows: [["000001_create-collaboration", 0, null, checksum]],
@@ -113,7 +113,7 @@ test("closed decoders refuse malformed protocol and receipt rows", async () => {
 		const observed = { transactions: 0, names: [] as string[] };
 		const database = runner((statement) => {
 			if (statement.name === malformed.name) return malformed.rows;
-			if (statement.name === "readiness.protocol.v8") return [[8, checksum]];
+			if (statement.name === "readiness.protocol.v9") return [[9, checksum]];
 			if (statement.name === "readiness.application-binding")
 				return [["application:collaboration", "collaboration"]];
 			return [["000001_create-collaboration", 1, null, checksum]];
@@ -121,7 +121,7 @@ test("closed decoders refuse malformed protocol and receipt rows", async () => {
 		await expect(
 			verifyPostgresDatabaseReadinessPrerequisites({
 				database,
-				protocol: { version: 8, checksum },
+				protocol: { version: 9, checksum },
 				application: "application:collaboration",
 				postgresSchema: "collaboration",
 				migrationHead: "000001_create-collaboration",
@@ -138,7 +138,7 @@ test("binding and receipt mismatches fail closed", async () => {
 	]) {
 		const observed = { transactions: 0, names: [] as string[] };
 		const database = runner((statement) => {
-			if (statement.name === "readiness.protocol.v8") return [[8, checksum]];
+			if (statement.name === "readiness.protocol.v9") return [[9, checksum]];
 			if (statement.name === "readiness.application-binding")
 				return changedName === statement.name
 					? [["application:other", "other"]]
@@ -150,7 +150,7 @@ test("binding and receipt mismatches fail closed", async () => {
 		await expect(
 			verifyPostgresDatabaseReadinessPrerequisites({
 				database,
-				protocol: { version: 8, checksum },
+				protocol: { version: 9, checksum },
 				application: "application:collaboration",
 				postgresSchema: "collaboration",
 				migrationHead: "000001_create-collaboration",
@@ -160,29 +160,29 @@ test("binding and receipt mismatches fail closed", async () => {
 	}
 });
 
-test("rejects a forged expected version and an installed pre-v8 protocol", async () => {
+test("rejects a forged expected version and an installed pre-v9 protocol", async () => {
 	const forgedObserved = { transactions: 0, names: [] as string[] };
 	await expect(
 		verifyPostgresDatabaseReadinessPrerequisites({
-			database: runner(() => [[8, checksum]], forgedObserved),
-			protocol: { version: 7, checksum } as never,
+			database: runner(() => [[9, checksum]], forgedObserved),
+			protocol: { version: 8, checksum } as never,
 			application: "application:collaboration",
 			postgresSchema: "collaboration",
 			migrationHead: "000001_create-collaboration",
 			committedMigrations: migrations,
 		}),
-	).rejects.toThrow("expected PostgreSQL readiness protocol must be v8");
+	).rejects.toThrow("expected PostgreSQL readiness protocol must be v9");
 	expect(forgedObserved.transactions).toBe(0);
 
 	const installedObserved = { transactions: 0, names: [] as string[] };
 	await expect(
 		verifyPostgresDatabaseReadinessPrerequisites({
-			database: runner(() => [[7, checksum]], installedObserved),
-			protocol: { version: 8, checksum },
+			database: runner(() => [[8, checksum]], installedObserved),
+			protocol: { version: 9, checksum },
 			application: "application:collaboration",
 			postgresSchema: "collaboration",
 			migrationHead: "000001_create-collaboration",
 			committedMigrations: migrations,
 		}),
-	).rejects.toThrow("questpie_internal protocol v8 is not installed");
+	).rejects.toThrow("questpie_internal protocol v9 is not installed");
 });
