@@ -13,6 +13,10 @@ import {
 } from "./collection-input";
 import { createCollectionLifecycleCheckExecutor } from "./collection-lifecycle-check";
 import {
+	createCollectionListAccess,
+	type CollectionListResult,
+} from "./collection-list";
+import {
 	decodeMutationFieldInput,
 	decodeMutationFieldResult,
 	type MutationFieldCodecV1,
@@ -35,6 +39,7 @@ import type {
 	LinkedPostgresGetOperationPlanV1,
 	LinkedPostgresUpdateOperationPlanV1,
 } from "./postgres-program";
+import type { LinkedCollectionMutationProgramsV1 } from "./program";
 
 type Row = Readonly<Record<string, unknown>>;
 type Path = MutationFieldPath;
@@ -239,11 +244,12 @@ export function createCollectionMutationData(
 		executionBudget?: CollectionExecutionBudget;
 		issueMappings?: RuntimeIssueMappings;
 		callId?: string;
+		collectionOperations?: LinkedCollectionMutationProgramsV1;
 		acceptJob?(identity: string, request: unknown): Promise<unknown>;
 		executeList?(
 			identity: string,
 			request: unknown,
-		): Promise<Readonly<{ nodes: readonly Row[]; observed: number }>>;
+		): Promise<CollectionListResult>;
 	}>,
 ) {
 	const scope = createCollectionExecutionScope({
@@ -274,18 +280,12 @@ export function createCollectionMutationData(
 		decode: (row, result) => decodeRow(row, result, input.resultValuesDecoded),
 		consumeRows,
 	});
-	const executeList = input.executeList
-		? async (identity: string, request: unknown, started: number) => {
-				const result = await executeCollectionStatement({
-					budget: executionBudget,
-					started,
-					durationMilliseconds: 5_000,
-					use: () => input.executeList!(identity, request),
-				});
-				consumeRows(result.observed);
-				return result.nodes;
-			}
-		: undefined;
+	const lists = createCollectionListAccess({
+		operations: input.collectionOperations,
+		execute: input.executeList,
+		budget: executionBudget,
+		consumeRows,
+	});
 	type CollectionData = Readonly<
 		Record<
 			string,
@@ -299,7 +299,7 @@ export function createCollectionMutationData(
 		doom: lifecycleDoom,
 		budget: executionBudget,
 		executeGet,
-		executeList,
+		executeList: lists.lifecycle,
 		executeWrite: async (identity, request) => {
 			const plan = input.plans.byIdentity.get(identity);
 			if (!plan || (plan.member !== "create" && plan.member !== "update"))
@@ -796,5 +796,5 @@ export function createCollectionMutationData(
 			]),
 		),
 	);
-	return data;
+	return lists.bind(data);
 }

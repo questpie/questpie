@@ -418,6 +418,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						);
 						const data = createCollectionMutationData({
 							plans: input.collectionPlans,
+							collectionOperations: input.collectionOperations,
 							facts,
 							operationTime: owner.operationTime,
 							resultValuesDecoded: true,
@@ -450,6 +451,17 @@ export function createPostgresDatabaseMutationInvoker<View>(
 										"Lifecycle list argument must be an object",
 									);
 								const values = argument as Readonly<Record<string, unknown>>;
+								const expected = linkedPlan.plan.binding.parameters
+									.map(({ name }) => name)
+									.sort();
+								const actual = Object.keys(values).sort();
+								if (
+									actual.length !== expected.length ||
+									actual.some((name, index) => name !== expected[index])
+								)
+									throw new TypeError(
+										"Collection list argument must have exactly the compiled parameters",
+									);
 								let observation: PostgresQueryObservationV1 | undefined;
 								const page = await executePostgresTransactionQuery({
 									linkedPlan,
@@ -486,6 +498,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 									);
 								return Object.freeze({
 									nodes: page.nodes,
+									pageInfo: page.pageInfo,
 									observed: observation.observed,
 								});
 							},

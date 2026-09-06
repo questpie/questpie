@@ -381,7 +381,12 @@ function dataFor(
 		issueMappings,
 		executionBudget,
 		lifecycleDoom,
-		executeList,
+		executeList: executeList
+			? async (identity, request) => ({
+					...(await executeList(identity, request)),
+					pageInfo: { endCursor: null, hasNextPage: false },
+				})
+			: undefined,
 	});
 }
 
