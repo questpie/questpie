@@ -82,10 +82,13 @@ validation, database time, and what a database tzdb update means for future
 matches. Runtime-host locale/ICU cannot decide a tick. Start with one optional
 schedule per Job; the research suggestion of multiple slots has no consumer yet.
 
-Missed-tick policy remains a material product decision: accept every missed
-instant in bounded batches, or explicitly coalesce to the latest missed instant.
-Neither is an implementation detail. The proof must also cover first activation,
-Context/acceptance failures, backlog bounds, cancellation, and restart.
+The owner approved one catch-up run after downtime, not replay of every missed
+minute. The candidate therefore coalesces missed instants to the latest due
+instant and advances its durable frontier explicitly. This is a recorded product
+direction, not yet a proven or Accepted scheduler contract. It does not cancel
+or merge runs already accepted before the outage, nor change their retry policy.
+The proof must cover concurrent catch-up, first activation, Context/acceptance
+failures, backlog bounds, cancellation, and restart.
 
 ### 3. Activation, identity, and removal
 

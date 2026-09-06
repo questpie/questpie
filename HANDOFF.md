@@ -844,6 +844,8 @@ The active frontier is static Job schedules and the minimum named-Mutation
 checkpoint needed by a minute sweep, tracked in #365 and
 `docs/v4/research/static-job-schedules/DECISION-MAP.md`. The human explicitly
 keeps dynamic schedules as application-owned data, not framework schedule CRUD.
+The human also selected one catch-up run after downtime, rather than replaying
+every missed minute; preserve already accepted runs and their independent retries.
 ADR-0016/0017/0026 own the accepted direction; the unresolved producer,
 calendar, activation/removal, and checkpoint contracts need focused proof.
 
