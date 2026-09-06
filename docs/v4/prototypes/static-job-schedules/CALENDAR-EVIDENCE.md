@@ -2,7 +2,7 @@
 
 - Date: 2026-09-06
 - Candidate input: Proposed ADR-0043
-- Scope: standalone parser and latest-match model only
+- Scope: standalone parser/latest-match model and SELECT-only PostgreSQL oracle
 - Authority: none; this evidence does not accept or project ADR-0043
 
 ## Falsified boundary
@@ -63,13 +63,40 @@ The branch also ran the repository formatter and warning-denying linter over
 the three proof files, a standalone strict TypeScript check over both `.ts`
 files, and `git diff --check` before its proof commit. All returned zero.
 
+The PostgreSQL oracle in `calendar-postgres.test.ts` enumerates at most 10,080
+minutes per fixed test window with `generate_series`, extracts UTC fields, and
+selects the latest match. It shares parser-produced field sets, not the
+backwards-by-day search. It therefore tests evaluator agreement independently,
+but does not independently prove parser grammar or canonicalization. Every SQL
+statement is SELECT-only; the connection is not an enforced read-only role or
+transaction. No database, schema, row, or setting is created or changed.
+
+Independent review covered UTC extraction, frontier exclusivity, oracle work
+bounds, cleanup, and these evidence limitations. The PostgreSQL tests require
+process-only PG settings and assert major version 17; a skipped run is not
+evidence.
+
+The live PostgreSQL 17 run, including a window with several quarter-hour
+matches, passed:
+
+```text
+bun test docs/v4/prototypes/static-job-schedules/calendar.test.ts docs/v4/prototypes/static-job-schedules/calendar-postgres.test.ts
+17 pass, 0 fail, 0 skip, 65 assertions
+bun run --bun tsc -p docs/v4/prototypes/static-job-schedules/tsconfig.json
+exit 0
+```
+
+The standalone configuration now includes both activation and calendar proofs.
+
 ## Residual proof work
 
-This model does not prove compiler Origins or artifact linkage, PostgreSQL
-clock ownership, activation/frontier transactions, concurrent tick uniqueness,
-schedule counts, transaction-time budgets, or Job acceptance. Production must
-not use Runtime-host `Date` as calendar authority. PostgreSQL 17 integration
-must reproduce the same canonical UTC answers and own the observed instant.
+This model does not prove compiler Origins or artifact linkage, activation/
+frontier transactions, concurrent tick uniqueness, schedule counts,
+transaction-time budgets, or real Job acceptance. The PostgreSQL oracle checks
+selected UTC answers and one database-derived whole-minute instant. Production
+still must capture `clock_timestamp()` once after acquiring the activation lock,
+validate linked artifacts, and commit frontier progress with real Job acceptance.
+Runtime-host `Date` must not decide the observed instant.
 
 Named zones, DST, aliases, seconds, years, wrapping ranges, special tokens, and
 multiple schedules are outside this candidate slice. No dependency or timer

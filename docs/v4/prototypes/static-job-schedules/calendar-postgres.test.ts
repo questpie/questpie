@@ -88,12 +88,22 @@ async function expectPostgresAgreement(
 	return postgresMatch;
 }
 
-postgresTest("uses a PostgreSQL 17 read-only calendar oracle", async () => {
+postgresTest("uses a PostgreSQL 17 SELECT-only calendar oracle", async () => {
 	const [row] = await database!.unsafe<
 		readonly Readonly<{ version: number }>[]
 	>("SELECT current_setting('server_version_num')::integer AS version");
 	expect(row?.version).toBeGreaterThanOrEqual(170_000);
 	expect(row?.version).toBeLessThan(180_000);
+});
+
+postgresTest("chooses the latest of several PostgreSQL matches", async () => {
+	expect(
+		await expectPostgresAgreement(
+			"*/15 * * * *",
+			"2026-09-06T00:00:00.000Z",
+			"2026-09-06T01:07:00.000Z",
+		),
+	).toEqual(new Date("2026-09-06T01:00:00.000Z"));
 });
 
 postgresTest(

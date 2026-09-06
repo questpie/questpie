@@ -9,5 +9,11 @@
 		"target": "ESNext",
 		"types": ["bun"]
 	},
-	"include": ["activation.ts", "activation.test.ts"]
+	"include": [
+		"activation.ts",
+		"activation.test.ts",
+		"calendar.ts",
+		"calendar.test.ts",
+		"calendar-postgres.test.ts"
+	]
 }

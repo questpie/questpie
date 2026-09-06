@@ -860,10 +860,12 @@ stopped before new work; overlapping unguarded workers remain unsafe.
 The repair passes the affected PostgreSQL 17 and both Firefox tracers,
 `quality:release`, and two byte-identical forced-build release dry-runs.
 Checkpoint commit/result recovery is the next blocking proof. The activation
-model under
-`docs/v4/prototypes/static-job-schedules` has 11 passing PostgreSQL tests and
-independent synthetic-model review; it does not prove calendar evaluation or
-real Job acceptance. Keep ADR-0043 Proposed.
+model under `docs/v4/prototypes/static-job-schedules` has 11 passing PostgreSQL
+tests and independent synthetic-model review. The separate UTC calendar proof
+has bounded latest-match search and a PostgreSQL 17 oracle; it does not prove
+compiler artifacts or clock capture inside real tick acceptance. Neither model
+proves real scheduled Job acceptance or checkpoint execution. Keep ADR-0043
+Proposed.
 
 The behavior-preserving DX cleanup #360 through #363 is complete. The preserved
 pre-schedule candidate `863120698` has final `quality:release` PASS and a valid
