@@ -81,6 +81,56 @@ test("bounds a centuries-long outage by Gregorian days, never missed minutes", (
 	expect(result.examinedDays).toBeLessThan(370);
 });
 
+test("distinguishes the 2100 century exception from the 2400 leap year", () => {
+	const leapDay = parseUtcCron("0 0 29 2 *");
+	expect(
+		evaluateLatestCronMatch(
+			leapDay,
+			new Date("2095-01-01T00:00:00.000Z"),
+			new Date("2104-02-28T23:59:00.000Z"),
+		).match,
+	).toEqual(new Date("2096-02-29T00:00:00.000Z"));
+	expect(
+		evaluateLatestCronMatch(
+			leapDay,
+			new Date("2399-01-01T00:00:00.000Z"),
+			new Date("2400-03-01T00:00:00.000Z"),
+		).match,
+	).toEqual(new Date("2400-02-29T00:00:00.000Z"));
+});
+
+test("handles the lower and upper supported UTC year boundaries", () => {
+	const newYear = parseUtcCron("0 0 1 1 *");
+	expect(
+		evaluateLatestCronMatch(
+			newYear,
+			new Date("0001-12-31T00:00:00.000Z"),
+			new Date("0002-01-01T00:00:00.000Z"),
+		).match,
+	).toEqual(new Date("0002-01-01T00:00:00.000Z"));
+	const everyMinute = parseUtcCron("* * * * *");
+	expect(
+		evaluateLatestCronMatch(
+			everyMinute,
+			new Date("9999-12-31T23:58:00.000Z"),
+			new Date("9999-12-31T23:59:00.000Z"),
+		).match,
+	).toEqual(new Date("9999-12-31T23:59:00.000Z"));
+	expect(() =>
+		evaluateLatestCronMatch(
+			everyMinute,
+			new Date("9999-12-31T23:59:00.000Z"),
+			new Date("+010000-01-01T00:00:00.000Z"),
+		),
+	).toThrow("year 1 through 9999");
+});
+
+test("currently normalizes JavaScript Unicode whitespace between fields", () => {
+	expect(parseUtcCron("\u00a0*/15\t0-12/12\n*\r*\f* ")).toEqual(
+		parseUtcCron("*/15 0-12/12 * * *"),
+	);
+});
+
 test("uses UTC weekday fields and rejects non-minute or unsupported-year inputs", () => {
 	const sunday = parseUtcCron("0 0 * * 0");
 	expect(

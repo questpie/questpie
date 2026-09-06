@@ -32,6 +32,12 @@ These are prototype bounds, not Accepted product limits:
   parsing;
 - UTC numeric fields use the proleptic Gregorian behavior modeled by
   ECMAScript `Date` in this standalone proof.
+- authored text currently uses JavaScript `trim()` plus Unicode `\s` splitting,
+  so leading, trailing, and inter-field JavaScript whitespace normalize away;
+  this is a provisional parser assumption, not a projected public grammar;
+- the evaluator trusts a canonical program produced by `parseUtcCron`; it does
+  not validate forged arrays or mutable foreign artifacts. Production requires
+  an artifact decoder that reconstructs and validates this invariant.
 
 The year bound is conservative and executable. ADR-0043 or its implementation
 must either ratify it or replace it with an equally finite PostgreSQL-owned
@@ -50,7 +56,7 @@ Implemented proof:
 
 ```text
 bun test docs/v4/prototypes/static-job-schedules/calendar.test.ts
-8 pass, 0 fail, 35 assertions
+11 pass, 0 fail, 41 assertions
 ```
 
 The branch also ran the repository formatter and warning-denying linter over
