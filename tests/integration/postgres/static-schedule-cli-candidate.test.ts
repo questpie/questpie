@@ -42,6 +42,7 @@ postgres(
 				cwd,
 				env: {
 					...process.env,
+					PGDATABASE: name,
 					DATABASE_URL: url.href,
 					QUESTPIE_REALTIME_HMAC_KEY: "",
 					...environment,
@@ -77,6 +78,14 @@ postgres(
 			} finally {
 				await probe.end();
 			}
+			await ok(
+				[
+					"bun",
+					"-e",
+					`const sql = new Bun.SQL(process.env.DATABASE_URL); try { const [row] = await sql\`select current_database() as name\`; if (row.name !== new URL(process.env.DATABASE_URL).pathname.slice(1)) throw new Error("CLI_DATABASE_ISOLATION_FAILED"); } finally { await sql.close(); }`,
+				],
+				temporary,
+			);
 			const packageRoot = join(repository, "packages/questpie");
 			await ok(["bun", "run", "build"], packageRoot);
 			await ok(
@@ -144,6 +153,7 @@ for(;;){const view=await app.durable.inspect(receipt.runId);if(view?.state==="su
 				cwd: consumer,
 				env: {
 					...process.env,
+					PGDATABASE: name,
 					DATABASE_URL: url.href,
 					QUESTPIE_REALTIME_HMAC_KEY: "a".repeat(64),
 				},
