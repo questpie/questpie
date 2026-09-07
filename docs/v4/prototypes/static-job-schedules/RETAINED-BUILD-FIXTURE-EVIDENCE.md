@@ -102,3 +102,35 @@ ten-instance timing failure is retained, alongside the separate
 [contention failures](./CONTENTION-CANDIDATE-EVIDENCE.md); neither budget was
 raised and no retry was used to replace a failing measurement. Full integrated
 gates and stable-runner performance closure remain the integration owner's work.
+
+## Setup-failure cleanup
+
+Independent review found an inherited fixture ownership gap: after the preparer
+returned, a rejected generated-module load or later setup step could strand the
+prepared artifact directory and any already acquired application/database owner.
+The public fixture disposer then re-awaited rejected construction instead of
+releasing those resources.
+
+One disposer local to `buildBeta08Durable` now covers successful and failed
+construction. It attempts to close every acquired application, then the database
+owner, then dispose both prepared builds; one cleanup failure cannot prevent the remaining
+cleanup attempts. Cleanup failures remain in an `AggregateError`, following the
+testkit convention. When setup also failed, `SuppressedError` retains the exact
+original setup error and the cleanup aggregate, following the Runtime Service
+disposal convention. Repeated public fixture disposal after rejected setup is
+benign because construction already performed and reported cleanup.
+
+`bun test tests/unit/beta08-fixture-cleanup.test.ts` first failed all five cases,
+then passed all five with 10 outer assertions. The cases fail generated loading,
+application creation, database acquisition, or Principal creation after database
+acquisition; the final case additionally fails all three cleanup operations and
+checks every retained error. Temporary artifact directories are real and their
+removal is asserted before the test runner's own cleanup.
+
+The tests substitute the preparer and acquired application/database handles in
+isolated Bun children. This is explicit fault injection at the test-helper
+boundary, not compiler, application startup or PostgreSQL engine evidence. It
+adds no production injection API, generic cleanup utility or dependency on an
+external database. The ordinary strict proof typecheck, scoped warning-denying
+lint, formatting and diff check pass. No real-fixture compilation or PostgreSQL
+rerun was performed for this follow-up while the integration gate was active.

@@ -188,239 +188,270 @@ async function buildBeta08Durable(
 	database: SQL,
 ): Promise<Readonly<{ harness: Beta08Harness; dispose: () => Promise<void> }>> {
 	const prepared = await prepareBeta05PostgresApplication(database);
-	// The relocated fixture links its own `questpie` module, so its branded
-	// Principal is the trusted value the maintenance surface requires.
-	const framework = prepared.generated.framework as Readonly<{
-		principal: Readonly<{ user(input: Readonly<{ id: string }>): Principal }>;
-	}>;
-	const internal = (await prepared.generated.loadInternal()) as Readonly<{
-		bindIngressPrincipalForRequest(
-			request: Request,
-			principal: unknown,
-		): Request;
-		createApplication(
-			input: Readonly<{
-				postgres: Readonly<{
-					connectionUrl: string;
-					directConnectionUrl: string;
-				}>;
-				realtime: Readonly<{ hmacKey: Uint8Array }>;
-				maintenance: Readonly<{
-					authorize(
-						input: Readonly<{
-							actor: Readonly<{ kind: string; id: string }>;
-							command: string;
-							runId: string;
-						}>,
-					): boolean | Promise<boolean>;
-				}>;
-			}>,
-		): Promise<Beta08Application>;
-	}>;
 	const applications = new Set<Beta08Application>();
-	const currentRuntimeBuildBytes = prepared.runtimeBuildBytes;
-	const currentRuntimeBuild = JSON.parse(currentRuntimeBuildBytes) as Readonly<
-		Record<string, unknown>
-	>;
-	const createApplication = async (entry = internal) => {
-		const application = await entry.createApplication({
-			postgres: {
-				connectionUrl: beta05PostgresUrl(),
-				directConnectionUrl: beta05PostgresUrl(),
-			},
-			realtime: { hmacKey: new Uint8Array(32).fill(8) },
-			maintenance: {
-				authorize: ({ actor }) => actor.id === beta05Ids.principal,
-			},
-		});
-		applications.add(application);
-		return application;
-	};
+	let databaseOwner: PostgresDatabase | undefined;
 	let retained: ReturnType<typeof prepareBeta05RetainedApplication> | undefined;
-	const createRetainedApplication = async () => {
-		const build = await (retained ??= prepareBeta05RetainedApplication());
-		const manifest = JSON.parse(build.runtimeBuildBytes) as Readonly<
-			Record<string, unknown>
-		>;
-		if (manifest.digest === currentRuntimeBuild.digest)
-			throw new Error("Retained fixture must carry distinct executable bytes");
-		for (const key of [
-			"application",
-			"internalProtocol",
-			"schemaFingerprint",
-			"committedMigrationsDigest",
-			"clientContractDigest",
-			"operationHttpContractDigest",
-			"policyProjectionDigest",
-			"postgresContextBootstrapPlansDigest",
-		])
-			if (manifest[key] !== currentRuntimeBuild[key])
-				throw new Error(`Retained fixture changed ${key} compatibility`);
-		return createApplication(
-			(await build.generated.loadInternal()) as typeof internal,
+	let disposed = false;
+	const dispose = async () => {
+		if (disposed) return;
+		disposed = true;
+		const outcomes = await Promise.allSettled(
+			[...applications].map(async (application) => application.close()),
 		);
-	};
-	const app = await createApplication();
-	// Load the source database owner only after the generated application bundle.
-	// Bun cannot load the source `pg` entry while the independently bundled copy
-	// is still being initialized by the generated module.
-	const { createPostgresDatabase } =
-		await import("../../../../packages/runtime/src/postgres");
-	const runtimeDatabase: PostgresDatabase = createPostgresDatabase({
-		connectionUrl: beta05PostgresUrl(),
-		directConnectionUrl: beta05PostgresUrl(),
-		pool: {
-			max: 4,
-			connectTimeoutMs: 5_000,
-			checkoutTimeoutMs: 5_000,
-			idleTimeoutMs: 1_000,
-			maxLifetimeSeconds: 60,
-		},
-		timeouts: {
-			statementMs: 10_000,
-			lockMs: 2_000,
-			idleInTransactionMs: 10_000,
-		},
-	});
-	const reactionProjectionBytes = await Bun.file(
-		resolve(prepared.generated.generatedRoot, "reaction-projection.json"),
-	).text();
-	const runtimeBuild = JSON.parse(prepared.runtimeBuildBytes) as Readonly<{
-		application: string;
-		clientContractDigest: string;
-		operationHttpContractDigest: string;
-	}>;
-	const principal = framework.principal.user({ id: beta05Ids.principal });
-	const readerPrincipal = framework.principal.user({
-		id: beta05Ids.readerPrincipal,
-	});
-	const reactions = linkReactionProjection(JSON.parse(reactionProjectionBytes));
-	const attemptPostgres = createPostgresDatabaseDurableAttemptObservation({
-		database: runtimeDatabase,
-	});
-	const runExplicitNullAttempt = <Result>(
-		claim: DurableClaim,
-		use: () => Result | Promise<Result>,
-	) =>
-		attemptPostgres.run({
-			observation: null,
-			principalKind: claim.principal.kind,
-			signal: undefined,
-			use,
-		});
-	const exposeKernel = (kernel: DurableKernel): DurableKernel =>
-		Object.freeze<DurableKernel>({
-			...kernel,
-			heartbeat: (claim) =>
-				runExplicitNullAttempt(claim, () => kernel.heartbeat(claim)),
-			succeed: (claim, resultBytes) =>
-				runExplicitNullAttempt(claim, () => kernel.succeed(claim, resultBytes)),
-			fail: (claim, failure) =>
-				runExplicitNullAttempt(claim, () => kernel.fail(claim, failure)),
-			cancel: (claim) =>
-				runExplicitNullAttempt(claim, () => kernel.cancel(claim)),
-		});
-	const exposeLedger = (ledger: DurableEffectLedger): DurableEffectLedger =>
-		Object.freeze<DurableEffectLedger>({
-			...ledger,
-			reserve: (claim, request) =>
-				runExplicitNullAttempt(claim, () => ledger.reserve(claim, request)),
-			settle: (claim, request) =>
-				runExplicitNullAttempt(claim, () => ledger.settle(claim, request)),
-			markAmbiguous: (claim, request) =>
-				runExplicitNullAttempt(claim, () =>
-					ledger.markAmbiguous(claim, request),
+		outcomes.push(
+			...(await Promise.allSettled([
+				Promise.resolve().then(() =>
+					databaseOwner?.close({ deadlineAt: Date.now() + 5_000 }),
 				),
-		});
-	const createKernel = (
-		options: Readonly<{ random?: () => number; claimBatch?: number }> = {},
-	) =>
-		createPostgresDatabaseDurableKernel({
-			runtimeBuildDigest: String(currentRuntimeBuild.digest),
-			database: runtimeDatabase,
-			attemptDatabase: attemptPostgres.database,
-			application: beta08Application,
-			reactions,
-			claimBatch: options.claimBatch,
-			random: options.random,
-		});
-	const kernel = exposeKernel(createKernel());
-	const ledger = exposeLedger(
-		createPostgresDatabaseDurableEffectLedger({
-			database: runtimeDatabase,
-			attemptDatabase: attemptPostgres.database,
-			application: beta08Application,
-		}),
-	);
-	const harness = Object.freeze({
-		app,
-		createSiblingApplication: () => createApplication(),
-		createRetainedApplication,
-		fetch: (request: Request) => app.fetch(request),
-		bindPrincipal: (request: Request) => {
-			const headers = new Headers(request.headers);
-			headers.set(
-				"cookie",
-				"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
-			);
-			return internal.bindIngressPrincipalForRequest(
-				new Request(request, { headers }),
-				principal,
-			);
-		},
-		mutationRequest: (operation: string, input: unknown) => {
-			const name = operation.slice("mutation:".length);
-			return new Request(`http://runtime.test/_questpie/mutation/${name}`, {
-				method: "POST",
-				headers: {
-					"content-type": "application/json",
-					"Idempotency-Key": encodeURIComponent(crypto.randomUUID()),
-					"Questpie-Application": runtimeBuild.application,
-					"Questpie-Client-Contract": runtimeBuild.clientContractDigest,
-					"Questpie-Wire-Digest": runtimeBuild.operationHttpContractDigest,
-					"Questpie-Timeout-Milliseconds": "5000",
+			])),
+		);
+		outcomes.push(
+			...(await Promise.allSettled([
+				Promise.resolve().then(() => prepared.dispose()),
+				retained?.then(
+					(build) => build.dispose(),
+					() => undefined,
+				),
+			])),
+		);
+		const failures = outcomes.flatMap((outcome) =>
+			outcome.status === "rejected" ? [outcome.reason] : [],
+		);
+		if (failures.length)
+			throw new AggregateError(failures, "BETA-08 fixture cleanup failed");
+	};
+	try {
+		// The relocated fixture links its own `questpie` module, so its branded
+		// Principal is the trusted value the maintenance surface requires.
+		const framework = prepared.generated.framework as Readonly<{
+			principal: Readonly<{ user(input: Readonly<{ id: string }>): Principal }>;
+		}>;
+		const internal = (await prepared.generated.loadInternal()) as Readonly<{
+			bindIngressPrincipalForRequest(
+				request: Request,
+				principal: unknown,
+			): Request;
+			createApplication(
+				input: Readonly<{
+					postgres: Readonly<{
+						connectionUrl: string;
+						directConnectionUrl: string;
+					}>;
+					realtime: Readonly<{ hmacKey: Uint8Array }>;
+					maintenance: Readonly<{
+						authorize(
+							input: Readonly<{
+								actor: Readonly<{ kind: string; id: string }>;
+								command: string;
+								runId: string;
+							}>,
+						): boolean | Promise<boolean>;
+					}>;
+				}>,
+			): Promise<Beta08Application>;
+		}>;
+		const currentRuntimeBuildBytes = prepared.runtimeBuildBytes;
+		const currentRuntimeBuild = JSON.parse(
+			currentRuntimeBuildBytes,
+		) as Readonly<Record<string, unknown>>;
+		const createApplication = async (entry = internal) => {
+			const application = await entry.createApplication({
+				postgres: {
+					connectionUrl: beta05PostgresUrl(),
+					directConnectionUrl: beta05PostgresUrl(),
 				},
-				body: JSON.stringify({
-					context: { companyId: beta05Ids.company },
-					input,
-				}),
+				realtime: { hmacKey: new Uint8Array(32).fill(8) },
+				maintenance: {
+					authorize: ({ actor }) => actor.id === beta05Ids.principal,
+				},
 			});
-		},
-		compilation: prepared.compilation,
-		database: runtimeDatabase,
-		kernel,
-		kernelWith: (
-			options: Readonly<{ random?: () => number; claimBatch?: number }>,
-		) => exposeKernel(createKernel(options)),
-		ledger,
-		// The maintenance surface the generated application publishes: its
-		// Principal brand is the one the relocated fixture mints, so a test drives
-		// the same object an operator would.
-		maintenance: app.durable,
-		reactionProjectionBytes,
-		runtimeBuildDigest: String(currentRuntimeBuild.digest),
-		principal,
-		readerPrincipal,
-	});
-	return Object.freeze({
-		harness,
-		dispose: async () => {
-			await Promise.allSettled(
-				[...applications].map((application) => application.close()),
+			applications.add(application);
+			return application;
+		};
+		const createRetainedApplication = async () => {
+			const build = await (retained ??= prepareBeta05RetainedApplication());
+			const manifest = JSON.parse(build.runtimeBuildBytes) as Readonly<
+				Record<string, unknown>
+			>;
+			if (manifest.digest === currentRuntimeBuild.digest)
+				throw new Error(
+					"Retained fixture must carry distinct executable bytes",
+				);
+			for (const key of [
+				"application",
+				"internalProtocol",
+				"schemaFingerprint",
+				"committedMigrationsDigest",
+				"clientContractDigest",
+				"operationHttpContractDigest",
+				"policyProjectionDigest",
+				"postgresContextBootstrapPlansDigest",
+			])
+				if (manifest[key] !== currentRuntimeBuild[key])
+					throw new Error(`Retained fixture changed ${key} compatibility`);
+			return createApplication(
+				(await build.generated.loadInternal()) as typeof internal,
 			);
-			try {
-				await runtimeDatabase.close({ deadlineAt: Date.now() + 5_000 });
-			} finally {
-				await Promise.all([
-					retained?.then(
-						(build) => build.dispose(),
-						() => undefined,
+		};
+		const app = await createApplication();
+		// Load the source database owner only after the generated application bundle.
+		// Bun cannot load the source `pg` entry while the independently bundled copy
+		// is still being initialized by the generated module.
+		const { createPostgresDatabase } =
+			await import("../../../../packages/runtime/src/postgres");
+		const runtimeDatabase = (databaseOwner = createPostgresDatabase({
+			connectionUrl: beta05PostgresUrl(),
+			directConnectionUrl: beta05PostgresUrl(),
+			pool: {
+				max: 4,
+				connectTimeoutMs: 5_000,
+				checkoutTimeoutMs: 5_000,
+				idleTimeoutMs: 1_000,
+				maxLifetimeSeconds: 60,
+			},
+			timeouts: {
+				statementMs: 10_000,
+				lockMs: 2_000,
+				idleInTransactionMs: 10_000,
+			},
+		}));
+		const reactionProjectionBytes = await Bun.file(
+			resolve(prepared.generated.generatedRoot, "reaction-projection.json"),
+		).text();
+		const runtimeBuild = JSON.parse(prepared.runtimeBuildBytes) as Readonly<{
+			application: string;
+			clientContractDigest: string;
+			operationHttpContractDigest: string;
+		}>;
+		const principal = framework.principal.user({ id: beta05Ids.principal });
+		const readerPrincipal = framework.principal.user({
+			id: beta05Ids.readerPrincipal,
+		});
+		const reactions = linkReactionProjection(
+			JSON.parse(reactionProjectionBytes),
+		);
+		const attemptPostgres = createPostgresDatabaseDurableAttemptObservation({
+			database: runtimeDatabase,
+		});
+		const runExplicitNullAttempt = <Result>(
+			claim: DurableClaim,
+			use: () => Result | Promise<Result>,
+		) =>
+			attemptPostgres.run({
+				observation: null,
+				principalKind: claim.principal.kind,
+				signal: undefined,
+				use,
+			});
+		const exposeKernel = (kernel: DurableKernel): DurableKernel =>
+			Object.freeze<DurableKernel>({
+				...kernel,
+				heartbeat: (claim) =>
+					runExplicitNullAttempt(claim, () => kernel.heartbeat(claim)),
+				succeed: (claim, resultBytes) =>
+					runExplicitNullAttempt(claim, () =>
+						kernel.succeed(claim, resultBytes),
 					),
-					prepared.dispose(),
-				]);
-			}
-		},
-	});
+				fail: (claim, failure) =>
+					runExplicitNullAttempt(claim, () => kernel.fail(claim, failure)),
+				cancel: (claim) =>
+					runExplicitNullAttempt(claim, () => kernel.cancel(claim)),
+			});
+		const exposeLedger = (ledger: DurableEffectLedger): DurableEffectLedger =>
+			Object.freeze<DurableEffectLedger>({
+				...ledger,
+				reserve: (claim, request) =>
+					runExplicitNullAttempt(claim, () => ledger.reserve(claim, request)),
+				settle: (claim, request) =>
+					runExplicitNullAttempt(claim, () => ledger.settle(claim, request)),
+				markAmbiguous: (claim, request) =>
+					runExplicitNullAttempt(claim, () =>
+						ledger.markAmbiguous(claim, request),
+					),
+			});
+		const createKernel = (
+			options: Readonly<{ random?: () => number; claimBatch?: number }> = {},
+		) =>
+			createPostgresDatabaseDurableKernel({
+				runtimeBuildDigest: String(currentRuntimeBuild.digest),
+				database: runtimeDatabase,
+				attemptDatabase: attemptPostgres.database,
+				application: beta08Application,
+				reactions,
+				claimBatch: options.claimBatch,
+				random: options.random,
+			});
+		const kernel = exposeKernel(createKernel());
+		const ledger = exposeLedger(
+			createPostgresDatabaseDurableEffectLedger({
+				database: runtimeDatabase,
+				attemptDatabase: attemptPostgres.database,
+				application: beta08Application,
+			}),
+		);
+		const harness = Object.freeze({
+			app,
+			createSiblingApplication: () => createApplication(),
+			createRetainedApplication,
+			fetch: (request: Request) => app.fetch(request),
+			bindPrincipal: (request: Request) => {
+				const headers = new Headers(request.headers);
+				headers.set(
+					"cookie",
+					"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+				);
+				return internal.bindIngressPrincipalForRequest(
+					new Request(request, { headers }),
+					principal,
+				);
+			},
+			mutationRequest: (operation: string, input: unknown) => {
+				const name = operation.slice("mutation:".length);
+				return new Request(`http://runtime.test/_questpie/mutation/${name}`, {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"Idempotency-Key": encodeURIComponent(crypto.randomUUID()),
+						"Questpie-Application": runtimeBuild.application,
+						"Questpie-Client-Contract": runtimeBuild.clientContractDigest,
+						"Questpie-Wire-Digest": runtimeBuild.operationHttpContractDigest,
+						"Questpie-Timeout-Milliseconds": "5000",
+					},
+					body: JSON.stringify({
+						context: { companyId: beta05Ids.company },
+						input,
+					}),
+				});
+			},
+			compilation: prepared.compilation,
+			database: runtimeDatabase,
+			kernel,
+			kernelWith: (
+				options: Readonly<{ random?: () => number; claimBatch?: number }>,
+			) => exposeKernel(createKernel(options)),
+			ledger,
+			// The maintenance surface the generated application publishes: its
+			// Principal brand is the one the relocated fixture mints, so a test drives
+			// the same object an operator would.
+			maintenance: app.durable,
+			reactionProjectionBytes,
+			runtimeBuildDigest: String(currentRuntimeBuild.digest),
+			principal,
+			readerPrincipal,
+		});
+		return Object.freeze({ harness, dispose });
+	} catch (error) {
+		try {
+			await dispose();
+		} catch (cleanupError) {
+			throw new SuppressedError(
+				cleanupError,
+				error,
+				"BETA-08 setup and cleanup failed",
+			);
+		}
+		throw error;
+	}
 }
 
 let building: Promise<
@@ -440,7 +471,13 @@ export async function beta08Harness(database: SQL): Promise<Beta08Harness> {
 export async function disposeBeta08Harness(): Promise<void> {
 	const built = building;
 	building = null;
-	if (built) await (await built).dispose();
+	// Failed construction already disposed its acquired resources and reported
+	// any cleanup failures together with the original setup failure.
+	if (built)
+		await built.then(
+			(value) => value.dispose(),
+			() => undefined,
+		);
 }
 
 /**

@@ -10,6 +10,7 @@
 		"types": ["bun"]
 	},
 	"include": [
+		"../../../../tests/unit/beta08-fixture-cleanup.test.ts",
 		"../../../../tests/integration/postgres/beta10-retained-build-ownership.test.ts",
 		"../../../../tests/integration/postgres/pb05-postgres-database-durable-maintenance.test.ts",
 		"../../../../tests/load/beta10-ten-instance.ts",
