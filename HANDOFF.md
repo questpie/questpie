@@ -859,8 +859,9 @@ attempt consumption for another build, and recovery through retained artifacts.
 `EXECUTABLE-PINNING.md` records the reproduced defect, regression matrix, and
 whole-build retention cost. Pre-repair candidate workers must be drained and
 stopped before new work; overlapping unguarded workers remain unsafe.
-The repair passes the affected PostgreSQL 17 and both Firefox tracers,
-`quality:release`, and two byte-identical forced-build release dry-runs.
+That earlier repair passed the affected PostgreSQL 17 and both Firefox tracers,
+`quality:release`, and two byte-identical forced-build release dry-runs. Those
+results are historical and do not describe the latest integrated gate outcome.
 The candidate's generated workers now exercise stable checkpoint identity,
 retained-receipt recovery, caught-error doom, owned promise joining, cancellation,
 lease takeover and Context/admission versus Collection-only replay authority.
@@ -873,9 +874,17 @@ Release-wide regression uncovered compiler source-read ownership, explicit
 database-target, fenced-outcome and retained protocol-upgrade defects. Their
 focused repairs remain in the candidate. The v9 cutover preserves the existing
 v8 acknowledgement and rechecks current protocol state after its lock wait.
-Do not describe the broad gates as passed until the final integrated head has
-fresh results and exact package artifact pins. ADR-0043 remains Proposed;
-no formal acceptance review has been invoked.
+The current candidate passes `quality:release`, including its ordinary, React
+and packed-package checks; performance manifests were validated only. Its
+complete PostgreSQL lane failed at the 60-second schedule owner-deadline test.
+Focused deadline diagnostics and the three-file consumer tail pass but neither
+explains that stall nor replaces the complete lane. A new complete PostgreSQL
+result remains pending. The
+[owner-deadline evidence](docs/v4/prototypes/static-job-schedules/OWNER-DEADLINE-EVIDENCE.md)
+retains the failure, diagnostic limits and cleanup. Full PostgreSQL and affected
+load/soak closure, formal acceptance, public authority projection and manual
+preview remain pending. ADR-0043 remains Proposed; no formal acceptance review
+has been invoked. Final gate evidence must bind the exact package artifacts.
 
 The owner additionally requires a manually inspectable Team Support Desk before
 publication, with domain-local backend Definitions, a product `web/` independent
