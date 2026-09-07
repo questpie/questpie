@@ -191,7 +191,12 @@
 		{
 			"name": "HANDOFF.md",
 			"path": "HANDOFF.md",
-			"sha256": "847bb03a7b7f6e394c3445212577b095ed0c352119c8e9814cf94c4650c8358e"
+			"sha256": "d8e7666f8453e936adfd40f5bfcaaadff4fa27f77fc67b4e11001e3d606189ea"
+		},
+		{
+			"name": "candidate preflight rejection and owner decision boundary",
+			"path": "docs/v4/prototypes/static-job-schedules/ACCEPTANCE-PREFLIGHT-BLOCKER.md",
+			"sha256": "4cb87a436cb3d63dd6da572c85cb610c26563e7bccf48127f617b1048470346a"
 		}
 	],
 	"verification": [

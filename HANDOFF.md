@@ -888,11 +888,21 @@ Mutation test's late promise ownership was reproduced and repaired; the original
 60-second schedule stall remains unexplained despite the subsequent complete
 lane PASS. No production limit was changed.
 
-Next is the committed ADR-0043 manifest and formal review, then public authority
-projection only after a verified PASS, followed by the replacement aggregate
-beta.2 review. ADR-0043 and ADR-0039 remain Proposed; no schedule acceptance
-review has been invoked. Tagged stable-runner release evidence and the manual
-preview remain pending. The local passes do not make this candidate release-ready.
+The ADR-0043 manifest is committed. Its credential-free packet preflight rejects
+a credential-bearing URL in removed historical README content; nothing was sent
+to a reviewer. The
+[preflight blocker](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-PREFLIGHT-BLOCKER.md)
+records the exact boundary and pending owner decision. Do not hide diff content
+or weaken the scanner. The additional 64-program PostgreSQL owner proof passes
+the full affected file with five tests and 254 assertions; its evidence does not
+relabel the preceding integrated lanes as rerun.
+
+Formal review remains unconsumed. Public authority projection requires a verified
+PASS, followed by the replacement aggregate beta.2 review. ADR-0043 and ADR-0039
+remain Proposed. Tagged stable-runner release evidence and the user's manual
+preview remain pending. The restored example host is loopback-only on port 43122;
+existing tailnet mappings are preserved. Local passes do not make this candidate
+release-ready.
 
 The owner additionally requires a manually inspectable Team Support Desk before
 publication, with domain-local backend Definitions, a product `web/` independent
