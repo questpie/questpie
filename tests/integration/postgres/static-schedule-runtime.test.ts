@@ -117,13 +117,20 @@ postgres.each([false, true])(
 				await installer?.close({ timeout: 2 });
 			} finally {
 				await pending;
-				await waiter?.close({ timeout: 2 });
-				if (previousDatabase === undefined) delete process.env.PGDATABASE;
-				else process.env.PGDATABASE = previousDatabase;
-				if (previousDatabaseAlias === undefined) delete process.env.PG_DATABASE;
-				else process.env.PG_DATABASE = previousDatabaseAlias;
-				if (created) await admin.query(`DROP DATABASE "${ownedDatabase}"`);
-				await admin.end();
+				try {
+					await waiter?.close({ timeout: 2 });
+				} finally {
+					if (previousDatabase === undefined) delete process.env.PGDATABASE;
+					else process.env.PGDATABASE = previousDatabase;
+					if (previousDatabaseAlias === undefined)
+						delete process.env.PG_DATABASE;
+					else process.env.PG_DATABASE = previousDatabaseAlias;
+					try {
+						if (created) await admin.query(`DROP DATABASE "${ownedDatabase}"`);
+					} finally {
+						await admin.end();
+					}
+				}
 			}
 		}
 	},

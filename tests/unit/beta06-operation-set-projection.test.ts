@@ -541,6 +541,7 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 				["priority"],
 				["reference"],
 				["requesterMembershipId"],
+				["slaFollowUpDueAt"],
 				["status"],
 				["summary"],
 				["teamId"],
