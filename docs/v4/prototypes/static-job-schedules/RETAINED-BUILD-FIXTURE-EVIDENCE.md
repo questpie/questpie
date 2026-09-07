@@ -3,8 +3,9 @@
 This repair replaces synthetic version labels in the load, soak and maintenance
 fixtures with two complete compiler-built applications. It changes no production
 artifact verifier, Runtime compatibility rule, workload count or timing budget.
-ADR-0043 remains Proposed; the unresolved performance gates still block formal
-acceptance.
+ADR-0043 remains Proposed. The later
+[complete local matrix](./CONTENTION-CANDIDATE-EVIDENCE.md#integrated-reference-local-run)
+passes; the failures recorded here remain historical evidence, not erased samples.
 
 ## Failure and authority
 
@@ -100,8 +101,11 @@ The host was shared and compiler work continued during the consumer checks.
 The soak command's local PASS is not tagged stable-runner evidence. The
 ten-instance timing failure is retained, alongside the separate
 [contention failures](./CONTENTION-CANDIDATE-EVIDENCE.md); neither budget was
-raised and no retry was used to replace a failing measurement. Full integrated
-gates and stable-runner performance closure remain the integration owner's work.
+raised and no retry was used to replace a failing measurement. The later
+[integrated checks](./OWNER-DEADLINE-EVIDENCE.md#final-integrated-candidate-checks)
+and complete local matrix pass on the final candidate. They do not convert these
+shared-host measurements into tagged stable-runner release evidence. Formal
+acceptance and strict release performance evidence remain outstanding.
 
 ## Setup-failure cleanup
 

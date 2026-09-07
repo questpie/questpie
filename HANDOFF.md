@@ -874,23 +874,25 @@ Release-wide regression uncovered compiler source-read ownership, explicit
 database-target, fenced-outcome and retained protocol-upgrade defects. Their
 focused repairs remain in the candidate. The v9 cutover preserves the existing
 v8 acknowledgement and rechecks current protocol state after its lock wait.
-The current candidate passes `quality:release`, including its ordinary, React
-and packed-package checks; performance manifests were validated only. Its
-complete PostgreSQL lane failed at the 60-second schedule owner-deadline test.
-Focused deadline diagnostics and the three-file consumer tail pass but neither
-explains that stall nor replaces the complete lane. A second full PostgreSQL
-run failed earlier in the Membership-after-Channel-lock Mutation case, followed
-by an unhandled missing-table error; it never reached the deadline file. That
-Mutation test's late promise ownership is now reproduced and repaired: client
-and server roots are observed immediately and joined before rollback counts
-and fixture disposal. Its full file passes with unchanged limits and independent
-Standards/Spec review. The schedule stall remains unexplained, and the complete
-PostgreSQL lane still needs a passing integrated run. The
+The integrated candidate passes `quality:release`, the complete PostgreSQL 17
+lane (185 passes, four environment skips, 1,983 assertions across 44 roots), and
+the focused proof TypeScript project. A single predeclared, sequential run of
+all four affected load/soak scenarios also passes with unchanged workloads and
+budgets. It is `reference-local` evidence, not tagged stable-runner evidence.
+The
 [owner-deadline evidence](docs/v4/prototypes/static-job-schedules/OWNER-DEADLINE-EVIDENCE.md)
-retains both failures, diagnostic limits and cleanup. Full PostgreSQL and affected
-load/soak closure, formal acceptance, public authority projection and manual
-preview remain pending. ADR-0043 remains Proposed; no formal acceptance review
-has been invoked. Final gate evidence must bind the exact package artifacts.
+records the exact candidate, commands, package checks and cleanup; the
+[contention evidence](docs/v4/prototypes/static-job-schedules/CONTENTION-CANDIDATE-EVIDENCE.md#integrated-reference-local-run)
+records the complete local matrix. Earlier failures remain retained. The
+Mutation test's late promise ownership was reproduced and repaired; the original
+60-second schedule stall remains unexplained despite the subsequent complete
+lane PASS. No production limit was changed.
+
+Next is the committed ADR-0043 manifest and formal review, then public authority
+projection only after a verified PASS, followed by the replacement aggregate
+beta.2 review. ADR-0043 and ADR-0039 remain Proposed; no schedule acceptance
+review has been invoked. Tagged stable-runner release evidence and the manual
+preview remain pending. The local passes do not make this candidate release-ready.
 
 The owner additionally requires a manually inspectable Team Support Desk before
 publication, with domain-local backend Definitions, a product `web/` independent

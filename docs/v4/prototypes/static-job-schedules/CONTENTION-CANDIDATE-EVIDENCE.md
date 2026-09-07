@@ -1,10 +1,11 @@
-# Worker contention: unresolved performance gate
+# Worker contention and integrated local measurements
 
 This record preserves the failed contention gate and its bounded comparison on
 2026-09-07. The measurements do not establish a candidate-specific regression,
-but they do not close the gate. ADR-0043 remains Proposed. Formal acceptance must
-wait for deterministic gate closure; successful samples cannot replace the
-failures below.
+but did not close the gate. The later complete
+[reference-local run](#integrated-reference-local-run) passes without replacing
+the failures below. ADR-0043 remains Proposed; this is not formal acceptance or
+tagged stable-runner release evidence.
 
 ## Original failure and comparison
 
@@ -112,9 +113,33 @@ reading PostgreSQL would change that observable distinction even though no tick
 could be accepted.
 
 The 2000 ms budget, workload and consumer remain unchanged. No producer fast
-path, performance waiver or production patch was introduced. The gate remains
-unresolved. Strict release budgets require stable tagged-runner evidence under
-the repository quality rule; this shared-host record is not that evidence.
-Subsequent closure must retain these failures and record its runner conditions,
-commands and results. ADR-0043 acceptance cannot proceed while its required
-deterministic gates remain unresolved.
+path, performance waiver or production patch was introduced. The comparison
+left the gate unresolved; the later complete run is recorded below. Strict
+release budgets still require stable tagged-runner evidence under the repository
+quality rule. ADR-0043 acceptance cannot proceed while any required deterministic
+gate remains unresolved.
+
+## Integrated reference-local run
+
+On candidate `fcf2adeeb`, one predeclared sequential invocation of the complete
+four-scenario matrix passed. The coordinator stopped its other compiler and
+PostgreSQL verification work before starting; the machine remained a shared
+development host, not a tagged stable runner. Every scenario reported
+`evidenceClass: "reference-local"`. Earlier failures above and in the
+[retained-build record](./RETAINED-BUILD-FIXTURE-EVIDENCE.md) remain evidence;
+this run establishes neither their sole cause nor stable performance.
+
+| Command                                                          | Result                                                                                                                                       |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun run test:load -- --scenario beta08-worker-contention`       | PASS: 822.651 ms against 2000 ms; 64 runs, eight workers, zero duplicate attempts                                                            |
+| `bun run test:load -- --scenario beta10-ten-instance`            | PASS: 1940.702 ms against 15000 ms; ten instances, 20 direct roots, 20 network posts, 40 runs, zero duplicate attempts or drained admissions |
+| `bun run test:load -- --scenario pb05-mutation-transaction-tail` | PASS: 1,000 measured calls, 500 fresh and 500 replay samples, 500 fresh writes and zero replay writes                                        |
+| `bun run test:soak -- --scenario beta10-soak-chaos`              | PASS: 5935.412 ms against 60000 ms; 80 runs, one recovered crash attempt, three replacements, zero failed runs or drained admissions         |
+
+Workloads, budgets and production limits are unchanged. The log records each
+scenario's start, exit zero and owned-database cleanup in order. The coordinator
+verified removal of all four exact owned databases. The complete log is
+`/home/drepkovsky/code/questpie-v4-beta2-verification.l3bsSH/affected-load-soak-fcf2adeeb.log`;
+this is local provenance, not a portable prerequisite. The complete local matrix
+closes the affected candidate load/soak checks. Strict tagged-runner release
+evidence remains outstanding; no release or public performance claim follows.

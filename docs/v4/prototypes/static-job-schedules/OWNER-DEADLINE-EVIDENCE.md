@@ -116,8 +116,8 @@ only its intended failure; joined cancellation counts were zero and the next
 schema-reset case passed without an unhandled error. All owned databases were
 removed. Logs and the removed control are retained under
 `/home/drepkovsky/code/questpie-v4-beta06-settlement-proof.w0eBGY`.
-This repairs the second failure, not the unexplained schedule stall or the full
-PostgreSQL lane.
+This repairs the second failure, not the unexplained schedule stall. Complete
+lane evidence is recorded separately below.
 
 The same candidate's `quality:release` completed: the ordinary suite reported
 1,107 passes, 195 gated skips and zero failures; React reported three passes and
@@ -150,4 +150,36 @@ release dry-run logs in the same directory use suffixes `6c673e931-1` and
 and its three named diagnostic logs; and
 `/home/drepkovsky/code/questpie-v4-team-tail-proof.D0O50E` for the three tail logs.
 These paths document local evidence, not portable build prerequisites. The
-original failure remains retained while complete integrated closure is pending.
+original failure remains retained and its cause remains unexplained.
+
+## Final integrated candidate checks
+
+Candidate `fcf2adeeb` passes `bun run quality:release`: 1,107 ordinary passes,
+195 gated skips and zero failures; React passes three tests with 15 assertions;
+packed OTel05 and OTel06 pass with 2,333 and 24 assertions respectively. The 19
+performance manifests were validated only. A separate complete
+`bun run test:postgres` passes 185 tests with 1,983 assertions across all 44
+registered roots. Its four environment skips are three PostgreSQL-18-only
+catalog cases and one PgBouncer case. The schedule deadline file passes all
+four tests with 104 assertions; no required schedule/checkpoint case is skipped.
+This complete PASS does not explain or erase the earlier 60-second stall.
+
+The exact focused TypeScript command in Verification also passes on this
+candidate. Its log is empty; the coordinating agent recorded exit zero. The
+[complete affected load/soak matrix](./CONTENTION-CANDIDATE-EVIDENCE.md#integrated-reference-local-run)
+passes separately as `reference-local` evidence. Workload counts, timing budgets,
+production owner deadlines and test guards remain unchanged.
+
+Two forced builds of `questpie` and `questpie-opentelemetry`, each followed by
+`bun run release -- --dry-run`, also pass on the same clean candidate. Both
+dry-run logs are byte-identical, including archive hashes and isolated import,
+negative import, peer, optional React, packed application and exact-two-package
+combined-import checks. Their local logs use `forced-build-fcf2adeeb-1/2.log`
+and `release-dry-run-fcf2adeeb-1/2.log` in the verification directory below.
+
+Local logs are `quality-release-fcf2adeeb.log` and `proof-types-fcf2adeeb.log`
+under `/home/drepkovsky/code/questpie-v4-beta2-verification.l3bsSH`, and
+`/home/drepkovsky/code/questpie-v4-full-postgres-fcf2.vJijOB/full-postgres.log`.
+These are local provenance, not portable build prerequisites. ADR-0043 remains
+Proposed. Formal review and verified public projection remain pending; tagged
+stable-runner release evidence and manual preview are separate outstanding work.
