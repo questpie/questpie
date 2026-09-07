@@ -1,8 +1,8 @@
 import { definePolicy, expr, policy } from "questpie";
 
-import { labels } from "../labels";
 import { memberships } from "../memberships";
 import { tickets } from "../tickets";
+import { labels } from "./index";
 
 export const labelPolicy = definePolicy(labels, {
 	name: "labels.default",

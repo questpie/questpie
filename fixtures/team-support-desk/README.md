@@ -1,68 +1,86 @@
 # Team Support Desk
 
-Team Support Desk is the production-like QUESTPIE v4 reference application. It
-keeps application declarations, generated artifacts, the Bun host, and the
-Firefox tracer visibly separate so a reader can follow one request without
-fixture-only shortcuts leaking into application code.
+Team Support Desk is the QUESTPIE v4 reference application for a tenant-aware
+support queue. Follow a browser interaction through generated Operations,
+Policy, PostgreSQL writes, and Live Query updates.
 
-## Module map
+## Recommended application layout
 
-- `src/{organizations,memberships,teams,tickets,comments,labels}.ts` own the six
-  Collection schemas and relations.
-- `src/<domain>/policy.ts` and `src/<domain>/operations.ts` keep authorization
-  and Collection lifecycle next to the domain they govern.
-- `src/{tickets,labels,teams}/queries.ts` and adjacent query-plan files own
-  network Queries, pagination, filters, and nested relation selection. Ticket
-  detail projects its bounded comments array in the same structural Query.
-- `src/ticket-mutations.ts`, `src/ticket-sla-follow-up-job.ts`,
-  `src/notification-action.ts`, and `src/inbound-webhook-route.ts` own ticket
-  commands and execution-boundary effects.
-- `src/execution.ts` resolves the tenant-aware execution context;
-  `src/{identity-seed,demo-seed}.ts` provide deterministic public seed data.
-- `src/auth/*` owns the Better Auth-backed credential Service and the public
-  `/api/auth/*` Routes. `runtime/better-auth.ts` owns deployment-time auth
-  configuration and its bounded PostgreSQL pool; `tracer/auth/*` owns Better
-  Auth migration and idempotent local identity seed entrypoints.
-- `tracer/host.ts` serves static assets and fixture-control endpoints, runs the
-  durable worker, and delegates every framework request to `application.fetch`.
-- `tracer/browser/main.tsx` bootstraps React 19. `browser/app.tsx` coordinates
-  local UI state, while `browser/tickets/*` owns queue, detail, and dialogs.
-  `browser/tickets/edit-input.ts` derives role-aware edit input from the
-  generated client contract, `browser/tracer/*` owns Firefox automation,
-  `browser/auth/*` owns Better Auth login/session/logout, and
-  `browser/questpie.ts` is the only application-data transport boundary.
+Group source by the business domain that changes together. This tree is an
+application convention, not a compiler requirement: `questpie.json` selects
+`src` for Definition discovery, while explicit Resource names own identity.
 
-Generated output lives under `.questpie/`; migrations and seeds committed for
-the fixture live under `questpie/`.
+```text
+src/
+  execution.ts                  application Context
+  tickets/
+    index.ts                    Ticket Collection and lifecycle
+    policy.ts                   Ticket authorization
+    operations.ts               Collection Operation declarations
+    queries.ts, query-plans.ts   named and structural Queries
+    mutations.ts                ticket commands
+    sla-sweep.ts, sla-follow-up.ts
+    inbound-webhook.ts
+  organizations/, memberships/, teams/, comments/, labels/
+  auth/                         credentials, Routes, auth Service
+  notifications/                notification Action and Service
+web/
+  main.tsx, app.tsx              product UI entry and composition
+  auth/, tickets/               UI grouped by domain
+  questpie.ts                   generated client and inferred result types
+  shared/format.ts              formatting used by several components
+runtime/                        external deployment adapters
+questpie/                       committed migrations and immutable Seeds
+tracer/                         local host, receiver, and test automation
+.questpie/                      compiler output
+```
 
-## Execution flow
+Each domain's `index.ts` contains its Collection declaration; it is not a
+pass-through barrel. Keep named Operations and local helpers beside that
+Collection. Add a shared helper only after real consumers need it. Source moves
+retain Resource names but change Origins and executable artifacts: rebuild and
+review the generated diff after a move. Do not rewrite migration or Seed
+history to match the folder layout.
 
-The browser signs in through the Better Auth React client. Two public QUESTPIE
-Routes delegate `GET` and `POST /api/auth/*` to the standard Better Auth handler;
-the application credential resolver validates its session and emits a user
-Principal. Session Organization, Membership, and role values are routing hints:
-`src/execution.ts` re-reads the current Membership and remains tenant and Policy
-authority. The browser then creates a context-scoped generated client and sends
-every application Query, Mutation, and Action through `#questpie/client`. The
-generated client calls
-kind-specific `/_questpie/query/<name>`, `/_questpie/mutation/<name>`, and
-`/_questpie/action/<name>` endpoints; the host delegates them unchanged to
-`application.fetch`.
-Mutations use Policy-authorized Collection operations, comments enqueue their
-immediate SLA Job, and the Action performs the external notification request.
-The same host polls durable work so delayed, retrying, cancelled, and recovered
-runs exercise the PostgreSQL-backed runtime. The sole manual browser `fetch`
-posts Firefox progress to the clearly fixture-only report endpoint.
+Useful entrypoints:
 
-## Commands
+- [Ticket schema and lifecycle](src/tickets/index.ts),
+  [Policy](src/tickets/policy.ts), and [commands](src/tickets/mutations.ts).
+- [Context](src/execution.ts) and [credential resolution](src/auth/credentials.ts).
+- [Web app](web/app.tsx), [selected ticket](web/tickets/selected.tsx), and
+  [generated client boundary](web/questpie.ts).
+- [Runtime adapters](runtime/) and [committed database artifacts](questpie/).
+- [Tracer host](tracer/host.ts) and [browser tracer entry](tracer/browser/main.tsx).
 
-Run these from this directory with a PostgreSQL 17 connection URL:
+## Application and tracer boundaries
+
+The browser signs in with the Better Auth React client. QUESTPIE Routes delegate
+`/api/auth/*` to Better Auth, and credential resolution produces a user
+Principal. Session Organization, Membership, and role values are routing hints;
+Context reads the current Membership and Policy controls each Operation.
+All application data uses `#questpie/client`. React subscribes through
+`questpie/react`; it owns no second request cache or post-Mutation refresh loop.
+
+The normal `web/main.tsx` bundle contains no tracer reporting or automatic
+journey. The separate tracer entry imports that same web app, signs in through
+its auth client, selects views through the DOM, and exercises generated
+Operations. Fixture reporting lives only under `tracer/`.
+
+The local host serves web assets, OpenAPI, and Scalar, runs the existing durable
+worker, and delegates framework requests to `application.fetch`. It also
+starts a loopback test notification receiver on port 43121. Its permissive
+fixture maintenance authorizer and fixed test realtime key are test controls;
+this host is not a production deployment template.
+
+## Run locally
+
+From this directory, provide the database connection and Better Auth secret
+through the environment. Use PostgreSQL 17 for the checked tracer. Keep real
+credentials out of source and shell history. The auth deployment adapter reads
+`DATABASE_URL` and `BETTER_AUTH_SECRET`; `BETTER_AUTH_TRUSTED_HOST` is optional
+for an authorized tailnet HTTPS hostname.
 
 ```sh
-export DATABASE_URL=postgres://postgres:questpie@127.0.0.1:55432/questpie
-export BETTER_AUTH_SECRET=replace-with-at-least-32-random-characters
-# Optional for tailnet HTTPS, for example: devbox.example.ts.net:*
-export BETTER_AUTH_TRUSTED_HOST=your-host.your-tailnet.ts.net:*
 bunx questpie build
 bunx questpie migration apply
 bunx questpie seed apply
@@ -71,54 +89,62 @@ bun run auth:seed
 bun tracer/host.ts --port=43120
 ```
 
-The local auth seed creates three public fixture identities:
+The auth seed creates the customer, agent, and admin personas offered by the
+login form. Their public fixture values are defined in
+[demo identities](src/auth/demo-identities.ts). A normal launch does not run
+browser automation. URLs with tracer parameters select a separate instrumented
+bundle for the automated tests.
 
-| Role     | Email                      | Password              |
-| -------- | -------------------------- | --------------------- |
-| Customer | `customer@support.example` | `Customer-demo-2026!` |
-| Agent    | `agent@support.example`    | `Agent-demo-2026!`    |
-| Admin    | `admin@support.example`    | `Admin-demo-2026!`    |
+The static-schedule candidate has additional cutover and activation steps in
+its [internal draft](../../docs/v4/research/static-job-schedules/PUBLIC-GUIDE-DRAFT.md).
+Those commands remain candidate-only until formal acceptance; booting this host
+does not activate schedules.
 
-These credentials are demo data, not deployable secrets.
+## Manual review
 
-The host compiles all React source into one minified `/desk.js` browser bundle.
-It also serves the compiler-generated OpenAPI document at `/openapi.json` and
-an interactive Scalar view at `/api-reference`. Scalar is fixture-only: it
-renders the same checked artifact and does not add a QUESTPIE Runtime route or
-another operation registry. Its wrapper reads the compiler-owned application
-and digest values from the generated document, hides that compatibility trio
-from Scalar's per-request form, and adds it before a request. Call ID and
-timeout remain available as advanced headers, while Query Context stays
-explicit: sign in through the reference application and supply canonical
-base64url Context for that user's matching `organizationId` and `membershipId`.
-The Scalar placeholder `Value` is not a valid Context and correctly returns
-`PROTOCOL_UNSUPPORTED`; the generated client performs this encoding for normal
-application code.
+| Try in the web app                                       | Framework behavior visible to the reviewer           |
+| -------------------------------------------------------- | ---------------------------------------------------- |
+| Sign in, reload, sign out; switch personas               | Auth session and role-dependent UI                   |
+| Filter by status/team, paginate, find an exact reference | Generated Queries and bounded pages                  |
+| Open ticket detail and comments                          | Relations, inverse selection, conditional disclosure |
+| Create, edit, assign, comment, close, reopen             | Named Mutations, lifecycle, server values, Policy    |
+| Observe another session's edits                          | Live Query and generated Query Resources             |
+| Send summary                                             | Action through the local HTTP provider               |
+| Observe Last SLA follow-up after an activated sweep      | Job-driven Mutation and Live Query result            |
 
-Typecheck the fixture from the repository root:
+Open `/api-reference` for Scalar or `/openapi.json` for the generated document.
+Sign in first. Scalar fills the three compiler compatibility headers; supply
+canonical base64url Context for the signed-in user's matching organization and
+Membership. Its placeholder `Value` is invalid. The regular generated client
+encodes Context automatically.
+
+MCP is enabled at `POST /_questpie/mcp`; see the
+[MCP guide](../../apps/docs/content/docs/v4/basic-mcp.mdx) for its protocol and
+request metadata. There is no separate MCP UI.
+
+Job inspection, retry/cancellation, schedule activation, signed webhook input,
+and telemetry require their server/CLI/test surfaces. This UI has no general
+admin editor for Memberships, teams, or labels. Crash recovery, competing
+workers, receipt corruption, rollback races, and authority-revocation guarantees
+are automated evidence, not claims established by clicking the app. Other
+fixtures cover Reaction and Package composition; absent framework capabilities
+such as Files, Search, and Studio are not implied by this example.
+
+## Verify
+
+From the repository root, run the structural and application-contract checks:
 
 ```sh
+bun test tests/integration/team-support-structure.test.ts
 bunx tsc -p fixtures/team-support-desk/tsconfig.json --noEmit
 ```
 
-Run the complete PostgreSQL 17 and Firefox tracer from the repository root:
+With the disposable PostgreSQL environment selected and Firefox available, run
+`bun test tests/integration/postgres/team-support-desk.test.ts`. Follow that
+test's database ownership requirements. The ordinary React adapter test remains
+under `tracer/browser/`.
 
-```sh
-PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres \
-PGPASSWORD=questpie PGDATABASE=questpie QUESTPIE_POSTGRES_MAJOR=17 \
-FIREFOX_BIN=/usr/bin/firefox \
-bun test tests/integration/postgres/team-support-desk.test.ts
-```
-
-For tailnet-only manual testing, keep the host bound to loopback and let
-Tailscale terminate HTTPS on a dedicated port:
-
-```sh
-tailscale serve --bg --https=8444 http://127.0.0.1:43120
-```
-
-Open `https://<machine>.<tailnet>.ts.net:8444/` from an authorized tailnet
-device. Do not use Funnel for this fixture. Inspect existing Serve mappings
-before adding or removing this port so unrelated services remain untouched. To
-remove only this mapping, run `tailscale serve --https=8444 off` (with `sudo`
-when the local Tailscale operator policy requires it).
+For authorized tailnet review, keep the host on loopback and inspect existing
+Serve mappings before adding a dedicated HTTPS port. The existing local setup
+uses `tailscale serve --bg --https=8444 http://127.0.0.1:43120`. Remove only that
+mapping with `tailscale serve --https=8444 off` after the session. Use no Funnel.

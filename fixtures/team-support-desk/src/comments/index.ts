@@ -2,8 +2,8 @@ import { constraint, defineCollection, field, index, relation } from "questpie";
 
 import type { CollectionLifecycle } from "#questpie/app";
 
-import { memberships } from "./memberships";
-import { tickets } from "./tickets";
+import { memberships } from "../memberships";
+import { tickets } from "../tickets";
 
 export const comments = defineCollection({
 	name: "comments",

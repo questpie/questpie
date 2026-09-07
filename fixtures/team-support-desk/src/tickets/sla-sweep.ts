@@ -2,7 +2,7 @@ import { codec, durable, operation, policy, principal } from "questpie";
 
 import { defineJob, defineMutation } from "#questpie/app";
 
-import { demoIds } from "./demo-ids";
+import { demoIds } from "../demo-ids";
 
 export const sweepSla = defineMutation({
 	name: "ticket.sweepSla",

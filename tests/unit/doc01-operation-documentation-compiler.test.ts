@@ -164,8 +164,8 @@ describe("DOC-01 compiler integration", () => {
 		await compileApplication({ applicationRoot: root, outputDirectory });
 		for (const relativePath of [
 			"src/tickets/queries.ts",
-			"src/ticket-mutations.ts",
-			"src/notification-action.ts",
+			"src/tickets/mutations.ts",
+			"src/notifications/action.ts",
 			"src/tickets/operations.ts",
 		]) {
 			const path = join(root, relativePath);

@@ -125,7 +125,7 @@ test("ships one optional-peer React subpath with no second client owner", () => 
 });
 
 test("Team Support Desk observes ticket comments through one detail resource", () => {
-	const browserRoot = resolve(import.meta.dir);
+	const browserRoot = resolve(import.meta.dir, "../../web");
 	const sources = [
 		readFileSync(resolve(browserRoot, "app.tsx"), "utf8"),
 		readFileSync(resolve(browserRoot, "questpie.ts"), "utf8"),

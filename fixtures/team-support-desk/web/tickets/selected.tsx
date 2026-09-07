@@ -1,8 +1,7 @@
 import { useQueryResource } from "questpie/react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import type { SupportSession } from "../auth/client";
-import { reportFixturePhase } from "../fixture-control";
 import type { SupportDesk } from "../questpie";
 import { errorMessage } from "../shared/format";
 import { TicketDetailPanel } from "./detail";
@@ -35,7 +34,6 @@ export function SelectedTicket({
 	const [actionKind, setActionKind] = useState<"ok" | "error">("ok");
 	const [editError, setEditError] = useState("");
 	const editDialog = useRef<HTMLDialogElement>(null);
-	const selectionReported = useRef(false);
 
 	const snapshots = [detailSnapshot, labelsSnapshot] as const;
 	const failure = snapshots.find((snapshot) => snapshot.kind === "failed");
@@ -68,21 +66,6 @@ export function SelectedTicket({
 					: "Live ticket view is current.";
 	const ticket = detailSnapshot.kind === "ready" ? detailSnapshot.value : null;
 	const labels = labelsSnapshot.kind === "ready" ? labelsSnapshot.value : null;
-
-	useEffect(() => {
-		if (
-			selectionReported.current ||
-			detailSnapshot.kind !== "ready" ||
-			detailSnapshot.value === null
-		)
-			return;
-		selectionReported.current = true;
-		void reportFixturePhase({
-			phase: "ticket-selected",
-			reference: detailSnapshot.value.reference,
-			ticketId,
-		});
-	}, [detailSnapshot, ticketId]);
 
 	async function execute<Output>(
 		label: string,
@@ -158,19 +141,12 @@ export function SelectedTicket({
 				onSummary={() => {
 					if (!ticket) return;
 					const effectKey = `browser:summary:${ticket.reference}:${crypto.randomUUID()}`;
-					void execute("Sending summary", async () => {
-						const result = await desk.actions["notification.sendTicketSummary"](
+					void execute("Sending summary", () =>
+						desk.actions["notification.sendTicketSummary"](
 							{ ticketId: ticket.id },
 							{ effectKey, timeoutMilliseconds: 3_000 },
-						);
-						await reportFixturePhase({
-							effectId: result.effectId,
-							effectKey,
-							phase: "summary-sent",
-							receipt: result.providerReceipt,
-							ticketReference: result.ticketReference,
-						});
-					}).catch(() => undefined);
+						),
+					).catch(() => undefined);
 				}}
 				onTransition={() => {
 					if (!ticket) return;

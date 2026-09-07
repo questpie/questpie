@@ -2,7 +2,7 @@ import { codec, expr } from "questpie";
 
 import { defineQuery } from "#questpie/app";
 
-import { tickets } from "../tickets";
+import { tickets } from "./index";
 import { ticketDetailPlan, ticketSearchByReferencePlan } from "./query-plans";
 
 const membershipSummaryCodec = codec.object({

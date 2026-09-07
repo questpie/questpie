@@ -2,7 +2,7 @@ import { codec, operation, policy } from "questpie";
 
 import { defineMutation } from "#questpie/app";
 
-import { tickets } from "./tickets";
+import { tickets } from "./index";
 
 const ticketResultCodec = codec.object({
 	id: codec.uuid(),

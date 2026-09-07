@@ -1,7 +1,7 @@
 import { codec } from "questpie";
 
+import { tickets } from "..";
 import { comments } from "../../comments";
-import { tickets } from "../../tickets";
 
 const ticketComments = comments.list({
 	first: 50,

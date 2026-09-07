@@ -30,8 +30,8 @@ export async function startTeamSlaBrowser(input: {
 	expect(build.success).toBe(true);
 	expect(build.outputs).toHaveLength(1);
 	const [html, styles, javascript] = await Promise.all([
-		readFile(join(fixture, "tracer/index.html"), "utf8"),
-		readFile(join(fixture, "tracer/styles.css"), "utf8"),
+		readFile(join(fixture, "web/index.html"), "utf8"),
+		readFile(join(fixture, "web/styles.css"), "utf8"),
 		build.outputs[0]!.text(),
 	]);
 	let report: Record<string, unknown> = {};

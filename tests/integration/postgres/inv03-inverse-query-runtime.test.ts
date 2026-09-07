@@ -25,7 +25,7 @@ import {
 import {
 	integrationCredentialHeader,
 	localIntegrationKey,
-} from "../../../fixtures/team-support-desk/src/auth";
+} from "../../../fixtures/team-support-desk/src/auth/credentials";
 import { demoIds } from "../../../fixtures/team-support-desk/src/demo-ids";
 import { installQuestpieForTracer } from "../../support/beta12-packed-questpie";
 

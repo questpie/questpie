@@ -1,20 +1,10 @@
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useState } from "react";
 
-import { demoAuthIdentities } from "../../../src/auth/demo-identities";
+import { demoAuthIdentities } from "../../src/auth/demo-identities";
 import { DeskApplication } from "../app";
-import { reportFixturePhase } from "../fixture-control";
 import { createSupportDesk } from "../questpie";
 import { errorMessage } from "../shared/format";
 import { authClient, supportSession } from "./client";
-
-type DemoPersona = keyof typeof demoAuthIdentities;
-
-function tracerPersona(): DemoPersona | null {
-	const value = new URL(location.href).searchParams.get("tracerPersona");
-	return value === "customer" || value === "agent" || value === "admin"
-		? value
-		: null;
-}
 
 async function signIn(email: string, password: string): Promise<void> {
 	const result = await authClient.signIn.email({ email, password });
@@ -28,35 +18,19 @@ function LoginScreen() {
 	);
 	const [busy, setBusy] = useState(false);
 	const [failure, setFailure] = useState("");
-	const automaticStarted = useRef(false);
 
 	async function authenticate(nextEmail: string, nextPassword: string) {
 		setBusy(true);
 		setFailure("");
 		try {
 			await signIn(nextEmail, nextPassword);
-			await reportFixturePhase({
-				authProvider: "better-auth",
-				phase: "authenticated",
-			});
 		} catch (error) {
 			const message = errorMessage(error);
 			setFailure(message);
-			await reportFixturePhase({ error: message, phase: "auth-error" });
 		} finally {
 			setBusy(false);
 		}
 	}
-
-	useEffect(() => {
-		const persona = tracerPersona();
-		if (persona === null || automaticStarted.current) return;
-		automaticStarted.current = true;
-		const identity = demoAuthIdentities[persona];
-		setEmail(identity.email);
-		setPassword(identity.password);
-		void authenticate(identity.email, identity.password);
-	}, []);
 
 	function submit(event: FormEvent<HTMLFormElement>): void {
 		event.preventDefault();

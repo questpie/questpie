@@ -37,11 +37,11 @@ The schedule uses a service Principal and the application's existing Context
 input. The service needs an active Membership with the `agent` role. This Seed
 adds that Membership after the application's identity Seed:
 
-```ts title="src/sla-sweep-seed.ts"
+```ts title="src/memberships/sweep-seed.ts"
 import { defineSeed, seed } from "questpie";
 
-import { demoIds } from "./demo-ids";
-import { memberships } from "./memberships";
+import { demoIds } from "../demo-ids";
+import { memberships } from "./index";
 
 export const supportSweepIdentity = defineSeed({
 	name: "teamSupport.sweepIdentity.v1",
@@ -74,12 +74,12 @@ time, ordered by `slaFollowUpDueAt` and then `id`. Its page limit is one. The
 Mutation locks that candidate through `get`, then checks its current status and
 due time against the transaction's `ctx.now` before updating it.
 
-```ts title="src/ticket-sla-sweep.ts"
+```ts title="src/tickets/sla-sweep.ts"
 import { codec, durable, operation, policy, principal } from "questpie";
 
 import { defineJob, defineMutation } from "#questpie/app";
 
-import { demoIds } from "./demo-ids";
+import { demoIds } from "../demo-ids";
 
 export const sweepSla = defineMutation({
 	name: "ticket.sweepSla",
@@ -258,7 +258,7 @@ Facts read from source rather than executed by this documentation task:
 - Identity and privilege: `fixtures/team-support-desk/src/execution.ts`,
   `sla-sweep-seed.ts`, and `tickets/policy.ts`; the ordinary Context validates an
   active Membership, and the application grants its `agent` role.
-- Atomic follow-up: `fixtures/team-support-desk/src/tickets.ts` `afterWrite`
+- Atomic follow-up: `fixtures/team-support-desk/src/tickets/index.ts` `afterWrite`
   accepts `ticket.slaFollowUp` with a stable Mutation-derived key.
 - CLI arguments and receipts: `packages/questpie/cli/questpie.ts`,
   `cli/schedule.ts`, and `packages/runtime/src/durable/schedule/contract.ts`.

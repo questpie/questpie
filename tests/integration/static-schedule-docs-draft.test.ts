@@ -23,8 +23,8 @@ test("compiles the exact candidate schedule guide against the Support Desk contr
 			...draft.matchAll(/^```ts title="([^"]+)"\n([\s\S]*?)\n```/gm),
 		];
 		expect(snippets.map((snippet) => snippet[1])).toEqual([
-			"src/sla-sweep-seed.ts",
-			"src/ticket-sla-sweep.ts",
+			"src/memberships/sweep-seed.ts",
+			"src/tickets/sla-sweep.ts",
 		]);
 		for (const snippet of snippets) {
 			const path = snippet[1]!;

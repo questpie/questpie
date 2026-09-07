@@ -76,13 +76,13 @@ const databaseUrl =
 	})();
 const [html, styles, scalarHtml, scalarConfiguration, openApi, browserBuild] =
 	await Promise.all([
-		readFile(resolve(import.meta.dir, "index.html"), "utf8"),
-		readFile(resolve(import.meta.dir, "styles.css"), "utf8"),
+		readFile(resolve(root, "web/index.html"), "utf8"),
+		readFile(resolve(root, "web/styles.css"), "utf8"),
 		readFile(resolve(import.meta.dir, "scalar.html"), "utf8"),
 		readFile(resolve(import.meta.dir, "scalar-configuration.js"), "utf8"),
 		readFile(resolve(root, ".questpie/generated/openapi.json"), "utf8"),
 		Bun.build({
-			entrypoints: [resolve(import.meta.dir, "browser/main.tsx")],
+			entrypoints: [resolve(root, "web/main.tsx")],
 			format: "esm",
 			minify: true,
 			target: "browser",
@@ -93,6 +93,15 @@ if (!browserBuild.success)
 if (browserBuild.outputs.length !== 1)
 	throw new TypeError("Team Support Desk must compile to one browser bundle");
 const browserJavaScript = await browserBuild.outputs[0]!.text();
+const tracerBuild = await Bun.build({
+	entrypoints: [resolve(import.meta.dir, "browser/main.tsx")],
+	format: "esm",
+	minify: true,
+	target: "browser",
+});
+if (!tracerBuild.success || tracerBuild.outputs.length !== 1)
+	throw new Error("Team Support Desk tracer bundle failed");
+const tracerJavaScript = await tracerBuild.outputs[0]!.text();
 const telemetry =
 	process.env.QUESTPIE_TRACER_OPENTELEMETRY === "1"
 		? await createOpenTelemetry({ operationalIds: "spans" })
@@ -134,12 +143,25 @@ const server = Bun.serve({
 			url.pathname.startsWith("/_questpie/action/")
 		)
 			browserOperationRequests.push(`${request.method} ${url.pathname}`);
-		if (url.pathname === "/" && request.method === "GET")
-			return response(html, "text/html; charset=utf-8");
+		if (url.pathname === "/" && request.method === "GET") {
+			const tracing = [
+				"tracerPersona",
+				"tracerReference",
+				"tracerSlaTicket",
+			].some((name) => url.searchParams.has(name));
+			return response(
+				tracing
+					? html.replace('src="/desk.js"', 'src="/desk-tracer.js"')
+					: html,
+				"text/html; charset=utf-8",
+			);
+		}
 		if (url.pathname === "/styles.css" && request.method === "GET")
 			return response(styles, "text/css; charset=utf-8");
 		if (url.pathname === "/desk.js" && request.method === "GET")
 			return response(browserJavaScript, "text/javascript; charset=utf-8");
+		if (url.pathname === "/desk-tracer.js" && request.method === "GET")
+			return response(tracerJavaScript, "text/javascript; charset=utf-8");
 		if (url.pathname === "/api-reference" && request.method === "GET")
 			return response(scalarHtml, "text/html; charset=utf-8");
 		if (url.pathname === "/scalar-configuration.js" && request.method === "GET")

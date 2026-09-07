@@ -1,6 +1,6 @@
 import { defineCollectionOperations } from "questpie";
 
-import { tickets } from "../tickets";
+import { tickets } from "./index";
 import { ticketPolicy } from "./policy";
 import { dueTickets } from "./sla-query";
 

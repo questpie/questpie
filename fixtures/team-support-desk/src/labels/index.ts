@@ -1,7 +1,7 @@
 import { constraint, defineCollection, field, index, relation } from "questpie";
 
-import { organizations } from "./organizations";
-import { tickets } from "./tickets";
+import { organizations } from "../organizations";
+import { tickets } from "../tickets";
 
 export const labels = defineCollection({
 	name: "labels",

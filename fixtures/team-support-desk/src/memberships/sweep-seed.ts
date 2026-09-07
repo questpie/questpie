@@ -1,7 +1,7 @@
 import { defineSeed, seed } from "questpie";
 
-import { demoIds } from "./demo-ids";
-import { memberships } from "./memberships";
+import { demoIds } from "../demo-ids";
+import { memberships } from "./index";
 
 export const supportSweepIdentity = defineSeed({
 	name: "teamSupport.sweepIdentity.v1",

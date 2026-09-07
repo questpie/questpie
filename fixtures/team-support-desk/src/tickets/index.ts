@@ -10,9 +10,9 @@ import {
 
 import type { CollectionLifecycle } from "#questpie/app";
 
-import { memberships } from "./memberships";
-import { organizations } from "./organizations";
-import { teams } from "./teams";
+import { memberships } from "../memberships";
+import { organizations } from "../organizations";
+import { teams } from "../teams";
 
 export const tickets = defineCollection({
 	name: "tickets",

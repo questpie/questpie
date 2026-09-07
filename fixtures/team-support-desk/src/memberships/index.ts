@@ -1,6 +1,6 @@
 import { constraint, defineCollection, field, index, relation } from "questpie";
 
-import { organizations } from "./organizations";
+import { organizations } from "../organizations";
 
 export const memberships = defineCollection({
 	name: "memberships",

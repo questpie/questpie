@@ -1,6 +1,6 @@
 import { defineCollectionOperations } from "questpie";
 
-import { teams } from "../teams";
+import { teams } from "./index";
 import { teamPolicy } from "./policy";
 
 export const teamOperations = defineCollectionOperations(teams, {

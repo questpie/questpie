@@ -22,6 +22,44 @@ changing the Application Root or PostgreSQL shape.
 Do not hand-edit `.questpie/generated` output. A complete build owns that
 directory and deletes stale generated files.
 
+## Organize the application by domain
+
+For a new application, follow the Team Support Desk convention: group each
+Collection with its Policy, Collection Operations, named Queries and Mutations,
+Jobs, and local helpers. For example:
+
+```text
+src/
+  execution.ts
+  tickets/
+    index.ts          Collection declaration and lifecycle
+    policy.ts
+    operations.ts     Collection Operation declarations
+    queries.ts
+    mutations.ts
+    sla-follow-up.ts
+  auth/
+web/
+  main.tsx
+  auth/
+  tickets/
+  questpie.ts         generated client boundary
+runtime/             external deployment adapters
+questpie/            committed migrations and immutable Seeds
+tracer/              fixture host and test automation
+```
+
+These paths are a convention, not a compiler grammar. Preserve a coherent
+existing layout; `source.root` controls Definition discovery and explicit names
+control Resource identity. Put the actual Collection declaration in the domain
+entry rather than adding a pass-through barrel. Keep helpers local until real
+consumers need sharing. Product UI must build without importing tracer code;
+browser automation can import and exercise the product UI.
+
+After moving Definitions, rebuild and review Origins and executable artifacts.
+Keep immutable migration and Seed history intact. A source move is not a
+schema migration or permission to change a Resource name.
+
 ## Change PostgreSQL shape deliberately
 
 The Compiled Manifest is desired state, committed migrations are reviewed

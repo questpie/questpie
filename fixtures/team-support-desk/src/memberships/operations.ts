@@ -1,6 +1,6 @@
 import { defineCollectionOperations } from "questpie";
 
-import { memberships } from "../memberships";
+import { memberships } from "./index";
 import { membershipPolicy } from "./policy";
 
 export const membershipOperations = defineCollectionOperations(memberships, {

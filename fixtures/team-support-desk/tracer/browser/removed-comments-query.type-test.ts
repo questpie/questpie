@@ -1,4 +1,4 @@
-import type { SupportDesk } from "./questpie";
+import type { SupportDesk } from "../../web/questpie";
 
 declare const desk: SupportDesk;
 

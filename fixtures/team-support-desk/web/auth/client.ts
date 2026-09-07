@@ -1,7 +1,7 @@
 import { inferAdditionalFields } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
-import type { SupportBetterAuth } from "../../../runtime/better-auth";
+import type { SupportBetterAuth } from "../../runtime/better-auth";
 
 export const authClient = createAuthClient({
 	baseURL: location.origin,

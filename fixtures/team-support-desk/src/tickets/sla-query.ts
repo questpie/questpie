@@ -1,6 +1,6 @@
 import { codec, expr } from "questpie";
 
-import { tickets } from "../tickets";
+import { tickets } from "./index";
 
 export const dueTickets = tickets.list({
 	parameters: {

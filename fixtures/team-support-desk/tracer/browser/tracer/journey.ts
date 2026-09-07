@@ -1,7 +1,7 @@
 import { demoIds } from "../../../src/demo-ids";
-import type { SupportSession } from "../auth/client";
+import type { SupportSession } from "../../../web/auth/client";
+import type { SupportDesk } from "../../../web/questpie";
 import { reportFixturePhase } from "../fixture-control";
-import type { SupportDesk } from "../questpie";
 
 type JourneyTicket = Readonly<{
 	id: string;

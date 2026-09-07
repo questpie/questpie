@@ -1,6 +1,6 @@
 import { defineCollectionOperations } from "questpie";
 
-import { labels } from "../labels";
+import { labels } from "./index";
 import { labelPolicy } from "./policy";
 
 export const labelOperations = defineCollectionOperations(labels, {

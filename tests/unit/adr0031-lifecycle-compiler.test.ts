@@ -66,7 +66,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 		await rm(join(temporary, "src/labels/operations.ts"));
 		await rm(join(temporary, "src/memberships/operations.ts"));
 		await rm(join(temporary, "src/teams/operations.ts"));
-		const labelsPath = join(temporary, "src/labels.ts");
+		const labelsPath = join(temporary, "src/labels/index.ts");
 		await writeFile(
 			labelsPath,
 			(await readFile(labelsPath, "utf8"))
@@ -83,7 +83,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 \tconstraints: {`,
 				),
 		);
-		const ticketsPath = join(temporary, "src/tickets.ts");
+		const ticketsPath = join(temporary, "src/tickets/index.ts");
 		await writeFile(
 			ticketsPath,
 			withoutTicketCheck(await readFile(ticketsPath, "utf8")).replace(
@@ -98,7 +98,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 \t\tvalidate: ({ candidate, issues }) => {`,
 			),
 		);
-		const membershipsPath = join(temporary, "src/memberships.ts");
+		const membershipsPath = join(temporary, "src/memberships/index.ts");
 		await writeFile(
 			membershipsPath,
 			(await readFile(membershipsPath, "utf8")).replace(
@@ -111,7 +111,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 \tconstraints: {`,
 			),
 		);
-		const teamsPath = join(temporary, "src/teams.ts");
+		const teamsPath = join(temporary, "src/teams/index.ts");
 		let teamsSource = await readFile(teamsPath, "utf8");
 
 		const compiled = await compileApplication({ applicationRoot: temporary });
@@ -187,7 +187,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 		const issuePrefix = teamsSource.slice(0, issueOffset);
 		const issueLines = issuePrefix.split("\n");
 		const issueOrigin = {
-			module: "src/teams.ts",
+			module: "src/teams/index.ts",
 			line: issueLines.length,
 			column: issueLines.at(-1)!.length + 1,
 		};
@@ -260,7 +260,7 @@ export const optionalCreatesOperations = defineCollectionOperations(optionalCrea
 });
 `,
 		);
-		const ticketsPath = join(temporary, "src/tickets.ts");
+		const ticketsPath = join(temporary, "src/tickets/index.ts");
 		const valid = withoutTicketCheck(
 			await readFile(ticketsPath, "utf8"),
 		).replace(
@@ -322,8 +322,8 @@ test("lowers bounded lifecycle reads and afterWrite writes", async () => {
 			teamsOperationsPath,
 			teamsOperations
 				.replace(
-					'import { teams } from "../teams";',
-					'import { teams } from "../teams";\nimport { teamListPlan } from "./query-plan";',
+					'import { teams } from "./index";',
+					'import { teams } from "./index";\nimport { teamListPlan } from "./query-plan";',
 				)
 				.replace(
 					"\tpolicy: teamPolicy,",
@@ -338,8 +338,8 @@ test("lowers bounded lifecycle reads and afterWrite writes", async () => {
 				'name: "teams.browse"',
 			),
 		);
-		await rm(join(temporary, "src/team-mutations.ts"));
-		const ticketsPath = join(temporary, "src/tickets.ts");
+		await rm(join(temporary, "src/teams/mutations.ts"));
+		const ticketsPath = join(temporary, "src/tickets/index.ts");
 		const sourceWithoutCheck = withoutTicketCheck(
 			await readFile(ticketsPath, "utf8"),
 		);
@@ -353,7 +353,7 @@ test("lowers bounded lifecycle reads and afterWrite writes", async () => {
 		const ticketsSource = `${sourceWithoutCheck.slice(0, normalizeStart)}\n\t\tnormalize: ({ input }) => input,${sourceWithoutCheck.slice(validateStart)}`;
 		await writeFile(
 			ticketsPath,
-			`import type { LifecycleTypeProof } from "./lifecycle-type-consumer";\nexport type TicketLifecycleTypeProof = LifecycleTypeProof;\n${ticketsSource.replace(
+			`import type { LifecycleTypeProof } from "../lifecycle-type-consumer";\nexport type TicketLifecycleTypeProof = LifecycleTypeProof;\n${ticketsSource.replace(
 				"\t\tvalidate: ({ candidate, issues }) => {",
 				`\t\tcheck: async ({ candidate, ctx, issues }) => {
 \t\t\tconst team = await ctx.data.teams.get({ key: { id: candidate.teamId }, select: { routingStatus: true, id: true } });
@@ -548,7 +548,7 @@ test("rejects different argument shapes for one capability across phases", async
 	);
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
-		const path = join(temporary, "src/tickets.ts");
+		const path = join(temporary, "src/tickets/index.ts");
 		const source = withoutTicketCheck(await readFile(path, "utf8")).replace(
 			"\t\tvalidate: ({ candidate, issues }) => {",
 			`\t\tcheck: async ({ candidate, ctx }) => {
@@ -590,7 +590,7 @@ test("rejects parallel, detached, ambient, and external afterWrite work", async 
 		);
 		try {
 			await cp(fixtureRoot, temporary, { recursive: true });
-			const path = join(temporary, "src/tickets.ts");
+			const path = join(temporary, "src/tickets/index.ts");
 			const source = withoutTicketCheck(await readFile(path, "utf8")).replace(
 				"\t\tvalidate: ({ candidate, issues }) => {",
 				`\t\t${authored}\n\t\tvalidate: ({ candidate, issues }) => {`,
@@ -686,14 +686,14 @@ test("rejects unbounded, detached, write, and inexact check capabilities", async
 		);
 		try {
 			await cp(fixtureRoot, temporary, { recursive: true });
-			const ticketsPath = join(temporary, "src/tickets.ts");
+			const ticketsPath = join(temporary, "src/tickets/index.ts");
 			let authoredSource = withoutTicketCheck(
 				await readFile(ticketsPath, "utf8"),
 			);
 			if (prelude)
 				authoredSource = authoredSource.replace(
-					'import { memberships } from "./memberships";',
-					`import { memberships } from "./memberships";\n\n${prelude}`,
+					'import { memberships } from "../memberships";',
+					`import { memberships } from "../memberships";\n\n${prelude}`,
 				);
 			authoredSource = authoredSource.replace(
 				"\t\tvalidate: ({ candidate, issues }) => {",
@@ -707,7 +707,7 @@ test("rejects unbounded, detached, write, and inexact check capabilities", async
 				diagnosticClass,
 				details: {
 					phase: "check",
-					origin: sourceOrigin("src/tickets.ts", authoredSource, needle),
+					origin: sourceOrigin("src/tickets/index.ts", authoredSource, needle),
 				},
 			});
 		} finally {
@@ -723,7 +723,7 @@ test("rejects ambient clocks and network access before lifecycle lowering", asyn
 		);
 		try {
 			await cp(fixtureRoot, temporary, { recursive: true });
-			const ticketsPath = join(temporary, "src/tickets.ts");
+			const ticketsPath = join(temporary, "src/tickets/index.ts");
 			await writeFile(
 				ticketsPath,
 				withoutTicketCheck(await readFile(ticketsPath, "utf8")).replace(
@@ -1152,7 +1152,7 @@ test("reports unsupported lifecycle capture at its authored Origin", async () =>
 	);
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
-		const path = join(temporary, "src/tickets.ts");
+		const path = join(temporary, "src/tickets/index.ts");
 		const source = await readFile(path, "utf8");
 		const authored = withTicketNormalize(
 			source,
@@ -1169,7 +1169,11 @@ test("reports unsupported lifecycle capture at its authored Origin", async () =>
 				code: "QP-COMPOSE-026",
 				diagnosticClass: "lifecycleCapture",
 				details: {
-					origin: sourceOrigin("src/tickets.ts", authored, "crypto.randomUUID"),
+					origin: sourceOrigin(
+						"src/tickets/index.ts",
+						authored,
+						"crypto.randomUUID",
+					),
 					phase: "normalize",
 				},
 			});
@@ -1185,7 +1189,7 @@ test("rejects an incomplete issue mapping with the complete Collection-call path
 	);
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
-		const collectionPath = join(temporary, "src/tickets.ts");
+		const collectionPath = join(temporary, "src/tickets/index.ts");
 		const collectionSource = await readFile(collectionPath, "utf8");
 		const authoredCollection = collectionSource
 			.replace(
@@ -1197,7 +1201,7 @@ test("rejects an incomplete issue mapping with the complete Collection-call path
 				'\t\t\t\tthrow issues.invalidReference();\n\t\t\tif (candidate.summary === "") throw issues.emptySummary();',
 			);
 		await writeFile(collectionPath, authoredCollection);
-		const mutationPath = join(temporary, "src/ticket-mutations.ts");
+		const mutationPath = join(temporary, "src/tickets/mutations.ts");
 		const mutationSource = await readFile(mutationPath, "utf8");
 		let mappingIndex = 0;
 		const authoredMutation = mutationSource.replace(
@@ -1220,17 +1224,17 @@ test("rejects an incomplete issue mapping with the complete Collection-call path
 				details: {
 					phase: "validate",
 					origin: sourceOrigin(
-						"src/tickets.ts",
+						"src/tickets/index.ts",
 						authoredCollection,
 						"throw issues.emptySummary()",
 					),
 					mappingOrigin: sourceOrigin(
-						"src/ticket-mutations.ts",
+						"src/tickets/mutations.ts",
 						authoredMutation,
 						"issueMappings:",
 					),
 					callOrigin: sourceOrigin(
-						"src/ticket-mutations.ts",
+						"src/tickets/mutations.ts",
 						authoredMutation,
 						'tickets: { invalidReference: "invalidTicket" },',
 					),
@@ -1254,7 +1258,7 @@ test("uses issue mappings, not handler syntax, as Collection capability admissio
 	);
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
-		const mutationPath = join(temporary, "src/ticket-mutations.ts");
+		const mutationPath = join(temporary, "src/tickets/mutations.ts");
 		const source = await readFile(mutationPath, "utf8");
 		await writeFile(
 			mutationPath,
@@ -1281,7 +1285,7 @@ test("rejects a non-identity Collection issue at its exact declaration", async (
 	);
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
-		const path = join(temporary, "src/tickets.ts");
+		const path = join(temporary, "src/tickets/index.ts");
 		const source = await readFile(path, "utf8");
 		const authored = source.replace(
 			"\t\tinvalidReference: collection.issue(),",
@@ -1296,7 +1300,7 @@ test("rejects a non-identity Collection issue at its exact declaration", async (
 			diagnosticClass: "invalidIssueDeclaration",
 			details: {
 				phase: "validate",
-				origin: sourceOrigin("src/tickets.ts", authored, '"bad/name"'),
+				origin: sourceOrigin("src/tickets/index.ts", authored, '"bad/name"'),
 				rewrite: "use an identifier-safe issue name and collection.issue()",
 			},
 		});
@@ -1355,7 +1359,7 @@ const transitionRejected = operation.error({`,
 		);
 		try {
 			await cp(fixtureRoot, temporary, { recursive: true });
-			const path = join(temporary, "src/ticket-mutations.ts");
+			const path = join(temporary, "src/tickets/mutations.ts");
 			await writeFile(path, rewrite(await readFile(path, "utf8")));
 			await expect(
 				compileApplication({ applicationRoot: temporary }),
@@ -1364,7 +1368,7 @@ const transitionRejected = operation.error({`,
 				diagnosticClass: "invalidIssueMapping",
 				details: {
 					origin: {
-						module: "src/ticket-mutations.ts",
+						module: "src/tickets/mutations.ts",
 						line: originLine,
 						column: 14,
 					},
@@ -1382,7 +1386,7 @@ test("reports a helper-authored issue mapping at its exact key Origin", async ()
 	);
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
-		const path = join(temporary, "src/ticket-mutations.ts");
+		const path = join(temporary, "src/tickets/mutations.ts");
 		const source = (await readFile(path, "utf8"))
 			.replace(
 				"export const createTicket = defineMutation({",
@@ -1408,7 +1412,7 @@ export const createTicket = defineMutation({`,
 			diagnosticClass: "invalidIssueMapping",
 			details: {
 				origin: {
-					module: "src/ticket-mutations.ts",
+					module: "src/tickets/mutations.ts",
 					line: lines.length,
 					column: lines.at(-1)!.length + 1,
 				},
@@ -1435,7 +1439,7 @@ test("rejects unsupported lifecycle syntax and capability at compilation", async
 		);
 		try {
 			await cp(fixtureRoot, temporary, { recursive: true });
-			const path = join(temporary, "src/tickets.ts");
+			const path = join(temporary, "src/tickets/index.ts");
 			const source = await readFile(path, "utf8");
 			await writeFile(path, withTicketNormalize(source, authored));
 			await expect(

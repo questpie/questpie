@@ -3,7 +3,7 @@ import { codec, dataQuery, query } from "questpie";
 import type { AppData } from "#questpie/app";
 
 import { comments } from "../comments";
-import { tickets } from "../tickets";
+import { tickets } from "./index";
 
 const pageParameters = {
 	first: query.parameter.integer({

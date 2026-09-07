@@ -2,7 +2,7 @@ import { codec, policy } from "questpie";
 
 import { defineMutation } from "#questpie/app";
 
-import { teams } from "./teams";
+import { teams } from "./index";
 
 export const updateTeam = defineMutation({
 	name: "teams.update",

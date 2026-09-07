@@ -444,9 +444,9 @@ LIMIT 1`;
 					`${pathToFileURL(questpieEntry).href}?principal=${crypto.randomUUID()}`
 				) as Promise<typeof import("../../../packages/questpie/src/index")>,
 				import(
-					`${pathToFileURL(join(temporary, "tracer/browser/tickets/edit-input.ts")).href}?editInput=${crypto.randomUUID()}`
+					`${pathToFileURL(join(temporary, "web/tickets/edit-input.ts")).href}?editInput=${crypto.randomUUID()}`
 				) as Promise<
-					typeof import("../../../fixtures/team-support-desk/tracer/browser/tickets/edit-input")
+					typeof import("../../../fixtures/team-support-desk/web/tickets/edit-input")
 				>,
 			]);
 			const schemaProjection = (await Bun.file(

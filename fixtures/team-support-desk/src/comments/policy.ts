@@ -1,8 +1,8 @@
 import { definePolicy, expr, policy } from "questpie";
 
-import { comments } from "../comments";
 import { memberships } from "../memberships";
 import { tickets } from "../tickets";
+import { comments } from "./index";
 
 export const commentPolicy = definePolicy(comments, {
 	name: "comments.default",

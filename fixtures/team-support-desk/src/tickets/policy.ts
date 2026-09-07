@@ -2,7 +2,7 @@ import { definePolicy, expr, policy } from "questpie";
 
 import { memberships } from "../memberships";
 import { teams } from "../teams";
-import { tickets } from "../tickets";
+import { tickets } from "./index";
 
 const readableTicketRows = policy.rows(
 	tickets,

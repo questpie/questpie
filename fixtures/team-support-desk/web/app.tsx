@@ -1,28 +1,17 @@
 import { useQueryResource } from "questpie/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import type { SupportSession } from "./auth/client";
-import { reportFixturePhase } from "./fixture-control";
 import type { SupportDesk } from "./questpie";
 import { errorMessage } from "./shared/format";
 import { CreateTicketDialog } from "./tickets/dialogs";
 import { TicketQueue } from "./tickets/queue";
 import { SelectedTicket } from "./tickets/selected";
-import { firefoxJourneyFromUrl, runFirefoxJourney } from "./tracer/journey";
-import { observeSlaFollowUp } from "./tracer/sla-observer";
 
 type DeskApplicationProps = Readonly<{
 	desk: SupportDesk;
 	onSignOut: () => Promise<void>;
 	session: SupportSession;
-}>;
-
-type JourneyTicket = Readonly<{
-	id: string;
-	reference: string;
-	status: string;
-	teamId: string;
-	updatedAt: Date;
 }>;
 
 export function DeskApplication({
@@ -38,10 +27,6 @@ export function DeskApplication({
 	const [creating, setCreating] = useState(false);
 	const [createError, setCreateError] = useState("");
 	const createDialog = useRef<HTMLDialogElement>(null);
-	const readyReported = useRef(false);
-	const failureReported = useRef(false);
-	const tracerStarted = useRef(false);
-	const slaObserverStarted = useRef(false);
 	const after = cursors[pageIndex] ?? null;
 
 	const queueResource = desk.queries["tickets.queue"].observe({
@@ -83,93 +68,12 @@ export function DeskApplication({
 						: queueSnapshot.value.nodes.length === 0
 							? "No tickets match these filters."
 							: `${queueSnapshot.value.nodes.length} ticket${queueSnapshot.value.nodes.length === 1 ? "" : "s"} on this page`;
-	const initiallyReady =
-		queueSnapshot.kind === "ready" && teamsSnapshot.kind === "ready";
-
-	useEffect(() => {
-		const ticketId = new URL(location.href).searchParams.get("tracerSlaTicket");
-		if (!initiallyReady || ticketId === null || slaObserverStarted.current)
-			return;
-		slaObserverStarted.current = true;
-		setSelectedTicketId(ticketId);
-		void observeSlaFollowUp().catch(async () => {
-			await reportFixturePhase({ phase: "sla-observer-failed" });
+	async function searchTicket(reference: string): Promise<void> {
+		const match = await desk.queries["tickets.searchByReference"]({
+			reference,
 		});
-	}, [initiallyReady]);
-
-	useEffect(() => {
-		if (!initiallyReady || readyReported.current) return;
-		readyReported.current = true;
-		void reportFixturePhase({ phase: "desk-ready", role: session.role });
-	}, [initiallyReady, session.role]);
-
-	useEffect(() => {
-		const failed = [queueSnapshot, teamsSnapshot].find(
-			(snapshot) => snapshot.kind === "failed",
-		);
-		if (!failed || failureReported.current) return;
-		failureReported.current = true;
-		void reportFixturePhase({
-			error: failed.failure.code,
-			phase: "desk-error",
-		});
-	}, [queueSnapshot, teamsSnapshot]);
-
-	const searchTicket = useCallback(
-		async (reference: string): Promise<JourneyTicket | null> => {
-			const match = await desk.queries["tickets.searchByReference"]({
-				reference,
-			});
-			if (match !== null) setSelectedTicketId(match.id);
-			return match;
-		},
-		[desk],
-	);
-
-	const executeTicketOperation = useCallback(
-		async <Output,>(
-			_label: string,
-			operation: () => Promise<Output>,
-		): Promise<Output> => operation(),
-		[],
-	);
-
-	useEffect(() => {
-		const journey = firefoxJourneyFromUrl(location.href);
-		if (!initiallyReady || journey === null || tracerStarted.current) return;
-		tracerStarted.current = true;
-		void runFirefoxJourney({
-			...journey,
-			desk,
-			executeTicketOperation,
-			loadFilteredQueue: (status, teamId) =>
-				desk.queries["tickets.queue"]({
-					after: null,
-					first: 8,
-					statuses: status ? [status] : null,
-					teamIds: teamId ? [teamId] : null,
-				}),
-			role: session.role,
-			searchTicket,
-			selectFilters: (status, teamId) => {
-				setStatusFilter(status);
-				setTeamFilter(teamId);
-				setCursors([null]);
-				setPageIndex(0);
-			},
-		}).catch(async (error: unknown) => {
-			await reportFixturePhase({
-				error: errorMessage(error),
-				phase: "desk-error",
-			});
-		});
-	}, [
-		desk,
-		executeTicketOperation,
-		initiallyReady,
-		searchTicket,
-		session.role,
-	]);
+		if (match !== null) setSelectedTicketId(match.id);
+	}
 
 	function changeFilters(status: string, teamId: string): void {
 		setStatusFilter(status);

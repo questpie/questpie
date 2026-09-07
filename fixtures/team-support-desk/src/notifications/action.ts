@@ -3,7 +3,7 @@ import { codec, defineService, operation, policy } from "questpie";
 import { defineAction } from "#questpie/app";
 import type { ActionServices, ExecutionServices } from "#questpie/app";
 
-import { postTicketSummary } from "../runtime/notification-provider";
+import { postTicketSummary } from "../../runtime/notification-provider";
 
 class NotificationProviderRejection extends Error {
 	readonly status: number;

@@ -1,7 +1,7 @@
 import { defineCredentialResolver, principal } from "questpie";
 
-import { supportAuth } from "./auth/service";
-import { demoIds } from "./demo-ids";
+import { demoIds } from "../demo-ids";
+import { supportAuth } from "./service";
 
 export const integrationCredentialHeader = "x-team-support-integration-key";
 export const localIntegrationKey = "team-support-desk-local-integration-key-v1";

@@ -1,7 +1,7 @@
 import { definePolicy, expr, policy } from "questpie";
 
 import { memberships } from "../memberships";
-import { organizations } from "../organizations";
+import { organizations } from "./index";
 
 export const organizationPolicy = definePolicy(organizations, {
 	name: "organizations.default",
