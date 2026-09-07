@@ -3,6 +3,7 @@
 	"version": 1,
 	"scenario": "beta10-ten-instance",
 	"budgetOwner": "BETA-10",
+	"workloadEvolution": "2026-09-07: replace synthetic v4/v5 artifact labels with two complete compiler builds. Historical workload and samples below remain the August reference; retainedBuildInstances/currentBuildInstances replace only the corresponding 1/9 budget labels. These samples do not verify the revised fixture.",
 	"toolchain": {
 		"bun": "1.3.14",
 		"typescript": "6.0.2",
@@ -54,8 +55,8 @@
 		"durableRuns": 40,
 		"duplicateAttempts": 0,
 		"drainedWorkerAdmissions": 0,
-		"compatibleV4Instances": 1,
-		"currentV5Instances": 9
+		"retainedBuildInstances": 1,
+		"currentBuildInstances": 9
 	},
 	"status": "PASS"
 }

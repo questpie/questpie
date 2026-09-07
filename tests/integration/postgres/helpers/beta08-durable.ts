@@ -1,9 +1,8 @@
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 
 import type { SQL } from "bun";
 import type { Principal } from "questpie";
 
-import { runtimeArtifactDigest } from "../../../../packages/runtime/src/application/artifact-protocol";
 import {
 	createPostgresDatabaseDurableAttemptObservation,
 	createPostgresDatabaseDurableEffectLedger,
@@ -23,6 +22,7 @@ import {
 	beta05Ids,
 	beta05PostgresUrl,
 	prepareBeta05PostgresApplication,
+	prepareBeta05RetainedApplication,
 } from "./beta05-runtime";
 
 const beta08Application = "application:collaboration";
@@ -156,8 +156,7 @@ type Beta08Application = Readonly<{
 export type Beta08Harness = Readonly<{
 	app: Beta08Application;
 	createSiblingApplication(): Promise<Beta08Application>;
-	createCompatibleV4Application(): Promise<Beta08Application>;
-	createCompatibleV5Application(): Promise<Beta08Application>;
+	createRetainedApplication(): Promise<Beta08Application>;
 	fetch(request: Request): Promise<Response>;
 	bindPrincipal(request: Request): Request;
 	mutationRequest(operation: string, input: unknown): Request;
@@ -201,7 +200,10 @@ async function buildBeta08Durable(
 		): Request;
 		createApplication(
 			input: Readonly<{
-				postgres: Readonly<{ url: string }>;
+				postgres: Readonly<{
+					connectionUrl: string;
+					directConnectionUrl: string;
+				}>;
 				realtime: Readonly<{ hmacKey: Uint8Array }>;
 				maintenance: Readonly<{
 					authorize(
@@ -216,64 +218,47 @@ async function buildBeta08Durable(
 		): Promise<Beta08Application>;
 	}>;
 	const applications = new Set<Beta08Application>();
-	const runtimeBuildPath = join(
-		prepared.generated.generatedRoot,
-		"runtime-build.json",
-	);
 	const currentRuntimeBuildBytes = prepared.runtimeBuildBytes;
 	const currentRuntimeBuild = JSON.parse(currentRuntimeBuildBytes) as Readonly<
 		Record<string, unknown>
 	>;
-	const {
-		digest: _currentDigest,
-		mcpProjectionDigest: _mcpProjectionDigest,
-		...currentUnsigned
-	} = currentRuntimeBuild;
-	const compatibleInventory = (
-		currentUnsigned.inventory as readonly Readonly<{ path: string }>[]
-	).filter(({ path }) => path !== "mcp-projection.json");
-	const { jobDigest: _jobDigest, ...compatibleLater } =
-		currentRuntimeBuild.later as Readonly<Record<string, unknown>>;
-	const v4Unsigned = {
-		...currentUnsigned,
-		internalProtocol: "questpie.internal.v4",
-		later: compatibleLater,
-		inventory: compatibleInventory,
+	const createApplication = async (entry = internal) => {
+		const application = await entry.createApplication({
+			postgres: {
+				connectionUrl: beta05PostgresUrl(),
+				directConnectionUrl: beta05PostgresUrl(),
+			},
+			realtime: { hmacKey: new Uint8Array(32).fill(8) },
+			maintenance: {
+				authorize: ({ actor }) => actor.id === beta05Ids.principal,
+			},
+		});
+		applications.add(application);
+		return application;
 	};
-	const compatibleV4RuntimeBuildBytes = JSON.stringify({
-		...v4Unsigned,
-		digest: runtimeArtifactDigest("questpie-runtime-build-v1", v4Unsigned),
-	});
-	const v5Unsigned = {
-		...currentUnsigned,
-		internalProtocol: "questpie.internal.v5",
-		later: compatibleLater,
-		inventory: compatibleInventory,
-	};
-	const compatibleV5RuntimeBuildBytes = JSON.stringify({
-		...v5Unsigned,
-		digest: runtimeArtifactDigest("questpie-runtime-build-v1", v5Unsigned),
-	});
-	const createApplication = async (
-		runtimeBuildBytes = currentRuntimeBuildBytes,
-	) => {
-		await Bun.write(runtimeBuildPath, runtimeBuildBytes);
-		try {
-			const application = await internal.createApplication({
-				postgres: {
-					connectionUrl: beta05PostgresUrl(),
-					directConnectionUrl: beta05PostgresUrl(),
-				},
-				realtime: { hmacKey: new Uint8Array(32).fill(8) },
-				maintenance: {
-					authorize: ({ actor }) => actor.id === beta05Ids.principal,
-				},
-			});
-			applications.add(application);
-			return application;
-		} finally {
-			await Bun.write(runtimeBuildPath, currentRuntimeBuildBytes);
-		}
+	let retained: ReturnType<typeof prepareBeta05RetainedApplication> | undefined;
+	const createRetainedApplication = async () => {
+		const build = await (retained ??= prepareBeta05RetainedApplication());
+		const manifest = JSON.parse(build.runtimeBuildBytes) as Readonly<
+			Record<string, unknown>
+		>;
+		if (manifest.digest === currentRuntimeBuild.digest)
+			throw new Error("Retained fixture must carry distinct executable bytes");
+		for (const key of [
+			"application",
+			"internalProtocol",
+			"schemaFingerprint",
+			"committedMigrationsDigest",
+			"clientContractDigest",
+			"operationHttpContractDigest",
+			"policyProjectionDigest",
+			"postgresContextBootstrapPlansDigest",
+		])
+			if (manifest[key] !== currentRuntimeBuild[key])
+				throw new Error(`Retained fixture changed ${key} compatibility`);
+		return createApplication(
+			(await build.generated.loadInternal()) as typeof internal,
+		);
 	};
 	const app = await createApplication();
 	// Load the source database owner only after the generated application bundle.
@@ -324,7 +309,7 @@ async function buildBeta08Durable(
 			use,
 		});
 	const exposeKernel = (kernel: DurableKernel): DurableKernel =>
-		Object.freeze({
+		Object.freeze<DurableKernel>({
 			...kernel,
 			heartbeat: (claim) =>
 				runExplicitNullAttempt(claim, () => kernel.heartbeat(claim)),
@@ -336,7 +321,7 @@ async function buildBeta08Durable(
 				runExplicitNullAttempt(claim, () => kernel.cancel(claim)),
 		});
 	const exposeLedger = (ledger: DurableEffectLedger): DurableEffectLedger =>
-		Object.freeze({
+		Object.freeze<DurableEffectLedger>({
 			...ledger,
 			reserve: (claim, request) =>
 				runExplicitNullAttempt(claim, () => ledger.reserve(claim, request)),
@@ -369,11 +354,8 @@ async function buildBeta08Durable(
 	);
 	const harness = Object.freeze({
 		app,
-		createSiblingApplication: createApplication,
-		createCompatibleV4Application: () =>
-			createApplication(compatibleV4RuntimeBuildBytes),
-		createCompatibleV5Application: () =>
-			createApplication(compatibleV5RuntimeBuildBytes),
+		createSiblingApplication: () => createApplication(),
+		createRetainedApplication,
 		fetch: (request: Request) => app.fetch(request),
 		bindPrincipal: (request: Request) => {
 			const headers = new Headers(request.headers);
@@ -426,8 +408,17 @@ async function buildBeta08Durable(
 			await Promise.allSettled(
 				[...applications].map((application) => application.close()),
 			);
-			await runtimeDatabase.close({ deadlineAt: Date.now() + 5_000 });
-			await prepared.dispose();
+			try {
+				await runtimeDatabase.close({ deadlineAt: Date.now() + 5_000 });
+			} finally {
+				await Promise.all([
+					retained?.then(
+						(build) => build.dispose(),
+						() => undefined,
+					),
+					prepared.dispose(),
+				]);
+			}
 		},
 	});
 }
@@ -477,7 +468,7 @@ export function retiredDurableKernel(
 		application: beta08Application,
 		reactions: linkReactionProjection(projection),
 	});
-	return Object.freeze({
+	return Object.freeze<DurableKernel>({
 		...kernel,
 		heartbeat: (claim) =>
 			attemptPostgres.run({

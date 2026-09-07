@@ -1,4 +1,11 @@
-import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import {
+	cp,
+	mkdtemp,
+	readFile,
+	readdir,
+	rm,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -76,9 +83,14 @@ export function beta05PostgresUrl(): string {
 
 async function relocatedFixture(): Promise<string> {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta05-pg-"));
-	await cp(beta05FixtureRoot, temporary, { recursive: true });
-	await installQuestpieForTracer(temporary);
-	return temporary;
+	try {
+		await cp(beta05FixtureRoot, temporary, { recursive: true });
+		await installQuestpieForTracer(temporary);
+		return temporary;
+	} catch (error) {
+		await rm(temporary, { force: true, recursive: true });
+		throw error;
+	}
 }
 
 async function importGenerated(temporary: string) {
@@ -141,8 +153,31 @@ export async function prepareBeta05PostgresApplication(database: SQL) {
 		values
 			(${beta05Ids.message}, ${beta05Ids.channel}, ${beta05Ids.membership}, 'one engine', '2026-08-15T10:00:00.000Z')
 	`;
+	return compileBeta05Fixture("current");
+}
+
+/** A second complete build; never reapplies migrations or resets the database. */
+export function prepareBeta05RetainedApplication() {
+	return compileBeta05Fixture("retained");
+}
+
+async function compileBeta05Fixture(variant: "current" | "retained") {
 	const temporary = await relocatedFixture();
 	try {
+		if (variant === "retained") {
+			const path = join(temporary, "src/message-published.ts");
+			const source = await readFile(path, "utf8");
+			const resultMember = "\n\t\t\tdeliveryReceipt,\n";
+			if (source.split(resultMember).length !== 2)
+				throw new Error("Retained Reaction result source changed");
+			await writeFile(
+				path,
+				source.replace(
+					resultMember,
+					'\n\t\t\tdeliveryReceipt: "retained:" + deliveryReceipt,\n',
+				),
+			);
+		}
 		const packed = buildPackedTracer(temporary);
 		const compilation = await compileApplication({
 			applicationRoot: temporary,

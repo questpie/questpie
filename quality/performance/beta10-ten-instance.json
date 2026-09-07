@@ -40,12 +40,12 @@
 			"budget": 0,
 			"unit": "count"
 		},
-		"compatibleV4Instances": {
+		"retainedBuildInstances": {
 			"direction": "min",
 			"budget": 1,
 			"unit": "count"
 		},
-		"currentV5Instances": {
+		"currentBuildInstances": {
 			"direction": "min",
 			"budget": 9,
 			"unit": "count"

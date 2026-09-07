@@ -6,7 +6,7 @@ import { join } from "node:path";
 const postgres = process.env.PGHOST ? test : test.skip;
 
 postgres(
-	"proves Authority nondisclosure, retry fencing, audit, and compatible-v5 maintenance on PostgreSQL",
+	"proves Authority nondisclosure, retry fencing, audit, and retained-build maintenance on PostgreSQL",
 	async () => {
 		const temporary = await mkdtemp(
 			join(tmpdir(), "questpie-pb05-maintenance-"),
@@ -80,13 +80,13 @@ try {
     [beta05Ids.membership],
   );
 
-  const v5Call = "pb05-maintenance-v5-" + crypto.randomUUID();
-  await publish(prepared, v5Call, "compatible v5");
-  const v5RunId = await runIdFor(v5Call);
-  const compatibleV5 = await prepared.createCompatibleV5Application();
-  const v5Outcome = await compatibleV5.durable.cancelRun({
-    runId: v5RunId,
-    reason: "compatible v5 operator",
+  const retainedCall = "pb05-maintenance-retained-" + crypto.randomUUID();
+  await publish(prepared, retainedCall, "retained build");
+  const retainedRunId = await runIdFor(retainedCall);
+  const retainedApplication = await prepared.createRetainedApplication();
+  const retainedOutcome = await retainedApplication.durable.cancelRun({
+    runId: retainedRunId,
+    reason: "retained-build operator",
     actor: prepared.principal,
   });
   await Bun.write(${JSON.stringify(outputPath)}, JSON.stringify({
@@ -97,7 +97,7 @@ try {
     retried,
     afterVersion: afterRetry.version,
     retryKinds: retryEvents.map(({ kind }) => kind),
-    v5Outcome,
+    retainedOutcome,
   }));
 } finally {
   await disposeBeta08Harness();
@@ -134,7 +134,7 @@ try {
 			expect(
 				result.retryKinds.filter((kind: string) => kind === "retryRequested"),
 			).toHaveLength(1);
-			expect(result.v5Outcome).toMatchObject({
+			expect(result.retainedOutcome).toMatchObject({
 				outcome: "applied",
 				rejectionCode: null,
 			});

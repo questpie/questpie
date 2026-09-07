@@ -33,7 +33,7 @@ function derivedBudget(
 try {
 	const applications = [
 		prepared.app,
-		await prepared.createCompatibleV4Application(),
+		await prepared.createRetainedApplication(),
 	];
 	for (let index = applications.length; index < instanceCount; index += 1)
 		applications.push(await prepared.createSiblingApplication());
@@ -161,7 +161,7 @@ try {
 				process.env.QUESTPIE_PERFORMANCE_EVIDENCE_CLASS ?? "reference-local",
 			workProof: {
 				claimed,
-				compatibleV4Instances: 1,
+				retainedBuildInstances: 1,
 				optionalAccelerators: 0,
 			},
 			measurements,

@@ -10,6 +10,10 @@
 		"types": ["bun"]
 	},
 	"include": [
+		"../../../../tests/integration/postgres/beta10-retained-build-ownership.test.ts",
+		"../../../../tests/integration/postgres/pb05-postgres-database-durable-maintenance.test.ts",
+		"../../../../tests/load/beta10-ten-instance.ts",
+		"../../../../tests/load/beta10-soak-chaos.ts",
 		"../../../../tests/integration/postgres/static-schedule-runtime.test.ts",
 		"../../../../tests/unit/static-schedule-calendar.test.ts",
 		"../../../../tests/integration/postgres/static-schedule-calendar.test.ts",

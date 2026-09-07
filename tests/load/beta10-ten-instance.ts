@@ -33,7 +33,7 @@ function derivedBudget(
 try {
 	const applications = [
 		prepared.app,
-		await prepared.createCompatibleV4Application(),
+		await prepared.createRetainedApplication(),
 	];
 	applications.push(
 		...(await Promise.all(
@@ -71,7 +71,10 @@ try {
 			);
 			if (response.status !== 200)
 				throw new Error(`network publication failed with ${response.status}`);
-			const result = (await response.json()) as Readonly<{ result?: unknown }>;
+			const result = (await response.json()) as Readonly<{
+				result?: unknown;
+				kind?: unknown;
+			}>;
 			if (!Object.hasOwn(result, "result"))
 				throw new Error(`network publication returned ${String(result.kind)}`);
 			networkPosts += 1;
@@ -118,8 +121,8 @@ try {
 		durableRuns: rows.runs,
 		duplicateAttempts: rows.attempts - rows.runs,
 		drainedWorkerAdmissions: drained.admitted,
-		compatibleV4Instances: 1,
-		currentV5Instances: applications.length - 1,
+		retainedBuildInstances: 1,
+		currentBuildInstances: applications.length - 1,
 	};
 	if (
 		baseline.budgets.tenInstance40Ms !==
