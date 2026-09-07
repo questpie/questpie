@@ -10,8 +10,7 @@
 		"types": ["bun"]
 	},
 	"include": [
-		"activation.ts",
-		"activation.test.ts",
+		"../../../../tests/integration/postgres/static-schedule-runtime.test.ts",
 		"../../../../tests/unit/static-schedule-calendar.test.ts",
 		"../../../../tests/integration/postgres/static-schedule-calendar.test.ts",
 		"../../../../tests/unit/checkpoint-attempt-owner.test.ts",

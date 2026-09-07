@@ -11,6 +11,7 @@ import {
 	ensureInternalProtocolV9,
 	verifyInternalProtocolV9,
 } from "../../../packages/compiler/src/schema/postgres/internal-protocol-v9";
+import { decodeRuntimeCodecDescriptor } from "../../../packages/runtime/src/codec";
 import { createJobAcceptance } from "../../../packages/runtime/src/durable/acceptance";
 import type { LinkedJobMember } from "../../../packages/runtime/src/durable/job-projection";
 import { createPostgresStaticSchedules } from "../../../packages/runtime/src/durable/schedule";
@@ -140,7 +141,7 @@ postgres(
 				services: [],
 				context,
 				bootstrap: () => ({
-					read: async () => {
+					get: async () => {
 						throw new Error("unexpected bootstrap read");
 					},
 				}),
@@ -190,7 +191,9 @@ postgres(
 									tenantId: facts.tenant.id,
 									principal: facts.principal,
 									contextInput: facts.contextInput,
-									contextInputCodec: context.input,
+									contextInputCodec: decodeRuntimeCodecDescriptor(
+										context.input,
+									),
 									runtimeBuildDigest: "d".repeat(64),
 									acceptedAt: request.observedAt,
 									signal: facts.signal,
@@ -272,6 +275,18 @@ postgres(
 				const readded = await active.activate({ expectedRevision: "2" });
 				expect(readded.acceptedRevision).toBe("3");
 				expect(
+					(
+						await sql`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`
+					)[0].frontier_minute,
+				).toEqual(
+					new Date(Math.floor(Date.parse(readded.activatedAt) / 60000) * 60000),
+				);
+				expect(await active.activate({ expectedRevision: "0" })).toEqual({
+					...first,
+					currentHead: readded.currentHead,
+					replayed: true,
+				});
+				expect(
 					(await active.activate({ expectedRevision: "0" })).currentHead
 						.revision,
 				).toBe("3");
@@ -301,6 +316,34 @@ postgres(
 					"ACCEPTANCE_ROLLBACK",
 				);
 				failAfterAcceptance = false;
+				// Fail after the actual final frontier UPDATE: Job, tick and frontier roll back together.
+				const frontierFault: PostgresTransactionRunner = {
+					transaction: (input) =>
+						database!.transaction({
+							...input,
+							use: (transaction) =>
+								input.use({
+									...transaction,
+									execute: async (statement, parameters) => {
+										const result = await transaction.execute(
+											statement,
+											parameters,
+										);
+										if (statement.name === "durable.schedule.frontier.update")
+											throw new Error("FRONTIER_ROLLBACK");
+										return result;
+									},
+								}),
+						}),
+				};
+				await expect(
+					owner(artifact([freshProgram]), frontierFault).reconcile(),
+				).rejects.toThrow("FRONTIER_ROLLBACK");
+				expect(
+					(
+						await sql`SELECT count(*)::int AS count FROM questpie_internal.schedule_ticks`
+					)[0].count,
+				).toBe(1);
 				expect(
 					(
 						await sql`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`
@@ -309,6 +352,60 @@ postgres(
 				expect(
 					(
 						await sql`SELECT count(*)::int AS count FROM questpie_internal.durable_runs`
+					)[0].count,
+				).toBe(1);
+				// Observe the real PostgreSQL lock wait, then cancel without releasing the blocker first.
+				const locker = new Client({ database: ownedDatabase });
+				await locker.connect();
+				const blockedAbort = new AbortController();
+				let blockedWork: Promise<unknown> | undefined;
+				try {
+					await locker.query("BEGIN");
+					await locker.query(
+						"SELECT revision FROM questpie_internal.schedule_heads WHERE application_name = $1 FOR UPDATE",
+						[bindings.application],
+					);
+					const lockerPid = (
+						await locker.query("SELECT pg_backend_pid() AS pid")
+					).rows[0].pid;
+					const reason = new Error("PRODUCER_LOCK_CANCELLED");
+					blockedWork = rollback
+						.reconcile({ signal: blockedAbort.signal })
+						.then(
+							(value) => ({ value }),
+							(error: unknown) => ({ error }),
+						);
+					let observed = false;
+					for (let attempt = 0; attempt < 200; attempt++) {
+						const waiters = await admin.query(
+							"SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = $1 AND $2::int = ANY(pg_blocking_pids(pid))) AS blocked",
+							[ownedDatabase, lockerPid],
+						);
+						if (waiters.rows[0].blocked) {
+							observed = true;
+							break;
+						}
+						await Bun.sleep(5);
+					}
+					expect(observed).toBe(true);
+					blockedAbort.abort(reason);
+					expect(await blockedWork).toMatchObject({
+						error: { code: "cancelled", cause: reason },
+					});
+				} finally {
+					blockedAbort.abort();
+					await locker.query("ROLLBACK");
+					await blockedWork;
+					await locker.end();
+				}
+				expect(
+					(
+						await sql`SELECT frontier_minute FROM questpie_internal.schedule_frontiers`
+					)[0].frontier_minute,
+				).toEqual(before);
+				expect(
+					(
+						await sql`SELECT count(*)::int AS count FROM questpie_internal.schedule_ticks`
 					)[0].count,
 				).toBe(1);
 				const cancellation = new AbortController();
@@ -443,6 +540,72 @@ postgres(
 				await expect(
 					active.activate({ expectedRevision: "9223372036854775807" }),
 				).rejects.toThrow("SCHEDULE_REVISION_OVERFLOW");
+				// Ten distinct desired sets race from absent state, not ten retries of one request.
+				const raceBindings = {
+					...bindings,
+					application: "application:activation-race",
+				};
+				const contenders = Array.from({ length: 10 }, (_, index) => {
+					const schedules = [program(`contender-${index}`)];
+					return createPostgresStaticSchedules({
+						database: database!,
+						bindings: raceBindings,
+						artifact: {
+							...artifact(schedules),
+							...raceBindings,
+							digest: digest("questpie-job-schedule-set-v1", {
+								application: raceBindings.application,
+								schedules,
+							}),
+						},
+						accept: async () => {
+							throw new Error("activation must not accept a Job");
+						},
+					});
+				});
+				const attempts = await Promise.allSettled(
+					contenders.map((contender) =>
+						contender.activate({ expectedRevision: "0" }),
+					),
+				);
+				const winners = attempts.filter(
+					(outcome) => outcome.status === "fulfilled",
+				);
+				const losers = attempts.filter(
+					(outcome) => outcome.status === "rejected",
+				);
+				expect(winners).toHaveLength(1);
+				expect(losers).toHaveLength(9);
+				for (const loser of losers)
+					expect(loser.reason).toMatchObject({
+						code: "SCHEDULE_ACTIVATION_STALE",
+					});
+				const winner = winners[0]!;
+				expect(winner.value).toMatchObject({
+					acceptedRevision: "1",
+					replayed: false,
+				});
+				const winningOwner = contenders[attempts.indexOf(winner)]!;
+				expect(await winningOwner.activate({ expectedRevision: "0" })).toEqual({
+					...winner.value,
+					replayed: true,
+				});
+				expect(
+					(
+						await sql`SELECT count(*)::int AS count FROM questpie_internal.schedule_activations WHERE application_name = ${raceBindings.application}`
+					)[0].count,
+				).toBe(1);
+				await sql`UPDATE questpie_internal.schedule_frontiers SET frontier_minute = '2020-01-01T00:00:00Z' WHERE application_name = ${raceBindings.application}`;
+				const changed = await contenders[
+					(attempts.indexOf(winner) + 1) % 10
+				]!.activate({ expectedRevision: "1" });
+				expect(
+					(
+						await sql`SELECT frontier_minute FROM questpie_internal.schedule_frontiers WHERE application_name = ${raceBindings.application}`
+					)[0].frontier_minute,
+				).toEqual(
+					new Date(Math.floor(Date.parse(changed.activatedAt) / 60000) * 60000),
+				);
 			} finally {
 				await runtime.close();
 			}

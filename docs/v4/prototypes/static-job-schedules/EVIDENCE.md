@@ -1,11 +1,64 @@
-# Static schedule activation model evidence
+# Static schedule activation evidence
+
+The candidate Runtime owner now covers the activation model's guarantees through
+the [PostgreSQL tracer](../../../../tests/integration/postgres/static-schedule-runtime.test.ts).
+The duplicate `activation.ts` and `activation.test.ts` model files were deleted;
+Git preserves them and the historical results below. This deletion does not
+accept ADR-0043 or project product authority.
+
+## Current Runtime-owner coverage
+
+The tracer runs the actual `pg` transaction owner, v9 protocol, verified schedule
+catalog, calendar evaluator, ordinary Execution, and Job acceptance owner. Its
+controlled state changes and transaction faults affect only its UUID-owned test
+database. There is no synthetic tick table or caller-selected tick minute.
+
+| Former model guarantee                            | Current executable evidence                                                                                                                    |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Absent activation and activation-minute exclusion | Reconciliation creates no head or run before activation; a newly activated schedule accepts no current-minute run.                             |
+| Competing first activation                        | Ten distinct desired sets race from revision zero: one winner, nine stale failures, one stored activation, exact winning replay.               |
+| Response loss and ABA                             | Exact historical receipt replay returns the newer current head after removal/re-addition; a previously unsuccessful stale request stays stale. |
+| Revision overflow                                 | Maximum PostgreSQL bigint revision rejects the next activation.                                                                                |
+| Concurrent ticks and frontier bounds              | Ten producers accept one real Job/tick; a future frontier cannot regress or produce old work.                                                  |
+| Frontier transfer                                 | An adjacent unchanged program retains its frontier; changed and removed/re-added programs reset to the activation minute.                      |
+| Removal race                                      | Both shared-lock orders are controlled: accepted work survives removal; removal-first suppresses pending work.                                 |
+| Atomic rollback                                   | Faults after real Job acceptance, after the frontier UPDATE, and during activation roll back their writes.                                     |
+| Cancellation while blocked                        | PostgreSQL reports an observed head-lock waiter; cancellation settles before blocker release and leaves ticks/frontier unchanged.              |
+
+Blocked-statement cancellation uses the existing classified
+`QuestpiePostgresError` with code `cancelled` and the caller's reason as its cause.
+The old model returned the bare reason; that model-specific error shape was not
+a producer contract. No public `inspect` capability was carried across: settled
+test assertions read only this test's database.
+
+Executed with Bun 1.3.14 and PostgreSQL 17, with connection settings supplied
+only through the process environment:
+
+```sh
+bun test tests/integration/postgres/static-schedule-runtime.test.ts
+```
+
+Result: 1 passed, 0 failed, 69 assertions, no skips (2.70 seconds on the final
+local run). The strict proof TypeScript project now includes this Runtime
+tracer; types, warning-denying lint, focused formatting and `git diff --check`
+pass. Adding that type coverage exposed and repaired two old test-fixture
+mistakes: bootstrap now supplies `get`, and the acceptance codec descriptor is
+decoded from the existing Context codec rather than asserted to have another type.
+The tracer closes its Runtime, Pool, SQL and lock clients, restores the process
+database setting, then drops only the database whose CREATE it owns. The shared
+PostgreSQL container and other application databases remain untouched.
+
+This is Runtime-owner evidence, not generated worker/CLI or browser evidence;
+those remain separate tracers. It establishes no throughput or fairness claim.
+
+## Historical model
 
 This PostgreSQL model tests the activation concurrency rules proposed in
 ADR-0043. It is not a production scheduler or an acceptance record. The
 authoritative candidate is `docs/adr/0043-freeze-static-job-schedules-and-mutation-checkpoints.md`
 on `feat/v4`; this isolated proof worktree started from `338ac552b`.
 
-## Executed checks
+### Executed checks
 
 On PostgreSQL 17 and Bun 1.3.14, with PostgreSQL connection settings supplied
 only through the process environment:
@@ -33,7 +86,7 @@ both source files when invoked with this worktree as its working directory.
 An independent read-only Spec review found no contradiction within the
 synthetic concurrency/ABA/frontier model. It did not perform formal acceptance.
 
-## What this cannot establish
+### What the model could not establish
 
 `produce` receives a caller-selected minute. There is no cron evaluator,
 latest-match search, or no-match frontier advancement. `accepted_ticks` is a
@@ -49,9 +102,9 @@ lock-order test controls waiter arrival but establishes no PostgreSQL fairness
 guarantee. `inspect` is settled-state test observation, not a public coherent
 snapshot unless its caller supplies a snapshot transaction.
 
-## Resource cleanup and construction incidents
+### Resource cleanup and construction incidents
 
-Each current run creates a UUID-named schema with create-only SQL. Cleanup is
+Each historical run created a UUID-named schema with create-only SQL. Cleanup was
 allowed only after that run's CREATE succeeds, and closes its SQL clients.
 Tests backdate only their own synthetic program rows. The existing PostgreSQL
 container and application schemas are not cleanup targets.
