@@ -878,10 +878,12 @@ The current candidate passes `quality:release`, including its ordinary, React
 and packed-package checks; performance manifests were validated only. Its
 complete PostgreSQL lane failed at the 60-second schedule owner-deadline test.
 Focused deadline diagnostics and the three-file consumer tail pass but neither
-explains that stall nor replaces the complete lane. A new complete PostgreSQL
-result remains pending. The
+explains that stall nor replaces the complete lane. A second full PostgreSQL
+run failed earlier in the Membership-after-Channel-lock Mutation case, followed
+by an unhandled missing-table error; it never reached the deadline file. Both
+failures remain under diagnosis. The
 [owner-deadline evidence](docs/v4/prototypes/static-job-schedules/OWNER-DEADLINE-EVIDENCE.md)
-retains the failure, diagnostic limits and cleanup. Full PostgreSQL and affected
+retains both failures, diagnostic limits and cleanup. Full PostgreSQL and affected
 load/soak closure, formal acceptance, public authority projection and manual
 preview remain pending. ADR-0043 remains Proposed; no formal acceptance review
 has been invoked. Final gate evidence must bind the exact package artifacts.

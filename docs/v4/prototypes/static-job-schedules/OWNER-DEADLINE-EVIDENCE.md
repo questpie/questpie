@@ -90,9 +90,19 @@ or repair for it. Temporary instrumentation was removed.
 
 The separate three-file tail passed 15 tests and 242 assertions across lifecycle
 transactions, Team Support Desk and its static sweep. It does not replace the
-failed complete lane. A new complete PostgreSQL run has no recorded result here
-yet. Production 10-second owner bounds, 30-second PostgreSQL controls, the
+failed complete lane. Production 10-second owner bounds, 30-second PostgreSQL controls, the
 12.5-second test guard and the 60-second outer test timeout remain unchanged.
+
+A second full PostgreSQL run on the same candidate failed earlier in
+`beta06-publish-mutation.test.ts`. The Membership-after-Channel-lock case failed
+after 7,553.11 ms with `AbortError: caller cancelled`; a secondary unhandled
+error reported that `collaboration.message_events` did not exist. The file
+finished with four passes, one failure, one error and 34 assertions. This run
+never reached the schedule deadline file. The cause remains under diagnosis;
+neither a Runtime defect nor a harness cause is established by this log.
+The coordinating agent reports that the schedule-state observer started after
+the run had already failed, closed with `observed: false`, and made no database
+mutation. Both full-run outer databases were removed and cleanup verified.
 
 The same candidate's `quality:release` completed: the ordinary suite reported
 1,107 passes, 195 gated skips and zero failures; React reported three passes and
@@ -110,7 +120,8 @@ its fixture.
 
 Local provenance is retained in
 `/home/drepkovsky/code/questpie-v4-beta2-verification.l3bsSH/quality-release-6c673e931.log`
-and `full-postgres-6c673e931.log` in that directory;
+and `full-postgres-6c673e931.log` plus
+`full-postgres-6c673e931-observed.log` in that directory;
 `/home/drepkovsky/code/questpie-load-pairs.Q4HQN7/owner-deadline-diagnosis.json`
 and its three named diagnostic logs; and
 `/home/drepkovsky/code/questpie-v4-team-tail-proof.D0O50E` for the three tail logs.
