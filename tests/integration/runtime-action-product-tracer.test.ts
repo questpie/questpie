@@ -632,7 +632,31 @@ test("detached Action cleanup observes a late Service creation rejection", async
 	}
 });
 
-test("validated Action result wins when Service disposal never settles", async () => {
+test.each([
+	["validated Action result wins when Service disposal never settles", false],
+	[
+		"Action deadline wins before a late result when Service disposal never settles",
+		true,
+	],
+] as const)("%s", async (_name, deadlineFirst) => {
+	let now = 0;
+	let deadlineCallback!: () => void;
+	const scheduled: number[] = [];
+	const events: string[] = [];
+	const handlerStarted = Promise.withResolvers<void>();
+	const handlerResult = Promise.withResolvers<string>();
+	const disposalStarted = Promise.withResolvers<void>();
+	const clock = {
+		monotonicNow: () => now,
+		rootRemainingMilliseconds: () => null,
+		schedule: (callback: () => void, delay: number) => {
+			scheduled.push(delay);
+			deadlineCallback = callback;
+			return callback;
+		},
+		// Retain the callback to model delivery already queued before cancellation.
+		cancel: () => undefined,
+	};
 	let disposeCalls = 0;
 	const provider = defineService({
 		name: "action.never-disposed-provider",
@@ -641,11 +665,14 @@ test("validated Action result wins when Service disposal never settles", async (
 		create: () => Object.freeze({ ready: true }),
 		dispose: () => {
 			disposeCalls += 1;
+			events.push("dispose");
+			disposalStarted.resolve();
 			return new Promise<never>(() => undefined);
 		},
 	});
 	const actions = createRuntimeActionExecutor({
 		application: "application:collaboration",
+		clock,
 		bindings: [
 			{
 				identity: "action:delivery.known",
@@ -658,7 +685,11 @@ test("validated Action result wins when Service disposal never settles", async (
 				input: { kind: "text" },
 				output: { kind: "text" },
 				declaredErrors: [],
-				execute: () => "known",
+				execute: () => {
+					events.push("handler");
+					handlerStarted.resolve();
+					return handlerResult.promise;
+				},
 			},
 		],
 		project: async (scope) => {
@@ -685,20 +716,47 @@ test("validated Action result wins when Service disposal never settles", async (
 		}),
 	});
 
-	await expect(
-		Promise.race([
-			runtime.execution(
-				{
-					principal: principal.user({ id: callerId }),
-					context: { companyId },
-				},
-				(scope) => scope.invoke(),
-			),
-			new Promise<never>((_resolve, reject) =>
-				setTimeout(() => reject(new Error("disposal retained result")), 100),
-			),
-		]),
-	).resolves.toBe("known");
+	const outcome = Promise.race([
+		runtime.execution(
+			{
+				principal: principal.user({ id: callerId }),
+				context: { companyId },
+			},
+			(scope) => scope.invoke(),
+		),
+		new Promise<never>((_resolve, reject) =>
+			setTimeout(() => reject(new Error("disposal retained result")), 100),
+		),
+	]);
+	void outcome.catch(() => undefined);
+	await handlerStarted.promise;
+	expect(scheduled).toEqual([5]);
+	if (!deadlineFirst) {
+		now = 4;
+		handlerResult.resolve("known");
+		// Disposal starts only after the handler's outcome has been validated.
+		await disposalStarted.promise;
+	}
+	now = 5;
+	events.push("deadline");
+	deadlineCallback();
+	if (deadlineFirst) {
+		await expect(outcome).rejects.toEqual(
+			new OperationFailure("DEADLINE_EXCEEDED"),
+		);
+		handlerResult.resolve("known");
+		await disposalStarted.promise;
+		await expect(outcome).rejects.toEqual(
+			new OperationFailure("DEADLINE_EXCEEDED"),
+		);
+	} else {
+		await expect(outcome).resolves.toBe("known");
+	}
+	expect(events).toEqual(
+		deadlineFirst
+			? ["handler", "deadline", "dispose"]
+			: ["handler", "dispose", "deadline"],
+	);
 	expect(disposeCalls).toBe(1);
 	await expect(
 		Promise.race([
