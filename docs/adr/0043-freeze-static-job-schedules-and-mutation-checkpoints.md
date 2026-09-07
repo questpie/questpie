@@ -333,6 +333,20 @@ readiness claim follows from this candidate.
 
 ## Supersession ledger
 
+This slice advances the internal PostgreSQL protocol to v9 without rewriting
+ADR-0033's v8 SQL or checksum. Stop incompatible Runtime instances before
+upgrading. Existing v8 requires `--allow-non-rolling-protocol-v9`; supported
+exact v6/v7 input additionally requires the existing
+`--allow-non-rolling-protocol-v8` acknowledgement. Both required acknowledgements
+are checked before protocol mutation. The v9 owner rechecks after acquiring the
+protocol lock, then delegates pre-v8 input to the existing v8 owner. Fresh
+bootstrap requires no cutover acknowledgement; an older catalog installed by
+another process while waiting is not a fresh bootstrap. Each version upgrade
+owns its transaction: v9 failure rolls back v9 changes but may leave a preceding
+valid v8 upgrade committed. Runtime readiness requires exact v9. Migration
+never activates a schedule set, and there is no mixed-version Runtime fallback
+or in-place downgrade.
+
 If accepted, this ADR adds the missing schedule producer/calendar/activation
 contract to ADR-0016/0017/0026 and fixes the subset of named-Mutation checkpoint
 semantics above. Latest-only catch-up explicitly qualifies scheduled acceptance:

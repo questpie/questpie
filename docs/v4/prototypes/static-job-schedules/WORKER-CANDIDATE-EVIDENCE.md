@@ -50,7 +50,7 @@ transaction boundary and the existing unique Mutation receipt already prevent
 duplicate writes for a stable Call Identity. No second kernel or retry owner
 was introduced.
 
-## Still blocking
+## Expanded generated-worker evidence
 
 The expanded generated-worker tracer passes 1 test / 54 assertions. It covers
 caught forged-reference failure, unawaited and concurrent commands, duplicate
@@ -74,7 +74,14 @@ The generated durable-kernel artifact now pins `CHECKPOINT_INVALID` in both its
 known and permanent failure sets. A failing compiler artifact test preceded this
 repair; the focused artifact test passes 31 assertions.
 
-Integrated authority changes during replay, lease takeover and cancellation;
-beginner/browser tracer; final artifact and authority
-reconciliation; independent review and manifest-bound formal acceptance remain
-required. Historical model proofs do not substitute for generated-path checks.
+The later `static-job-checkpoint-recovery.test.ts` now exercises authority
+changes during replay, lease takeover, cancellation and commit-before-completion
+recovery through generated execution. The separate
+[Team sweep evidence](./TEAM-SWEEP-CANDIDATE-EVIDENCE.md) records the beginner
+PostgreSQL/browser tracer, and [owner-deadline evidence](./OWNER-DEADLINE-EVIDENCE.md)
+records actual transaction timeout rollback. These supersede the earlier
+integration gaps, not the requirement for final integrated gates.
+
+Final artifact reconciliation, complete release and PostgreSQL gates,
+independent review closure and manifest-bound formal acceptance remain required.
+Historical model proofs do not substitute for generated-path checks.

@@ -848,8 +848,10 @@ The human also selected one catch-up run after downtime, rather than replaying
 every missed minute; preserve already accepted runs and their independent retries.
 ADR-0016/0017/0026 own the accepted direction. Proposed ADR-0043 now records the
 candidate producer, UTC calendar, explicit revision-fenced activation/removal,
-and minimum Mutation checkpoint contract. It still needs focused proof and
-formal acceptance; no production schedule or checkpoint implementation exists.
+and minimum Mutation checkpoint contract. The isolated
+`work/static-schedule-integrated-proof` candidate now contains the connected
+compiler, Runtime, deployment CLI and reference-consumer implementation. It is
+not accepted product authority and has not been merged into canonical `feat/v4`.
 The existing executable-pinning gap is repaired: generated workers filter
 admission by their verified Runtime Build and recheck it under the run lock.
 The two-build PostgreSQL regression proves Job and Reaction isolation, no
@@ -859,31 +861,28 @@ whole-build retention cost. Pre-repair candidate workers must be drained and
 stopped before new work; overlapping unguarded workers remain unsafe.
 The repair passes the affected PostgreSQL 17 and both Firefox tracers,
 `quality:release`, and two byte-identical forced-build release dry-runs.
-Checkpoint recovery now has a real generated Mutation/lease prototype: one
-write and receipt survive takeover, stale completion is fenced, and Context
-denial versus Collection-only historical replay is distinguished. A separate
-attempt-control model proves caught-error doom, one in-flight command, owned
-promise joining, cancellation-reason preservation, and detached command input.
-A proof-only invocation owner now connects that coordinator to the generated
-Mutation and private receipt completion. Nested Date/optional input uses the
-generated codec; denied replay cannot complete history, input mutation cannot
-change the captured command, forged/borrowed/callable references fail before
-reservation, and write-then-declared-error rolls back without a receipt or
-later dispatch. Two sequential writes and the 1 MiB UTF-8 input bound also pass.
-Independent Standards and Spec reviews found no blocking issue; the Spec
-rollback-evidence qualification was repaired with a red/green control.
-This remains a one-Mutation proof binding, not the generated Job checkpoint
-entry. Generated reference/type and artifact linkage, trusted history loading,
-real worker terminal settlement, integrated cancellation/concurrency, and
-retained-receipt corruption remain blocking proof. The activation
-model under `docs/v4/prototypes/static-job-schedules` has 11 passing PostgreSQL
-tests and independent synthetic-model review. The separate UTC calendar proof
-has bounded latest-match search and a PostgreSQL 17 oracle; it does not prove
-compiler artifacts or clock capture inside real tick acceptance. Neither model
-proves real scheduled Job acceptance or checkpoint execution. Keep ADR-0043
-Proposed.
-The combined five-suite PostgreSQL 17 proof run passes 46 tests / 213 assertions
-with no skips; focused strict types, lint, format and cleanup checks pass.
+The candidate's generated workers now exercise stable checkpoint identity,
+retained-receipt recovery, caught-error doom, owned promise joining, cancellation,
+lease takeover and Context/admission versus Collection-only replay authority.
+Actual PostgreSQL owners replace the synthetic activation/checkpoint models;
+the Runtime calendar retains its PostgreSQL UTC oracle. The Team Support Desk
+minute sweep has PostgreSQL/Firefox evidence. Detailed results and historical
+red/green records live under `docs/v4/prototypes/static-job-schedules`.
+
+Release-wide regression uncovered compiler source-read ownership, explicit
+database-target, fenced-outcome and retained protocol-upgrade defects. Their
+focused repairs remain in the candidate. The v9 cutover preserves the existing
+v8 acknowledgement and rechecks current protocol state after its lock wait.
+Do not describe the broad gates as passed until the final integrated head has
+fresh results and exact package artifact pins. ADR-0043 remains Proposed;
+no formal acceptance review has been invoked.
+
+The owner additionally requires a manually inspectable Team Support Desk before
+publication, with domain-local backend Definitions, a product `web/` independent
+of `tracer/`, and consistent README/public-skill guidance. Immutable migration
+and Seed history must survive the source reorganization. Provide a coverage
+checklist distinguishing UI scenarios from automated crash, contention and
+corruption proof. The fixture host is not a production deployment template.
 
 The behavior-preserving DX cleanup #360 through #363 is complete. The preserved
 pre-schedule candidate `863120698` has final `quality:release` PASS and a valid

@@ -177,6 +177,13 @@ with the deployment database connection configured, run `questpie build`,
 then `questpie migration apply --allow-non-rolling-protocol-v9`, then
 `questpie seed apply`. Migration does not activate the schedule.
 
+For an existing v6/v7 installation, supply both
+`--allow-non-rolling-protocol-v8` and `--allow-non-rolling-protocol-v9` to
+`questpie migration apply`. Each upgrade keeps its own transaction: if v8
+commits and v9 later fails, the database stays at valid v8. Keep incompatible
+Runtimes stopped and repair forward; a failed command does not promise that
+every preceding upgrade rolled back. A fresh database needs no cutover flags.
+
 For the first activation, run
 `questpie schedule activate --expect-revision 0`. The receipt contains
 `acceptedRevision: "1"` and the current head. Keep revisions as decimal text.
