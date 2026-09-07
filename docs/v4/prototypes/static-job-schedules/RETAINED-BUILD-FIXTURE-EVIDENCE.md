@@ -134,3 +134,16 @@ adds no production injection API, generic cleanup utility or dependency on an
 external database. The ordinary strict proof typecheck, scoped warning-denying
 lint, formatting and diff check pass. No real-fixture compilation or PostgreSQL
 rerun was performed for this follow-up while the integration gate was active.
+
+Review also required explicit ownership of the fault-test subprocesses. A
+test-local collector now bounds their streams and exit with a two-second
+deadline, kills a still-running child with `SIGKILL`, and awaits exit before
+temporary-file removal. If termination itself fails, it preserves the original
+failure with `SuppressedError`. No production or shared process helper was added.
+A sixth test starts a real child whose imported module records entry and then
+stalls indefinitely. The unbounded collector failed its independent one-second
+guard; the bounded collector passes a 50 ms deadline probe, verifies signal and
+exit, and verifies the PID is gone before teardown. The guard is failure-only
+and kills the child during cleanup on a regression. The final compile-free suite
+passes six tests with 14 outer assertions; the five fixture-failure cases remain
+unchanged.

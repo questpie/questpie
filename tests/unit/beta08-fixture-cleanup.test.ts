@@ -1,7 +1,110 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+
+import { eventually } from "../../packages/testkit/src";
+
+type Child = Bun.Subprocess<"ignore", "pipe", "pipe">;
+
+async function collectFixtureChild(child: Child, timeoutMilliseconds = 2_000) {
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	let outcome:
+		| { value: readonly [string, string, number] }
+		| { reason: unknown };
+	try {
+		outcome = {
+			value: await Promise.race([
+				Promise.all([
+					new Response(child.stdout).text(),
+					new Response(child.stderr).text(),
+					child.exited,
+				] as const),
+				new Promise<never>((_resolve, reject) => {
+					timeout = setTimeout(
+						() =>
+							reject(
+								new DOMException(
+									"Fixture child deadline exceeded",
+									"TimeoutError",
+								),
+							),
+						timeoutMilliseconds,
+					);
+				}),
+			]),
+		};
+	} catch (reason) {
+		outcome = { reason };
+	} finally {
+		clearTimeout(timeout);
+	}
+	try {
+		if (child.exitCode === null && child.signalCode === null)
+			child.kill("SIGKILL");
+		await child.exited;
+	} catch (cleanupError) {
+		if ("reason" in outcome)
+			throw new SuppressedError(
+				cleanupError,
+				outcome.reason,
+				"Fixture child termination failed",
+			);
+		throw cleanupError;
+	}
+	if ("reason" in outcome) throw outcome.reason;
+	return outcome.value;
+}
+
+test("fixture child stuck in import is terminated before temporary files are removed", async () => {
+	const root = await mkdtemp(join(tmpdir(), "questpie-fixture-child-"));
+	let child: Child | undefined;
+	let guard: ReturnType<typeof setTimeout> | undefined;
+	try {
+		const module = join(root, "stuck.ts");
+		const entered = join(root, "entered");
+		await writeFile(
+			module,
+			`import { writeFileSync } from "node:fs"; setInterval(() => {}, 1_000); writeFileSync(${JSON.stringify(entered)}, "ready"); await new Promise(() => {});`,
+		);
+		child = Bun.spawn(
+			[process.execPath, "-e", `await import(${JSON.stringify(module)})`],
+			{ stdin: "ignore", stdout: "pipe", stderr: "pipe" },
+		);
+		await eventually(() => existsSync(entered), {
+			accept: Boolean,
+			timeoutMilliseconds: 2_000,
+		});
+		await expect(
+			Promise.race([
+				collectFixtureChild(child, 50),
+				new Promise<never>((_resolve, reject) => {
+					guard = setTimeout(
+						() => reject(new Error("child owner missed its deadline")),
+						1_000,
+					);
+				}),
+			]),
+		).rejects.toMatchObject({ name: "TimeoutError" });
+		expect(await child.exited).not.toBe(0);
+		expect(child.signalCode).toBe("SIGKILL");
+		try {
+			process.kill(child.pid, 0);
+			throw new Error("Fixture child survived its owner");
+		} catch (error) {
+			expect(error).toMatchObject({ code: "ESRCH" });
+		}
+	} finally {
+		clearTimeout(guard);
+		if (child) {
+			if (child.exitCode === null && child.signalCode === null)
+				child.kill("SIGKILL");
+			await child.exited;
+		}
+		await rm(root, { recursive: true, force: true });
+	}
+});
 
 // Isolated module substitution tests this test-helper's ownership only. It is
 // deliberately not compiler, application startup, or PostgreSQL engine proof.
@@ -101,6 +204,7 @@ console.log("fixture cleanup assertions passed");
 `;
 		try {
 			const child = Bun.spawn([process.execPath, "-e", script], {
+				stdin: "ignore",
 				stdout: "pipe",
 				stderr: "pipe",
 				env: {
@@ -111,11 +215,7 @@ console.log("fixture cleanup assertions passed");
 					PGPASSWORD: undefined,
 				},
 			});
-			const [stdout, stderr, code] = await Promise.all([
-				new Response(child.stdout).text(),
-				new Response(child.stderr).text(),
-				child.exited,
-			]);
+			const [stdout, stderr, code] = await collectFixtureChild(child);
 			expect(code, stdout + stderr).toBe(0);
 			expect(stdout).toContain("fixture cleanup assertions passed");
 		} finally {
