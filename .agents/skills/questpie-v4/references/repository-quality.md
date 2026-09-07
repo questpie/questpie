@@ -65,6 +65,12 @@ forms, not the values produced when the source runs:
   it does not resolve the environment or claim the resulting endpoint is local.
 - Documentation placeholders describing password forwarding without a value.
 
+The owner-approved historical-removal and committed-TypeScript source-form
+exceptions are specified in the
+[packet-safety decision](../../../../docs/v4/implementation/acceptance-packet-safety/DECISION.md).
+Historical redaction is explicit in the manifest and packet; source-form
+recognition changes only the scanner's shadow, never reviewed source bytes.
+
 The executable spellings live in `acceptance-packet-secrets.ts` and its positive
 and negative fixtures. Embedded credentials, literal remote endpoints, URL
 queries/fragments, alternate password environment variables, and password

@@ -39,6 +39,8 @@ redactions. Metadata contains transform version
 `historical-database-url-redaction-v1`, the original complete raw-diff SHA-256
 and byte count, and each applied index/path/base line. There are no individual
 secret hashes. The ordinary packet digest binds the rendered diff and metadata.
+Opt-in redaction rejects a diff that cannot round-trip through UTF-8 losslessly;
+replacement characters cannot silently change unrelated reviewed bytes.
 
 The existing credential-free verifier reconstructs the same representation from
 the reviewed commit and checks the existing record binding. No second verifier

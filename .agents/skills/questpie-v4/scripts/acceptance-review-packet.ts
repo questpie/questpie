@@ -3,6 +3,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, normalize, resolve } from "node:path";
 
 import {
+	decodeHistoricalRedactions,
+	HistoricalRedactionError,
+	type HistoricalDatabaseUrlRedaction,
+	redactHistoricalDatabaseUrls,
+} from "./acceptance-historical-redactions";
+import {
 	findAcceptanceGitDiffSecret,
 	findAcceptancePacketSecret,
 } from "./acceptance-packet-secrets";
@@ -22,6 +28,7 @@ export type AcceptanceManifestV2 = {
 	diffBase: string;
 	reviewOutput: string;
 	reviewerProfile?: AcceptanceReviewerProfileV2;
+	historicalDatabaseUrlRedactions?: HistoricalDatabaseUrlRedaction[];
 	authorityHeads: Record<string, string>;
 	authorityDocuments: Array<{
 		name: string;
@@ -89,11 +96,11 @@ function invalid(message: string): never {
 	throw new AcceptancePacketError(message);
 }
 
-function shell(
+function shellBytes(
 	args: string[],
 	cwd: string,
 	environment: Record<string, string> = {},
-): string {
+): Buffer {
 	const process = Bun.spawnSync(args, {
 		cwd,
 		env: { ...Bun.env, ...environment },
@@ -102,7 +109,15 @@ function shell(
 	});
 	if (process.exitCode !== 0)
 		invalid(`${args.join(" ")} failed: ${process.stderr.toString().trim()}`);
-	return process.stdout.toString();
+	return process.stdout;
+}
+
+function shell(
+	args: string[],
+	cwd: string,
+	environment: Record<string, string> = {},
+): string {
+	return shellBytes(args, cwd, environment).toString();
 }
 
 function sha256(value: string | Uint8Array): string {
@@ -147,6 +162,9 @@ function decodeManifest(source: string): AcceptanceManifestV2 {
 				...(Object.hasOwn(manifest, "reviewerProfile")
 					? ["reviewerProfile"]
 					: []),
+				...(Object.hasOwn(manifest, "historicalDatabaseUrlRedactions")
+					? ["historicalDatabaseUrlRedactions"]
+					: []),
 			].sort(),
 		)
 	)
@@ -162,6 +180,14 @@ function decodeManifest(source: string): AcceptanceManifestV2 {
 		invalid("manifest lacks exact protocol, ticket, proof, base, or output");
 	checkedPath(candidate.reviewOutput, "review output");
 	primaryProfileForManifest(candidate);
+	if (Object.hasOwn(candidate, "historicalDatabaseUrlRedactions")) {
+		try {
+			decodeHistoricalRedactions(candidate.historicalDatabaseUrlRedactions);
+		} catch (error) {
+			if (error instanceof HistoricalRedactionError) invalid(error.message);
+			throw error;
+		}
+	}
 	if (
 		typeof candidate.authorityHeads !== "object" ||
 		candidate.authorityHeads === null ||
@@ -289,46 +315,107 @@ export function prepareAcceptancePacket(input: {
 		).trim() !== ""
 	)
 		invalid("Git administrative attributes are not allowed during review");
-	const diff = requireNonEmptyReviewDiff(
+	const rawDiff = shellBytes(
+		[
+			"git",
+			"-c",
+			"core.quotePath=true",
+			"-c",
+			"diff.noprefix=false",
+			"-c",
+			"diff.mnemonicPrefix=false",
+			"-c",
+			"diff.renames=false",
+			"-c",
+			"diff.algorithm=myers",
+			"-c",
+			"core.attributesFile=/dev/null",
+			"diff",
+			"--binary",
+			"--full-index",
+			"--no-renames",
+			"--no-ext-diff",
+			"--no-color",
+			"--no-textconv",
+			"--no-indent-heuristic",
+			"--unified=3",
+			"--inter-hunk-context=0",
+			"--ignore-submodules=none",
+			"--submodule=short",
+			"-O/dev/null",
+			"--src-prefix=a/",
+			"--dst-prefix=b/",
+			`${manifest.diffBase}..${input.reviewedHead}`,
+			"--",
+			".",
+		],
+		repositoryPath,
+		{ GIT_ATTR_SOURCE: input.reviewedHead },
+	);
+	const diff = requireNonEmptyReviewDiff(rawDiff.toString());
+	let renderedDiff = diff;
+	let redactionMetadata = "";
+	if (manifest.historicalDatabaseUrlRedactions) {
+		if (!Buffer.from(diff).equals(rawDiff))
+			invalid("historical redaction requires lossless UTF-8 diff bytes");
+		try {
+			const redacted = redactHistoricalDatabaseUrls({
+				diff,
+				entries: manifest.historicalDatabaseUrlRedactions,
+				readBase: (path) =>
+					shell(
+						["git", "show", `${manifest.diffBase}:${path}`],
+						repositoryPath,
+					),
+				presentAtHead: (value) => {
+					const search = Bun.spawnSync(
+						[
+							"git",
+							"grep",
+							"-a",
+							"-F",
+							"-q",
+							"-f",
+							"-",
+							input.reviewedHead,
+							"--",
+						],
+						{
+							cwd: repositoryPath,
+							stdin: Buffer.from(`${value}\n`),
+							stdout: "ignore",
+							stderr: "ignore",
+						},
+					);
+					if (search.exitCode === 0) return true;
+					if (search.exitCode === 1) return false;
+					invalid("cannot verify historical URL absence at reviewed head");
+				},
+			});
+			renderedDiff = redacted.diff;
+			redactionMetadata = `<historical_redactions>${xml(
+				JSON.stringify({
+					version: "historical-database-url-redaction-v1",
+					originalDiffSha256: sha256(rawDiff),
+					originalDiffBytes: rawDiff.byteLength,
+					locations: redacted.locations,
+				}),
+			)}</historical_redactions>`;
+		} catch (error) {
+			if (error instanceof HistoricalRedactionError) invalid(error.message);
+			throw error;
+		}
+	}
+	const diffSecret = findAcceptanceGitDiffSecret(renderedDiff, (path, side) =>
 		shell(
 			[
 				"git",
-				"-c",
-				"core.quotePath=true",
-				"-c",
-				"diff.noprefix=false",
-				"-c",
-				"diff.mnemonicPrefix=false",
-				"-c",
-				"diff.renames=false",
-				"-c",
-				"diff.algorithm=myers",
-				"-c",
-				"core.attributesFile=/dev/null",
-				"diff",
-				"--binary",
-				"--full-index",
-				"--no-renames",
-				"--no-ext-diff",
-				"--no-color",
-				"--no-textconv",
-				"--no-indent-heuristic",
-				"--unified=3",
-				"--inter-hunk-context=0",
-				"--ignore-submodules=none",
-				"--submodule=short",
-				"-O/dev/null",
-				"--src-prefix=a/",
-				"--dst-prefix=b/",
-				`${manifest.diffBase}..${input.reviewedHead}`,
-				"--",
-				".",
+				"show",
+				`${side === "base" ? manifest.diffBase : input.reviewedHead}:${path}`,
 			],
 			repositoryPath,
-			{ GIT_ATTR_SOURCE: input.reviewedHead },
 		),
 	);
-	const diffSecret = findAcceptanceGitDiffSecret(diff);
 	if (diffSecret)
 		invalid(`review diff contains a prohibited ${diffSecret.name}`);
 
@@ -336,7 +423,10 @@ export function prepareAcceptancePacket(input: {
 	const profileMetadata = manifest.reviewerProfile
 		? `<primary_profile>${xml(primaryProfile.recordProfile)}</primary_profile>`
 		: "";
-	const packet = `<documents>\n${documents}\n<document index="${manifest.authorityDocuments.length + 1}"><source>${xml(manifestPath)}</source><document_content>${xml(JSON.stringify(manifest, null, 2))}</document_content></document>\n<document index="${manifest.authorityDocuments.length + 2}"><source>exact git diff ${xml(manifest.diffBase)}..${xml(input.reviewedHead)}</source><document_content>${xml(diff)}</document_content></document>\n</documents>\n<review_metadata><protocol_version>2</protocol_version><reviewed_head>${xml(input.reviewedHead)}</reviewed_head><diff_base>${xml(manifest.diffBase)}</diff_base><primary_model>${xml(primaryProfile.model)}</primary_model><primary_effort>${xml(primaryProfile.effort)}</primary_effort>${profileMetadata}</review_metadata>\n<review_task>\nYou are the independent acceptance reviewer for QUESTPIE v4 ticket ${xml(manifest.ticket)}. Review only the exact packet against its fixed authority, proof manifest, verification results, and acceptance criteria. Look for contradictions, missing evidence, invalid ownership, unsafe review behavior, false quality or performance gates, and scope creep. Return exactly one verdict line first: VERDICT: PASS or VERDICT: BLOCKED. A PASS means no blocking finding remains. For BLOCKED, list every concrete blocker with the affected file and required evidence or repair, followed by non-blocking observations.\n</review_task>\n`;
+	const diffLabel = redactionMetadata
+		? `exact git diff with ${manifest.historicalDatabaseUrlRedactions!.length} manifest-bound historical database URL redactions`
+		: "exact git diff";
+	const packet = `<documents>\n${documents}\n<document index="${manifest.authorityDocuments.length + 1}"><source>${xml(manifestPath)}</source><document_content>${xml(JSON.stringify(manifest, null, 2))}</document_content></document>\n<document index="${manifest.authorityDocuments.length + 2}"><source>${diffLabel} ${xml(manifest.diffBase)}..${xml(input.reviewedHead)}</source><document_content>${xml(renderedDiff)}</document_content></document>\n</documents>\n<review_metadata><protocol_version>2</protocol_version><reviewed_head>${xml(input.reviewedHead)}</reviewed_head><diff_base>${xml(manifest.diffBase)}</diff_base><primary_model>${xml(primaryProfile.model)}</primary_model><primary_effort>${xml(primaryProfile.effort)}</primary_effort>${profileMetadata}${redactionMetadata}</review_metadata>\n<review_task>\nYou are the independent acceptance reviewer for QUESTPIE v4 ticket ${xml(manifest.ticket)}. Review only the exact packet against its fixed authority, proof manifest, verification results, and acceptance criteria. Look for contradictions, missing evidence, invalid ownership, unsafe review behavior, false quality or performance gates, and scope creep. Return exactly one verdict line first: VERDICT: PASS or VERDICT: BLOCKED. A PASS means no blocking finding remains. For BLOCKED, list every concrete blocker with the affected file and required evidence or repair, followed by non-blocking observations.\n</review_task>\n`;
 	return Object.freeze({
 		manifest,
 		manifestPath,
