@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { Client } from "pg";
+
 import {
 	createPostgresDatabase,
 	createPostgresListener,
@@ -12,6 +14,7 @@ import {
 	type PostgresTransaction,
 	QuestpiePostgresError,
 } from "../../../packages/runtime/src/postgres";
+import { CleanupStack } from "../../../packages/testkit/src";
 
 const postgresTest = process.env.PGHOST ? test : test.skip;
 const pgbouncerTest = process.env.PGBOUNCER_PORT ? test : test.skip;
@@ -275,6 +278,7 @@ const terminateListener = definePostgresStatement({
 )
 FROM pg_catalog.pg_stat_activity
 WHERE application_name = $1::text
+	AND datname = pg_catalog.current_database()
 	AND pid <> pg_catalog.pg_backend_pid()`,
 	parameterCount: 1,
 	parameters: (applicationName: string) => [applicationName],
@@ -291,6 +295,7 @@ const listenerSessionCount = definePostgresStatement({
 	text: `SELECT count(*)::integer
 FROM pg_catalog.pg_stat_activity
 WHERE application_name = $1::text
+	AND datname = pg_catalog.current_database()
 	AND pid <> pg_catalog.pg_backend_pid()`,
 	parameterCount: 1,
 	parameters: (applicationName: string) => [applicationName],
@@ -408,6 +413,59 @@ test("redacts malformed migration connection configuration", () => {
 	});
 	expect(String(error)).not.toContain("qp-secret-user");
 	expect(String(error)).not.toContain("qp-secret-password");
+});
+
+postgresTest("listener probes stay inside their owned database", async () => {
+	const cleanup = new CleanupStack();
+	const admin = new Client(postgresUrl());
+	cleanup.defer(() => admin.end());
+	try {
+		await admin.connect();
+		const foreignDatabase = `qp_listener_${crypto.randomUUID().replaceAll("-", "")}`;
+		await admin.query(`CREATE DATABASE "${foreignDatabase}"`);
+		cleanup.defer(async () => {
+			await admin.query(`DROP DATABASE "${foreignDatabase}" WITH (FORCE)`);
+		});
+		const postgres = database();
+		cleanup.defer(() => postgres.close({ deadlineAt: Date.now() + 1_000 }));
+		const applicationName = `qp_probe_${crypto.randomUUID()}`;
+		const local = new Client({
+			connectionString: postgresUrl(),
+			application_name: applicationName,
+		});
+		// This exact owned connection is intentionally terminated below.
+		local.on("error", () => {});
+		cleanup.defer(() => local.end());
+		await local.connect();
+		const foreignUrl = new URL(postgresUrl());
+		foreignUrl.pathname = `/${foreignDatabase}`;
+		const foreign = new Client({
+			connectionString: foreignUrl.href,
+			application_name: applicationName,
+		});
+		cleanup.defer(() => foreign.end());
+		await foreign.connect();
+		const before = await foreign.query("SELECT pg_backend_pid() AS pid");
+		const count = () =>
+			postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: (transaction) =>
+					transaction.execute(listenerSessionCount, applicationName),
+			});
+		expect(await count()).toBe(1);
+		expect(
+			await postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: (transaction) =>
+					transaction.execute(terminateListener, applicationName),
+			}),
+		).toBe(true);
+		await eventually(async () => (await count()) === 0, "owned probe survived");
+		const after = await foreign.query("SELECT pg_backend_pid() AS pid");
+		expect(after.rows).toEqual(before.rows);
+	} finally {
+		await cleanup.dispose();
+	}
 });
 
 postgresTest(
