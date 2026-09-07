@@ -188,16 +188,35 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 		} catch (error) {
 			fail(error instanceof Error ? error.message : String(error));
 		}
-		const install = (
-			name: string,
-			source: string,
-			exports: Readonly<Record<string, unknown>>,
-			isPrivate = true,
-		): void => {
-			const root = join(nodeModules, ...name.split("/"));
+		const install = (source: string): void => {
 			const sourceManifest = JSON.parse(
 				readFileSync(resolve(source, "package.json"), "utf8"),
 			) as PackageJson;
+			const { name, exports: sourceExports } = sourceManifest;
+			if (!name || !sourceExports)
+				throw new Error(`${source}: package name and exports are required`);
+			// Private workspaces author source exports; their ordinary TypeScript
+			// build retains the same paths under dist. Do not copy the export map.
+			const exports = sourceManifest.private
+				? Object.fromEntries(
+						Object.entries(sourceExports).map(([subpath, target]) => {
+							if (
+								typeof target !== "string" ||
+								!target.startsWith("./src/") ||
+								!target.endsWith(".ts")
+							)
+								throw new Error(
+									`${name}: unsupported private build export ${subpath}`,
+								);
+							const built = `./dist/${target.slice("./src/".length)}`;
+							return [
+								subpath,
+								built.endsWith(".d.ts") ? built : `${built.slice(0, -3)}.js`,
+							];
+						}),
+					)
+				: sourceExports;
+			const root = join(nodeModules, ...name.split("/"));
 			mkdirSync(root, { recursive: true });
 			cpSync(resolve(source, "dist"), join(root, "dist"), {
 				recursive: true,
@@ -207,7 +226,7 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 				JSON.stringify({
 					name,
 					version: sourceManifest.version,
-					private: isPrivate,
+					private: sourceManifest.private ?? false,
 					type: "module",
 					exports,
 					dependencies: sourceManifest.dependencies,
@@ -217,35 +236,8 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 				fail(`${name}: relocated build unexpectedly contains source files`);
 		};
 
-		install(
-			"questpie",
-			"packages/questpie",
-			{
-				".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
-				"./react": {
-					types: "./dist/react.d.ts",
-					import: "./dist/react.js",
-				},
-				"./internal/observability": {
-					types: "./dist/internal/observability.d.ts",
-					import: "./dist/internal/observability.js",
-				},
-			},
-			false,
-		);
-		install("@questpie/runtime", "packages/runtime", {
-			".": "./dist/index.js",
-			"./bundle": "./dist/bundle.js",
-			"./codec": "./dist/codec/index.js",
-			"./bundle-core": "./dist/bundle-core.js",
-			"./bundle-core-types": "./dist/bundle-core-types.d.ts",
-			"./bundle-realtime": "./dist/bundle-realtime.js",
-			"./observation": "./dist/observation/index.js",
-			"./operation": "./dist/operation/index.js",
-		});
-		install("@questpie/compiler", "packages/compiler", {
-			".": "./dist/index.js",
-		});
+		install("packages/questpie");
+		for (const source of privateSources) install(source);
 		for (const name of embeddedDependencies.keys()) {
 			const installed = resolve("node_modules", ...name.split("/"));
 			if (!existsSync(installed))
