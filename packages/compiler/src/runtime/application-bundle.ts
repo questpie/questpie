@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
+import { compilerSourceFiles } from "../build-source";
 import type { ApplicationConfiguration, PackageInventory } from "../types";
 
 export async function bundleApplicationEntry(
@@ -34,15 +34,10 @@ export async function bundleApplicationEntry(
 		packages: "bundle",
 		external: ["questpie", "questpie/internal/observability"],
 		plugins: [
+			compilerSourceFiles,
 			{
 				name: "questpie-application-bundle",
 				setup(builder) {
-					// Own source reads for every build: Bun's host module cache can retain
-					// descriptors that an earlier bundle has already closed.
-					builder.onLoad(
-						{ filter: /\.(?:[cm]?[jt]s|[jt]sx|json)$/, namespace: "file" },
-						async ({ path }) => ({ contents: await readFile(path) }),
-					);
 					builder.onResolve({ filter: /^questpie:application-entry$/ }, () => ({
 						path: "application-entry",
 						namespace: "questpie-entry",

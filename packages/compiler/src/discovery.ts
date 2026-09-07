@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
+import { compilerSourceFiles } from "./build-source";
 import { compareAscii } from "./canonical";
 import {
 	CompilerDiagnosticError,
@@ -502,6 +503,7 @@ export async function evaluateModules(
 			format: "esm",
 			target: "bun",
 			plugins: [
+				compilerSourceFiles,
 				{
 					name: "questpie-current-contract",
 					setup(build) {
