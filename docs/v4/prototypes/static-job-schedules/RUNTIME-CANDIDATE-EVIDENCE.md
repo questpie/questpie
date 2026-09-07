@@ -97,6 +97,34 @@ the successful two-acknowledgement v7-to-v9 cutover; its independent v8 catalog
 and trace-preservation tests remain in place. This is candidate evidence and
 does not accept ADR-0043.
 
+A real two-session regression found a cutover acknowledgement race. The v9
+command first observed no protocol, then waited on the shared protocol lock.
+The lock holder bootstrapped exact v8 using the unchanged owner before releasing
+its session lock. Without a second acknowledgement check, the waiting v9
+command silently upgraded that now-existing v8 installation. The unacknowledged
+case failed its expected `QP-SCHEMA-020` assertion; the acknowledged control
+passed. Rechecking the same v9 acknowledgement against the locked protocol read,
+before bootstrap or delegation, closes the race without changing the v8 owner.
+The repaired test verifies refusal leaves the exact v8 catalog intact, an
+acknowledged waiter installs exact v9, and neither path leaves an advisory lock.
+Both cases pass with 12 assertions on PostgreSQL 17:
+
+```sh
+bun test tests/integration/postgres/static-schedule-runtime.test.ts --test-name-pattern 'protocol v9 rechecks'
+```
+
+The test uses two pinned Bun SQL connections in an identity-verified UUID-owned
+database, observes the actual PostgreSQL lock waiter, and runs the real v8/v9
+owners. It has no injected protocol reads, driver mocks, or caller aborts.
+Process-only credentials are not recorded; cleanup closes both sessions before
+dropping only the owned database.
+
+After the repair, the complete `static-schedule-runtime.test.ts` file passes
+4 tests / 104 assertions, including the two real 10-second owner deadlines.
+The compiler and static-schedule proof TypeScript projects, targeted
+warning-denying lint, formatting, architecture check and `git diff --check`
+also pass. These are focused results, not a replacement for integrated gates.
+
 The focused compiler, Runtime, and questpie typechecks, targeted lint and format,
 `bun run architecture:check`, and `git diff --check` pass. Workspace resolution
 for compiler, Runtime, and questpie was checked and points inside this isolated

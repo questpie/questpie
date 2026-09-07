@@ -6,7 +6,14 @@ import { codec, defineContext, principal } from "questpie";
 
 import { digest } from "../../../packages/compiler/src/canonical";
 import { projectPostgresMutationTransactionStatements } from "../../../packages/compiler/src/mutation/postgres-transaction-statements";
-import { ensureInternalProtocolV8 } from "../../../packages/compiler/src/schema/postgres/internal-protocol-v8";
+import {
+	backendPid,
+	lockKey,
+} from "../../../packages/compiler/src/postgres-session";
+import {
+	ensureInternalProtocolV8,
+	verifyInternalProtocolV8,
+} from "../../../packages/compiler/src/schema/postgres/internal-protocol-v8";
 import {
 	ensureInternalProtocolV9,
 	verifyInternalProtocolV9,
@@ -21,10 +28,107 @@ import { createPostgresJobAcceptanceTransaction } from "../../../packages/runtim
 import { linkPostgresMutationTransactionStatements } from "../../../packages/runtime/src/mutation/postgres-transaction-statements";
 import { createRuntimePostgres } from "../../../packages/runtime/src/postgres";
 import type { PostgresTransactionRunner } from "../../../packages/runtime/src/postgres/contract";
+import { eventually } from "../../../packages/testkit/src";
 import { provePostgresOwnerDeadline } from "./helpers/owner-deadline";
 import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const postgres = process.env.PGHOST ? test : test.skip;
+
+postgres.each([false, true])(
+	"protocol v9 rechecks concurrent v8 cutover acknowledgement after lock wait: %s",
+	async (acknowledged) => {
+		const ownedDatabase = `qp_cutover_${crypto.randomUUID().replaceAll("-", "")}`;
+		const admin = new Client({ database: "postgres" });
+		const previousDatabase = process.env.PGDATABASE;
+		const previousDatabaseAlias = process.env.PG_DATABASE;
+		let created = false;
+		let installer: SQL | undefined;
+		let waiter: SQL | undefined;
+		let pending: Promise<{ ok: true } | { error: unknown }> | undefined;
+		try {
+			await admin.connect();
+			await admin.query(`CREATE DATABASE "${ownedDatabase}"`);
+			created = true;
+			process.env.PGDATABASE = ownedDatabase;
+			process.env.PG_DATABASE = ownedDatabase;
+			installer = new SQL({ database: ownedDatabase, max: 1 });
+			waiter = new SQL({ database: ownedDatabase, max: 1 });
+			for (const connection of [installer, waiter]) {
+				const [environment] =
+					await connection`SELECT current_database() AS database, current_setting('server_version_num')::int AS version`;
+				expect(environment.database).toBe(ownedDatabase);
+				expectPostgresMajor(environment.version);
+				await connection`SELECT set_config('statement_timeout', '10000', false)`;
+			}
+			const installerPid = await backendPid(installer);
+			const waiterPid = await backendPid(waiter);
+			const key = lockKey(ownedDatabase, "questpie.internal-protocol");
+			await installer`SELECT pg_advisory_lock(${key})`;
+			const control = { lockTimeoutMs: 5000, statementTimeoutMs: 10000 };
+			pending = ensureInternalProtocolV9(
+				waiter,
+				ownedDatabase,
+				waiterPid,
+				control,
+				{ allowNonRollingProtocolV9: acknowledged },
+			).then(
+				() => ({ ok: true as const }),
+				(error: unknown) => ({ error }),
+			);
+			await eventually(
+				async () => {
+					const [row] =
+						await installer!`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = ${waiterPid} AND wait_event_type = 'Lock') AS waiting`;
+					return row.waiting as boolean;
+				},
+				{
+					description: "v9 command waits after observing an absent protocol",
+					timeoutMilliseconds: 2000,
+					accept: (waiting) => waiting,
+				},
+			);
+			// The older bootstrap owns the same session lock reentrantly.
+			await ensureInternalProtocolV8(
+				installer,
+				ownedDatabase,
+				installerPid,
+				control,
+			);
+			await verifyInternalProtocolV8(installer);
+			await installer`SELECT pg_advisory_unlock(${key})`;
+			const outcome = await pending;
+			if (acknowledged) {
+				expect(outcome).toEqual({ ok: true });
+				await verifyInternalProtocolV9(waiter);
+			} else {
+				expect(outcome).toMatchObject({
+					error: {
+						code: "QP-SCHEMA-020",
+						diagnosticClass: "destructiveAcknowledgementRequired",
+					},
+				});
+				await verifyInternalProtocolV8(waiter);
+			}
+			const [locks] =
+				await waiter`SELECT count(*)::int AS count FROM pg_locks WHERE pid = ${waiterPid} AND locktype = 'advisory'`;
+			expect(locks.count).toBe(0);
+		} finally {
+			try {
+				await installer?.close({ timeout: 2 });
+			} finally {
+				await pending;
+				await waiter?.close({ timeout: 2 });
+				if (previousDatabase === undefined) delete process.env.PGDATABASE;
+				else process.env.PGDATABASE = previousDatabase;
+				if (previousDatabaseAlias === undefined) delete process.env.PG_DATABASE;
+				else process.env.PG_DATABASE = previousDatabaseAlias;
+				if (created) await admin.query(`DROP DATABASE "${ownedDatabase}"`);
+				await admin.end();
+			}
+		}
+	},
+	20000,
+);
 
 postgres.each([
 	[

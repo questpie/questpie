@@ -118,21 +118,27 @@ export async function ensureInternalProtocolV9(
 	signal?: AbortSignal,
 ): Promise<void> {
 	await assertBackendPid(sql, expectedPid, "before internal protocol v9");
-	const initial = await protocolRow(sql);
-	if (
-		initial &&
-		initial.version !== 9 &&
-		cutover.allowNonRollingProtocolV9 !== true
-	)
-		return fail(
-			"QP-SCHEMA-020",
-			"destructiveAcknowledgementRequired",
-			"protocol v9 requires an explicitly acknowledged non-rolling cutover",
-		);
+	const assertCutover = (
+		protocol: Readonly<{ version: number }> | undefined,
+	) => {
+		if (
+			protocol &&
+			protocol.version !== 9 &&
+			cutover.allowNonRollingProtocolV9 !== true
+		)
+			fail(
+				"QP-SCHEMA-020",
+				"destructiveAcknowledgementRequired",
+				"protocol v9 requires an explicitly acknowledged non-rolling cutover",
+			);
+	};
+	assertCutover(await protocolRow(sql));
 	const key = lockKey(databaseName, "questpie.internal-protocol");
 	await acquireSessionLock(sql, key, control, signal);
 	try {
 		let protocol = await protocolRow(sql);
+		// Another installer may have committed while this session waited for the lock.
+		assertCutover(protocol);
 		if (protocol?.version === 9) {
 			await verifyInternalProtocolV9(sql);
 			return;
