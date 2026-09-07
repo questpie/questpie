@@ -1,0 +1,263 @@
+{
+	"protocolVersion": 2,
+	"ticket": "STATIC-JOB-SCHEDULES",
+	"proof": "Ratify Proposed ADR-0043's focused static Job producer and named-Mutation checkpoint boundary through the existing compiler, PostgreSQL durable kernel, Mutation result receipt owner, deployment CLI, and generated consumer tracers. This is not beta.2 aggregate release acceptance. Candidate-only implementation and supporting regression repairs remain isolated from canonical feat/v4 until committed verified PASS.",
+	"diffBase": "97910dac96e0fcc9a7da5c911b8f2534f5eb83b4",
+	"reviewOutput": "docs/v4/prototypes/static-job-schedules/REVIEW.json",
+	"authorityHeads": {
+		"canonical accepted baseline": "97910dac96e0fcc9a7da5c911b8f2534f5eb83b4",
+		"integrated full quality PostgreSQL local load and repeated package gate head": "fcf2adeeb39a86f81fe4176360c59a6fcfa13005",
+		"committed final gate qualifications": "e437e9aaad5d2a306443a45906dbb30cd7f47503",
+		"candidate calendar clarification and explicit reconciliation bound": "61991e1733648381186bfd1da4078b2a1808dba5"
+	},
+	"acceptanceCriteria": [
+		"One optional application-owned Job schedule has exactly cron, execution { principal, context }, and input. Existing Context and Job codecs own exact inferred inputs; explicit principal.service grants no authority. No duplicate schemas, System elevation, Package schedule widening, browser/OpenAPI/MCP schedule recipe, second scheduler, or Job management API.",
+		"Numeric five-field UTC cron canonicalizes equivalent allowed field sets and rejects unsupported, impossible, and doubly restricted day expressions. PostgreSQL observes time once after the activation lock; bounded evaluation selects the latest matching instant in (frontier, observedMinute]. New/changed/readded programs start after activation minute, unchanged adjacent programs retain frontiers, and clock regression cannot rewind them.",
+		"Activation is explicit mandatory-revision CAS with exact immutable request replay before revision comparison, PostgreSQL bigint text revisions and overflow refusal. Desired-set digest, monotonic activation revision, and application/Job/minute tick identity remain disjoint. Response loss, stale ABA requests, both removal/producer lock orders, rollback, cancellation, and ten competing producers preserve accepted runs and atomic frontier/tick/ordinary acceptance.",
+		"Schedule configuration, execution compatibility, and executable bytes have independent bindings. Verified Runtime Build admission and locked claim prevent another build consuming attempts, and retained actual compiled Job and Reaction builds remain necessary to execute prior work. No digest relabel, latest-handler replay, hidden loader, or unsafe rolling overlap is claimed.",
+		"Generated ctx.run.step.mutation(name, ctx.mutations.<qualified.name>, input) accepts only inert verified named Mutation references and preserves exact inferred input, output, and declared error types. It adds no Query, direct Mutation, Service, Action, database, callback, timer, signal, child Job, or workflow capability to the Job Context.",
+		"Checkpoint reservation, the existing named Mutation transaction, and checkpoint completion remain distinct transactions. Stable run/ordered-step Call Identity and the existing result receipt close the commit-before-completion crash window without another result ledger. Fresh Context and Operation admission are required for replay; Collection-only permission changes do not retroactively change the originally authorized immutable receipt.",
+		"Checkpoint replay checks exact ordered command/input and required executable/contract/receipt bindings, rejects renamed/reordered/duplicate/truncated or corrupted history, and cannot rerun a committed Mutation when its required receipt is missing or changed. Receipts required by retained history remain retained; retry horizon is not receipt expiry.",
+		"Declared step errors retain their typed nondisclosure and permanent REACTION_ERROR semantics. Reservation, concurrency, cancellation, unknown completion, and incomplete history doom further step dispatch and successful attempt settlement even if caught. Every started step promise is owned and joined before terminal settlement and cleanup. Observed cancellation preserves its reason; dispatch racing unobserved lease loss may commit and must be recovered by stable receipt identity.",
+		"Executable evidence establishes the exact ADR-0043 bounds: 64 scheduled Jobs, 262144 canonical artifact bytes, UTC instant years 1 through 9999, finite Gregorian search and minute-of-day candidates, at most one acceptance per program per bounded reconciliation, 10-second activation/producer owners, 64 unique checkpoint names with one in-flight command, 5-second checkpoint transactions, and existing 1 MiB canonical input/result limits. Limits are not configurable throughput promises and failures cannot publish partial work.",
+		"Existing worker polling owns reconciliation, overlapping polls join, drain/root cancellation abort producer work and prevent later admission, and producer failure does not starve already accepted durable runs. Safe producer results and fixed diagnostic classes disclose no SQL details, original exceptions, actor identities, Context/input values, or new telemetry payloads.",
+		"Protocol v9 is an explicitly acknowledged non-rolling extension that preserves immutable v8 SQL/checksum. Existing v8 requires the v9 acknowledgement; supported exact v6/v7 requires both v8 and v9 acknowledgements, rechecked after lock wait. Separate committed version upgrades preserve a valid preceding v8 state if v9 fails. Fresh bootstrap is distinguished from an older catalog installed while waiting. No mixed-version fallback or boot-time schedule activation.",
+		"Real generated compiler, packed CLI, PostgreSQL 17, worker restart/checkpoint recovery, Collaboration, and Team Support Desk Firefox tracers establish integration rather than synthetic-model-only acceptance. The four PG environment skips cover only PG18 catalog features and optional PgBouncer, not this ADR's requirements. The example preserves immutable migrations/Seeds and uses documented domain-local Definitions and product web independent of tracer automation.",
+		"Supporting test/compiler/package repairs preserve ordinary lifecycle, Policy, Mutation ownership, receipt semantics, and fixed budgets. Earlier failed full-PostgreSQL and timing runs remain recorded, including the unexplained original schedule stall; a reproduced Mutation-test promise ownership repair is not presented as the cause of that stall.",
+		"Verification distinguishes exact implementation-head complete quality/PG and four-scenario reference-local load/soak evidence, subsequent test/document-only checks, and two byte-identical forced-build package dry-runs. No tagged stable-runner performance certification, manual user approval, beta.2 aggregate acceptance, publication, or production-readiness claim follows.",
+		"ADR-0043 remains Proposed throughout this candidate, with public schedule material retained as an internal draft. Only a committed credential-free-verified formal PASS permits a separate authority/public-documentation projection. ADR-0039 requires a fresh schedule-inclusive aggregate manifest; its Fable exception does not apply here. One pinned Opus-medium review, no fallback, no manufactured PASS, and terminal NO_RESULT rules remain unchanged."
+	],
+	"authorityDocuments": [
+		{
+			"name": ".agents/skills/questpie-v4/references/proof.md",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "23aa3acf1bc2671279b10b890e965d3c7be598a07e82f20af3ff672a229487a9"
+		},
+		{
+			"name": ".agents/skills/questpie-v4/references/repository-quality.md",
+			"path": ".agents/skills/questpie-v4/references/repository-quality.md",
+			"sha256": "087e6420a3d3a9965d80f270abd9d2fc0abc1e8573e5676c87117e36fb43f1e0"
+		},
+		{
+			"name": "docs/v4/DELIVERY-FLOW.md",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "4041c0f4f7f450928a33a51c0c096211d851c255a319f009a64be3fe6ab74cfc"
+		},
+		{
+			"name": "SPEC.md",
+			"path": "SPEC.md",
+			"sha256": "8cd06c68afee320cef230ca8da9b9e7f5f5293e5268423562a9d26bc47ce257b"
+		},
+		{
+			"name": "CONTEXT.md",
+			"path": "CONTEXT.md",
+			"sha256": "35923bba65f4b5d4906110711df42e53617455a1ef71fc575aee3361644b6466"
+		},
+		{
+			"name": "docs/adr/0011-freeze-query-mutation-and-explicit-lifecycle.md",
+			"path": "docs/adr/0011-freeze-query-mutation-and-explicit-lifecycle.md",
+			"sha256": "19e8c611bbcd5230e79c64398d5495365e807e265ca0500aece797ed54d1e458"
+		},
+		{
+			"name": "docs/adr/0013-freeze-transactional-dispatch-and-reaction.md",
+			"path": "docs/adr/0013-freeze-transactional-dispatch-and-reaction.md",
+			"sha256": "8164bf531b761ea05bfa0e71565a64e9c2923d8da26fff9630e641e1e44b0556"
+		},
+		{
+			"name": "docs/adr/0015-freeze-service-route-and-auth-composition.md",
+			"path": "docs/adr/0015-freeze-service-route-and-auth-composition.md",
+			"sha256": "5db374d76fc838dc5ae2eaabc214e82b03e26c1526611ad9384f48c6f78e1ea9"
+		},
+		{
+			"name": "docs/adr/0016-freeze-lifecycle-jobs-and-shared-durable-kernel.md",
+			"path": "docs/adr/0016-freeze-lifecycle-jobs-and-shared-durable-kernel.md",
+			"sha256": "c1b780549481dc8941c7a325f6a8160193b8c3d584d547b66e5dc0c77aa854fb"
+		},
+		{
+			"name": "docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md",
+			"path": "docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md",
+			"sha256": "59c50705e563b8af7b751e26aa97263d9ba12fbd184ec270bf6fd2121a383c28"
+		},
+		{
+			"name": "docs/adr/0020-establish-the-repository-foundation.md",
+			"path": "docs/adr/0020-establish-the-repository-foundation.md",
+			"sha256": "74fe3638329ac6889c77094cdf7f5298982bcccd28c35b9c5ebcf378ff90ea03"
+		},
+		{
+			"name": "docs/adr/0026-freeze-action-and-unify-checkpointed-work-in-job.md",
+			"path": "docs/adr/0026-freeze-action-and-unify-checkpointed-work-in-job.md",
+			"sha256": "c327aa569f6ae1716adefb6f7bc0281b5d81f2193eaae51bd0a4006a27ebb93d"
+		},
+		{
+			"name": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md",
+			"path": "docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md",
+			"sha256": "fe5dd7ece8168e7a2405035b0f6352b35ba1f822afb12ac3d808696c2e648dae"
+		},
+		{
+			"name": "docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
+			"path": "docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
+			"sha256": "62cb8d773380989eabec6154533410d52dda01445ed9deb4b08ad6959d59870b"
+		},
+		{
+			"name": "docs/adr/0043-freeze-static-job-schedules-and-mutation-checkpoints.md",
+			"path": "docs/adr/0043-freeze-static-job-schedules-and-mutation-checkpoints.md",
+			"sha256": "54156d653b6b49165770e32861eaff88a615ea05a5cf5af571da4e1764e8a2cf"
+		},
+		{
+			"name": "candidate research/draft: DECISION-MAP.md",
+			"path": "docs/v4/research/static-job-schedules/DECISION-MAP.md",
+			"sha256": "90c52ed50c5e559eec5c2019fb1a2c07cad73830b28b3ece32166cabe7663eab"
+		},
+		{
+			"name": "candidate research/draft: EXECUTABLE-PINNING.md",
+			"path": "docs/v4/research/static-job-schedules/EXECUTABLE-PINNING.md",
+			"sha256": "c6bcab8ca04bc2f48b2940386c20997caf4a06ad829c79cb7ac5fac6f0e59d58"
+		},
+		{
+			"name": "candidate research/draft: PUBLIC-GUIDE-DRAFT.md",
+			"path": "docs/v4/research/static-job-schedules/PUBLIC-GUIDE-DRAFT.md",
+			"sha256": "b772c54c2f7abe12bf4aa00c83a4222d2b82a11cdd2613a407361559bbeb3de2"
+		},
+		{
+			"name": "candidate evidence: EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/EVIDENCE.md",
+			"sha256": "cff320de42a7fd270f7b089b0792537f0d6bcd90e5c6b43c84739b219962d0c6"
+		},
+		{
+			"name": "candidate evidence: CALENDAR-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/CALENDAR-EVIDENCE.md",
+			"sha256": "256c8ffa8ce1d0ce7332faa7590344fe595939a4de7dccc4a9d741a569308fef"
+		},
+		{
+			"name": "candidate evidence: RUNTIME-CANDIDATE-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/RUNTIME-CANDIDATE-EVIDENCE.md",
+			"sha256": "426d9e0562eb0986e8ae45ebb14a07bd381c3740a8c8736683af737f27ed607e"
+		},
+		{
+			"name": "candidate evidence: WORKER-CANDIDATE-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/WORKER-CANDIDATE-EVIDENCE.md",
+			"sha256": "950ba13a2d848ff995140e5386ebcda5cb61ed7a8012079b380ba47c4f2da25c"
+		},
+		{
+			"name": "candidate evidence: CHECKPOINT-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/CHECKPOINT-EVIDENCE.md",
+			"sha256": "ade70ba8583537d33475782a4e14143059848ee809fe2d40f7c804e50783ba13"
+		},
+		{
+			"name": "candidate evidence: CHECKPOINT-ATTEMPT-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/CHECKPOINT-ATTEMPT-EVIDENCE.md",
+			"sha256": "b3bb057164a86cd1c393d0112f3fcef45506dae8792a23f734db695ab3ed0ebe"
+		},
+		{
+			"name": "candidate evidence: TEAM-SWEEP-CANDIDATE-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/TEAM-SWEEP-CANDIDATE-EVIDENCE.md",
+			"sha256": "8a8a75fe4b70b2ce393ab12b3cffaa2e39e6999ee69876e2b8e72708e698565e"
+		},
+		{
+			"name": "candidate evidence: COMPILER-SOURCE-READ-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/COMPILER-SOURCE-READ-EVIDENCE.md",
+			"sha256": "ff6539337311a422745d633b7fd0d86d19b62345138388d032eaa78259b2438c"
+		},
+		{
+			"name": "candidate evidence: OWNER-DEADLINE-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/OWNER-DEADLINE-EVIDENCE.md",
+			"sha256": "39d8832d9635cdffc600af40781f7b7371b4c0ec76671da5ae65e59c211e8bc5"
+		},
+		{
+			"name": "candidate evidence: CONTENTION-CANDIDATE-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/CONTENTION-CANDIDATE-EVIDENCE.md",
+			"sha256": "bbf513068c847092d680254855d111f9f5a7cfd8e877fd6f44af01a6ec575664"
+		},
+		{
+			"name": "candidate evidence: RETAINED-BUILD-FIXTURE-EVIDENCE.md",
+			"path": "docs/v4/prototypes/static-job-schedules/RETAINED-BUILD-FIXTURE-EVIDENCE.md",
+			"sha256": "5c79b4e7bf452a508c017cc20101977c7d9f015b2ea55abc1fb0701026b82363"
+		},
+		{
+			"name": "fixtures/team-support-desk/README.md",
+			"path": "fixtures/team-support-desk/README.md",
+			"sha256": "faabf330d39e34573f3d0f86af3a3c278089df613aa6c1c0b8627df2b9c42910"
+		},
+		{
+			"name": "skills/questpie/references/application-authoring.md",
+			"path": "skills/questpie/references/application-authoring.md",
+			"sha256": "92be4e93a4da75cd26d0edd7fc5fd2847964a3747ab4f6578538ccc6ef3c6cd2"
+		},
+		{
+			"name": "HANDOFF.md",
+			"path": "HANDOFF.md",
+			"sha256": "847bb03a7b7f6e394c3445212577b095ed0c352119c8e9814cf94c4650c8358e"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run quality:release (fcf2adeeb: complete PASS; 1107 ordinary passes, 195 gated skips, React and packed OTel checks PASS; 19 performance manifests validated, not executed)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run test:postgres (fcf2adeeb: complete unfiltered PostgreSQL 17 lane PASS; 185 passes, four PG18/PgBouncer environment skips, 1983 assertions across 44 roots; generated worker/recovery/CLI and both reference consumer Firefox tracers included)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run test:load -- --scenario beta08-worker-contention (fcf2adeeb: single predeclared sequential four-scenario reference-local matrix; 822.651 ms <= 2000 ms; unchanged workload and budget)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run test:load -- --scenario beta10-ten-instance (same fcf2adeeb local matrix: 1940.702 ms <= 15000 ms; ten instances, 40 runs, zero duplicates/drained admissions)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run test:load -- --scenario pb05-mutation-transaction-tail (same fcf2adeeb local matrix: 1000 measured calls, 500 fresh/500 replay, 500 fresh writes/zero replay writes)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run test:soak -- --scenario beta10-soak-chaos (same fcf2adeeb local matrix: 5935.412 ms <= 60000 ms; 80 runs, recovered crash, three replacements, zero failed/drained runs)",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx turbo run build --filter=questpie --filter=questpie-opentelemetry --force (fcf2adeeb: two independent forced public-package builds PASS)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run release -- --dry-run (fcf2adeeb: after each forced build, two PASS runs with byte-identical output and archive hashes; exactly questpie and questpie-opentelemetry; React is questpie/react)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun test tests/integration/postgres/static-schedule-runtime.test.ts (7d8dcee test-only bound addition integrated unchanged at 61991e173: PostgreSQL 17 full affected file 5 PASS, 254 assertions, zero skips/failures; 64-program owner and 65-program rejection added without production changes)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun test tests/unit/static-schedule-calendar.test.ts tests/unit/static-schedule-runtime.test.ts (calendar-bound documentation clarification: 13 PASS, 55 assertions; no production changes)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc -p docs/v4/prototypes/static-job-schedules/tsconfig.json --noEmit (61991e173: PASS)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run lint -- tests/integration/postgres/static-schedule-runtime.test.ts --deny-warnings (61991e173: PASS)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:negative-control (db33e0bff: 73 PASS, 143 assertions; no reviewer invocation)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run skill:check (db33e0bff: contributor and portable public skills PASS)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run format:check -- HANDOFF.md docs/adr/0043-freeze-static-job-schedules-and-mutation-checkpoints.md docs/v4/prototypes/static-job-schedules tests/integration/postgres/static-schedule-runtime.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	]
+}
