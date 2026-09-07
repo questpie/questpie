@@ -256,7 +256,7 @@ Facts read from source rather than executed by this documentation task:
   and `tickets/operations.ts`; one open, non-null-due candidate ordered by due
   time and ID. The Mutation rechecks the clock after locking.
 - Identity and privilege: `fixtures/team-support-desk/src/execution.ts`,
-  `sla-sweep-seed.ts`, and `tickets/policy.ts`; the ordinary Context validates an
+  `memberships/sweep-seed.ts`, and `tickets/policy.ts`; the ordinary Context validates an
   active Membership, and the application grants its `agent` role.
 - Atomic follow-up: `fixtures/team-support-desk/src/tickets/index.ts` `afterWrite`
   accepts `ticket.slaFollowUp` with a stable Mutation-derived key.
