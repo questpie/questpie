@@ -1,4 +1,4 @@
-import { canonicalMutationBytes } from "../../mutation/canonical";
+import { canonicalMutationBytes } from "../../mutation/contract";
 import type { PostgresTransactionRunner } from "../../postgres/contract";
 import {
 	scheduleDigest,

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import {
 	canonicalMutationBytes,
 	deterministicUuid,
-} from "../../mutation/canonical";
+} from "../../mutation/contract";
 import { parseUtcCron } from "./calendar";
 import {
 	StaticScheduleFailure,

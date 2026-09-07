@@ -4,7 +4,7 @@ import {
 	type RuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
-import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
+import { canonicalMutationBytes, mutationDigest } from "../mutation/contract";
 import { OperationFailure } from "../operation";
 import { createMutationCheckpointAttemptOwner } from "./checkpoint-attempt";
 import { DurableCheckpointError } from "./checkpoint-contract";
