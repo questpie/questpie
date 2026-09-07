@@ -12,6 +12,7 @@ import {
 	beta05Ids,
 	prepareBeta05PostgresApplication,
 } from "./helpers/beta05-runtime";
+import { provePostgresOwnerDeadline } from "./helpers/owner-deadline";
 import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const admin = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
@@ -107,6 +108,7 @@ async function withApplication(
 	const name = `qp_checkpoint_recovery_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
 	const url = connectionUrl(name);
 	const previousDatabase = process.env.PGDATABASE;
+	const previousDatabaseAlias = process.env.PG_DATABASE;
 	let owned = false;
 	let database: SQL | undefined;
 	let prepared:
@@ -120,6 +122,7 @@ async function withApplication(
 		await admin!.unsafe(`CREATE DATABASE "${name}"`);
 		owned = true;
 		process.env.PGDATABASE = name;
+		process.env.PG_DATABASE = name;
 		database = new SQL(url, { database: name, max: 4 });
 		const [connected] =
 			await database`SELECT current_database() AS name, current_setting('server_version_num')::integer AS version`;
@@ -223,6 +226,8 @@ async function withApplication(
 		}
 		if (previousDatabase === undefined) delete process.env.PGDATABASE;
 		else process.env.PGDATABASE = previousDatabase;
+		if (previousDatabaseAlias === undefined) delete process.env.PG_DATABASE;
+		else process.env.PG_DATABASE = previousDatabaseAlias;
 		if (owned) {
 			try {
 				await admin!.unsafe(`DROP DATABASE "${name}" WITH (FORCE)`);
@@ -378,9 +383,18 @@ postgresTest(
 	120_000,
 );
 
-postgresTest(
-	"superseded checkpoint holder cannot complete the successor's committed Mutation receipt",
-	async () => {
+postgresTest.each([
+	[
+		"superseded checkpoint holder cannot complete the successor's committed Mutation receipt",
+		false,
+	],
+	[
+		"checkpoint owner deadlines roll back history and preserve a committed Mutation receipt",
+		true,
+	],
+] as const)(
+	"%s",
+	async (_name, deadlineProof) => {
 		await withApplication(
 			async ({ app, database, root, accept, generatedRoot, connectionUrl }) => {
 				// Load the independent source owner only after the generated application
@@ -438,9 +452,9 @@ postgresTest(
 						maxLifetimeSeconds: 60,
 					},
 					timeouts: {
-						statementMs: 10000,
-						lockMs: 2000,
-						idleInTransactionMs: 10000,
+						statementMs: deadlineProof ? 30000 : 10000,
+						lockMs: deadlineProof ? 30000 : 2000,
+						idleInTransactionMs: deadlineProof ? 30000 : 10000,
 					},
 				});
 				try {
@@ -466,7 +480,7 @@ postgresTest(
 					const first = await kernel.claim({
 						runId,
 						workerId: "stale-holder",
-						leaseMilliseconds: 1000,
+						leaseMilliseconds: deadlineProof ? 30000 : 1000,
 					});
 					if (first.status !== "claimed")
 						throw new Error("first checkpoint claim missing");
@@ -479,6 +493,26 @@ postgresTest(
 						contractDigest: executable.contractDigest,
 						runtimeGraphDigest: executable.runtimeGraphDigest,
 					};
+					if (deadlineProof) {
+						for (const stage of ["history", "reserve"] as const) {
+							await provePostgresOwnerDeadline({
+								database: runtimeDatabase,
+								connectionUrl,
+								statementName: `checkpoint.${stage}`,
+								milliseconds: 5000,
+								use: (runner) => {
+									const bounded = createPostgresMutationCheckpointStore({
+										database: runner,
+										application: artifacts.runtimeBuild.application,
+									});
+									return stage === "history"
+										? bounded.load(first.claim)
+										: bounded.reserve(first.claim, command);
+								},
+							});
+							expect(await store.load(first.claim)).toBe(0);
+						}
+					}
 					expect(await store.load(first.claim)).toBe(0);
 					const reservation = await store.reserve(first.claim, command);
 					if (reservation.status !== "reserved")
@@ -491,6 +525,38 @@ postgresTest(
 					const digest = mutationDigest(
 						canonicalMutationBytes(encodeRuntimeCodec(contract.output, result)),
 					);
+					if (deadlineProof) {
+						const receiptFacts = () =>
+							database`SELECT transaction_id::text, input_digest, result_bytes FROM questpie_internal.mutation_call_receipts WHERE call_id = ${reservation.callId}`;
+						const committed = await receiptFacts();
+						expect(committed).toHaveLength(1);
+						await provePostgresOwnerDeadline({
+							database: runtimeDatabase,
+							connectionUrl,
+							statementName: "checkpoint.complete",
+							milliseconds: 5000,
+							use: (runner) =>
+								createPostgresMutationCheckpointStore({
+									database: runner,
+									application: artifacts.runtimeBuild.application,
+								}).complete(first.claim, command, digest),
+						});
+						expect(await receiptFacts()).toEqual(committed);
+						const [rolledBack] = await database`SELECT
+							(SELECT count(*)::int FROM collaboration.messages WHERE body = ${body}) AS writes,
+							state, receipt_transaction_id, receipt_result_digest FROM questpie_internal.mutation_checkpoints WHERE run_id = ${runId}`;
+						expect(rolledBack).toEqual({
+							writes: 1,
+							state: "reserved",
+							receipt_transaction_id: null,
+							receipt_result_digest: null,
+						});
+						expect(
+							await store.complete(first.claim, command, digest),
+						).toMatchObject({ status: "completed" });
+						expect(await receiptFacts()).toEqual(committed);
+						return;
+					}
 					await eventually(
 						async () => {
 							const [row] =
@@ -526,7 +592,11 @@ postgresTest(
 					).toMatchObject({ status: "completed" });
 					const [facts] =
 						await database`SELECT (SELECT count(*)::integer FROM collaboration.messages WHERE body = ${body}) AS writes, (SELECT count(*)::integer FROM questpie_internal.mutation_call_receipts WHERE call_id = ${reservation.callId}) AS receipts, (SELECT state FROM questpie_internal.mutation_checkpoints WHERE run_id = ${runId}) AS state`;
-					expect(facts).toEqual({ writes: 1, receipts: 1, state: "completed" });
+					expect(facts).toEqual({
+						writes: 1,
+						receipts: 1,
+						state: "completed",
+					});
 				} finally {
 					await runtimeDatabase.close({ deadlineAt: Date.now() + 5000 });
 				}

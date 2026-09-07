@@ -21,13 +21,23 @@ import { createPostgresJobAcceptanceTransaction } from "../../../packages/runtim
 import { linkPostgresMutationTransactionStatements } from "../../../packages/runtime/src/mutation/postgres-transaction-statements";
 import { createRuntimePostgres } from "../../../packages/runtime/src/postgres";
 import type { PostgresTransactionRunner } from "../../../packages/runtime/src/postgres/contract";
+import { provePostgresOwnerDeadline } from "./helpers/owner-deadline";
 import { expectPostgresMajor } from "./helpers/postgres-major";
 
 const postgres = process.env.PGHOST ? test : test.skip;
 
-postgres(
-	"static schedules serialize ten ordinary Job producers, replay activation, and roll back acceptance",
-	async () => {
+postgres.each([
+	[
+		"static schedules serialize ten ordinary Job producers, replay activation, and roll back acceptance",
+		false,
+	],
+	[
+		"static schedule owner deadlines roll back activation and accepted ticks",
+		true,
+	],
+] as const)(
+	"%s",
+	async (_name, deadlineProof) => {
 		const ownedDatabase = `qp_schedule_${crypto.randomUUID().replaceAll("-", "")}`;
 		const admin = new Client({ database: "postgres" });
 		await admin.connect();
@@ -35,10 +45,12 @@ postgres(
 		let sql: SQL | undefined;
 		let database: ReturnType<typeof createRuntimePostgres> | undefined;
 		const previousDatabase = process.env.PGDATABASE;
+		const previousDatabaseAlias = process.env.PG_DATABASE;
 		try {
 			await admin.query(`CREATE DATABASE "${ownedDatabase}"`);
 			created = true;
 			process.env.PGDATABASE = ownedDatabase;
+			process.env.PG_DATABASE = ownedDatabase;
 			const url = new URL("postgres://localhost/");
 			url.hostname = process.env.PGHOST!;
 			url.port = process.env.PGPORT ?? "5432";
@@ -84,9 +96,9 @@ postgres(
 					maxLifetimeSeconds: 60,
 				},
 				timeouts: {
-					statementMs: 10000,
-					lockMs: 5000,
-					idleInTransactionMs: 10000,
+					statementMs: deadlineProof ? 30000 : 10000,
+					lockMs: deadlineProof ? 30000 : 5000,
+					idleInTransactionMs: deadlineProof ? 30000 : 10000,
 				},
 			});
 			const bindings = {
@@ -237,6 +249,43 @@ postgres(
 				).toBe(0);
 				const first = await active.activate({ expectedRevision: "0" });
 				expect(first.acceptedRevision).toBe("1");
+				if (deadlineProof) {
+					const activationFacts = () => sql!`SELECT
+						(SELECT count(*)::int FROM questpie_internal.schedule_catalogs) AS catalogs,
+						(SELECT count(*)::int FROM questpie_internal.schedule_activations) AS activations,
+						(SELECT revision::text FROM questpie_internal.schedule_heads) AS revision,
+						(SELECT program_digest FROM questpie_internal.schedule_frontiers) AS program,
+						(SELECT frontier_minute FROM questpie_internal.schedule_frontiers) AS frontier`;
+					const beforeActivation = await activationFacts();
+					await provePostgresOwnerDeadline({
+						database,
+						connectionUrl: url.toString(),
+						statementName: "durable.schedule.activation.insert",
+						milliseconds: 10000,
+						use: (runner) =>
+							owner(artifact([program("changed")]), runner).activate({
+								expectedRevision: "1",
+							}),
+					});
+					expect(await activationFacts()).toEqual(beforeActivation);
+					await sql`UPDATE questpie_internal.schedule_frontiers SET frontier_minute = date_trunc('minute', clock_timestamp(), 'UTC') - interval '3 minutes'`;
+					const beforeTick = await activationFacts();
+					await provePostgresOwnerDeadline({
+						database,
+						connectionUrl: url.toString(),
+						statementName: "durable.schedule.frontier.update",
+						milliseconds: 10000,
+						use: (runner) => owner(artifact(), runner).reconcile(),
+					});
+					expect(await activationFacts()).toEqual(beforeTick);
+					const [rolledBack] = await sql`SELECT
+						(SELECT count(*)::int FROM questpie_internal.schedule_ticks) AS ticks,
+						(SELECT count(*)::int FROM questpie_internal.durable_runs) AS runs,
+						(SELECT count(*)::int FROM questpie_internal.durable_dispatches) AS acceptances`;
+					expect(rolledBack).toEqual({ ticks: 0, runs: 0, acceptances: 0 });
+					expect((await active.reconcile()).accepted).toBe(1);
+					return;
+				}
 				expect(
 					(await active.activate({ expectedRevision: "0" })).replayed,
 				).toBe(true);
@@ -614,6 +663,8 @@ postgres(
 			await sql?.close({ timeout: 2 });
 			if (previousDatabase === undefined) delete process.env.PGDATABASE;
 			else process.env.PGDATABASE = previousDatabase;
+			if (previousDatabaseAlias === undefined) delete process.env.PG_DATABASE;
+			else process.env.PG_DATABASE = previousDatabaseAlias;
 			if (created) await admin.query(`DROP DATABASE "${ownedDatabase}"`);
 			await admin.end();
 		}
