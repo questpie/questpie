@@ -43,12 +43,12 @@ export async function provePostgresOwnerDeadline(
 	// Initialize pg only after a caller's generated application has compiled.
 	const { Client } = await import("pg");
 	const blocker = new Client({ connectionString: input.connectionUrl });
-	await blocker.connect();
 	const key = crypto.getRandomValues(new Uint32Array(1))[0]! % 2_147_483_647;
 	let pending: Promise<{ value: unknown } | { error: unknown }> | undefined;
 	let guard: ReturnType<typeof setTimeout> | undefined;
 	let reached: { pid: number; xid: string } | undefined;
 	try {
+		await blocker.connect();
 		await blocker.query("SELECT pg_advisory_lock($1)", [key]);
 		const database: PostgresTransactionRunner = {
 			transaction: (request) =>
@@ -121,8 +121,10 @@ export async function provePostgresOwnerDeadline(
 	} finally {
 		if (guard) clearTimeout(guard);
 		// The guard is failure only. Release for cleanup, never to make a missing deadline pass.
-		await blocker.query("SELECT pg_advisory_unlock($1)", [key]);
-		await pending;
-		await blocker.end();
+		try {
+			await blocker.end();
+		} finally {
+			await pending;
+		}
 	}
 }
