@@ -7,6 +7,7 @@ import {
 	assertBackendPid,
 	cancelBackendOnAbort,
 	configurePostgresTimeouts,
+	createPostgresCommandConnection,
 	lockKey,
 	probeCommittedSession,
 	resolvePostgresControl,
@@ -237,9 +238,7 @@ export async function applyCommittedMigrations(
 	}
 	const target = migrations.at(-1)!.targetSchema;
 	const application = target.application.name;
-	const pool = input.connectionString
-		? new SQL(input.connectionString)
-		: new SQL();
+	const pool = createPostgresCommandConnection(input.connectionString);
 	const session = await pool.reserve();
 	let stopBackendCancellation = () => {};
 	try {

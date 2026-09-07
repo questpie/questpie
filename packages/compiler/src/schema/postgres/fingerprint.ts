@@ -1,7 +1,8 @@
-import { SQL } from "bun";
+import type { SQL } from "bun";
 
 import { canonicalBytes, digest } from "../../canonical";
 import { CompilerDiagnosticError } from "../../diagnostic";
+import { createPostgresCommandConnection } from "../../postgres-session";
 import type { SchemaProjectionV1 } from "../contracts";
 import type { SchemaFingerprintV1 } from "../postgres-types";
 import { readCatalogComparableInOwnedTransaction } from "./catalog-reader";
@@ -332,9 +333,7 @@ export async function inspectSchemaFingerprint(
 		schema: SchemaProjectionV1;
 	}>,
 ): Promise<Readonly<{ fingerprint: SchemaFingerprintV1; digest: string }>> {
-	const sql = input.connectionString
-		? new SQL(input.connectionString)
-		: new SQL();
+	const sql = createPostgresCommandConnection(input.connectionString);
 	try {
 		const value = await fingerprint(sql, input.schema);
 		return {

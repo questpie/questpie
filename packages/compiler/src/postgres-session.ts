@@ -1,8 +1,20 @@
 import { createHash } from "node:crypto";
 
-import type { SQL } from "bun";
+import { SQL } from "bun";
 
 import { CompilerDiagnosticError } from "./diagnostic";
+
+export function createPostgresCommandConnection(
+	connectionString?: string,
+): SQL {
+	if (!connectionString) return new SQL();
+	// Bun 1.3.14 otherwise gives PG_DATABASE/PGDATABASE priority over the URL.
+	// Keep the complete URL so its TLS and startup parameters retain their meaning.
+	const database = decodeURIComponent(
+		new URL(connectionString).pathname.slice(1),
+	);
+	return new SQL(connectionString, { database });
+}
 
 export interface PostgresCommandControl {
 	readonly lockTimeoutMs?: number;

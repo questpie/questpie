@@ -1,4 +1,4 @@
-import { SQL } from "bun";
+import type { SQL } from "bun";
 
 import { digest } from "../../canonical";
 import {
@@ -6,6 +6,7 @@ import {
 	assertBackendPid,
 	cancelBackendOnAbort,
 	configurePostgresTimeouts,
+	createPostgresCommandConnection,
 	lockKey,
 	probeCommittedSession,
 	resolvePostgresControl,
@@ -213,9 +214,7 @@ export async function applyCommittedSeeds(
 ): Promise<ApplySeedsResult> {
 	const seeds = orderCommittedSeeds(input.seeds);
 	for (const seed of seeds) validateCommittedSeedSchema(seed, input.schema);
-	const pool = input.connectionString
-		? new SQL(input.connectionString)
-		: new SQL();
+	const pool = createPostgresCommandConnection(input.connectionString);
 	const session = await pool.reserve();
 	const applied: string[] = [];
 	const alreadyApplied: string[] = [];
