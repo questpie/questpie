@@ -108,6 +108,28 @@ const backendIsSleeping = definePostgresStatement({
 	},
 });
 
+const migrationBackendIsBlockedBy = definePostgresStatement({
+	name: "pb03.migration-backend-is-blocked-by",
+	operation: "SELECT",
+	text: `SELECT EXISTS (
+	SELECT 1
+	FROM pg_catalog.pg_stat_activity
+	WHERE datname = pg_catalog.current_database()
+		AND application_name = 'questpie-migration'
+		AND state = 'active'
+		AND wait_event_type = 'Lock'
+		AND $1::integer = ANY(pg_catalog.pg_blocking_pids(pid))
+)`,
+	parameterCount: 1,
+	parameters: (holderPid: number) => [holderPid],
+	decode(result) {
+		const blocked = result.rows[0]?.[0];
+		if (result.rows.length !== 1 || typeof blocked !== "boolean")
+			throw new TypeError("migration lock activity result is invalid");
+		return blocked;
+	},
+});
+
 const createCommitProbeTable = definePostgresAdministrativeStatement({
 	name: "pb03.commit-probe-table-create",
 	text: "CREATE TEMP TABLE qp_pb03_commit_probe (value integer)",
@@ -874,23 +896,29 @@ postgresTest(
 			}),
 		).resolves.toBe("lock-released");
 
-		let holderEntered: (() => void) | undefined;
+		let holderPid: number | undefined;
 		let releaseHolder: (() => void) | undefined;
-		const holding = new Promise<void>((resolve) => {
-			holderEntered = resolve;
-		});
 		const holderReleased = new Promise<void>((resolve) => {
 			releaseHolder = resolve;
 		});
+		const contentionObserver = database({ max: 1 });
 		const holder = migration.run({
 			application: "pb03MigrationContention",
-			use: async () => {
-				holderEntered?.();
+			use: async (session) => {
+				holderPid = await session.transaction({
+					mode: { isolation: "readCommitted", access: "readOnly" },
+					use: (transaction) =>
+						transaction.execute(currentBackendPid, undefined),
+				});
 				await holderReleased;
 			},
 		});
-		await holding;
+		const holderSettled = holder.catch(() => undefined);
 		try {
+			await eventually(
+				() => holderPid !== undefined,
+				"migration holder never acquired its lock",
+			);
 			await expect(
 				migration.run({
 					application: "pb03MigrationContention",
@@ -900,30 +928,40 @@ postgresTest(
 			).rejects.toMatchObject({ code: "lockTimeout", phase: "statement" });
 
 			const controller = new AbortController();
-			const startedAt = Date.now();
 			const cancelled = migration.run({
 				application: "pb03MigrationContention",
 				control: { lockTimeoutMs: 500, signal: controller.signal },
 				use: () =>
 					Promise.reject(new Error("cancelled contender acquired lock")),
 			});
-			const timer = setTimeout(
-				() => controller.abort(new Error("stop waiting for migration lock")),
-				20,
-			);
+			const cancellationSettled = cancelled.catch(() => undefined);
 			try {
+				await eventually(
+					() =>
+						contentionObserver.transaction({
+							mode: { isolation: "readCommitted", access: "readOnly" },
+							use: (transaction) =>
+								transaction.execute(migrationBackendIsBlockedBy, holderPid!),
+						}),
+					"migration contender never waited for the owned lock",
+				);
+				const startedAt = Date.now();
+				controller.abort(new Error("stop waiting for migration lock"));
 				await expect(cancelled).rejects.toMatchObject({
 					code: "cancelled",
 					phase: "statement",
 				});
 				expect(Date.now() - startedAt).toBeLessThan(250);
 			} finally {
-				clearTimeout(timer);
+				controller.abort();
+				await cancellationSettled;
 			}
 		} finally {
 			releaseHolder?.();
-			await holder;
+			await holderSettled;
+			await contentionObserver.close({ deadlineAt: Date.now() + 1_000 });
 		}
+		await holder;
 		await expect(
 			migration.run({
 				application: "pb03MigrationContention",
@@ -999,6 +1037,7 @@ postgresTest(
 				signal?: AbortSignal;
 				deadlineAt?: number;
 			},
+			publishPid?: (pid: number) => void,
 		) =>
 			migration.run({
 				application,
@@ -1006,7 +1045,13 @@ postgresTest(
 				use: (session) =>
 					session.transaction({
 						mode: { isolation: "readCommitted", access: "readWrite" },
-						use: (transaction) => transaction.execute(sleep, 0.3),
+						use: async (transaction) => {
+							if (publishPid)
+								publishPid(
+									await transaction.execute(currentBackendPid, undefined),
+								);
+							return transaction.execute(sleep, 0.3);
+						},
 					}),
 			});
 
@@ -1021,22 +1066,41 @@ postgresTest(
 		});
 
 		const controller = new AbortController();
-		const cancellationStartedAt = Date.now();
-		const cancelled = executeSleep("pb03MigrationCancellation", {
-			signal: controller.signal,
-		});
-		const cancellationTimer = setTimeout(
-			() => controller.abort(new Error("cancel active migration SQL")),
-			25,
+		const observer = database({ max: 1 });
+		let sleepingPid: number | undefined;
+		const cancelled = executeSleep(
+			"pb03MigrationCancellation",
+			{ signal: controller.signal },
+			(pid) => {
+				sleepingPid = pid;
+			},
 		);
+		const cancellationSettled = cancelled.catch(() => undefined);
 		try {
+			await eventually(
+				() => sleepingPid !== undefined,
+				"migration transaction never published its backend PID",
+			);
+			await eventually(
+				() =>
+					observer.transaction({
+						mode: { isolation: "readCommitted", access: "readOnly" },
+						use: (transaction) =>
+							transaction.execute(backendIsSleeping, sleepingPid!),
+					}),
+				"migration backend never entered pg_sleep",
+			);
+			const cancellationStartedAt = Date.now();
+			controller.abort(new Error("cancel active migration SQL"));
 			await expect(cancelled).rejects.toMatchObject({
 				code: "cancelled",
 				phase: "statement",
 			});
 			expect(Date.now() - cancellationStartedAt).toBeLessThan(200);
 		} finally {
-			clearTimeout(cancellationTimer);
+			controller.abort();
+			await cancellationSettled;
+			await observer.close({ deadlineAt: Date.now() + 1_000 });
 		}
 
 		const deadlineStartedAt = Date.now();
