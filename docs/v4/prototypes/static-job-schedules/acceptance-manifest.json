@@ -8,7 +8,8 @@
 		"canonical accepted baseline": "97910dac96e0fcc9a7da5c911b8f2534f5eb83b4",
 		"integrated full quality PostgreSQL local load and repeated package gate head": "fcf2adeeb39a86f81fe4176360c59a6fcfa13005",
 		"committed final gate qualifications": "e437e9aaad5d2a306443a45906dbb30cd7f47503",
-		"candidate calendar clarification and explicit reconciliation bound": "61991e1733648381186bfd1da4078b2a1808dba5"
+		"candidate calendar clarification and explicit reconciliation bound": "61991e1733648381186bfd1da4078b2a1808dba5",
+		"committed packet safety implementation and independent review head": "e3568262097ca03b0f5990f17dfc7dcdb9f2170b"
 	},
 	"acceptanceCriteria": [
 		"One optional application-owned Job schedule has exactly cron, execution { principal, context }, and input. Existing Context and Job codecs own exact inferred inputs; explicit principal.service grants no authority. No duplicate schemas, System elevation, Package schedule widening, browser/OpenAPI/MCP schedule recipe, second scheduler, or Job management API.",
@@ -25,18 +26,19 @@
 		"Real generated compiler, packed CLI, PostgreSQL 17, worker restart/checkpoint recovery, Collaboration, and Team Support Desk Firefox tracers establish integration rather than synthetic-model-only acceptance. The four PG environment skips cover only PG18 catalog features and optional PgBouncer, not this ADR's requirements. The example preserves immutable migrations/Seeds and uses documented domain-local Definitions and product web independent of tracer automation.",
 		"Supporting test/compiler/package repairs preserve ordinary lifecycle, Policy, Mutation ownership, receipt semantics, and fixed budgets. Earlier failed full-PostgreSQL and timing runs remain recorded, including the unexplained original schedule stall; a reproduced Mutation-test promise ownership repair is not presented as the cause of that stall.",
 		"Verification distinguishes exact implementation-head complete quality/PG and four-scenario reference-local load/soak evidence, subsequent test/document-only checks, and two byte-identical forced-build package dry-runs. No tagged stable-runner performance certification, manual user approval, beta.2 aggregate acceptance, publication, or production-readiness claim follows.",
-		"ADR-0043 remains Proposed throughout this candidate, with public schedule material retained as an internal draft. Only a committed credential-free-verified formal PASS permits a separate authority/public-documentation projection. ADR-0039 requires a fresh schedule-inclusive aggregate manifest; its Fable exception does not apply here. One pinned Opus-medium review, no fallback, no manufactured PASS, and terminal NO_RESULT rules remain unchanged."
+		"ADR-0043 remains Proposed throughout this candidate, with public schedule material retained as an internal draft. Only a committed credential-free-verified formal PASS permits a separate authority/public-documentation projection. ADR-0039 requires a fresh schedule-inclusive aggregate manifest; its Fable exception does not apply here. One pinned Opus-medium review, no fallback, no manufactured PASS, and terminal NO_RESULT rules remain unchanged.",
+		"The owner-approved packet-safety repair permits only one explicitly selected removed historical README database URL, binds the original complete raw diff and its exact redaction location, and retains all other review bytes and normal new-code/authority secret checks. Committed TypeScript source-form recognition changes only the scan shadow. Existing 16 protocol-v2 PASS records verify unchanged; the default pinned reviewer and terminal rules are unchanged."
 	],
 	"authorityDocuments": [
 		{
 			"name": ".agents/skills/questpie-v4/references/proof.md",
 			"path": ".agents/skills/questpie-v4/references/proof.md",
-			"sha256": "23aa3acf1bc2671279b10b890e965d3c7be598a07e82f20af3ff672a229487a9"
+			"sha256": "abac0cf7fcefd7b8604fc9c0d7d60f7801f34454ed805924e60bf4b12421c498"
 		},
 		{
 			"name": ".agents/skills/questpie-v4/references/repository-quality.md",
 			"path": ".agents/skills/questpie-v4/references/repository-quality.md",
-			"sha256": "087e6420a3d3a9965d80f270abd9d2fc0abc1e8573e5676c87117e36fb43f1e0"
+			"sha256": "8ea3f684e22d1fa91260bd3c31b88591d229b26184464ca498c7f70c0630c85a"
 		},
 		{
 			"name": "docs/v4/DELIVERY-FLOW.md",
@@ -191,12 +193,22 @@
 		{
 			"name": "HANDOFF.md",
 			"path": "HANDOFF.md",
-			"sha256": "d8e7666f8453e936adfd40f5bfcaaadff4fa27f77fc67b4e11001e3d606189ea"
+			"sha256": "da58f66920315a2c222fb58614701ea36ea0b03899ab2991694153ff93ad12ba"
 		},
 		{
 			"name": "candidate preflight rejection and owner decision boundary",
 			"path": "docs/v4/prototypes/static-job-schedules/ACCEPTANCE-PREFLIGHT-BLOCKER.md",
-			"sha256": "4cb87a436cb3d63dd6da572c85cb610c26563e7bccf48127f617b1048470346a"
+			"sha256": "c023a4e35e094543a5ae92ee68a29148da988ce442d0cc0ac021596ebfad7100"
+		},
+		{
+			"name": "docs/v4/implementation/acceptance-packet-safety/DECISION.md",
+			"path": "docs/v4/implementation/acceptance-packet-safety/DECISION.md",
+			"sha256": "332f0b90a525aee15a118729128acffb1d44cf4ef6a72195a7106c25a3f28544"
+		},
+		{
+			"name": "docs/v4/implementation/acceptance-packet-safety/EVIDENCE.md",
+			"path": "docs/v4/implementation/acceptance-packet-safety/EVIDENCE.md",
+			"sha256": "23262a95b79e9b424afa7e7518c1a0d1ca17cb3c5877624fe4c0b0f955fe84f5"
 		}
 	],
 	"verification": [
@@ -263,6 +275,28 @@
 		{
 			"command": "git diff --check",
 			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:negative-control (e35682620: 124 PASS, 217 assertions across seven files; independently rerun by Spec/security reviewer)",
+			"result": "PASS"
+		},
+		{
+			"command": "Strict TypeScript --noUncheckedIndexedAccess over acceptance-review-packet.ts and acceptance-historical-redaction.test.ts (e35682620: PASS)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:verify -- --record <each committed protocol-v2 PASS record> (e35682620: all 16 PASS without model credentials or reviewer invocation)",
+			"result": "PASS"
+		},
+		{
+			"command": "Independent Standards and Spec/security review de55e364c..e35682620 (no blocking or non-blocking findings; repository-quality review, not product acceptance)",
+			"result": "PASS"
+		}
+	],
+	"historicalDatabaseUrlRedactions": [
+		{
+			"path": "fixtures/team-support-desk/README.md",
+			"baseLine": 62
 		}
 	]
 }

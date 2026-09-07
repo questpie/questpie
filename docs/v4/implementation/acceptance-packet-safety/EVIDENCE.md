@@ -52,5 +52,7 @@ the rejected historical credential was neither printed nor sent to a reviewer.
 
 No Runtime, PostgreSQL schema, package export, reviewer profile, fallback,
 release budget, or product-authority change is part of this repair. Independent
-final Standards and Spec/security review and the fresh real-candidate packet
-preflight remain required before formal submission.
+Standards and Spec/security reviews of `de55e364c..e35682620` found no blocking
+or non-blocking findings. The security reviewer independently reran all 124
+affected tests. These are repository-quality reviews, not ADR acceptance.
+The fresh real-candidate packet preflight remains required before submission.

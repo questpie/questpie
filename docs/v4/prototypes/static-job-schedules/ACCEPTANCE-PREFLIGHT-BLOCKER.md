@@ -21,19 +21,22 @@ sign-in function's parameter annotation and the browser tracer's variable
 forwarding. Those are separate scanner findings; repairing them alone cannot
 make the historical URL eligible for transmission.
 
-The existing protocol binds the complete diff, including removed lines. It has
-no approved historical-secret redaction or file-exclusion mechanism. Its narrow
+The protocol at that rejected head bound the complete diff, including removed
+lines, without an approved historical-secret redaction or file-exclusion mechanism. Its narrow
 synthetic negative-control exemption does not apply to application files.
 Independent read-only authority review confirmed there is no already-authorized
 path that preserves the complete review scope and sends no secret material.
 
 ## Resume boundary
 
-The owner has been asked whether to prepare a focused docs-first protocol change
-for explicitly labelled historical-secret redaction with original-diff integrity
-bindings and unchanged checks on new code. No such change is authorized or
-implemented by this record. Do not move the diff base, omit paths, mask packet
-bytes, weaken the scanner, or invoke another reviewer to evade the rejection.
+The owner authorized the focused docs-first change on 2026-09-07. Its
+[decision](../../implementation/acceptance-packet-safety/DECISION.md) and
+[test evidence](../../implementation/acceptance-packet-safety/EVIDENCE.md) specify
+explicit historical URL redaction with original-diff integrity bindings and
+unchanged checks on new code. Only that manifest-bound transform is permitted.
+Do not move the diff base, omit paths, add arbitrary masks, weaken the scanner,
+or invoke another reviewer to evade the rejection. Independent final review and
+the fresh candidate preflight must pass before formal submission.
 
 All completed deterministic candidate evidence remains retained. The explicit
 64-program PostgreSQL owner proof and calendar-range clarification are committed;

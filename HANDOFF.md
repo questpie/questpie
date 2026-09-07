@@ -888,20 +888,27 @@ Mutation test's late promise ownership was reproduced and repaired; the original
 60-second schedule stall remains unexplained despite the subsequent complete
 lane PASS. No production limit was changed.
 
-The ADR-0043 manifest is committed. Its credential-free packet preflight rejects
-a credential-bearing URL in removed historical README content; nothing was sent
-to a reviewer. The
+The ADR-0043 manifest is committed. Its initial credential-free packet preflight
+rejected a credential-bearing URL in removed historical README content; nothing
+was sent to a reviewer. The owner then approved the narrow docs-first
+[packet-safety repair](docs/v4/implementation/acceptance-packet-safety/DECISION.md):
+explicit removed-URL locations, original full-diff integrity bindings, and
+unchanged checks on new code. Its affected suite passes 124 tests and all 16
+existing v2 PASS records still verify without model credentials. Independent
+Standards and Spec/security reviews found no findings; a fresh bound candidate
+preflight still precedes formal submission.
+The
 [preflight blocker](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-PREFLIGHT-BLOCKER.md)
-records the exact boundary and pending owner decision. Do not hide diff content
-or weaken the scanner. The additional 64-program PostgreSQL owner proof passes
+records the original boundary and authorized repair. Do not substitute the diff
+base or omit review paths. The additional 64-program PostgreSQL owner proof passes
 the full affected file with five tests and 254 assertions; its evidence does not
 relabel the preceding integrated lanes as rerun.
 
 Formal review remains unconsumed. Public authority projection requires a verified
 PASS, followed by the replacement aggregate beta.2 review. ADR-0043 and ADR-0039
 remain Proposed. Tagged stable-runner release evidence and the user's manual
-preview remain pending. The restored example host is loopback-only on port 43122;
-existing tailnet mappings are preserved. Local passes do not make this candidate
+preview remain pending. The example's reserved loopback port is 43122; the host
+is currently stopped and existing tailnet mappings are preserved. Local passes do not make this candidate
 release-ready.
 
 The owner additionally requires a manually inspectable Team Support Desk before
