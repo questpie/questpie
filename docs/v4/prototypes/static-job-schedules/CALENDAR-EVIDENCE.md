@@ -56,9 +56,14 @@ These are prototype bounds, not Accepted product limits:
   not validate forged arrays or mutable foreign artifacts. Production requires
   an artifact decoder that reconstructs and validates this invariant.
 
-The year bound is conservative and executable. ADR-0043 or its implementation
-must either ratify it or replace it with an equally finite PostgreSQL-owned
-instant bound.
+The year bound was a conservative model assumption. Proposed ADR-0043 now
+explicitly selects the implemented UTC year range 1 through 9999. The current
+calendar tests accept both boundary years and reject years 0 and 10000; the
+Runtime schedule owner separately validates observed and stored instants and
+projects unsupported values as `SCHEDULE_STATE_INVALID`. These are source-read
+facts, with the calendar tests executed in the complete candidate quality lane.
+This is a schedule-specific boundary, not an inherited timestamp Codec limit.
+Formal acceptance remains pending.
 
 ## Commands and results
 

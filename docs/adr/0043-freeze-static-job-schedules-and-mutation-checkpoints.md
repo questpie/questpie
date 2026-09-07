@@ -291,6 +291,7 @@ The candidate's fixed work bounds are:
 | Boundary                                                | Limit                                                                   |
 | ------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Static desired set                                      | 64 scheduled Jobs; 262,144 canonical artifact bytes                     |
+| Schedule activation, frontier, and observation instants | UTC years 1 through 9999 inclusive                                      |
 | Calendar search                                         | At most 146,097 UTC days; at most 1,440 minute-of-day candidates        |
 | Activation or producer transaction                      | 10 seconds, including lock wait; caller cancellation may end it earlier |
 | One reconciliation                                      | At most 64 programs and one accepted tick per program                   |
@@ -302,6 +303,12 @@ These are finite first-slice bounds, not throughput promises or new authoring
 configuration. The Job's existing attempt deadline, retry horizon and result
 bound still apply. A reconciliation timeout rolls back its entire frontier/tick/
 acceptance transaction; it cannot publish partial acceptance.
+
+Calendar inputs are whole UTC minutes after flooring the PostgreSQL observation.
+The schedule owner rejects an unsupported instant with `SCHEDULE_STATE_INVALID`
+without committed activation, frontier, or tick changes. Worker observation
+still exposes only `SCHEDULE_PRODUCER_FAILED`. This schedule-specific bound does
+not narrow the ordinary timestamp Codec.
 
 Reference, history, command compatibility and required-receipt corruption produce
 the permanent durable code `CHECKPOINT_INVALID`. The history/input size cap uses
