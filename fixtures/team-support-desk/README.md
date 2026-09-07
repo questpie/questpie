@@ -80,13 +80,17 @@ credentials out of source and shell history. The auth deployment adapter reads
 `DATABASE_URL` and `BETTER_AUTH_SECRET`; `BETTER_AUTH_TRUSTED_HOST` is optional
 for an authorized tailnet HTTPS hostname.
 
+Check that the chosen app port and the receiver's fixed port 43121 are free.
+The example uses app port 43122; choose another free port with `--port` if
+needed. Preserve existing processes rather than stopping them to free a port.
+
 ```sh
 bunx questpie build
 bunx questpie migration apply
 bunx questpie seed apply
 bun run auth:migrate
 bun run auth:seed
-bun tracer/host.ts --port=43120
+bun tracer/host.ts --port=43122
 ```
 
 The auth seed creates the customer, agent, and admin personas offered by the
@@ -144,7 +148,9 @@ With the disposable PostgreSQL environment selected and Firefox available, run
 test's database ownership requirements. The ordinary React adapter test remains
 under `tracer/browser/`.
 
-For authorized tailnet review, keep the host on loopback and inspect existing
-Serve mappings before adding a dedicated HTTPS port. The existing local setup
-uses `tailscale serve --bg --https=8444 http://127.0.0.1:43120`. Remove only that
-mapping with `tailscale serve --https=8444 off` after the session. Use no Funnel.
+For authorized tailnet review, keep the host on loopback. Inspect listening
+ports and `tailscale serve status` before choosing a free HTTPS port and adding
+a mapping to this session's app port. Historical examples using local port
+43120 or HTTPS port 8444 do not establish ownership: preserve existing mappings
+and their target processes. Record the mapping created for this session and
+remove only that mapping afterward. Use no Funnel.

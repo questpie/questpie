@@ -46,7 +46,7 @@ web/
   questpie.ts         generated client boundary
 runtime/             external deployment adapters
 questpie/            committed migrations and immutable Seeds
-tracer/              fixture host and test automation
+tracer/              optional test or reference-application harness
 ```
 
 These paths are a convention, not a compiler grammar. Preserve a coherent
@@ -55,6 +55,10 @@ control Resource identity. Put the actual Collection declaration in the domain
 entry rather than adding a pass-through barrel. Keep helpers local until real
 consumers need sharing. Product UI must build without importing tracer code;
 browser automation can import and exercise the product UI.
+
+Add `tracer/` only for test or reference-application consumers. It is not
+required application scaffolding; the Support Desk's local host and demo
+controls are fixture infrastructure, not a production deployment template.
 
 After moving Definitions, rebuild and review Origins and executable artifacts.
 Keep immutable migration and Seed history intact. A source move is not a
