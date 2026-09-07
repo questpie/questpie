@@ -223,6 +223,14 @@ export const auditById = defineQuery({
 			] ?? "";
 		expect(packageContract).toContain('readonly "auditEntries"');
 		expect(packageContract).toContain('"audit.byId"');
+		expect(packageContract).toContain(
+			'handlerOutput: PackageQueries["audit.byId"]["output"]',
+		);
+		expect(packageContract).not.toContain("GeneratedQueries");
+		expect(packageContract).not.toContain("GeneratedMutations");
+		expect(packageContract).toContain(
+			"export declare const defineMutation: EmptyDefinitionFactory;",
+		);
 		expect(packageContract).not.toContain('readonly "messages"');
 
 		await writeFile(

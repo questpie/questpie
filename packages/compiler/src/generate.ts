@@ -768,7 +768,7 @@ export interface PackageData {
 }
 
 export interface PackageQueries {
-	${renderQueryDeclarations(resources, documentation)}
+	${renderQueryDeclarations(resources, documentation, "PackageQueries")}
 }
 
 export type PackageServices = Readonly<{
