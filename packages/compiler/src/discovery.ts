@@ -494,6 +494,7 @@ export async function evaluateModules(
 			)
 			.join(",\n");
 		const entry = join(temporary, "entry.ts");
+		const sourcePaths = new Set(files);
 		await writeFile(
 			entry,
 			`${imports}\nimport { projectEvaluatedJobSchedule } from ${JSON.stringify(fileURLToPath(import.meta.resolve("./job/discovery")))};\nconst records = [${records}];\nexport default records;\nexport const projectJobValue = (value) => projectEvaluatedJobSchedule(value, records, ${JSON.stringify(input.packageId ?? null)});\n`,
@@ -507,6 +508,12 @@ export async function evaluateModules(
 				{
 					name: "questpie-current-contract",
 					setup(build) {
+						// These exact imports were already resolved and validated by discovery.
+						build.onResolve({ filter: /.*/, namespace: "file" }, (args) =>
+							args.importer === entry && sourcePaths.has(args.path)
+								? { path: args.path }
+								: undefined,
+						);
 						build.onResolve({ filter: /^@questpie\/runtime\/codec$/ }, () => ({
 							path: fileURLToPath(
 								import.meta.resolve("@questpie/runtime/codec"),
