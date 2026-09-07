@@ -111,6 +111,13 @@ OTel06 reported one pass and 24 assertions. Its 19 performance manifests were
 validated, not executed. This quality result does not close the PostgreSQL or
 affected load gates, and ADR-0043 remains Proposed.
 
+Two subsequent forced builds of both public packages, each followed by
+`bun run release -- --dry-run`, passed on that same candidate. Both runs matched
+the committed package artifact manifest and produced identical archive hashes
+for `questpie` and `questpie-opentelemetry`. Their isolated import, negative
+import, peer, optional React, packed application and combined-import checks
+passed. These package checks do not close either PostgreSQL failure.
+
 All nine diagnostic databases were removed. The coordinating agent separately
 removed the original inactive orphan `qp_schedule_d1cc8707f8cb42cda52568f5593232ad`
 after matching its sole activation at `12:36:35.601Z` to the original timeout at
@@ -121,7 +128,9 @@ its fixture.
 Local provenance is retained in
 `/home/drepkovsky/code/questpie-v4-beta2-verification.l3bsSH/quality-release-6c673e931.log`
 and `full-postgres-6c673e931.log` plus
-`full-postgres-6c673e931-observed.log` in that directory;
+`full-postgres-6c673e931-observed.log` in that directory. The forced-build and
+release dry-run logs in the same directory use suffixes `6c673e931-1` and
+`6c673e931-2`. Diagnostic provenance is retained in
 `/home/drepkovsky/code/questpie-load-pairs.Q4HQN7/owner-deadline-diagnosis.json`
 and its three named diagnostic logs; and
 `/home/drepkovsky/code/questpie-v4-team-tail-proof.D0O50E` for the three tail logs.
