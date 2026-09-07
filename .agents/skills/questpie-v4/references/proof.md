@@ -41,6 +41,12 @@ Every packet byte is read from the exact reviewed commit rather than the working
 tree, and the diff pins prefixes, renames, algorithm, context, an empty order
 file and an empty attributes file so no local Git configuration can reshape it.
 
+If removed historical database credentials block that complete diff, follow the
+owner-approved [packet-safety decision](../../../../docs/v4/implementation/acceptance-packet-safety/DECISION.md).
+Only its explicit manifest-bound URL redaction may change rendered diff bytes;
+the packet records the original full-diff binding and every applied location.
+New code and authority documents retain the normal secret checks.
+
 The reviewer proves itself before the packet is sent: the pinned executable must
 report a version and declare every pinned option. An absent or
 argument-rejecting reviewer is a fail-closed error rather than a review outcome.
