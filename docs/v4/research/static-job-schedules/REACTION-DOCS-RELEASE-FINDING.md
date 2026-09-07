@@ -1,7 +1,7 @@
 # Reaction documentation release finding
 
-The public durable-work guide contains examples that do not compile against the
-current generated contract. This finding separates those errors from the
+The public durable-work guide contained examples that did not compile against
+the generated contract. This finding separates those errors from the
 accepted beta.1 release cut. It makes no product decision or acceptance verdict.
 Static schedules and the Proposed ADR-0043 checkpoint boundary are not authority
 for the retained Reaction surface.
@@ -89,3 +89,9 @@ from Job checkpoints. Record the later callback replacement as inherited work,
 not as a newly invented requirement or a completed capability. The public
 `skills/questpie` durable reference has no executable snippet with these errors;
 its checkpoint availability must still match the final accepted release cut.
+
+The accompanying documentation repair replaces the first example with the
+retained Collaboration Reaction surface. The exact code fence now compiles in
+`tests/integration/durable-docs-generated.test.ts`; before the repair, that test
+failed with `QP-COMPOSE-013`. The repair does not close the inherited generated
+Reaction Action replacement assignment.
