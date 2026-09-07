@@ -219,8 +219,10 @@ if the handler catches the error. Reservation, dispatch, completion-unknown,
 concurrency, cancellation, and incomplete-history failures likewise prevent
 later checkpoint dispatch and successful settlement in that attempt. An already
 dispatched Mutation may still commit. The reserved command and stable Call
-Identity remain for the existing bounded Job retry, which re-enters in order
-with fresh Context; no retry loop runs inside the helper. Completion never
+Identity remain available to the existing Job failure policy. Declared errors
+remain permanent `REACTION_ERROR` failures; catching one does not make it
+retryable. Only retryable failures re-enter the reserved command in a later
+bounded attempt with fresh Context; no retry loop runs inside the helper. Completion never
 stores a second copy of a success or failure result. Catch-and-continue after a
 failed Mutation step is outside this minimum slice.
 The worker owns every started step promise, including an unawaited one. It

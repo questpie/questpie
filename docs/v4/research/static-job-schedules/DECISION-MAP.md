@@ -159,8 +159,11 @@ mechanism to claim a stronger guarantee.
 
 A declared Mutation failure has no receipt. The narrowed candidate dooms
 checkpoint progress and successful settlement for the attempt even if the Job
-catches that error. The next bounded Job attempt re-enters the reserved command;
-there is no failure-result ledger or catch-and-continue workflow in this slice.
+catches that error. The existing Job failure policy decides whether another
+attempt occurs.
+Declared errors remain permanent `REACTION_ERROR` failures, including caught
+Mutation errors. Only retryable failures re-enter the reserved command; there
+is no failure-result ledger or catch-and-continue workflow in this slice.
 The proposed history cap and all remaining byte/work/time bounds still require
 executable proof; the 100-Job acceptance cap is not a checkpoint limit.
 
@@ -228,10 +231,10 @@ database while preserving the original URL options. The real PostgreSQL target
 regression uses a separate decoy database, checks identity before DDL, and
 passes migration, Seed, replay and fingerprint checks.
 
-Claude authentication currently prevents advisory consultation and formal
-review; GitHub CLI authentication prevents tracker writes. Neither blocker
-permits a substitute verdict, an authority projection, or submission of the
-pre-schedule beta.2 manifest. Deterministic proof and scoped repairs continue.
+GitHub read access and an ordinary stateless Fable 5.1 consultation now succeed.
+No formal review has run: the remaining deterministic gates still block its
+submission. The pre-schedule beta.2 manifest remains invalid for this scope,
+and neither ADR gains authority from advisory consultation.
 
 1. Close the focused decisions in #365 and write an additive Proposed ADR.
 2. Build compiler/type and PostgreSQL falsification, including ten-instance
