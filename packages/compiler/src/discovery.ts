@@ -509,10 +509,34 @@ export async function evaluateModules(
 					name: "questpie-current-contract",
 					setup(build) {
 						// These exact imports were already resolved and validated by discovery.
-						build.onResolve({ filter: /.*/, namespace: "file" }, (args) =>
-							args.importer === entry && sourcePaths.has(args.path)
-								? { path: args.path }
-								: undefined,
+						build.onResolve(
+							{ filter: /.*/, namespace: "file" },
+							async (args) => {
+								if (args.importer === entry && sourcePaths.has(args.path))
+									return { path: args.path };
+								if (
+									!sourcePaths.has(args.importer) ||
+									!args.path.startsWith(".")
+								)
+									return;
+								// Bind authored local edges with validation's existing resolver,
+								// only when their target is already in this evaluated source set.
+								const path = await resolveSourceModule(
+									args.importer,
+									args.path,
+								);
+								if (path === null || !sourcePaths.has(path)) return;
+								try {
+									// Leave ambiguous extension/directory selection to Bun unless
+									// its resolver agrees with the already validated target.
+									if (
+										Bun.resolveSync(args.path, dirname(args.importer)) === path
+									)
+										return { path };
+								} catch {
+									return;
+								}
+							},
 						);
 						build.onResolve({ filter: /^@questpie\/runtime\/codec$/ }, () => ({
 							path: fileURLToPath(

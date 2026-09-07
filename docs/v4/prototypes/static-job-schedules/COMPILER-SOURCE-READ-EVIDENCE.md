@@ -71,13 +71,13 @@ changed the timing and passed; that successful trace is not negative evidence.
 An exploratory source-build warm-up also avoided the failure, but no warm-up or
 retry was retained.
 
-The structural build now resolves only its compiler-generated entry imports
+The first structural repair resolved only its compiler-generated entry imports
 from the exact already-discovered source-path set. Both entry-importer identity
 and exact path membership must match. The returned path is unchanged: no
 extension search, normalization, candidate synthesis, or general resolution
-fallback is added. Authored relative imports, package imports and virtual
-factories keep their existing rules. Structural validation, lowering and
-isolated evaluation remain unchanged.
+fallback was added. Authored relative imports, package imports and virtual
+factories retained their existing rules. Structural validation, lowering and
+isolated evaluation remained unchanged.
 
 The pre-existing direct lifecycle and loaded-source tests reproduce the defect
 without mocks; the direct lifecycle test changes from unresolved-import failure
@@ -100,3 +100,59 @@ Both direct consumer compiles and the complete lifecycle compiler suite pass:
 4 tests / 11 assertions. Compiler strict types, warning-denying lint, formatting,
 architecture and whitespace checks pass. These runs use the existing
 15-second ordinary-test timeout and change no test or production limit.
+
+## Authored local imports after earlier client builds
+
+The integrated ordinary suite exposed a remaining boundary: after the generated
+Query Resource tests, compiling Team Support Desk rejected all six authored
+`./demo-ids` or `../demo-ids` imports. The target remained a regular, unchanged
+tracked source file. The generated-entry binding above did not own these
+authored edges.
+
+The same failure reproduced in an isolated worktree: first with the 27-file
+ordinary prefix, then its last 13 files, then just these two retained suites:
+
+```sh
+bun test --timeout=15000 tests/integration/qri01-generated-query-resource.test.ts tests/integration/compiler-loaded-source.test.ts
+```
+
+Before the repair, that pair passed 15 tests and failed the Team Support Desk
+compile with the six unresolved imports. Loading fixture modules, repeated
+compiles, copied-fixture cleanup, and a client build added after the first
+application compile did not reproduce it alone. Those exploratory probes were
+not added to repository tests or production code. No further claim about Bun's
+internal cache mechanism follows from this reduction.
+
+The structural build now binds authored relative imports through the same
+`resolveSourceModule` owner already used for structural validation. Both the
+importer and resolved target must belong to the exact evaluated source-path
+set, and Bun's existing synchronous resolver must agree with that target. The
+agreement guard matters: the inherited validation search prefers `.ts` to
+`.tsx`, whereas pinned Bun selects `.tsx` when both exist. This repair does not
+change validation's search or choose between ambiguous candidates. When the
+resolvers disagree or Bun cannot resolve the edge, ordinary bundler handling
+remains in force. The generated-entry binding is retained; package names,
+virtual factories, authored absolute imports, and imports outside that set keep
+their existing handling. This adds no second resolution algorithm, retry,
+warm-up, or general resolution fallback and does not bypass source validation,
+lowering, or isolated evaluation.
+
+The unchanged two-file sequence passes all 16 tests / 72 assertions after the
+repair. A retained structural-evaluation regression first failed by selecting
+`.ts` instead of `.tsx`; with the agreement guard it and directory-only and
+explicit-extension controls pass. Running those controls with the original
+pair passes 19 tests / 75 assertions. The 13-file sequence's compiler consumers
+also pass, but that run is not a full PASS: an unrelated existing Action test
+with a 5ms duration failed while testing non-settling Service disposal.
+The four existing structural hostile cases above pass with 11 assertions;
+compiler strict types, warning-denying lint, formatting, architecture, and
+`git diff --check` also pass.
+
+In the same plain-process context, all 59 Team Support Desk artifact paths and
+bytes are identical before and after the repair. A separate comparison against
+mixed `bun test` compilation found different dependency chunk identities. That
+cross-context determinism issue remains open and is not justified by the
+same-context comparison or a golden refresh. The existing 15-second
+ordinary-test timeout and all production limits remain unchanged. This is
+candidate compiler evidence, not a release verdict or formal acceptance of
+ADR-0043.
