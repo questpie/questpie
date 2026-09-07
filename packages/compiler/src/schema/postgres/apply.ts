@@ -266,6 +266,7 @@ export async function applyCommittedMigrations(
 			firstPid,
 			control,
 			{
+				allowNonRollingProtocolV8: input.allowNonRollingProtocolV8,
 				allowNonRollingProtocolV9: input.allowNonRollingProtocolV9,
 			},
 			input.signal,

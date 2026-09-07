@@ -111,7 +111,10 @@ export async function ensureInternalProtocolV9(
 	databaseName: string,
 	expectedPid: number,
 	control: PostgresControl,
-	cutover: Readonly<{ allowNonRollingProtocolV9?: boolean }> = {},
+	cutover: Readonly<{
+		allowNonRollingProtocolV8?: boolean;
+		allowNonRollingProtocolV9?: boolean;
+	}> = {},
 	signal?: AbortSignal,
 ): Promise<void> {
 	await assertBackendPid(sql, expectedPid, "before internal protocol v9");
@@ -134,13 +137,17 @@ export async function ensureInternalProtocolV9(
 			await verifyInternalProtocolV9(sql);
 			return;
 		}
-		if (protocol === undefined) {
+		if (
+			protocol === undefined ||
+			protocol.version === 6 ||
+			protocol.version === 7
+		) {
 			await ensureInternalProtocolV8(
 				sql,
 				databaseName,
 				expectedPid,
 				control,
-				{},
+				{ allowNonRollingProtocolV8: cutover.allowNonRollingProtocolV8 },
 				signal,
 			);
 			protocol = await protocolRow(sql);

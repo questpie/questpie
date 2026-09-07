@@ -8,6 +8,7 @@ import { projectPostgresMutationTransactionStatements } from "../../../packages/
 import { backendPid } from "../../../packages/compiler/src/postgres-session";
 import {
 	ensureInternalProtocolV7,
+	internalProtocolV7Checksum,
 	verifyInternalProtocolV7,
 } from "../../../packages/compiler/src/schema/postgres/internal-protocol-v7";
 import {
@@ -16,6 +17,7 @@ import {
 	internalProtocolV8Checksum,
 	verifyInternalProtocolV8,
 } from "../../../packages/compiler/src/schema/postgres/internal-protocol-v8";
+import { verifyInternalProtocolV9 } from "../../../packages/compiler/src/schema/postgres/internal-protocol-v9";
 import {
 	createJobAcceptance,
 	type DurableWorkerOutcome,
@@ -436,7 +438,7 @@ afterAll(async () => {
 });
 
 describe.skipIf(!sql).serial("OTEL-04 protocol-v8 Durable correlation", () => {
-	test("cuts over only through the exact public CLI acknowledgement", async () => {
+	test("retains both explicit public CLI acknowledgements when upgrading v7 through v8 to v9", async () => {
 		const session = await sql!.reserve();
 		try {
 			const build = Bun.spawnSync(["bun", "run", "build"], {
@@ -449,22 +451,53 @@ describe.skipIf(!sql).serial("OTEL-04 protocol-v8 Durable correlation", () => {
 				build.stdout.toString() + build.stderr.toString(),
 			).toBe(0);
 			await installV7(session);
-			const invoke = (flag: string) =>
-				Bun.spawnSync(["bun", cli, "migration", "apply", flag], {
+			const invoke = (...flags: string[]) =>
+				Bun.spawnSync(["bun", cli, "migration", "apply", ...flags], {
 					cwd: fixtureRoot,
 					env: { ...process.env, DATABASE_URL: postgresUrl() },
 					stdout: "pipe",
 					stderr: "pipe",
 				});
-			const historical = invoke("--allow-non-rolling-protocol-v7");
-			expect(historical.exitCode).not.toBe(0);
-			await verifyInternalProtocolV7(session);
-			const accepted = invoke("--allow-non-rolling-protocol-v8");
+			for (const flags of [
+				[],
+				["--allow-non-rolling-protocol-v7"],
+				["--allow-non-rolling-protocol-v8"],
+				["--allow-non-rolling-protocol-v9"],
+			]) {
+				const refused = invoke(...flags);
+				expect(refused.exitCode).not.toBe(0);
+				expect(refused.stderr.toString()).toContain("QP-SCHEMA-020");
+				await verifyInternalProtocolV7(session);
+			}
+			for (const hostile of [
+				{ version: 99, checksum: internalProtocolV7Checksum },
+				{ version: 7, checksum: "0".repeat(64) },
+			]) {
+				await session`UPDATE questpie_internal.protocol SET version = ${hostile.version}, checksum = ${hostile.checksum} WHERE singleton = true`;
+				try {
+					const refused = invoke(
+						"--allow-non-rolling-protocol-v8",
+						"--allow-non-rolling-protocol-v9",
+					);
+					expect(refused.exitCode).not.toBe(0);
+					expect(refused.stderr.toString()).toContain("QP-SCHEMA-023");
+					const [retained] =
+						await session`SELECT version, checksum FROM questpie_internal.protocol WHERE singleton = true`;
+					expect(retained).toEqual(hostile);
+				} finally {
+					await session`UPDATE questpie_internal.protocol SET version = 7, checksum = ${internalProtocolV7Checksum} WHERE singleton = true`;
+				}
+				await verifyInternalProtocolV7(session);
+			}
+			const accepted = invoke(
+				"--allow-non-rolling-protocol-v8",
+				"--allow-non-rolling-protocol-v9",
+			);
 			expect(
 				accepted.exitCode,
 				accepted.stdout.toString() + accepted.stderr.toString(),
 			).toBe(0);
-			await verifyInternalProtocolV8(session);
+			await verifyInternalProtocolV9(session);
 		} finally {
 			await session.unsafe("DROP SCHEMA IF EXISTS team_support_desk CASCADE");
 			session.release();

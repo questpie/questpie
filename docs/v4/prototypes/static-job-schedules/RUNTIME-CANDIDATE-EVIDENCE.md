@@ -78,6 +78,25 @@ generated from an isolated PostgreSQL 17 database by
 checksum remain immutable. Runtime readiness expects v9 and the candidate CLI
 has `--allow-non-rolling-protocol-v9` for migration.
 
+The candidate retains the Accepted ADR-0033 v8 migration owner for existing
+exact v6/v7 installations. Moving those installations to v9 requires both
+`--allow-non-rolling-protocol-v8` and `--allow-non-rolling-protocol-v9`.
+Either missing acknowledgement refuses before changing the existing catalog;
+unknown versions and corrupt input checksums remain rejected. An existing
+exact v8 installation needs only the v9 acknowledgement, and a fresh database
+still bootstraps without a cutover acknowledgement.
+
+The v8 and v9 owners keep their separate committed transactions. If v8 commits
+and the later v9 transaction fails, the verified v8 state remains available for
+an explicitly acknowledged v9 retry. The outer v9 session lock remains held
+while the unchanged v8 owner acquires and releases its reentrant lock on the
+same PostgreSQL session. No alternate migration implementation or rolling
+compatibility path is introduced. The retained OTEL PostgreSQL CLI regression
+checks each missing acknowledgement, unknown/corrupt input preservation, and
+the successful two-acknowledgement v7-to-v9 cutover; its independent v8 catalog
+and trace-preservation tests remain in place. This is candidate evidence and
+does not accept ADR-0043.
+
 The focused compiler, Runtime, and questpie typechecks, targeted lint and format,
 `bun run architecture:check`, and `git diff --check` pass. Workspace resolution
 for compiler, Runtime, and questpie was checked and points inside this isolated
