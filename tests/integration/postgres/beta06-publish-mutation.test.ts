@@ -32,17 +32,21 @@ afterAll(async () => {
 	await database?.close({ timeout: 0 });
 });
 
-async function waitForBlockedChannelRead(): Promise<void> {
+async function waitForBlockedChannelRead(blockerPid: number): Promise<void> {
 	for (let attempt = 0; attempt < 200; attempt += 1) {
 		const [blocked] = await database!.unsafe<
 			Readonly<Array<{ blocked: boolean }>>
-		>(`SELECT EXISTS (
+		>(
+			`SELECT EXISTS (
   SELECT 1
   FROM pg_catalog.pg_stat_activity
-  WHERE pid <> pg_catalog.pg_backend_pid()
+  WHERE datname = pg_catalog.current_database()
+    AND pid <> pg_catalog.pg_backend_pid()
     AND query LIKE '%FROM "collaboration"."channels"%FOR UPDATE%'
-    AND pg_catalog.cardinality(pg_catalog.pg_blocking_pids(pid)) > 0
-) AS blocked`);
+    AND $1::integer = ANY(pg_catalog.pg_blocking_pids(pid))
+) AS blocked`,
+			[blockerPid],
+		);
 		if (blocked?.blocked) return;
 		await Bun.sleep(10);
 	}
@@ -403,43 +407,64 @@ postgresTest(
 				realtime: { hmacKey: new Uint8Array(32) },
 				maintenance: { authorize: () => true },
 			});
+			const controller = new AbortController();
+			const pendingRoots: Promise<unknown>[] = [];
+			function observeRoot<Value>(root: Promise<Value>) {
+				const outcome = root.then(
+					(value) => ({ status: "fulfilled" as const, value }),
+					(reason: unknown) => ({ status: "rejected" as const, reason }),
+				);
+				pendingRoots.push(outcome);
+				return outcome;
+			}
 			try {
+				const [backend] = await blocker.unsafe<
+					Readonly<Array<{ pid: number }>>
+				>("SELECT pg_catalog.pg_backend_pid() AS pid");
+				if (!backend) throw new Error("Channel blocker has no backend PID");
 				const internal = await prepared.generated.loadInternal();
 				const user = prepared.generated.framework.principal.user({
 					id: beta05Ids.principal,
 				});
 				const callId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b62b0";
+				let requestSettled: Promise<unknown> = Promise.resolve();
 				const client = prepared.generated.client.createClient({
 					baseUrl: "http://runtime.test",
-					fetch: (request: Request) =>
-						application.fetch(
+					fetch: (request: Request) => {
+						const response = application.fetch(
 							internal.bindIngressPrincipalForRequest(
 								withTracerCredential(request),
 								user,
 							),
-						),
+						);
+						requestSettled = observeRoot(response);
+						return response;
+					},
 				});
 				await blocker.unsafe("BEGIN");
 				await blocker.unsafe(
 					"SELECT id FROM collaboration.channels WHERE id = $1 FOR UPDATE",
 					[beta05Ids.channel],
 				);
-				const pending = client
-					.withContext({ companyId: beta05Ids.company })
-					.mutations["message.publish"](
-						{ channelId: beta05Ids.channel, body: "must be revoked" },
-						{ callId },
-					);
-				await waitForBlockedChannelRead();
+				const pending = observeRoot(
+					client
+						.withContext({ companyId: beta05Ids.company })
+						.mutations["message.publish"](
+							{ channelId: beta05Ids.channel, body: "must be revoked" },
+							{ callId },
+						),
+				);
+				await waitForBlockedChannelRead(backend.pid);
 				await database!.unsafe(
 					"UPDATE collaboration.memberships SET status = 'inactive' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
 					[beta05Ids.company, beta05Ids.principal],
 				);
 				await blocker.unsafe("COMMIT");
-				await expect(pending).rejects.toMatchObject({
-					code: "CHANNEL_UNAVAILABLE",
-					status: 404,
+				await expect(pending).resolves.toMatchObject({
+					status: "rejected",
+					reason: { code: "CHANNEL_UNAVAILABLE", status: 404 },
 				});
+				await Promise.all(pendingRoots);
 				const counts = await mutationCounts(callId);
 				expect(counts).toEqual({
 					audit: 0,
@@ -457,24 +482,38 @@ postgresTest(
 					[beta05Ids.channel],
 				);
 				const cancelledCallId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b62b1";
-				const controller = new AbortController();
-				const cancelled = client
-					.withContext({ companyId: beta05Ids.company })
-					.mutations["message.publish"](
-						{ channelId: beta05Ids.channel, body: "must roll back" },
-						{ callId: cancelledCallId, signal: controller.signal },
-					);
-				await waitForBlockedChannelRead();
-				controller.abort(new DOMException("caller cancelled", "AbortError"));
+				const cancelled = observeRoot(
+					client
+						.withContext({ companyId: beta05Ids.company })
+						.mutations["message.publish"](
+							{ channelId: beta05Ids.channel, body: "must roll back" },
+							{ callId: cancelledCallId, signal: controller.signal },
+						),
+				);
+				await waitForBlockedChannelRead(backend.pid);
+				const callerAbortError = new DOMException(
+					"caller cancelled",
+					"AbortError",
+				);
+				controller.abort(callerAbortError);
+				// Regression control: cancellation can settle before the assertion resumes.
+				await requestSettled;
+				await new Promise<void>((resolve) => setImmediate(resolve));
 				await blocker.unsafe("COMMIT");
-				await expect(cancelled).rejects.toMatchObject({ name: "AbortError" });
+				await expect(cancelled).resolves.toEqual({
+					status: "rejected",
+					reason: callerAbortError,
+				});
+				await Promise.all(pendingRoots);
 				expect(await mutationCounts(cancelledCallId)).toEqual({
 					audit: 0,
 					intents: 0,
 					receipts: 0,
 				});
 			} finally {
+				controller.abort();
 				await blocker.unsafe("ROLLBACK").catch(() => {});
+				await Promise.all(pendingRoots);
 				await application.close();
 			}
 		} finally {
