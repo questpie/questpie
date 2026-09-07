@@ -895,8 +895,9 @@ was sent to a reviewer. The owner then approved the narrow docs-first
 explicit removed-URL locations, original full-diff integrity bindings, and
 unchanged checks on new code. Its affected suite passes 124 tests and all 16
 existing v2 PASS records still verify without model credentials. Independent
-Standards and Spec/security reviews found no findings; a fresh bound candidate
-preflight still precedes formal submission.
+Standards and Spec/security reviews found no findings. The fresh bound candidate
+passes real packet preflight with the complete diff and one explicit historical
+URL redaction; no formal reviewer has been invoked.
 The
 [preflight blocker](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-PREFLIGHT-BLOCKER.md)
 records the original boundary and authorized repair. Do not substitute the diff

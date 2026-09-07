@@ -55,4 +55,14 @@ release budget, or product-authority change is part of this repair. Independent
 Standards and Spec/security reviews of `de55e364c..e35682620` found no blocking
 or non-blocking findings. The security reviewer independently reran all 124
 affected tests. These are repository-quality reviews, not ADR acceptance.
-The fresh real-candidate packet preflight remains required before submission.
+The fresh real-candidate packet preflight passes at `e2a1cbc21`: 1,233,528
+original diff bytes, 1,695,267 packet bytes and 38 documents, with the default
+`claude-opus-medium-v1` reviewer. The complete diff remains present except for
+the one explicitly selected historical URL. No model was invoked.
+
+The preceding `e9807dbdd` preflight rejected the malformed-URL negative fixture's
+literal, not the historical redaction. The test now constructs the identical
+invalid value at execution time; neither its rejection assertion nor the
+scanner changes. All 124 tests and 217 assertions pass again. Independent
+Spec/security delta review through `e2a1cbc21` found no findings. This is a
+test-source repair, not another secret exemption or a formal review outcome.
