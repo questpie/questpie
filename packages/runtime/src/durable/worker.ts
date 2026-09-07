@@ -307,7 +307,8 @@ export function createDurableWorker<Execution>(
 					resource: claim.resource,
 					attemptNumber: claim.attemptNumber,
 					outcome: "fenced" as const,
-					failureCode: code,
+					// The stale holder did not persist a terminal failure.
+					failureCode: null,
 				});
 			if (transition.state === "delayed")
 				return Object.freeze({

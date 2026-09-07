@@ -384,6 +384,37 @@ test("retries an ordinary Job handler failure through the shared kernel", async 
 	expect(state.failed).toEqual(["HANDLER_FAILED"]);
 });
 
+test("reports a fenced failure without projecting an unapplied terminal failure code", async () => {
+	for (const failure of [
+		new Error("handler failed after takeover"),
+		new DOMException("Attempt deadline", "TimeoutError"),
+	]) {
+		const claimed = claim({
+			resource: "job:reports.companyDigest",
+			executableDigest: digest("b"),
+			semanticVersion: 2,
+			payload: { companyId: "company:one" },
+		});
+		const state = kernelFor(claimed, { status: "fenced" });
+		const worker = createDurableWorker({
+			attemptExecution,
+			kernel: state.kernel,
+			ledger: unusedLedger,
+			reactions,
+			jobs,
+			execute: async () => {
+				throw failure;
+			},
+		});
+
+		expect((await worker.poll()).outcomes).toEqual([
+			expect.objectContaining({ outcome: "fenced", failureCode: null }),
+		]);
+		expect(state.failed).toEqual(["HANDLER_FAILED"]);
+		expect(state.succeeded).toEqual([]);
+	}
+});
+
 test("fails a Job before handler work when fresh Context resolves another Tenant", async () => {
 	const claimed = claim({
 		resource: "job:reports.companyDigest",
