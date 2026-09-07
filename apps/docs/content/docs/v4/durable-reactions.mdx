@@ -74,7 +74,7 @@ export const messagePublished = defineReaction({
 		if (message?.body === undefined) throw errors.messageUnavailable();
 		const body = message.body;
 		const deliveryReceipt = await ctx.run.effect("deliver-message").invoke({
-			input: { messageId: input.messageId },
+			input: { messageId: input.messageId, body },
 			perform: ({ attempt, effectId }) =>
 				deliverMessage({ attempt, body, effectId }),
 			recover: ({ effectId }) => lookupDelivery({ body, effectId }),
@@ -107,6 +107,8 @@ The Query returns at most 100 Policy-visible Messages. This example fails with
 is not disclosed. It does not scan beyond the page or bypass Policy to find it.
 The nested `message.recordDelivery` call uses a stable Mutation Call ID derived
 from the Durable Run, so a later attempt can replay its committed receipt.
+The effect input includes the body sent to the provider. If a later attempt
+reads a changed body, the same Effect Identity conflicts before provider work.
 
 The Reaction Context contains immutable Principal, Tenant, Context values,
 signal, and deadline. It reads through current Collection Policy and changes

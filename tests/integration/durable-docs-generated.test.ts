@@ -20,9 +20,10 @@ test("compiles the exact public Reaction example against its application contrac
 			),
 			"utf8",
 		);
-		const example = /^```ts title="[^"]+"\n([\s\S]*?)\n```/m.exec(
-			documentation,
-		)?.[1];
+		const example =
+			/^```ts title="src\/message-published\.ts"\n([\s\S]*?)\n```/m.exec(
+				documentation,
+			)?.[1];
 		if (!example) throw new Error("missing documented Reaction example");
 		await writeFile(join(root, "src/message-published.ts"), `${example}\n`);
 		const compilation = await compileApplication({ applicationRoot: root });
