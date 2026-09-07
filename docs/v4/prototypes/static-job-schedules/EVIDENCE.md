@@ -51,6 +51,48 @@ PostgreSQL container and other application databases remain untouched.
 This is Runtime-owner evidence, not generated worker/CLI or browser evidence;
 those remain separate tracers. It establishes no throughput or fairness claim.
 
+## Maximum reconciliation work
+
+A separate case now activates 64 distinct, sorted, correctly digested schedule
+programs through the actual Runtime artifact verifier and PostgreSQL owner. With
+all owned frontiers three minutes behind, one reconciliation reports exactly 64
+examined and 64 accepted. PostgreSQL contains one tick for each Job, 64 distinct
+run IDs, 64 ordinary Job acceptances and 64 frontiers. Every tick belongs to the
+latest observed minute; missed minutes do not multiply acceptance.
+
+The replay executes every real PostgreSQL statement through the normal owner
+transaction. A test-local clock adapter retains the first reconciliation's
+actual PostgreSQL observation and supplies it again for replay, so a wall-minute
+boundary cannot change the intended same-minute case. Replay reports 64 examined
+and zero accepted; tick identities, run/acceptance counts and the 64 Context
+resolutions remain unchanged. No production clock or deadline is changed.
+
+The negative case supplies a correctly digested 65-program catalog to the same
+owner constructor. It rejects with `SCHEDULE_ARTIFACT_INVALID` before any
+transaction or Context call. This is verified Runtime-owner coverage, not an
+additional generated-authoring proof or performance measurement. The 64-program
+case passed the existing implementation; no behavioral RED or production repair
+is claimed.
+
+On Bun 1.3.14 and PostgreSQL 17, the focused `64 verified programs` selection
+passes one test with 150 assertions. The complete command above passes five
+tests with 254 assertions, zero failures and no skips in 28.12 seconds. The
+focused proof TypeScript command
+`bun node_modules/typescript/bin/tsc -p docs/v4/prototypes/static-job-schedules/tsconfig.json --noEmit`,
+warning-denying lint, formatting and `git diff --check` pass. Existing tests and
+production work/time bounds remain unchanged.
+
+Local logs remain in
+`/home/drepkovsky/code/questpie-v4-reconciliation-cap-proof.BhwKfG`:
+`focused-corrected-connection.log`, `full-runtime.log` and `types-final.log`.
+The initial `focused.log` records an authentication setup failure before database
+creation: the absent container `POSTGRES_USER` setting selected the OS username;
+the corrected invocation explicitly selects the default `postgres` role.
+Credentials stayed in process memory. Successful runs completed the existing
+UUID-owned database cleanup. These logs are local provenance, not portable
+prerequisites. ADR-0043 remains Proposed; the prior integrated gate evidence is
+not relabelled as rerun for this test-only addition.
+
 ## Historical model
 
 This PostgreSQL model tests the activation concurrency rules proposed in

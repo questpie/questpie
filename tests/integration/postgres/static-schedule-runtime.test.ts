@@ -141,14 +141,21 @@ postgres.each([
 	[
 		"static schedules serialize ten ordinary Job producers, replay activation, and roll back acceptance",
 		false,
+		false,
 	],
 	[
 		"static schedule owner deadlines roll back activation and accepted ticks",
 		true,
+		false,
+	],
+	[
+		"static schedule reconciliation accepts at most one tick for each of 64 verified programs",
+		false,
+		true,
 	],
 ] as const)(
 	"%s",
-	async (_name, deadlineProof) => {
+	async (_name, deadlineProof, capacityProof) => {
 		const ownedDatabase = `qp_schedule_${crypto.randomUUID().replaceAll("-", "")}`;
 		const admin = new Client({ database: "postgres" });
 		await admin.connect();
@@ -217,9 +224,9 @@ postgres.each([
 				compilerRuntimeBuildDigest: "a".repeat(64),
 				jobProjectionDigest: "b".repeat(64),
 			};
-			const program = (service = "sweep") => {
+			const program = (service = "sweep", jobIdentity = "job:sweep") => {
 				const value = {
-					jobIdentity: "job:sweep",
+					jobIdentity,
 					cron: parseUtcCron("* * * * *"),
 					principal: { kind: "service" as const, id: service },
 					contextJson: '{"tenant":"tenant-one"}\n',
@@ -348,6 +355,117 @@ postgres.each([
 			const active = owner();
 			const empty = owner(artifact([]));
 			try {
+				if (capacityProof) {
+					const programs = Array.from({ length: 64 }, (_, index) =>
+						program("sweep", `job:sweep-${String(index).padStart(2, "0")}`),
+					);
+					let invalidTransactions = 0;
+					const noDatabaseWork: PostgresTransactionRunner = {
+						transaction: () => {
+							invalidTransactions++;
+							throw new Error("invalid catalog reached PostgreSQL");
+						},
+					};
+					expect(() =>
+						owner(
+							artifact([...programs, program("sweep", "job:sweep-64")]),
+							noDatabaseWork,
+						),
+					).toThrow("SCHEDULE_ARTIFACT_INVALID");
+					expect(invalidTransactions).toBe(0);
+					expect(contextCalls).toBe(0);
+					const catalog = artifact(programs);
+					await owner(catalog).activate({ expectedRevision: "0" });
+					await sql`UPDATE questpie_internal.schedule_frontiers SET frontier_minute = date_trunc('minute', clock_timestamp(), 'UTC') - interval '3 minutes'`;
+
+					// Execute every real statement; replay only the first PostgreSQL clock
+					// observation so crossing a wall-clock minute cannot change this case.
+					let replayClock: Date | undefined;
+					let clockReads = 0;
+					const sameMinute: PostgresTransactionRunner = {
+						transaction: (input) =>
+							database!.transaction({
+								...input,
+								use: (transaction) =>
+									input.use({
+										...transaction,
+										execute: async (statement, parameters) => {
+											const result = await transaction.execute(
+												statement,
+												parameters,
+											);
+											if (statement.name !== "durable.schedule.clock")
+												return result;
+											if (
+												!Array.isArray(result) ||
+												!(result[0]?.[0] instanceof Date)
+											)
+												throw new Error(
+													"expected actual PostgreSQL clock observation",
+												);
+											replayClock ??= new Date(result[0][0]);
+											clockReads++;
+											return statement.decode({
+												command: "SELECT",
+												rowCount: 1,
+												rows: [[replayClock]],
+											});
+										},
+									}),
+							}),
+					};
+					const full = owner(catalog, sameMinute);
+					expect(await full.reconcile()).toEqual({
+						status: "active",
+						accepted: 64,
+						examined: 64,
+					});
+					const readTicks = (): Promise<
+						{
+							job_identity: string;
+							scheduled_minute: Date;
+							run_id: string;
+						}[]
+					> =>
+						sql!`SELECT job_identity, scheduled_minute, run_id::text FROM questpie_internal.schedule_ticks ORDER BY job_identity`;
+					const ticks = await readTicks();
+					expect(ticks).toHaveLength(64);
+					expect(ticks.map((row) => row.job_identity)).toEqual(
+						programs.map((entry) => entry.jobIdentity),
+					);
+					expect(new Set(ticks.map((row) => row.run_id)).size).toBe(64);
+					expect(
+						new Set(ticks.map((row) => row.scheduled_minute.toISOString()))
+							.size,
+					).toBe(1);
+					expect(ticks[0]!.scheduled_minute).toEqual(
+						new Date(Math.floor(replayClock!.getTime() / 60000) * 60000),
+					);
+					const counts = () => sql!`SELECT
+						(SELECT count(*)::int FROM questpie_internal.durable_runs) AS runs,
+						(SELECT count(*)::int FROM questpie_internal.durable_dispatches) AS acceptances,
+						(SELECT count(*)::int FROM questpie_internal.schedule_frontiers) AS frontiers`;
+					expect((await counts())[0]).toEqual({
+						runs: 64,
+						acceptances: 64,
+						frontiers: 64,
+					});
+					expect(contextCalls).toBe(64);
+					expect(await full.reconcile()).toEqual({
+						status: "active",
+						accepted: 0,
+						examined: 64,
+					});
+					expect(await readTicks()).toEqual(ticks);
+					expect((await counts())[0]).toEqual({
+						runs: 64,
+						acceptances: 64,
+						frontiers: 64,
+					});
+					expect(contextCalls).toBe(64);
+					expect(clockReads).toBe(2);
+					return;
+				}
 				expect(await active.reconcile()).toEqual({
 					status: "inactive",
 					accepted: 0,
