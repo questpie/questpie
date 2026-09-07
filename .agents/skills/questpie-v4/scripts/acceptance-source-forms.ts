@@ -87,7 +87,12 @@ export function maskAcceptanceSourceForms(
 	const sources = new Map<string, Source>();
 	return parseAcceptanceDiffLines(diff)
 		.map((line) => {
-			if (!line.path || !/\.tsx?$/.test(line.path)) return line.text;
+			if (
+				!line.path ||
+				!/\.tsx?$/.test(line.path) ||
+				!/\bpassword\b/.test(line.text)
+			)
+				return line.text;
 			const sides: Array<"base" | "head"> =
 				line.kind === "context"
 					? ["base", "head"]

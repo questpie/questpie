@@ -17,6 +17,15 @@ function addedDiff(source: string, path = "web/auth.tsx"): string {
 	].join("\n");
 }
 
+test("does not load a source blob when no lowercase password word is present", () => {
+	const diff = addedDiff("export const title = 'Support desk';");
+	expect(
+		maskAcceptanceSourceForms(diff, () => {
+			throw new Error("Unnecessary source read");
+		}),
+	).toBe(diff);
+});
+
 test("permits a password reference without admitting calls or literal values", () => {
 	const source = `const input = { ${field}: identity.password };`;
 	expect(
