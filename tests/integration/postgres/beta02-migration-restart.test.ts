@@ -24,6 +24,7 @@ import { assertSchemaMatches } from "../../../packages/compiler/src/schema";
 
 const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
 const database = process.env.PGHOST ? new SQL() : undefined;
+let fixtureCompilation: Awaited<ReturnType<typeof compileApplication>>;
 
 function beta02Schema(
 	compilation: Awaited<ReturnType<typeof compileApplication>>,
@@ -36,6 +37,9 @@ function beta02Schema(
 
 beforeAll(async () => {
 	if (!database) return;
+	fixtureCompilation = await compileApplication({
+		applicationRoot: fixtureRoot,
+	});
 	await database.unsafe(
 		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "identity_probe" CASCADE; DROP SCHEMA IF EXISTS "snapshot_probe" CASCADE; DROP SCHEMA IF EXISTS "bootstrap_pg18_probe" CASCADE; DROP SCHEMA IF EXISTS "partial_apply_probe" CASCADE; DROP SCHEMA IF EXISTS "alter_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
@@ -47,9 +51,7 @@ afterAll(async () => {
 
 describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	test("bounds application advisory-lock waits before schema SQL", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
@@ -285,9 +287,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("returns a partial failure after committing an earlier migration and resumes", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const baseSchema = {
 			...fixtureSchema,
@@ -463,9 +463,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("allows an authorized non-owner deploy role to verify an applied migration", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
@@ -528,9 +526,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("normalizes PostgreSQL 18 NOT NULL constraints in bootstrap verification", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "bootstrap-pg18-probe",
@@ -596,9 +592,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("rejects a standalone fingerprint with the wrong Application Identity", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "identity-probe",
@@ -669,9 +663,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("rejects an applied head with no Application Identity binding", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "missing-binding-probe",
@@ -714,9 +706,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("rejects an orphan Application Identity binding before Genesis", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "orphan-binding-probe",
@@ -765,9 +755,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("maps a concurrent Genesis binding claim before application DDL", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "binding-race-probe",
@@ -870,9 +858,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("reads one standalone Schema Fingerprint from a concurrent snapshot", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "snapshot-probe",
@@ -938,9 +924,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("matches PostgreSQL noAction and setNull foreign-key actions", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "fk-actions-probe",
@@ -993,9 +977,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("stores and fingerprints every foundational Field family", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
@@ -1172,9 +1154,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("detects numeric typmod drift from the live catalog", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
@@ -1226,9 +1206,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("rolls back Seed writes and receipt when a later step fails", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
@@ -1314,9 +1292,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("maps a Seed insert conflict to its registered durable diagnostic", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
@@ -1402,9 +1378,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("records a blocked attempt for an applied Seed checksum mismatch", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
@@ -1472,9 +1446,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("serializes concurrent application of one Seed", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
@@ -1550,9 +1522,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("cancels a blocked Seed statement and rolls back prior steps", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
@@ -1667,9 +1637,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("applies, loses the response, restarts, and reports no Drift", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const targetSchema = beta02Schema(compilation);
 		const mismatchedSchema = {
 			...targetSchema,
@@ -1983,9 +1951,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 120_000);
 
 	test("applies and fingerprints alterField with a Relation constraint rename", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const baseSchema = structuredClone(fixtureSchema);
 		baseSchema.application = {
@@ -2098,9 +2064,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	}, 10_000);
 
 	test("receipts a semantic rename with stable physical names and no DDL", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const fixtureSchema = beta02Schema(compilation);
 		const baseSchema = {
 			...fixtureSchema,
@@ -2173,9 +2137,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 	});
 
 	test("quotes PostgreSQL keywords through apply, fingerprint, and restart", async () => {
-		const compilation = await compileApplication({
-			applicationRoot: fixtureRoot,
-		});
+		const compilation = fixtureCompilation;
 		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			...targetSchema.application,
