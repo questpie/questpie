@@ -77,12 +77,14 @@ test("emits one executable App over the same exact Query engine", async () => {
 		expect(compilation.generatedFiles["internal/application.js"]).toContain(
 			"schemaFingerprint",
 		);
-		expect(compilation.generatedFiles["internal/application.js"]).toContain(
-			"schema_migration_receipts",
-		);
-		expect(compilation.generatedFiles["internal/application.js"]).toContain(
-			"application_bindings",
-		);
+		const applicationChunks = Object.entries(compilation.generatedFiles)
+			.filter(([path]) =>
+				/^internal\/application(?:-[a-z0-9]+)?\.js$/u.test(path),
+			)
+			.map(([, source]) => source)
+			.join("\n");
+		expect(applicationChunks).toContain("schema_migration_receipts");
+		expect(applicationChunks).toContain("application_bindings");
 		expect(compilation.generatedFiles["internal/application.d.ts"]).toContain(
 			"bindIngressPrincipalForRequest",
 		);
