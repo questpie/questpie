@@ -880,8 +880,12 @@ complete PostgreSQL lane failed at the 60-second schedule owner-deadline test.
 Focused deadline diagnostics and the three-file consumer tail pass but neither
 explains that stall nor replaces the complete lane. A second full PostgreSQL
 run failed earlier in the Membership-after-Channel-lock Mutation case, followed
-by an unhandled missing-table error; it never reached the deadline file. Both
-failures remain under diagnosis. The
+by an unhandled missing-table error; it never reached the deadline file. That
+Mutation test's late promise ownership is now reproduced and repaired: client
+and server roots are observed immediately and joined before rollback counts
+and fixture disposal. Its full file passes with unchanged limits and independent
+Standards/Spec review. The schedule stall remains unexplained, and the complete
+PostgreSQL lane still needs a passing integrated run. The
 [owner-deadline evidence](docs/v4/prototypes/static-job-schedules/OWNER-DEADLINE-EVIDENCE.md)
 retains both failures, diagnostic limits and cleanup. Full PostgreSQL and affected
 load/soak closure, formal acceptance, public authority projection and manual

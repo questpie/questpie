@@ -98,11 +98,26 @@ A second full PostgreSQL run on the same candidate failed earlier in
 after 7,553.11 ms with `AbortError: caller cancelled`; a secondary unhandled
 error reported that `collaboration.message_events` did not exist. The file
 finished with four passes, one failure, one error and 34 assertions. This run
-never reached the schedule deadline file. The cause remains under diagnosis;
-neither a Runtime defect nor a harness cause is established by this log.
+never reached the schedule deadline file. The log alone established no cause.
 The coordinating agent reports that the schedule-state observer started after
 the run had already failed, closed with `observed: false`, and made no database
 mutation. Both full-run outer databases were removed and cleanup verified.
+
+Subsequent test-first diagnosis reproduced the naked caller `AbortError` by
+waiting for actual server-request settlement and one event-loop turn before
+the old client rejection assertion. The repair observes client and server
+outcomes immediately and joins them before atomic-count assertions and teardown.
+The test still checks Membership revocation after the exact owned Channel lock,
+`CHANNEL_UNAVAILABLE`/404, caller cancellation and zero atomic records. Its
+retained settlement gap now passes; the complete file passes five tests and
+35 assertions without changed limits or production code. Independent Standards
+and Spec reviews found no issues. A temporary observer-failure control produced
+only its intended failure; joined cancellation counts were zero and the next
+schema-reset case passed without an unhandled error. All owned databases were
+removed. Logs and the removed control are retained under
+`/home/drepkovsky/code/questpie-v4-beta06-settlement-proof.w0eBGY`.
+This repairs the second failure, not the unexplained schedule stall or the full
+PostgreSQL lane.
 
 The same candidate's `quality:release` completed: the ordinary suite reported
 1,107 passes, 195 gated skips and zero failures; React reported three passes and
