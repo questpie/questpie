@@ -21,7 +21,21 @@ async function selectReference(reference: string): Promise<void> {
 	const search = await element<HTMLInputElement>("#reference-search");
 	search.value = reference;
 	search.form!.requestSubmit();
-	await element('[data-detail-state][data-kind="ready"]');
+	const deadline = Date.now() + 30_000;
+	do {
+		const detail = document.querySelector(
+			'[data-detail-state][data-kind="ready"]',
+		);
+		if (
+			detail
+				?.closest(".detail")
+				?.querySelector("[data-detail-reference]")
+				?.textContent?.trim() === reference
+		)
+			return;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	} while (Date.now() < deadline);
+	throw new Error(`Browser tracer did not select ${reference}`);
 }
 
 function selectFilter(selector: string, value: string): void {
@@ -49,7 +63,10 @@ async function run(): Promise<void> {
 	const session = current.data === null ? null : supportSession(current.data);
 	if (session === null)
 		throw new Error("Browser tracer has no support session");
-	const desk = createSupportDesk(session);
+	const desk = createSupportDesk({
+		membershipId: session.membershipId,
+		organizationId: session.organizationId,
+	});
 	await reportFixturePhase({ phase: "desk-ready", role: session.role });
 	const slaTicket = parameters.get("tracerSlaTicket");
 	if (slaTicket !== null) {

@@ -81,7 +81,11 @@ export async function startTeamSlaBrowser(input: {
 	return {
 		phase: (phase: string) =>
 			eventually(() => report, {
-				accept: (value) => value.phase === phase,
+				accept: (value) => {
+					if (value.phase === "desk-error")
+						throw new Error(`Firefox tracer failed: ${String(value.error)}`);
+					return value.phase === phase;
+				},
 				timeoutMilliseconds: 30_000,
 				description: `Firefox ${phase}`,
 			}),

@@ -1577,9 +1577,14 @@ WHERE call_id = ${editCallId}`;
 			cleanup.defer(() => stop(customerBrowser, "SIGKILL"));
 			expect(
 				await eventually(() => tracerReport(recoveredHost.port), {
-					accept: (report) =>
-						report?.phase === "firefox-comments-complete" &&
-						report.commentBody === customerComment,
+					accept: (report) => {
+						if (report?.phase === "desk-error")
+							throw new Error(`Firefox tracer failed: ${String(report.error)}`);
+						return (
+							report?.phase === "firefox-comments-complete" &&
+							report.commentBody === customerComment
+						);
+					},
 					description: "Firefox customer inverse-list journey",
 					intervalMilliseconds: 100,
 					timeoutMilliseconds: 40_000,
