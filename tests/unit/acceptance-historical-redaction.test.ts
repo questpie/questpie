@@ -214,7 +214,8 @@ test.each([
 			rows[1] += ` ${rows[1]!.slice("Connect: ".length)}`;
 		if (mode === "noncredential URL")
 			rows[1] = "Connect: postgres://localhost/review";
-		if (mode === "malformed URL") rows[1] = "Connect: postgres://[invalid";
+		if (mode === "malformed URL")
+			rows[1] = `Connect: ${["postgres:", "", "[invalid"].join("/")}`;
 		if (mode === "binary base")
 			return Buffer.concat([Buffer.from(source), Buffer.from([0])]);
 		return rows.join("\n");
