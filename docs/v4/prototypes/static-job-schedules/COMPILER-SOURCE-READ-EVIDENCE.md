@@ -149,10 +149,22 @@ compiler strict types, warning-denying lint, formatting, architecture, and
 `git diff --check` also pass.
 
 In the same plain-process context, all 59 Team Support Desk artifact paths and
-bytes are identical before and after the repair. A separate comparison against
-mixed `bun test` compilation found different dependency chunk identities. That
-cross-context determinism issue remains open and is not justified by the
-same-context comparison or a golden refresh. The existing 15-second
-ordinary-test timeout and all production limits remain unchanged. This is
-candidate compiler evidence, not a release verdict or formal acceptance of
-ADR-0043.
+bytes are identical before and after the repair. A separate comparison before
+the agreement guard against mixed `bun test` compilation found different
+dependency chunk identities; the same-context comparison did not explain or
+justify that difference, and no golden was refreshed.
+
+After adding the agreement guard, the exact 13-file sequence passes: 48 tests,
+two already-registered gated skips, zero failures, and 256 assertions in
+208.20 seconds. Comparing its Team Support Desk output immediately afterward
+against the original plain-process baseline finds all 59 artifact paths and
+bytes identical. The final three-file run above also matches that baseline.
+Tiny conditional-package controls preserve distinct import/require identities,
+and a two-version PostgreSQL graph preserves both installed versions in plain,
+host-loaded, and `bun test` contexts. These results qualify the final repair's
+output in the observed contexts; they do not establish an internal Bun cache
+cause for the earlier difference or justify a package-resolution workaround.
+
+The existing 15-second ordinary-test timeout and all production limits remain
+unchanged. This is candidate compiler evidence, not a release verdict or formal
+acceptance of ADR-0043.
