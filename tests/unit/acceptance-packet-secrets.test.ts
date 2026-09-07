@@ -6,6 +6,12 @@ import {
 } from "../../.agents/skills/questpie-v4/scripts/acceptance-packet-secrets";
 
 describe("acceptance packet secret scanner", () => {
+	test("rejects a quoted JSON credential key", () => {
+		const value = ["synthetic", "negative", "only"].join("-");
+		expect(
+			findAcceptancePacketSecret(JSON.stringify({ password: value }))?.name,
+		).toBe("generic credential");
+	});
 	test.each([
 		'const url = new URL("postgres://localhost/");',
 		'createApp({ postgres: { url: "postgres://localhost/questpie" } });',

@@ -1,3 +1,8 @@
+import {
+	type AcceptanceSourceReader,
+	maskAcceptanceSourceForms,
+} from "./acceptance-source-forms";
+
 export type AcceptancePacketSecret = {
 	name:
 		| "database URL"
@@ -10,6 +15,15 @@ export type AcceptancePacketSecret = {
 
 const DATABASE_URL =
 	/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s"'<>`]+/giu;
+
+export function findDatabaseUrlTokens(
+	value: string,
+): readonly { index: number; value: string }[] {
+	return [...value.matchAll(DATABASE_URL)].map((match) => ({
+		index: match.index,
+		value: match[0],
+	}));
+}
 const PASSWORD_PROPERTY_ASSIGNMENT =
 	/\b[A-Za-z_$][\w$]*(?:\.password|\[\s*["']password["']\s*\])\s*(?:\|\|=|&&=|\?\?=|>>>=|<<=|>>=|\*\*=|[+\-*/%&|^]=|=(?!=|>))/iu;
 const SAFE_PASSWORD_FORWARDING =
@@ -30,7 +44,7 @@ const SECRET_PATTERNS: Array<[AcceptancePacketSecret["name"], RegExp]> = [
 	["AWS access key", /\bAKIA[0-9A-Z]{16}\b/],
 	[
 		"generic credential",
-		/\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?[^\s"']{8,}/i,
+		/\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|password)["']?(?:\s*:\s*string)?\s*[:=]\s*["']?[^\s"']{8,}/i,
 	],
 ];
 
@@ -122,13 +136,16 @@ export function findAcceptancePacketSecret(
  */
 export function findAcceptanceGitDiffSecret(
 	diff: string,
+	readSource?: AcceptanceSourceReader,
 ): AcceptancePacketSecret | null {
 	let currentPath = "";
-	const sanitized = diff
+	const sanitized = (
+		readSource ? maskAcceptanceSourceForms(diff, readSource) : diff
+	)
 		.split("\n")
 		.map((line) => {
 			const header = /^diff --git a\/(.+) b\/(.+)$/.exec(line);
-			if (header) currentPath = header[2];
+			if (header) currentPath = header[2]!;
 			if (
 				currentPath === NEGATIVE_CONTROL_PATH &&
 				line.includes(NEGATIVE_CONTROL_MARKER)
