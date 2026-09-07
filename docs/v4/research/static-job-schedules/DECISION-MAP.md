@@ -25,9 +25,10 @@ times, and accept independent Jobs in one transaction. Its idempotency material
 comes from the application schedule identity and logical due instant. There is
 no parent/child, join, cascade-cancellation, or result-wait relationship.
 
-## What the code actually supports
+## Canonical baseline before the candidate
 
-These are source-read findings, not new executable proof:
+These are source-read findings from the canonical pre-schedule baseline, not
+claims about the isolated integrated candidate described below:
 
 - `packages/compiler/src/job/index.ts` rejects non-null schedules; generated
   declarations in `job/declarations.ts` expose only `schedule?: null`.
@@ -73,8 +74,8 @@ Exact member spelling and omission rules remain candidate work.
 
 The shown `schedule: { cron, execution, input }` and
 `ctx.run.step.mutation(name, reference, input)` direction received the owner's
-go-ahead. ADR-0043 records that shape without claiming generated declarations
-or an executable schedule/checkpoint path exists today.
+go-ahead. ADR-0043 records that shape. Its isolated compiler and Runtime proof
+does not make it Accepted or available on the canonical branch.
 
 ### 2. Calendar and missed ticks
 
@@ -193,29 +194,44 @@ executor; consultation output is neither repository authority nor acceptance.
 
 ## Delivery order
 
-The current proof frontier is below. A passing model does not accept ADR-0043
-or count as a shipped schedule/checkpoint capability.
+The isolated integrated candidate now runs the real generated application.
+These results do not accept ADR-0043 or count as a shipped capability. The
+canonical branch and public authority remain unchanged.
 
-| Obligation               | Current evidence                                                                                                                                                                                                                                                    | Remaining                                                                                                         |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Executable pinning       | Real two-build Job/Reaction regression and repair; PostgreSQL/Firefox, release gates and two dry-runs pass                                                                                                                                                          | Schedule catalog and retirement integration                                                                       |
-| Activation/removal       | PostgreSQL synthetic model: ten contenders, CAS/replay, ABA, both lock orders and rollback                                                                                                                                                                          | Verified catalog and real Job acceptance in the same owner                                                        |
-| UTC latest-only calendar | Standalone parser/search plus PostgreSQL SELECT-only oracle; combined activation/calendar suite passes 28 tests / 110 assertions                                                                                                                                    | Compiler diagnostics/cross-pins and clock capture within tick transaction                                         |
-| Mutation checkpoint      | Generated Mutation/lease prototype plus private invocation owner: codec-bound Date/optional input, takeover, revoked Context, caught-error rollback, reference refusal, sequential writes and input byte bound; five combined suites pass 46 tests / 213 assertions | Generated worker/reference integration, trusted history, cancellation/concurrency and retained-receipt corruption |
-| Generated authoring      | Compiler seams under audit                                                                                                                                                                                                                                          | Exact schedule input and non-callable Mutation reference types; hostile artifact proof                            |
-| Acceptance and delivery  | ADR-0043 and ADR-0039 remain Proposed                                                                                                                                                                                                                               | Complete deterministic proof, formal PASS, projection, tickets and production tracers                             |
+| Obligation               | Executable candidate evidence                                                                                                                                                                                          | Remaining closure                                                                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Activation/removal       | Verified catalog, explicit revision-fenced CLI, real Context and Job acceptance in the existing transaction, ten-contender tick proof, replay, ABA, both removal lock orders and rollback                              | Final integrated regression and formal acceptance                                                                         |
+| UTC latest-only calendar | Tests now import the actual Runtime calendar; 11 unit tests / 41 assertions and PostgreSQL 17 oracle 6 tests / 23 assertions pass; duplicate calendar model deleted                                                    | Final candidate gate record                                                                                               |
+| Mutation checkpoint      | Generated worker: 1 test / 60 assertions; integrated PostgreSQL recovery: 5 tests / 49 assertions, including exact 1 MiB result and rollback above it; actual attempt/reference/store units: 27 tests / 194 assertions | Final integrated regression and formal acceptance                                                                         |
+| Generated authoring      | Typed static recipe, inert nested Mutation references, artifact cross-pins and Package-local query aliases; exact relocated artifacts pass                                                                             | Final release gate record                                                                                                 |
+| Beginner consumer        | Team Support Desk PostgreSQL 17/Firefox sweep: 1 test / 32 assertions; existing transaction-bound Collection list bridge: 1 test / 15 assertions                                                                       | Final integrated regression; preserve the measured one-ticket batch rather than raising budgets                           |
+| Packed deployment CLI    | Build/install, readiness refusal, activation/replay/stale revision, autonomous polling and drain; explicit connection-target repair passes real migration, Seed and fingerprint checks plus independent review         | Integrated CLI rerun after connection-target repair                                                                       |
+| Release and acceptance   | ADR-0043 and ADR-0039 remain Proposed; no formal review invoked                                                                                                                                                        | Release gates, exact manifests, two dry-runs, formal PASS, authority projection, tracker tickets and public documentation |
 
-Next, connect the proven invocation composition to the actual generated Job
-checkpoint entry and worker settlement. The expanded disposable fixture uses
-nested Date and optional text input; it falsified raw JSON digesting, then
-proved byte agreement through the generated codec. Private composition now
-requires successful generated invocation before completion, but its trusted
-binding and history length are still supplied by the test. Generated nested
-references/types, artifact cross-pins, authoritative history loading, real worker
-cancellation/concurrency, and retained-receipt corruption remain proof gaps.
-Do not expose the lower-level proof completion method to Job authors. Then
-connect verified authoring/artifacts and real tick acceptance. Do not submit
-the pre-schedule beta.2 manifest.
+The last activation model is also replaced by actual Runtime PostgreSQL
+coverage: ten distinct first activations produce one winner and nine stale
+refusals; exact replay, recipe reset, rollback and blocked-lock cancellation
+pass in the 69-assertion suite. Its deleted source remains recoverable in Git.
+
+Detailed evidence is owned by the candidate records under
+`docs/v4/prototypes/static-job-schedules`, not by this map. The current full
+release lane is not green. Independent review found a Durable-to-Mutation
+barrel cycle; the contract-only repair is integrated and actual worker dependency
+closure tests pass. Broader inverse-child row-accounting evidence for Mutation lists
+is an inherited qualification, not something the scalar sweep proves.
+
+The packed CLI tracer now checks the Bun SQL database identity before DDL and
+aligns its child process environment with its UUID-owned database. Before that
+guard, inherited `PGDATABASE` overrode the URL target and Genesis correctly
+refused an existing schema with `QP-SCHEMA-026`. The shared administrative connection constructor now pins the decoded URL
+database while preserving the original URL options. The real PostgreSQL target
+regression uses a separate decoy database, checks identity before DDL, and
+passes migration, Seed, replay and fingerprint checks.
+
+Claude authentication currently prevents advisory consultation and formal
+review; GitHub CLI authentication prevents tracker writes. Neither blocker
+permits a substitute verdict, an authority projection, or submission of the
+pre-schedule beta.2 manifest. Deterministic proof and scoped repairs continue.
 
 1. Close the focused decisions in #365 and write an additive Proposed ADR.
 2. Build compiler/type and PostgreSQL falsification, including ten-instance
