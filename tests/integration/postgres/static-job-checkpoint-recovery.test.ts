@@ -120,7 +120,7 @@ async function withApplication(
 		await admin!.unsafe(`CREATE DATABASE "${name}"`);
 		owned = true;
 		process.env.PGDATABASE = name;
-		database = new SQL(url, { max: 4 });
+		database = new SQL(url, { database: name, max: 4 });
 		const [connected] =
 			await database`SELECT current_database() AS name, current_setting('server_version_num')::integer AS version`;
 		expect(connected.name).toBe(name);

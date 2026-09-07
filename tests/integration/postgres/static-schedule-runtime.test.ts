@@ -45,7 +45,7 @@ postgres(
 			url.username = process.env.PGUSER ?? "postgres";
 			if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
 			url.pathname = `/${ownedDatabase}`;
-			sql = new SQL(url.toString(), { max: 1 });
+			sql = new SQL(url.toString(), { database: ownedDatabase, max: 1 });
 			const [environment] =
 				await sql`SELECT current_database() AS database, current_setting('server_version_num')::int AS version, pg_backend_pid() AS pid`;
 			expect(environment.database).toBe(ownedDatabase);

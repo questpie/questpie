@@ -57,6 +57,7 @@ export async function prepareBeta06PostgresSchema(
 ): Promise<void> {
 	await resetPostgresApplication(database);
 	const applied = await applyCommittedMigrations({
+		connectionString: beta05PostgresUrl(),
 		migrations: await loadFixtureMigrations(beta06MigrationNames),
 	});
 	if (applied.status !== "applied")
@@ -110,7 +111,10 @@ export async function prepareBeta05PostgresApplication(database: SQL) {
 		.map(({ name }) => name)
 		.sort();
 	const migrations = await loadFixtureMigrations(migrationNames);
-	const applied = await applyCommittedMigrations({ migrations });
+	const applied = await applyCommittedMigrations({
+		connectionString: beta05PostgresUrl(),
+		migrations,
+	});
 	if (applied.status !== "applied")
 		throw new Error(`failed to apply BETA-05 migrations: ${applied.status}`);
 	await database`

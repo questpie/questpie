@@ -39,7 +39,10 @@ postgresTest(
 	"one explicit deployment feeds the existing worker and checkpoints a bounded due-ticket batch once",
 	async () => {
 		const name = `qp_team_sweep_${crypto.randomUUID().replaceAll("-", "")}`;
-		const admin = new SQL(connectionUrl("postgres"), { max: 1 });
+		const admin = new SQL(connectionUrl("postgres"), {
+			database: "postgres",
+			max: 1,
+		});
 		const previous = {
 			database: process.env.PGDATABASE,
 			url: process.env.DATABASE_URL,
@@ -53,7 +56,7 @@ postgresTest(
 			owned = true;
 			process.env.PGDATABASE = name;
 			process.env.DATABASE_URL = connectionUrl(name);
-			database = new SQL(connectionUrl(name), { max: 2 });
+			database = new SQL(connectionUrl(name), { database: name, max: 2 });
 			const [connected] =
 				await database`SELECT current_database() AS name, current_setting('server_version_num')::integer AS version`;
 			expect(connected.name).toBe(name);

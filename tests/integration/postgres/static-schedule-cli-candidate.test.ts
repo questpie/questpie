@@ -43,6 +43,7 @@ postgres(
 				env: {
 					...process.env,
 					PGDATABASE: name,
+					PG_DATABASE: name,
 					DATABASE_URL: url.href,
 					QUESTPIE_REALTIME_HMAC_KEY: "",
 					...environment,
@@ -154,6 +155,7 @@ for(;;){const view=await app.durable.inspect(receipt.runId);if(view?.state==="su
 				env: {
 					...process.env,
 					PGDATABASE: name,
+					PG_DATABASE: name,
 					DATABASE_URL: url.href,
 					QUESTPIE_REALTIME_HMAC_KEY: "a".repeat(64),
 				},
