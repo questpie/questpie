@@ -142,9 +142,21 @@ superset, not a precise write-set claim. Native userland pending-intent types
 and HTTP tests pass without a framework optimistic engine. The combined suite
 has 75 tests / 311 assertions, two DOM tests / 12 assertions, six TypeScript
 projects and the existing Start/Firefox baseline and fault scenarios passing.
-Full credential-switch consumers, R4's PostgreSQL coverage, remaining R5
-counterexamples, production migration and architecture acceptance remain open;
-earlier checkpoint counts and counterexamples above are historical evidence.
+The [credential-switch consumer](../../prototypes/react-query-integration/start-app/CREDENTIAL-SWITCH-EVIDENCE.md)
+subsequently exposed late native hydration restoring retired cache data. The
+targeted readiness-bound guard closes that defect: 76 parent tests / 315
+assertions, two DOM tests / 12 assertions, six type projects and 26 actual
+credential-switch browser assertions pass alongside the 37/45 baseline/fault
+checks. The [Collaboration PostgreSQL consumer](../../prototypes/react-query-integration/collaboration-native-EVIDENCE.md)
+adds two tests / 39 assertions for distinct families/windows, reconnect,
+no automatic write retry, real Policy omission and membership retirement.
+The [public-factory proof](../../prototypes/react-query-integration/factory-seam-evidence.md)
+adds four tests / 27 assertions and strict native type inference without a
+generated sibling import. None of these checkpoints ships production exports.
+[ADR-0044](../../../adr/0044-native-react-query-integration.md) remains Proposed;
+its acceptance, production extraction, golden-consumer/docs/skills migration
+and final combined release gates are the active frontier. Earlier counts and
+counterexamples above remain historical evidence, not current blockers.
 
 | Existing authority                                      | Candidate change                                                                                                        | Remains unchanged                                                                                                         |
 | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |

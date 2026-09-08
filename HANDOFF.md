@@ -868,10 +868,17 @@ The subsequent `INVALIDATION-EVIDENCE.md` records conservative local-commit
 invalidation and the tested native userland pending-intent recipe. The isolated
 prototype passes 75 tests / 311 assertions, two DOM tests / 12 assertions, six
 TypeScript projects, and the existing actual Start/Firefox baseline and faults.
-Private projection v4 replaces v3 without compatibility. Do not mark
-R1/R2/SSR1 complete: full credential-switch consumers, PostgreSQL invalidation
-coverage, remaining R5 hostiles, production migration and the focused
-superseding architecture acceptance are still open. Native callbacks which already received
+Private projection v4 replaces v3 without compatibility. Subsequent actual
+Start credential switching exposed and repaired late native hydration restoring
+retired cache data. The latest checkpoint has 76 parent tests / 315 assertions,
+two DOM tests / 12 assertions, six type projects, 26 credential-switch browser
+assertions, and the existing 37/45 baseline/fault assertions passing. The new
+Collaboration native consumer passes two PostgreSQL 17 tests / 39 assertions;
+the generic public-factory proof passes four tests / 27 assertions and native
+type inference. See their evidence beside the prototype. Keep R1/R2/SSR1 open
+through production extraction: Proposed ADR-0044 acceptance, golden consumer,
+public docs/skills, and combined release gates remain. No production
+`questpie/react-query` export has shipped. Native callbacks which already received
 a result cannot be cancelled or have their copied data erased by disposal.
 Parent prototype generation and Start builds must run sequentially. Use writable
 task-owned temporary storage; this host's `/tmp` currently reports `EDQUOT`.
