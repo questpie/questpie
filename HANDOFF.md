@@ -912,6 +912,14 @@ preview remain pending. The example's reserved loopback port is 43122; the host
 is currently stopped and existing tailnet mappings are preserved. Local passes do not make this candidate
 release-ready.
 
+The post-packet-repair full quality control also passes on `f616b17e2` with
+isolated disk-backed temporary storage: 1,158 passes, 196 gated skips and zero
+failures, plus React and packed OTel gates. Its
+[control evidence](docs/v4/prototypes/static-job-schedules/PACKET-GATE-CONTROL-EVIDENCE.md)
+retains the earlier Bun segmentation fault and subsequent `/tmp` quota failure.
+The crash remains unexplained. Release CI still needs actual stable workload
+execution: its current performance step validates manifests only.
+
 The owner additionally requires a manually inspectable Team Support Desk before
 publication, with domain-local backend Definitions, a product `web/` independent
 of `tracer/`, and consistent README/public-skill guidance. Immutable migration

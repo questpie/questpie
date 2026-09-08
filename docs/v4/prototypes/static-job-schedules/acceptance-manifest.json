@@ -10,7 +10,8 @@
 		"committed final gate qualifications": "e437e9aaad5d2a306443a45906dbb30cd7f47503",
 		"candidate calendar clarification and explicit reconciliation bound": "61991e1733648381186bfd1da4078b2a1808dba5",
 		"committed packet safety implementation and independent review head": "e3568262097ca03b0f5990f17dfc7dcdb9f2170b",
-		"credential-free complete packet preflight and test fixture repair": "e2a1cbc21f58ba8977ae40610ef32641508c1b0c"
+		"credential-free complete packet preflight and test fixture repair": "e2a1cbc21f58ba8977ae40610ef32641508c1b0c",
+		"post-packet-repair complete quality control with isolated temporary storage": "f616b17e22a67289c0627fdfb66fef0b9c6723b6"
 	},
 	"acceptanceCriteria": [
 		"One optional application-owned Job schedule has exactly cron, execution { principal, context }, and input. Existing Context and Job codecs own exact inferred inputs; explicit principal.service grants no authority. No duplicate schemas, System elevation, Package schedule widening, browser/OpenAPI/MCP schedule recipe, second scheduler, or Job management API.",
@@ -28,7 +29,8 @@
 		"Supporting test/compiler/package repairs preserve ordinary lifecycle, Policy, Mutation ownership, receipt semantics, and fixed budgets. Earlier failed full-PostgreSQL and timing runs remain recorded, including the unexplained original schedule stall; a reproduced Mutation-test promise ownership repair is not presented as the cause of that stall.",
 		"Verification distinguishes exact implementation-head complete quality/PG and four-scenario reference-local load/soak evidence, subsequent test/document-only checks, and two byte-identical forced-build package dry-runs. No tagged stable-runner performance certification, manual user approval, beta.2 aggregate acceptance, publication, or production-readiness claim follows.",
 		"ADR-0043 remains Proposed throughout this candidate, with public schedule material retained as an internal draft. Only a committed credential-free-verified formal PASS permits a separate authority/public-documentation projection. ADR-0039 requires a fresh schedule-inclusive aggregate manifest; its Fable exception does not apply here. One pinned Opus-medium review, no fallback, no manufactured PASS, and terminal NO_RESULT rules remain unchanged.",
-		"The owner-approved packet-safety repair permits only one explicitly selected removed historical README database URL, binds the original complete raw diff and its exact redaction location, and retains all other review bytes and normal new-code/authority secret checks. Committed TypeScript source-form recognition changes only the scan shadow. Existing 16 protocol-v2 PASS records verify unchanged; the default pinned reviewer and terminal rules are unchanged."
+		"The owner-approved packet-safety repair permits only one explicitly selected removed historical README database URL, binds the original complete raw diff and its exact redaction location, and retains all other review bytes and normal new-code/authority secret checks. Committed TypeScript source-form recognition changes only the scan shadow. Existing 16 protocol-v2 PASS records verify unchanged; the default pinned reviewer and terminal rules are unchanged.",
+		"Post-packet full quality failures are retained: the first long-process Bun segmentation fault remains unexplained; a later run failed temporary-file writes with EDQUOT. The unchanged candidate passed the complete lane with isolated disk-backed TMPDIR and unchanged tests/budgets. No claim is made that quota caused or repaired the earlier crash. Release CI currently validates performance manifests only and still needs actual stable-runner workload evidence before publication; this focused acceptance grants no release certification."
 	],
 	"authorityDocuments": [
 		{
@@ -194,7 +196,7 @@
 		{
 			"name": "HANDOFF.md",
 			"path": "HANDOFF.md",
-			"sha256": "81b9d23f2c01317565310812506071e542f2fef1fe94ec51b6d4ce7c831ec9a3"
+			"sha256": "4d0bfce0ed36a54df6420f9561e7ff43bb4145e6ee01d4961454219d60cabd91"
 		},
 		{
 			"name": "candidate preflight rejection and owner decision boundary",
@@ -210,6 +212,11 @@
 			"name": "docs/v4/implementation/acceptance-packet-safety/EVIDENCE.md",
 			"path": "docs/v4/implementation/acceptance-packet-safety/EVIDENCE.md",
 			"sha256": "775d965c650306ec0ae4b7d4d9d25fa9971c5c9843aeea33fc02de7253de1e08"
+		},
+		{
+			"name": "post-packet-repair full quality evidence and retained failures",
+			"path": "docs/v4/prototypes/static-job-schedules/PACKET-GATE-CONTROL-EVIDENCE.md",
+			"sha256": "ecf584e3d8fd3cd99e2cd4da1a98d3831bfa5e81d542be0a8c044eb052c6221c"
 		}
 	],
 	"verification": [
@@ -295,6 +302,18 @@
 		},
 		{
 			"command": "prepareAcceptancePacket (e2a1cbc21: PASS; 1233528 original diff bytes, 1695267 packet bytes, 38 documents, exactly one explicit historical URL redaction; no reviewer invoked)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run quality:release (f616b17e2, process-local TMPDIR on owned disk storage: complete PASS; 1158 ordinary passes, 196 gated skips, zero failures across 303 files; React and both packed OTel checks PASS; 19 performance manifests validated only)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun test tests/integration/qri01-generated-query-resource.test.ts (f616b17e2 with isolated TMPDIR: 14 PASS, 66 assertions; no code or budget changes)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun test tests/unit/static-schedule-compiler-candidate.test.ts (f616b17e2: 9 PASS, 52 assertions; isolated control does not explain preceding Bun segmentation fault)",
 			"result": "PASS"
 		}
 	],
