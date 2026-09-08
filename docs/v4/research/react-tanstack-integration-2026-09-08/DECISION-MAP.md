@@ -38,6 +38,14 @@ normalized IR, not full application compilation. Capture reclamation, reserved
 overrides, pending Mutation retirement and live integration remain open; R1 is
 not marked complete.
 
+The [generated watch checkpoint](../../prototypes/react-query-integration/GENERATED-LIVE-EVIDENCE.md)
+connects the existing SSE renderer and adds first-result, prefetch cleanup and
+denial coverage. A separate-bundle regression exposed and repaired colliding
+adapter namespaces. The combined prototype has 23 tests / 86 assertions. Local
+25/200-operation TypeScript measurements are recorded, without claiming a
+release budget. Next: render-pure computed identity and native-cache-owned work;
+then actual React/browser and PostgreSQL observation evidence. R2 is still open.
+
 | Slice                                               | Depends on                                      | Falsifiable exit                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | R1: Descriptor and ordinary Query/Mutation vertical | Focused public-surface decision                 | Compiler emits one reusable descriptor; native options infer input, output and declared errors; direct/generated transport behavior unchanged; no repeated schema/key registry                                 |

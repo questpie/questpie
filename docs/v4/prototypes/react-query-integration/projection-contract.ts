@@ -11,7 +11,20 @@ export interface CapturedRead<Output> {
 	/** Internal canonical material; never a public TanStack key or diagnostic. */
 	readonly canonical: string;
 	call(options?: CallOptions): Promise<Output>;
+	readonly watch?: (
+		callback: (value: Output) => void,
+		onError: (failure: ProjectionWatchFailure) => void,
+	) => () => void;
 }
+
+export type ProjectionWatchFailure = Readonly<{
+	code:
+		| "AUTHORIZATION_FAILED"
+		| "OUTPUT_INVALID"
+		| "RESOURCE_LIMIT"
+		| "TRANSPORT_FAILED"
+		| "VERSION_INCOMPATIBLE";
+}>;
 
 export interface ReadDescriptor<Input, Output, DeclaredError> {
 	readonly identity: string;

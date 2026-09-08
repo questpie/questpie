@@ -2,6 +2,7 @@
 	"extends": "./tsconfig.json",
 	"include": [
 		"query-adapter.test.ts",
+		"generated-live.test.ts",
 		"generated-client.test.ts",
 		"generated-consumer.types.ts"
 	]

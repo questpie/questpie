@@ -4,14 +4,7 @@ import type {
 	QueryObserverOptions,
 } from "@tanstack/query-core";
 
-type WatchFailure = Readonly<{
-	code:
-		| "AUTHORIZATION_FAILED"
-		| "OUTPUT_INVALID"
-		| "RESOURCE_LIMIT"
-		| "TRANSPORT_FAILED"
-		| "VERSION_INCOMPATIBLE";
-}>;
+import type { ProjectionWatchFailure } from "./projection-contract";
 
 export function createLiveQueryOptions<Output>(
 	input: Readonly<{
@@ -19,7 +12,7 @@ export function createLiveQueryOptions<Output>(
 		key: readonly string[];
 		watch(
 			callback: (value: Output) => void,
-			onError: (failure: WatchFailure) => void,
+			onError: (failure: ProjectionWatchFailure) => void,
 		): () => void;
 	}>,
 ) {

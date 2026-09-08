@@ -92,3 +92,9 @@ Production should replace this experiment when the relevant consumer passes;
 do not ship a prototype plus a parallel implementation. Follow the existing
 [decision map](../../research/react-tanstack-integration-2026-09-08/DECISION-MAP.md)
 for the remaining blocking edges.
+
+The [generated watch extension](GENERATED-LIVE-EVIDENCE.md) now connects the
+existing SSE client to the finite native Query experiment. Watchability is
+projected from the compiler contract, not authored again at the options call.
+This closes the synthetic-watch-only gap, not R2's browser or complete authority
+lifetime obligations. Its construction-time registry ownership remains open.

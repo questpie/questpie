@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { join } from "node:path";
 
 import {
 	MutationObserver,
@@ -6,8 +7,45 @@ import {
 	QueryObserver,
 } from "@tanstack/query-core";
 
-import { createClient } from "./generated/client";
+import { createClient, getClientProjection } from "./generated/client";
 import { createQueryAdapter } from "./generated/client.react-query";
+
+test("separately bundled adapter copies cannot alias inputs or evict each other's Query cache", async () => {
+	const bundle = await Bun.build({
+		entrypoints: [join(import.meta.dir, "query-adapter.ts")],
+		target: "browser",
+	});
+	if (!bundle.success || !bundle.outputs[0])
+		throw new Error("Independent adapter bundle failed");
+	const copyPath = join(import.meta.dir, "generated", "independent-adapter.js");
+	await Bun.write(copyPath, bundle.outputs[0]);
+	const copy: typeof import("./query-adapter") = await import(copyPath);
+	const client = createClient({ baseUrl: "https://proof.invalid" });
+	const cache = new QueryClient();
+	const scope = client.withContext({ companyId: id });
+	const first = createQueryAdapter(scope, cache);
+	const second = copy.bindProjection(getClientProjection(scope), cache);
+	try {
+		const one = first.queries["tasks.detail"].options({
+			id,
+			asOf: new Date(date),
+		});
+		const two = second.queries["tasks.detail"].options({ id });
+		expect(one.queryKey).not.toEqual(two.queryKey);
+		const secondValue = {
+			id,
+			title: "Second copy",
+			updatedAt: new Date(date),
+		};
+		cache.setQueryData(two.queryKey, () => secondValue);
+		await first.dispose();
+		expect(cache.getQueryData(two.queryKey)?.title).toBe("Second copy");
+	} finally {
+		await first.dispose();
+		await second.dispose();
+		cache.clear();
+	}
+});
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const date = "2026-09-08T10:00:00.000Z";

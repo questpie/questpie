@@ -20,6 +20,7 @@ function errorType(resource: NormalizedResource): string {
 export function instrumentClient(
 	source: string,
 	resources: readonly NormalizedResource[],
+	watchable: readonly string[] = [],
 ): string {
 	const start = "return Object.freeze({ context, queries: Object.freeze({";
 	const end = "}), withContext: scope });";
@@ -45,11 +46,11 @@ export function instrumentClient(
 			.map((resource) => {
 				const id = JSON.stringify(resource.identity);
 				const method = `scope.${kind === "query" ? "queries" : "mutations"}[${JSON.stringify(resource.name)}]`;
-				return `${JSON.stringify(resource.name)}: Object.freeze({ identity: ${id}, ${kind === "query" ? `capture: (input: Parameters<typeof ${method}>[0]) => captureClientRead(${id}, ${method}, input)` : `invoke: ${method}`}, isError: (error: unknown): error is ${errorType(resource)} => matchesClientError(${id}, error) }),`;
+				return `${JSON.stringify(resource.name)}: Object.freeze({ identity: ${id}, ${kind === "query" ? `capture: (input: Parameters<typeof ${method}>[0]) => captureClientRead(${id}, ${method}, input${watchable.includes(resource.identity) ? `, ${method}.watch` : ""})` : `invoke: ${method}`}, isError: (error: unknown): error is ${errorType(resource)} => matchesClientError(${id}, error) }),`;
 			})
 			.join("\n");
 	return (
-		`import type { CapturedRead, ReadDescriptor, MutationDescriptor } from "../projection-contract";\n` +
+		`import type { CapturedRead, ReadDescriptor, MutationDescriptor, ProjectionWatchFailure } from "../projection-contract";\n` +
 		source
 			.replace(
 				start,
@@ -70,11 +71,12 @@ export interface ClientProjection {
 
 const clientProjections = new WeakMap<GeneratedClientScope, ClientProjection | undefined>();
 
-function captureClientRead<Input, Output>(identity: string, call: (input: Input, options?: CallOptions) => Promise<Output>, input: Input): CapturedRead<Output> {
+function captureClientRead<Input, Output>(identity: string, call: (input: Input, options?: CallOptions) => Promise<Output>, input: Input, watch?: (input: Input, callback: (value: Output) => void, options?: { onError?: (failure: ProjectionWatchFailure) => void }) => () => void): CapturedRead<Output> {
 	const canonical = encode(inputCodecs[identity], input);
 	return Object.freeze({
 		canonical: JSON.stringify(canonical),
 		call: (options?: CallOptions) => call(decode(inputCodecs[identity], canonical) as Input, options),
+		...(watch ? { watch: (callback: (value: Output) => void, onError: (failure: ProjectionWatchFailure) => void) => watch(decode(inputCodecs[identity], canonical) as Input, callback, { onError }) } : {}),
 	});
 }
 

@@ -5,6 +5,7 @@ import {
 	renderClientContract,
 	renderCodecType,
 } from "../../../../packages/compiler/src/runtime/client";
+import { projectRealtimeWireContract } from "../../../../packages/compiler/src/runtime/realtime-wire";
 import { instrumentClient } from "./render-projection";
 import { contextCodec, resources } from "./task-contract.fixture";
 
@@ -31,4 +32,31 @@ await Bun.write(
 );
 console.log(
 	"Generated raw client and proof-instrumented sibling from the same Task IR",
+);
+
+const realtime = projectRealtimeWireContract({
+	application: "application:react-query-proof",
+	clientContractDigest: "1".repeat(64),
+	operationHttpContractDigest: "2".repeat(64),
+	resources,
+	watchableQueries: ["query:tasks.detail"],
+});
+const liveClient = renderClientContract(resources, {
+	application: realtime.application,
+	clientContractDigest: realtime.clientContractDigest,
+	httpContractDigest: realtime.operationHttpContractDigest,
+	contextCodec,
+	realtime,
+});
+await Bun.write(
+	join(directory, "live-client.ts"),
+	instrumentClient(
+		liveClient,
+		resources,
+		realtime.watchableQueries.map(({ identity }) => identity),
+	),
+);
+await Bun.write(
+	join(directory, "live-client.react-query.ts"),
+	`import { bindProjection } from "../query-adapter";\nimport { getClientProjection, type GeneratedClientScope } from "./live-client";\nimport type { QueryClient } from "@tanstack/query-core";\nexport function createQueryAdapter(scope: GeneratedClientScope, cache: QueryClient) { return bindProjection(getClientProjection(scope), cache); }\n`,
 );

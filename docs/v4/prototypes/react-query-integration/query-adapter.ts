@@ -5,6 +5,7 @@ import type {
 	QueryObserverOptions,
 } from "@tanstack/query-core";
 
+import { createLiveQueryOptions } from "./live-options";
 import {
 	projectionVersion,
 	type CapturedRead,
@@ -73,10 +74,14 @@ export function bindProjection<Source extends Projection>(
 	if (existing) return existing as Binding<Source>;
 	let retired = false;
 	let ordinal = 0;
-	const prefix = ["questpie", source.scopeId] as const;
+	const prefix = ["questpie", source.scopeId, crypto.randomUUID()] as const;
 	const captures = new Map<
 		string,
-		{ key: readonly string[]; captured: CapturedRead<unknown> }
+		{
+			key: readonly string[];
+			captured: CapturedRead<unknown>;
+			live?: ReturnType<typeof createLiveQueryOptions<unknown>>;
+		}
 	>();
 	const queries = Object.fromEntries(
 		Object.entries(source.queries).map(([name, descriptor]) => [
@@ -103,8 +108,15 @@ export function bindProjection<Source extends Projection>(
 							captured,
 						};
 						captures.set(identity, retained);
+						if (captured.watch)
+							retained.live = createLiveQueryOptions({
+								client,
+								key: retained.key,
+								watch: captured.watch,
+							});
 					}
 					const entry = retained;
+					if (entry.live) return entry.live.options;
 					return {
 						queryKey: entry.key,
 						retry: false,
@@ -150,6 +162,9 @@ export function bindProjection<Source extends Projection>(
 		async dispose() {
 			if (retired) return;
 			retired = true;
+			const liveClosures = [...captures.values()].map((entry) =>
+				entry.live?.dispose(),
+			);
 			const cancelled = client.cancelQueries(
 				{ queryKey: prefix },
 				{ revert: false },
@@ -164,6 +179,7 @@ export function bindProjection<Source extends Projection>(
 			client.removeQueries({ queryKey: prefix });
 			captures.clear();
 			await cancelled;
+			await Promise.all(liveClosures);
 		},
 	});
 	owners.set(client, binding);
