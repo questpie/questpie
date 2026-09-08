@@ -843,12 +843,12 @@ byte-identical release dry-runs pass.
 The active production worktree is
 `/home/drepkovsky/code/questpie-v4-native-react-integration`. It combines the
 accepted React architecture with the accepted schedule/release closure. Follow
-NRQ-01 in the production plan; do not edit the preserved accepted proof tree.
+the production plan; do not edit the preserved accepted proof tree.
 The public native factory, compiler-rendered neutral scope capability and optional
 package build are implemented. Declaration budgets, generated artifacts, detached
 types, prototype-test migration and narrow Knip classifications have focused
 passing controls. Throwing-observer cleanup defects were repaired test-first;
-the strict generated lifetime/invalidation suite passes 52 tests / 243 assertions.
+the strict generated lifetime/invalidation suite passes 53 tests / 249 assertions.
 Real PostgreSQL startup and native live/refresh controls pass 2 scenarios / 39
 assertions, with container cleanup.
 
@@ -868,10 +868,15 @@ followed by one complete `quality:release` with 1,208 passing tests, 197 gated
 skips and zero failures. The separate React and packed OTel controls also pass.
 Follow the [NRQ-01 evidence](docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md)
 and [independent reviews](docs/v4/implementation/native-react-query/NRQ-01-REVIEW.md).
-Next: close NRQ-02's native timer-driven GC control and document terminal-key
-retention, then rerun the owned PostgreSQL tracer. NRQ-03's actual Start browser
-migration can proceed in parallel in disjoint files. Golden UI and packed/docs/
-skills migration still follow; no aggregate beta.2 readiness is claimed.
+NRQ-02's native timer-driven GC, terminal-key guidance and owned PostgreSQL
+repetition pass; the latter repairs an invalid UUID publication-order assumption
+without changing Runtime behavior. NRQ-03's production Start build and Firefox
+baseline, four fault scenarios, credential replacement and three all-mode
+readiness scenarios pass. See [NRQ-02 evidence](docs/v4/implementation/native-react-query/NRQ-02-EVIDENCE.md)
+and [NRQ-03 evidence](docs/v4/implementation/native-react-query/NRQ-03-EVIDENCE.md).
+Next: combined quality/release and independent Standards/Spec review, then
+NRQ-04 golden UI and NRQ-05 packed/docs/skills migration. No aggregate beta.2
+readiness is claimed.
 The merge control verifies both acceptance records, skill validation, docs
 typecheck/build, public-package build and 33 affected tests / 154 assertions.
 The initial test attempt lacked built package output in the fresh worktree;

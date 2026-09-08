@@ -1,0 +1,17 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"jsx": "react-jsx",
+		"strict": true,
+		"paths": {
+			"#questpie/app": ["./generated/app.ts"],
+			"#questpie/source/*": ["../application/src/*"]
+		},
+		"skipLibCheck": true,
+		"types": ["bun", "vite/client"]
+	},
+	"include": ["src/**/*.ts", "src/**/*.tsx", "*.ts"]
+}
