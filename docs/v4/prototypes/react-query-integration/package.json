@@ -1,0 +1,16 @@
+{
+	"name": "questpie-react-query-interface-proof",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "bun test live-options.test.ts",
+		"types:check": "tsc -p tsconfig.json"
+	},
+	"dependencies": {
+		"@tanstack/query-core": "5.102.8"
+	},
+	"devDependencies": {
+		"@types/bun": "1.3.14",
+		"typescript": "6.0.2"
+	}
+}

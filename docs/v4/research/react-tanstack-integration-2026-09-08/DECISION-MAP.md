@@ -24,6 +24,12 @@ Escalate only a changed public guarantee or release scope, with evidence.
 
 ## Proposed tracer slices and explicit blockers
 
+The owner approved continuing the recommended narrow proof. An initial native
+Query/watch seam now has [executable evidence](../../prototypes/react-query-integration/EVIDENCE.md):
+10 tests / 32 assertions with an external watch peer and an isolated pinned
+install. This settles neither R1's generated descriptor nor R2's browser and
+generated-transport contract. It adds no release-scope or acceptance authority.
+
 | Slice                                               | Depends on                                      | Falsifiable exit                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | R1: Descriptor and ordinary Query/Mutation vertical | Focused public-surface decision                 | Compiler emits one reusable descriptor; native options infer input, output and declared errors; direct/generated transport behavior unchanged; no repeated schema/key registry                                 |
