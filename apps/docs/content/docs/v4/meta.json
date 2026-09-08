@@ -10,6 +10,7 @@
 		"queries-and-mutations",
 		"realtime",
 		"reactive-query-resources",
+		"react-query",
 		"durable-reactions",
 		"multi-instance",
 		"semantic-kernels-and-public-surface",

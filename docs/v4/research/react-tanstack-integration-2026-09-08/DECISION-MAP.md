@@ -1,8 +1,14 @@
 # React integration: bounded continuation
 
-Status: research planning, 2026-09-08. No ticket claims implementation or formal
-acceptance. Read [the recommendation](RECOMMENDATION.md) first. Existing release
-work and dirty Autopilot migration remain separate.
+Status: production planning after verified architecture PASS, 2026-09-08.
+The committed [ADR-0044 review](../../prototypes/react-query-integration/REVIEW.json)
+ratifies the isolated architecture, not production extraction or beta.2 release.
+Its authority projection remains a separate commit. Continue through the
+[production plan and blocking tickets](../../implementation/native-react-query/PLAN.md).
+The current prototype descriptor is v4; earlier v1–v3 references below are
+historical checkpoints, not compatibility paths. Read
+[the recommendation](RECOMMENDATION.md) for its original research context.
+Existing release work and dirty Autopilot migration remain separate.
 
 ## Ratification delta
 

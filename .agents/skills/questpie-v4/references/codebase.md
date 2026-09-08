@@ -6,9 +6,16 @@ private implementation by product domain, not by generic technical layer.
 ## Topology
 
 - Keep `questpie` as the sole application authoring/Runtime package and its
-  explicit public barrel, including the optional `questpie/react` subpath.
+  explicit public barrel, including the accepted optional `questpie/react-query`
+  subpath. ADR-0044's production extraction remains separate from acceptance:
+  migrate React consumers before deleting `questpie/react` and its hook; retain
+  the framework-neutral `.observe` and Query Resource implementation.
   Compiler, Runtime, and testkit packages remain private implementation
   modules.
+- Keep the generated scope capability framework-neutral and internal. The native
+  Query Adapter uses TanStack's cache and the existing generated `.watch`, not
+  Query Resource as an intermediate cache. Root and generated-client imports
+  remain free of React/TanStack runtime dependencies.
 - Keep `questpie-opentelemetry` as the one optional exact-peer package.
   Applications still author and run through `questpie`, and the integration
   implements the core-owned opaque observation handle. This is not a generic

@@ -1,13 +1,15 @@
 ---
 title: Use reactive Query state
-description: Observe one generated Query directly or through the optional React adapter.
+description: Observe one generated Query through a framework-neutral resource.
 kind: guide
 ---
 
 A Query Resource keeps the latest complete result of one watchable Query in a
 framework-neutral client value. The generated client owns Query identity,
 input validation and encoding, Context partitioning, and Live Query transport.
-A UI adapter only subscribes to that value.
+Consumers subscribe directly. For React applications, use the Query Adapter
+described in [Native React Query integration](/docs/v4/react-query). It binds the existing watch
+to TanStack's cache without wrapping a Query Resource.
 
 Version availability: This page documents the beta.2 preview. Beta.2 is not
 published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
@@ -126,52 +128,6 @@ One subscriber cannot cancel another. Last unsubscribe stops the shared watch
 and reconnect work. A failing subscriber callback does not change resource
 state or prevent peer notification.
 
-## Use the optional React adapter
-
-The preview package set uses QUESTPIE with its compatible optional React 19
-peer:
-
-```sh
-bun add questpie@4.0.0-beta.2 react@^19.2.0
-```
-
-The `questpie/react` subpath exports one hook:
-
-```tsx title="web/AppointmentCalendar.tsx"
-import { useQueryResource } from "questpie/react";
-
-import { createBarbershopApi } from "./barbershop-api";
-
-const api = createBarbershopApi("shop:central");
-
-export function AppointmentCalendar({ barberId }: { barberId: string }) {
-	const resource = api.queries["appointments.calendar"].observe({
-		barberId,
-		after: null,
-		first: 50,
-	});
-	const snapshot = useQueryResource(resource);
-
-	if (snapshot.kind === "pending") return <p>Loading appointments…</p>;
-	if (snapshot.kind === "failed")
-		return <p>Appointments unavailable: {snapshot.failure.code}</p>;
-
-	return (
-		<ul>
-			{snapshot.value.nodes.map((appointment) => (
-				<li key={appointment.id}>{appointment.startsAt.toLocaleString()}</li>
-			))}
-		</ul>
-	);
-}
-```
-
-`useQueryResource` calls
-`useSyncExternalStore(resource.subscribe, resource.getSnapshot)`. The adapter
-owns no identity, cache, transport, Context, credentials, retry, invalidation,
-or error translation. Version 1 is client-rendering only and defines no SSR,
-hydration, Suspense, transition, server-component, or fallback behavior.
-
 ## Let committed Queries publish updates
 
 A Mutation result never writes or invalidates a Query Resource. A committed
@@ -250,4 +206,4 @@ Policy traversal, Live Query dependency, generated descriptor, or Runtime
 polymorphic Relation. Resolve a target through an explicit named Query or
 Mutation so current Policy controls disclosure.
 
-Next, [run durable Jobs and Reactions](./durable-reactions).
+Next, read [Native React Query integration](./react-query).

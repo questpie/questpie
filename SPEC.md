@@ -35,8 +35,9 @@ and incremental adoption. QUESTPIE does not maintain a host-adapter matrix or
 promise lifecycle parity with Next.js, Hono, Elysia, Adonis, or other hosts.
 
 Frontend applications remain framework-neutral. They use the concrete generated
-client and its Query Resources directly, or the optional exact-peer React
-adapter that projects those same resources.
+client and its framework-neutral Query Resources directly, or the optional
+native TanStack Query adapter. That adapter uses the existing generated watch
+with TanStack's cache; it does not layer Query Resources into another cache.
 
 The optional Studio is an application inspector and operational control surface.
 It is not an Operator App framework. Product-specific Operator Apps live in
@@ -398,8 +399,11 @@ SPI, or OpenTelemetry dependency to core.
 The current beta publishable set is exactly `questpie` and
 `questpie-opentelemetry`. Both advance at one release version, and the
 OpenTelemetry package declares that exact `questpie` version as a peer.
-`questpie` exports `questpie/react` and declares its accepted React range as an
-optional peer. Release
+ADR-0044 replaces the old `questpie/react` recommendation with the optional
+`questpie/react-query` factory. Compatible native React/TanStack dependencies
+belong to consuming applications; core and generated clients remain free of
+their runtime imports. The adapter's fingerprint dependency is bundled inside
+its optional build, not exposed as another public package. Release
 verification rejects a missing, extra, private-as-public, or version-mismatched
 package, packs every archive twice byte-identically, installs both into one
 clean relocated consumer, and separately proves that core installs, imports,
@@ -680,11 +684,32 @@ in ADR-0012 and `docs/v4/live-query-and-change-ledger.md`. They do not accept
 durable Reaction delivery, atomic multi-Query publication, persistent offline
 resume, or a production Runtime.
 
-ADR-0035 accepts the generated framework-neutral Query Resource projection and
-the optional `questpie/react` adapter. Query Resource identity stays
-inside one immutable generated Context scope; React owns only
-`useSyncExternalStore` subscription. Mutation results do not update or
-invalidate resources directly. ADR-0037 exports `DiscriminatedValue`,
+ADR-0035 accepts the generated framework-neutral Query Resource projection.
+Its identity stays inside one immutable generated Context scope. Mutation
+results do not update or invalidate these resources directly.
+
+ADR-0044 supersedes only the React recommendation and related exclusions.
+`createQueryAdapter(scope, queryClient, options)` from `questpie/react-query`
+derives native Query/Mutation options, keys, error narrowing and compiler-proven
+forward infinite options without authored descriptors or DTOs. TanStack owns
+cache and hooks; the existing watch supplies complete authorized results.
+Server calls are finite. Native TanStack Start serialization and a host-owned
+first-document readiness boundary own SSR/hydration ordering.
+
+Credential/Context transitions require a fresh scope and retirement of the old
+binding. Retirement clears attached Query/Mutation data, fences retained options
+and late initial hydration, and preserves only safe dispatched-write identities
+and disposition. It neither cancels nor replays an already-dispatched write.
+Already-disclosed application copies cannot be erased. Known local commits
+conservatively invalidate the binding's non-live public Query families; unknown
+outcomes are not commits, and refresh failures are not rollbacks. Browser-live
+families remain watch-owned. Native userland pending intent is supported;
+framework optimism, causal observation fences, live infinite, TanStack DB and
+offline/persistence remain outside beta.2. The old React hook/export is deleted
+after the golden consumer migrates, without an alias. Neutral Query Resource
+and all server execution contracts remain unchanged.
+
+ADR-0037 exports `DiscriminatedValue`,
 `DiscriminatedReference`, and `matchDiscriminated` for ordinary TypeScript
 disjunctions and branded reference values. Those helpers create no Relation,
 codec, generated descriptor, Policy traversal, or Runtime kernel.

@@ -13,14 +13,17 @@ contract.
 Beta.2 has two npm packages at one exact version. The React adapter is a
 subpath, not a third package.
 
-| Package or subpath                    | Contract                                                               |
-| ------------------------------------- | ---------------------------------------------------------------------- |
-| `questpie@4.0.0-beta.2`               | Compiler, generated contracts and clients, Runtime, and CLI            |
-| `questpie/react`                      | Optional `useQueryResource` adapter with optional React `^19.2.0` peer |
-| `questpie-opentelemetry@4.0.0-beta.2` | Official adapter with exact `questpie@4.0.0-beta.2` peer               |
+| Package or subpath                    | Contract                                                    |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `questpie@4.0.0-beta.2`               | Compiler, generated contracts and clients, Runtime, and CLI |
+| `questpie/react-query`                | Optional native TanStack Query adapter; no separate package |
+| `questpie-opentelemetry@4.0.0-beta.2` | Official adapter with exact `questpie@4.0.0-beta.2` peer    |
 
 The package graph contains no scoped compatibility package, forwarding alias,
 or third publishable archive.
+Applications using the Query Adapter supply compatible React and TanStack Query
+dependencies. Core and generated clients have no React/TanStack runtime imports.
+An incompatible client/adapter contract fails closed, with no compatibility path.
 
 ## Included capability inventory
 
@@ -30,7 +33,8 @@ or third publishable archive.
 | Four-phase Collection lifecycle and Operation issue mapping                 | [Queries and Mutations](/docs/v4/queries-and-mutations)                                         |
 | Query, Mutation, Action, Route, Reaction, and Job Definitions               | [Executable application behavior](/docs/v4/executable-definitions)                              |
 | Bounded inverse Relation selection                                          | [Data and structural Queries](/docs/v4/data-and-queries)                                        |
-| Query Resource and optional React adapter                                   | [Reactive Query state](/docs/v4/reactive-query-resources)                                       |
+| Framework-neutral Query Resource                                            | [Reactive Query state](/docs/v4/reactive-query-resources)                                       |
+| Native React Query, Suspense, forward infinite and Start SSR/hydration      | [React Query integration](/docs/v4/react-query)                                                 |
 | Canonical Operation HTTP, shared documentation, and OpenAPI 3.1             | [Operation HTTP and OpenAPI](/docs/v4/operation-http-and-openapi)                               |
 | Stateless MCP Tools projection                                              | [Basic MCP](/docs/v4/basic-mcp)                                                                 |
 | Runtime observation and the official OpenTelemetry adapter                  | [OpenTelemetry](/docs/v4/opentelemetry)                                                         |
@@ -64,6 +68,10 @@ snapshot in place.
 Beta.2 adds no polymorphic Relation, polymorphic codec, descriptor, registry,
 or Runtime traversal kernel. Heterogeneous values use the ordinary TypeScript
 helpers.
+
+Optimistic presentation stays in userland. Beta.2 adds no framework-owned
+optimistic layers, automatic rollback/rebase, commit-to-observation fence,
+TanStack DB, live infinite lists, or offline/persistence integration.
 
 Beta.2 also adds no Workflow Resource, Cron, trigger system, generic browser
 Job control, application-generated skill, broad explain command, or expanded

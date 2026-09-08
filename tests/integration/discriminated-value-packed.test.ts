@@ -152,7 +152,7 @@ test("packed questpie exposes the three helpers and compiles every public skill 
 			)}void tickets;\n`,
 		);
 		await writeFile(
-			join(consumer, "react.tsx"),
+			join(consumer, "query-resource.ts"),
 			`declare const ticketId: string;
 declare const api: {
   queries: Record<string, {
@@ -164,8 +164,8 @@ declare const api: {
 };
 ${await publicExample(
 	publicSkillReference,
-	"react-query-resource",
-	"tsx",
+	"query-resource",
+	"ts",
 )}void snapshot;
 `,
 		);
@@ -221,7 +221,7 @@ console.log(JSON.stringify({
 					"generated-contract.d.ts",
 					"generated-client.ts",
 					"negative.ts",
-					"react.tsx",
+					"query-resource.ts",
 					"types.ts",
 				],
 			}),

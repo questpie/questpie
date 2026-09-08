@@ -25,23 +25,58 @@ that scope. The first subscriber starts the Live Query and the last subscriber
 stops it. Recomputes replace the complete result; rollback and unsuccessful
 recompute publish nothing.
 
-Each Context scope retains at most 128 Query Resource identities and evicts
-only idle least-recently-used entries. Terminal failure requires a fresh
-observation. There is no polling fallback or automatic Mutation invalidation.
+Read the current snapshot from the resource:
 
-For React 19, import only the adapter hook:
+<!-- packed-example: query-resource -->
 
-<!-- packed-example: react-query-resource -->
-
-```tsx
-import { useQueryResource } from "questpie/react";
-
+```ts
 const resource = api.queries["tickets.detail"].observe({ id: ticketId });
-const snapshot = useQueryResource(resource);
+const snapshot = resource.getSnapshot();
 ```
 
-Render the closed `pending`, `ready`, and `failed` states. The adapter owns no
-cache, transport, retry, Context, provider, SSR, Suspense, or hydration.
+Each Context scope retains at most 128 Query Resource identities and evicts
+only idle least-recently-used entries. Terminal failure requires a fresh
+observation. Query Resources add neither polling fallback nor automatic Mutation
+invalidation. This framework-neutral contract remains available for non-React
+consumers.
+
+## Use native React Query
+
+Read [native React Query](https://questpie.com/docs/v4/react-query) for the
+adapter's exact usage and lifetime contract. Confirm the installed package
+exposes `questpie/react-query` and its generated scope supports the adapter
+before applying that guidance. This reference does not establish production
+availability in an installed package.
+
+Bind the generated Context scope to a host-owned native QueryClient with
+`createQueryAdapter(scope, queryClient)` from `questpie/react-query`.
+Use each Query's `options(input)` with native Query and Suspense hooks, and each
+Mutation's `options()` with native Mutation hooks. Only compiler-proven root forward-cursor
+Queries offer `infiniteOptions(input)`; infinite pages are one-shot, not live
+page unions. Keep DTOs, keys, codecs and continuation rules generated, and narrow
+declared errors through the operation's `isError` predicate.
+
+Choose one state owner for a displayed result. The native adapter uses the
+generated watch directly with TanStack's cache; do not feed a Query Resource
+into that cache. A credential or Context change requires a fresh scope,
+retirement of the old adapter and removal of the old credential subtree.
+Disposal fences retained options and attached state, not copies already held
+by application code or callbacks already running.
+
+Keep generated transport, identity, continuation and retry defaults intact.
+Known local commits conservatively invalidate non-live Query families in the
+same binding; ordinary browser-live families use their existing watches.
+Refresh failure does not undo a commit, and Mutations do not retry automatically.
+Render application-owned Pending Intent alongside the current successful
+authorized result; hide it when that result fails or disappears. Never restore
+a saved whole cache after a Mutation error.
+
+For SSR, create a request-local QueryClient and use finite calls. TanStack Start's
+official Router Query integration owns serialization and hydration; the
+adapter's `dehydrate()` returns only its Query Identity Bootstrap. Follow the
+guide's first-document readiness and retirement rules before enabling fresh
+browser execution. Framework optimistic layers, TanStack DB and causal
+commit-to-observation guarantees are outside this interface.
 
 ## Model heterogeneous values in TypeScript
 

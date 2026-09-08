@@ -1,0 +1,141 @@
+---
+title: Native React Query integration
+description: Understand generated native options, cache lifetime, hydration and commit outcomes.
+kind: explanation
+---
+
+The optional Query Adapter at `questpie/react-query` connects generated operations to
+native TanStack Query. You do not repeat DTOs, cache-key maps, endpoints or
+pagination rules. TanStack owns the cache and React hooks; QUESTPIE supplies
+the generated transport, identity and scope lifetime.
+
+Version availability: This page documents the beta.2 preview. Beta.2 is not
+published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
+released package contract.
+
+## Native options, not another hook layer
+
+`createQueryAdapter(scope, queryClient, options)` binds one generated Context
+scope to your QueryClient. Its `queries[qualifiedName]` exposes `options(input)` for native
+`useQuery` and `useSuspenseQuery`. Its `mutations[qualifiedName]` exposes
+`options()` for `useMutation`. Inputs and decoded results remain inferred.
+Creating options validates and captures input without starting transport.
+The operation's callable `isError(error)` narrows declared errors; it is distinct
+from a native hook result's boolean `isError` flag. A transport failure is not
+a declared business error.
+
+Only a compiler-proven forward-cursor Query exposes `infiniteOptions(input)`.
+The compiler supplies the cursor parameter and continuation rule. A handler
+returning a page-shaped object does not establish that relationship. Ordinary
+and infinite results use separate identities. Infinite pages are one-shot reads,
+not independent live watches joined into one list.
+
+Native selectors, enabled state, Suspense and Mutation callbacks remain native
+TanStack behavior. Keep generated transport functions, keys, pagination rules
+and retry defaults intact. Replacing them is application-owned behavior, not
+part of these guarantees.
+
+Every Mutation invocation gets its own Call Identity. Reusing the variables
+object does not deduplicate a domain command or an application nonce.
+
+## One cache for each displayed result
+
+An ordinary watchable browser Query resolves its one-shot fetch at the first
+complete snapshot. Active observers share its existing generated watch. Later snapshots
+replace the complete result, including removed rows and omitted Fields.
+QUESTPIE adds no normalized entity store or second realtime transport.
+
+Last active observer, cache removal and scope retirement release watch
+ownership. The generated transport owns reconnection. Terminal watch failure
+clears retained data and fences old options. Independent Queries do not publish
+an atomic combined view.
+Native fetch status does not report Query Resource connection attempts or
+delivery metadata.
+
+The [framework-neutral Query Resource](/docs/v4/reactive-query-resources)
+remains available to non-React consumers. Choose one owner for a displayed
+result; do not create a Query Resource merely to feed TanStack's cache.
+
+## Credentials define the lifetime
+
+Create a fresh generated scope when credentials or Context change. Equal
+Context input does not establish equal credentials. The adapter does not inspect
+cookies or replace your Auth integration.
+Default scope owners do not share keys. Rebinding the same scope and QueryClient
+returns the same adapter; conflicting binding options fail closed. Incompatible
+generated-client and adapter versions fail closed without an old-version path.
+
+Remove the old credential subtree and await the old adapter's `dispose()`.
+Retirement cancels Query work, stops watches, clears attached Query and Mutation
+state, and fences retained options. Late Mutation results cannot republish
+protected data. Already-disclosed application copies and callbacks already
+running cannot be erased or cancelled.
+
+The adapter-local `SCOPE_RETIRED` Mutation failure preserves only its safe Call Identity after dispatch,
+validated Transaction Identity when available, and whether it committed, was
+rejected, or has an unknown outcome. Before dispatch, its disposition is
+not dispatched. The failure exposes no suppressed result, declared-error payload
+or underlying cause. Retirement neither cancels nor replays a dispatched
+write. A callback failure is not evidence of rollback.
+
+## Native Start hydration
+
+Use a fresh QueryClient and generated scope for each server request. Server
+Queries are one-shot calls, never continuing SSE subscriptions. Bind the server
+adapter with `ssr: true`. TanStack Start's
+Router Query integration owns serialization, streamed pending Queries,
+hydration and providers.
+
+The adapter's `dehydrate()` returns only an identity bootstrap. Transfer it in
+the native hydration payload and pass it as `hydrate` when binding the browser
+adapter. It reproduces scoped keys; it is not Query data, authorization or an
+authentication token. Do not log or persist it as an authentication token.
+Keys do not expose raw Context or Query input.
+
+Your browser host must supply `ready`, the initial-document readiness Promise,
+before fresh ordinary, infinite or live execution. Both `hydrate` and `ready`
+belong to the factory's third `options` argument. Readiness covers native hydration
+setup, document load and queued hydration work. Hydrated results can render
+while execution waits. This ordering also waits for unrelated assets; document
+load does not prove that every script or streamed chunk succeeded. There is no
+timeout bypass or second deserializer.
+
+Retiring a scope during initial streaming also rejects late native hydration under
+its old keys. A cache hit cannot bypass retirement. This protection lasts
+through the owned initial-delivery boundary. Manual hydration replay,
+persistence restore and bfcache recovery are not automatic recovery guarantees.
+
+## A commit does not mean every Query is fresh
+
+A decoded local Mutation success or validated, correlated
+`COMMITTED_RESULT_UNAVAILABLE` triggers conservative invalidation inside its
+binding. The adapter cancels older matching one-shot reads, marks cached entries
+stale and refetches active native Queries. Browser-live families use their watch
+or next activation for fresh results, including inactive hydrated entries.
+Infinite and server modes remain one-shot invalidation targets.
+
+The compiler does not infer arbitrary handler write-sets. It uses a shared
+superset of public Query families, so a commit can refresh more than necessary.
+You do not author invalidation maps, and private Policy dependencies are not
+published. Native disabled and static behavior remains unchanged.
+
+Unknown outcomes and fabricated error objects are not commit evidence. A
+refresh failure cannot replace a Mutation result or turn its commit into a
+rollback. Other bindings, remote writes and later Job effects use their watch
+or an explicit application refresh policy. No automatic Mutation retry or
+cross-view observation receipt is added.
+
+## Keep optimistic intent in userland
+
+Render pending Mutation intent separately from the current successful authorized
+Query result. Hide that intent when the base result disappears or fails. Do not
+restore an old whole-cache snapshot on error: a newer result may have removed
+rows or Fields that the caller can no longer read.
+
+Native `onMutate` context and pending Mutation state remain available. The
+framework does not provide ordered optimistic layers or rollback/rebase.
+Mutation completion can precede the next live snapshot, so temporary visual
+reversion is possible. TanStack DB, live infinite lists and offline/persistence
+are outside this integration.
+
+Next, [run durable Jobs and Reactions](./durable-reactions).

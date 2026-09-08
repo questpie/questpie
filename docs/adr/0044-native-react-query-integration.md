@@ -1,6 +1,6 @@
 # ADR-0044: Native React Query integration
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-08
 
 ## Context
@@ -16,12 +16,13 @@ keeps optimistic intent in userland. Framework-owned layers, rollback/rebase,
 TanStack DB, live infinite lists, offline/persistence and causal
 commit-to-observation guarantees are not part of this beta.
 
-This proposal does not change server execution or reopen lifecycle design.
+This decision does not change server execution or reopen lifecycle design.
 Its construction evidence lives in
 `docs/v4/prototypes/react-query-integration`; that prototype is not the public
-package. Acceptance, production extraction and release gates remain pending.
+package. The committed [review record](../v4/prototypes/react-query-integration/REVIEW.json)
+verifies PASS. Production extraction and release gates remain pending.
 
-## Candidate decision
+## Decision
 
 Expose one optional `createQueryAdapter` factory from `questpie/react-query`.
 It binds a generated Context scope to a host-owned native QueryClient. The
@@ -164,6 +165,13 @@ type-only peer import does not imply that importing the factory alone fails
 when React is absent. Exact peer metadata and packed-consumer checks are
 production gates, not inferred from the prototype install.
 
+The candidate uses `@noble/hashes` for synchronous cache fingerprints. Package
+that implementation dependency inside `questpie`'s optional adapter build;
+do not add a third public package or a new caller-authored peer. Root and
+generated-client imports do not reach it. The production relocation gate must
+verify the packed adapter and a separate core-only install/import/build, not
+infer isolation from a successful prototype install.
+
 Migrate Team Support Desk to the native factory with credential-owned cache and
 provider lifetime. Then delete `questpie/react`, `useQueryResource` and their
 obsolete hook tests; retain the neutral Query Resource implementation and its
@@ -174,7 +182,7 @@ after their production consumers pass. Preserve historical evidence.
 
 ## Supersession and acceptance
 
-On acceptance this decision supersedes only ADR-0035's React recommendation,
+This decision supersedes only ADR-0035's React recommendation,
 React-adapter exclusions of TanStack/Suspense/SSR and non-live invalidation,
 and ADR-0042's old React subpath/peer clauses. It preserves framework-neutral
 Query Resource, two-package identity, Policy, server Query/Mutation ordering,
@@ -187,8 +195,9 @@ The existing kernel proofs remain controls rather than being reimplemented.
 Review the narrow superseding public architecture through the repository's
 manifest-bound acceptance protocol after deterministic candidate gates pass.
 
-Keep this ADR Proposed until its committed review record verifies PASS. Only
-then project SPEC, CONTEXT, public docs, skills and the ADR index in a separate
-authority commit, followed by production extraction and complete release
-verification. ADR-0039's aggregate acceptance remains separate. No decision or
-PASS here authorizes tag creation, publication or registry deprecation.
+The manifest-bound Opus review returned PASS; its committed record passes
+`review:accept:verify`. Authority projection is separate from that record and
+from production extraction. Public examples, agent skills, packed consumers
+and the complete release gates must follow the production migration.
+ADR-0039's aggregate acceptance remains separate. No decision or PASS here
+authorizes tag creation, publication or registry deprecation.

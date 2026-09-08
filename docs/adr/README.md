@@ -46,13 +46,13 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 38. [Freeze basic MCP Operation projection](./0038-freeze-basic-mcp-operation-projection.md)
 39. [Freeze projection-neutral Operation documentation](./0040-freeze-projection-neutral-operation-documentation.md)
 40. [Freeze public package identities](./0042-freeze-public-package-identities.md)
+41. [Native React Query integration](./0044-native-react-query-integration.md)
 
 ## Proposed
 
 - [Slice the beta.2 DX release](./0039-slice-the-beta-two-dx-release.md)
 - [Freeze local OpenAPI projection explanation](./0041-freeze-local-openapi-projection-explanation.md)
 - [Freeze static Job schedules and Mutation checkpoints](./0043-freeze-static-job-schedules-and-mutation-checkpoints.md)
-- [Native React Query integration](./0044-native-react-query-integration.md)
 
 ## Open decisions
 
@@ -130,8 +130,8 @@ immutable generated Context scope, and accepts an optional exact-peer React
 `useSyncExternalStore` adapter. It adds no fallback poller, Mutation
 invalidation, global provider, second client cache, or polymorphic Relation
 kernel. ADR-0042 supersedes only its package placement: the adapter now ships as
-the `questpie/react` subpath while the React projection semantics remain
-unchanged.
+the `questpie/react` subpath. ADR-0044 subsequently supersedes that React
+recommendation, not the neutral Query Resource contract.
 ADR-0036 replaces the polymorphic Operation RPC endpoint with one
 compiler-derived endpoint per network Query, Mutation, and Action. Generated
 clients and optional OpenAPI 3.1 use the same Resource identities, codecs,
@@ -160,9 +160,16 @@ artifact unchanged after complete checksum and cross-pin verification, without
 source evaluation, Runtime or database access, a CLI-owned envelope, or a
 broader Resource/operational explain surface.
 ADR-0042 replaces the scoped React and OpenTelemetry package placement with
-exactly two public npm packages: `questpie`, including `questpie/react`, and
+exactly two public npm packages: `questpie` and
 `questpie-opentelemetry`. It deletes the old identities without aliases or
 fallback resolution while preserving both accepted projection kernels.
+ADR-0044 accepts the optional `questpie/react-query` native factory, inferred
+options and conservative non-live invalidation, scope retirement and native
+Start SSR/hydration. It replaces the old React hook/export after consumer
+migration without an alias. Neutral Query Resources, package cardinality and
+server contracts remain unchanged. Framework-owned optimism, live infinite,
+TanStack DB and offline/persistence remain outside beta.2. Its committed
+architecture PASS does not certify production extraction or aggregate release.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path

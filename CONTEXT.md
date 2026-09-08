@@ -524,6 +524,26 @@ canonical input inside an immutable Context scope. It exposes one immutable
 snapshot and subscription lifecycle. It is not a server cache, entity cache,
 Mutation invalidation target, or second realtime transport.
 
+### Query Adapter
+
+The optional binding between one generated Context scope and a host-owned
+native TanStack QueryClient. It derives native options and scoped identities,
+uses existing generated calls and watches, and retires attached state when its
+credential lifetime ends. It is not a Query Resource wrapper or a second
+realtime transport.
+
+### Query Identity Bootstrap
+
+The request-local, client-visible seed transferred through native SSR hydration
+to reproduce one Query Adapter's cache identities. It contains no Query cache
+payload and grants no authorization. It is not a credential or deployment secret.
+
+### Pending Intent
+
+Application-owned optimistic presentation of an in-flight Mutation alongside
+the current authorized Query result. It is not a committed result, an
+observation receipt, or permission to restore previously disclosed cache data.
+
 ### Resume Token
 
 An opaque generated-client continuation value for one Live Query. Application

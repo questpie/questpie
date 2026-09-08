@@ -840,15 +840,16 @@ byte-identical release dry-runs pass.
 
 ## Immediate continuation
 
-The active React construction work is isolated in
+The accepted React architecture and its construction evidence are isolated in
 `/home/drepkovsky/code/questpie-v4-react-query-proof`. The owner requires native
 React Query, Suspense, forward infinite Queries, safe authority lifetime and
 TanStack Start SSR/hydration before beta.2. DB integration, live infinite and
 offline/persistence remain outside this cut. The authoritative continuation map
-for this Proposed work is
+for this work is
 `docs/v4/research/react-tanstack-integration-2026-09-08/DECISION-MAP.md`.
-Existing ADR-0035/0042 product exports remain unchanged until the focused
-superseding decision and consumer migration; no compatibility adapter is added.
+ADR-0044 has a committed, verified manifest-bound Opus PASS. Its authority
+projection is separate from the review record. Existing production exports
+remain unchanged until consumer migration; no compatibility adapter is added.
 
 The owner-confirmed `BETA2-SCOPE-DECISION.md` in that research directory defers
 framework-owned optimistic layers, automatic rollback/rebase and a no-flicker
@@ -876,12 +877,20 @@ assertions, and the existing 37/45 baseline/fault assertions passing. The new
 Collaboration native consumer passes two PostgreSQL 17 tests / 39 assertions;
 the generic public-factory proof passes four tests / 27 assertions and native
 type inference. See their evidence beside the prototype. Keep R1/R2/SSR1 open
-through production extraction: Proposed ADR-0044 acceptance, golden consumer,
+through production extraction: golden consumer,
 public docs/skills, and combined release gates remain. No production
 `questpie/react-query` export has shipped. Native callbacks which already received
 a result cannot be cancelled or have their copied data erased by disposal.
 Parent prototype generation and Start builds must run sequentially. Use writable
 task-owned temporary storage; this host's `/tmp` currently reports `EDQUOT`.
+
+The production plan is `docs/v4/implementation/native-react-query/PLAN.md`.
+The current descriptor is prototype v4; earlier v1/v2/v3 evidence describes
+historical checkpoints, not supported versions. Carry the review's ordinary
+follow-ups into extraction: bundled fingerprint dependency and core-only packed
+isolation, portable proof temporary storage, actual ordinary/infinite browser
+readiness coverage, and exact-command evidence. Do not repeat architecture
+acceptance or treat it as ADR-0039's aggregate release PASS.
 
 The schedule acceptance follow-up has since produced the committed verified
 `docs/v4/prototypes/static-job-schedules/REVIEW.json` PASS. Its public authority
@@ -1015,12 +1024,14 @@ release ticket; do not relabel another reviewer or reuse that exception elsewher
    reimplement lifecycle, restore callback-based Operation Set normalization,
    or create a second Collection/CRUD kernel. Start the next vertical from its
    own accepted authority.
-5. ADR-0035 Query Resource and `questpie/react` are closed, and the executable
+5. ADR-0035 Query Resource and the original `questpie/react` were closed, and the executable
    prototype is deleted. Do not retain a compatibility Resource, callback
    Context scope, global cache, fallback poller, or second realtime kernel.
    ADR-0042 now places that adapter at `questpie/react` and the official
-   observation adapter at `questpie-opentelemetry`; beta.2 has exactly two npm
-   packages and no scoped-name compatibility path.
+   observation adapter at `questpie-opentelemetry`. ADR-0044 now supersedes the
+   React recommendation with native `questpie/react-query`; migrate its golden
+   consumer then delete the old hook/export, preserving neutral `.observe`.
+   Beta.2 has exactly two npm packages and no scoped-name compatibility path.
 6. ADR-0036 canonical Operation HTTP and OpenAPI are closed. The canonical
    document declares every applicable carrier. Team Support Desk's Scalar
    display hides only the compatibility trio and injects its exact generated
