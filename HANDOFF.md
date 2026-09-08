@@ -897,7 +897,8 @@ unchanged checks on new code. Its affected suite passes 124 tests and all 16
 existing v2 PASS records still verify without model credentials. Independent
 Standards and Spec/security reviews found no findings. The fresh bound candidate
 passes real packet preflight with the complete diff and one explicit historical
-URL redaction; no formal reviewer has been invoked.
+URL redaction. The later formal invocation ended in terminal transport timeout,
+as recorded below.
 The
 [preflight blocker](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-PREFLIGHT-BLOCKER.md)
 records the original boundary and authorized repair. Do not substitute the diff
@@ -905,8 +906,15 @@ base or omit review paths. The additional 64-program PostgreSQL owner proof pass
 the full affected file with five tests and 254 assertions; its evidence does not
 relabel the preceding integrated lanes as rerun.
 
-Formal review remains unconsumed. Public authority projection requires a verified
-PASS, followed by the replacement aggregate beta.2 review. ADR-0043 and ADR-0039
+The one formal review of candidate `2a40103a1` ended on 2026-09-08 in terminal
+`NO_RESULT: timeout` after the unchanged 300-second limit. No review record was
+generated. The
+[transport record](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-TRANSPORT-NO-RESULT.md)
+binds the exact invocation and packet. This acceptance lane is stopped: no retry
+of the head, fresh-head transport retry, fallback reviewer or authority
+projection is permitted without explicit resolution of that boundary.
+Public authority projection requires a verified PASS, followed by the replacement
+aggregate beta.2 review. ADR-0043 and ADR-0039
 remain Proposed. Tagged stable-runner release evidence and the user's manual
 preview remain pending. The example's reserved loopback port is 43122; the host
 is currently stopped and existing tailnet mappings are preserved. Local passes do not make this candidate
