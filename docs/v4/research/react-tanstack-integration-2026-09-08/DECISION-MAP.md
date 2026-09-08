@@ -46,6 +46,16 @@ adapter namespaces. The combined prototype has 23 tests / 86 assertions. Local
 release budget. Next: render-pure computed identity and native-cache-owned work;
 then actual React/browser and PostgreSQL observation evidence. R2 is still open.
 
+The owner's follow-up asks about infinite/suspense Queries, Start and current
+package skills. The [compatibility audit](../../prototypes/react-query-integration/TANSTACK-COMPATIBILITY.md)
+records exact upstream versions and a reproduced native hydration key miss.
+Before selecting computed identity, reconcile server/browser lifetime; do not
+accidentally lock the general adapter to a browser-only fingerprint. Add explicit
+ordinary/suspense, infinite pagination and Start loader/SSR/streaming consumers.
+None is supported merely because Query Core tests pass. This refines the design
+evidence required before selecting the interface; it does not silently expand
+the beta-2 release cut or declare SSR1 complete.
+
 | Slice                                               | Depends on                                      | Falsifiable exit                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | R1: Descriptor and ordinary Query/Mutation vertical | Focused public-surface decision                 | Compiler emits one reusable descriptor; native options infer input, output and declared errors; direct/generated transport behavior unchanged; no repeated schema/key registry                                 |
