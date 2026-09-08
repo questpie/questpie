@@ -9,6 +9,51 @@ const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const otherId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7132";
 const time = "2026-09-08T10:00:00.000Z";
 
+test("late native hydration cannot restore a retired scope before initial delivery ends", async () => {
+	const ready = Promise.withResolvers<void>();
+	const client = createClient({ baseUrl: "https://proof.invalid" });
+	const serverCache = new QueryClient();
+	const cache = new QueryClient();
+	const server = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		serverCache,
+		{ ssr: true },
+	);
+	const old = createQueryAdapter(client.withContext({ companyId: id }), cache, {
+		hydrate: server.dehydrate(),
+		ready: ready.promise,
+	});
+	const next = createQueryAdapter(client.withContext({ companyId: id }), cache);
+	const oldOptions = {
+		...old.queries["tasks.detail"].options({ id }),
+		staleTime: Infinity,
+	};
+	const nextOptions = next.queries["tasks.detail"].options({ id });
+	try {
+		serverCache.setQueryData(oldOptions.queryKey, () => ({
+			id,
+			title: "Old streamed row",
+			updatedAt: new Date(time),
+		}));
+		cache.setQueryData(nextOptions.queryKey, () => null);
+		await old.dispose();
+		hydrate(cache, dehydrate(serverCache));
+		expect(cache.getQueryData(oldOptions.queryKey)).toBeUndefined();
+		expect(cache.getQueryData(nextOptions.queryKey)).toBeNull();
+		await expect(cache.fetchQuery(oldOptions)).rejects.toThrow("SCOPE_RETIRED");
+		ready.resolve();
+		await Bun.sleep(0);
+		expect(cache.getQueryData(oldOptions.queryKey)).toBeUndefined();
+	} finally {
+		ready.resolve();
+		await old.dispose();
+		await next.dispose();
+		await server.dispose();
+		cache.clear();
+		serverCache.clear();
+	}
+});
+
 test("ordinary browser reads wait for native hydration before publishing a newer result", async () => {
 	const ready = Promise.withResolvers<void>();
 	let calls = 0;

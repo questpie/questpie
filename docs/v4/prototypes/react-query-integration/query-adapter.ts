@@ -114,6 +114,37 @@ async function waitForReady(
 	signal.throwIfAborted();
 }
 
+/** Native initial hydration may still settle after an authority scope retires. */
+function fenceRetiredHydration(
+	client: QueryClient,
+	prefix: readonly string[],
+	ready: Promise<void>,
+) {
+	const clearing = new WeakSet<object>();
+	const unsubscribe = client.getQueryCache().subscribe(({ type, query }) => {
+		if (
+			(type !== "added" && type !== "updated") ||
+			query.queryKey[0] !== prefix[0] ||
+			query.queryKey[1] !== prefix[1] ||
+			clearing.has(query)
+		)
+			return;
+		clearing.add(query);
+		try {
+			query.setState({
+				data: undefined,
+				error: new Error("SCOPE_RETIRED"),
+				status: "error",
+				fetchStatus: "idle",
+			});
+			client.removeQueries({ queryKey: query.queryKey, exact: true });
+		} finally {
+			clearing.delete(query);
+		}
+	});
+	void ready.then(unsubscribe, unsubscribe);
+}
+
 export function bindProjection<Source extends Projection>(
 	source: Source,
 	client: QueryClient,
@@ -340,6 +371,7 @@ export function bindProjection<Source extends Projection>(
 		async dispose() {
 			if (retired) return;
 			retired = true;
+			if (ready) fenceRetiredHydration(client, prefix, ready);
 			const invalidationClosed = invalidation.retire();
 			let mutationFailure: unknown;
 			try {

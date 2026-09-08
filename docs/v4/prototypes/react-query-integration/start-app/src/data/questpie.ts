@@ -12,9 +12,13 @@ export const expectedTime = "2026-09-08T10:00:00.000Z";
 const requestUrl = createIsomorphicFn()
 	.server(() => getRequest().url)
 	.client(() => window.location.href);
+const requestCookie = createIsomorphicFn()
+	.server(() => getRequest().headers.get("cookie"))
+	.client(() => null);
 
 export function createOwner(server: boolean) {
 	const location = new URL(requestUrl());
+	const cookie = requestCookie();
 	const cache = new QueryClient({
 		defaultOptions: { queries: { staleTime: 60_000, retry: false } },
 	});
@@ -36,6 +40,7 @@ export function createOwner(server: boolean) {
 				const request = new Request(input, init);
 				const headers = new Headers(request.headers);
 				headers.set("x-proof-side", server ? "server" : "browser");
+				if (server && cookie) headers.set("cookie", cookie);
 				if (server && location.searchParams.has("hold"))
 					headers.set("x-proof-hold", "1");
 				if (new URL(request.url).pathname === "/_questpie/realtime") {
@@ -52,6 +57,14 @@ export function createOwner(server: boolean) {
 		: undefined;
 	return {
 		cache,
+		replaceScope() {
+			adapter = createQueryAdapter(
+				client.withContext({ companyId: firstId }),
+				cache,
+				{ ready: executionReady },
+			);
+			return adapter;
+		},
 		get api() {
 			if (!adapter) throw new Error("BOOTSTRAP_NOT_READY");
 			return adapter;

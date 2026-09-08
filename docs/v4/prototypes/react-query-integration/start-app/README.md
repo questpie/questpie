@@ -26,6 +26,7 @@ bun run build
 bun run types:check
 bun run test:browser
 bun run test:browser:faults
+bun run test:browser:credentials
 ```
 
 The recorded runs use Bun 1.3.14, `/usr/bin/firefox`, and a writable task-owned
@@ -115,8 +116,14 @@ tenant lifetime must retire the old adapter; a route change alone need not
 retire an owner shared by other routes. Observed native speculative work may
 finish once and close when it has no active observers.
 
+The separate [credential-switch consumer](CREDENTIAL-SWITCH-EVIDENCE.md) now
+covers replacement of synthetic HttpOnly credentials during the initial stream,
+equal-Context/new-owner isolation, mounted state retirement and late SSR/Mutation
+delivery. Its 26 browser assertions pulled a narrow retired-prefix hydration
+guard in the main candidate adapter.
+
 This does not establish replayed/repaired serialization scripts, bfcache
-restoration, auth-scope replacement during an initial stream, or an indefinitely
+restoration, production authentication integration, or an indefinitely
 held script/resource. Those must not be advertised as automatically recovered.
 No completion sentinel, private Router flag, custom serializer, or global cache
 timestamp fence is justified by these counterexamples.

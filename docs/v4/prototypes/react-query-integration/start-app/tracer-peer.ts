@@ -3,7 +3,9 @@ const streamedId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7132";
 const time = "2026-09-08T10:00:00.000Z";
 const protocol = { name: "questpie.realtime", version: 1 };
 
-export function createPeer() {
+export function createPeer(
+	options: { result?: (id: string, request: Request) => unknown } = {},
+) {
 	const delayed = Promise.withResolvers<void>();
 	const asset = Promise.withResolvers<void>();
 	const carriers = new Map<
@@ -119,8 +121,9 @@ export function createPeer() {
 					bindingId: command.bindingId,
 					query: command.query,
 					delivery: "initial",
-					payload:
-						id === firstId
+					payload: options.result
+						? options.result(id, request)
+						: id === firstId
 							? null
 							: { id, title: "Current live task", updatedAt: time },
 					resetReason: null,

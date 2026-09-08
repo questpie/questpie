@@ -7,7 +7,8 @@
 		"build": "vite build",
 		"types:check": "tsc --noEmit",
 		"test:browser": "bun run tracer.ts",
-		"test:browser:faults": "bun run tracer-faults.ts"
+		"test:browser:faults": "bun run tracer-faults.ts",
+		"test:browser:credentials": "bun run tracer-credentials.ts"
 	},
 	"dependencies": {
 		"@tanstack/query-core": "5.102.8",
