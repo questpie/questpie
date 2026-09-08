@@ -863,13 +863,15 @@ native transport and dependency-byte controls. No production resolver or package
 pin changes for this repair. The changed-scope gate passes 3 tests / 20 assertions
 and both affected workspace typechecks.
 
-Next: repeat the frozen full-source tracer and run one complete `quality:release`
-on this test-host repair. Earlier separate passing stages are not that final
-invocation. Follow the [NRQ-01 evidence](docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md)
+NRQ-01 is complete: five frozen full-source runs each pass 3 tests / 20 assertions,
+followed by one complete `quality:release` with 1,208 passing tests, 197 gated
+skips and zero failures. The separate React and packed OTel controls also pass.
+Follow the [NRQ-01 evidence](docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md)
 and [independent reviews](docs/v4/implementation/native-react-query/NRQ-01-REVIEW.md).
-NRQ-01 remains open through those gates; NRQ-02–06's final lifetime/Start browser,
-golden UI and packed/docs/skills migration still follow. No actual Start-browser
-or aggregate beta.2 readiness is claimed.
+Next: close NRQ-02's native timer-driven GC control and document terminal-key
+retention, then rerun the owned PostgreSQL tracer. NRQ-03's actual Start browser
+migration can proceed in parallel in disjoint files. Golden UI and packed/docs/
+skills migration still follow; no aggregate beta.2 readiness is claimed.
 The merge control verifies both acceptance records, skill validation, docs
 typecheck/build, public-package build and 33 affected tests / 154 assertions.
 The initial test attempt lacked built package output in the fresh worktree;
@@ -983,7 +985,7 @@ The remaining frontier is:
   native tests. Its full-source tracer now uses one ordinary Bun child for both
   original and relocated compiles after an independently reproduced Bun test-host
   dependency-resolution defect. See the [current evidence](docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md).
-  Finish its broad gates, then NRQ-02–06's lifetime/Start browser, golden UI,
+  Its frozen repetitions and complete broad gate now pass. Finish NRQ-02–06's lifetime/Start browser, golden UI,
   packed/docs/skills migration and old-hook deletion. Do not repeat architecture
   acceptance or treat this extraction as beta.2 readiness;
 - integrate the focused repairs, bind exact final PostgreSQL/browser and quality

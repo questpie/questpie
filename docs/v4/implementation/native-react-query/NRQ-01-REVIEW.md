@@ -80,3 +80,12 @@ diagnosis while its later paragraph described the repair. That paragraph now
 names the reproduced host defect and the remaining repetition/release gates.
 These focused reviews do not replace those execution gates or claim a beta.2
 acceptance result.
+
+## Exit closure
+
+The frozen test-host repair passes five consecutive full-source consumer runs
+and one complete `quality:release` invocation. See the final execution checkpoint
+in [NRQ-01-EVIDENCE.md](NRQ-01-EVIDENCE.md). This closes the remaining deterministic
+artifact exit requirement alongside the already passing complete-inventory
+PostgreSQL startup control. Standards and Spec have no open finding for NRQ-01;
+successor browser, golden-consumer and packed-native gates are not included.

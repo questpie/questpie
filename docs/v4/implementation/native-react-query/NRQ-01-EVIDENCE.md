@@ -1,8 +1,8 @@
-# NRQ-01 production extraction — in progress
+# NRQ-01 production extraction
 
 ADR-0044 is Accepted. This record tracks production implementation, not another
-architecture review or beta.2 acceptance. NRQ-01 remains open until its exit
-criteria and ordinary reviews pass.
+architecture review or beta.2 acceptance. NRQ-01 is complete; the final execution
+checkpoint below closes the earlier failures without discarding their evidence.
 
 ## Implemented seam
 
@@ -271,3 +271,25 @@ The changed-scope command passes **3 tests / 20 assertions**, compiler and
 Frozen repetitions, independent review of the host change and a complete
 `quality:release` invocation remain before NRQ-01 closes. This isolation does
 not certify the private compiler API inside arbitrary Bun test-runner processes.
+
+## Final execution checkpoint
+
+On the clean test-host repair commit, five consecutive executions of
+`bun test tests/integration/native-react-query.test.ts` each pass **3 tests /
+20 assertions**. Complete generated maps agree, both dependency-byte witnesses
+pass, and the strict consumer measures the same 30,538 Types / 93,300
+Instantiations in every run. No source or dependency changes occur between runs.
+
+One subsequent complete `bun run quality:release` exits **0**. Its ordinary
+suite passes **1,208 tests**, with **197 gated skips**, **zero failures**, across
+317 files. The separate golden React control passes **3 / 15**; packed OTel
+isolation passes **1 / 2,393** and packed CLI telemetry **1 / 24**. Architecture,
+format, zero-warning lint, workspace types/builds, docs, skill validation,
+strict Knip, package contract and `git diff --check` pass. All **19** performance
+manifests validate; that is not execution on the required stable runner.
+
+The earlier process lost its terminal result and is not counted. These results
+come from the fresh five-run sequence and complete release invocation. The
+[independent reviews](NRQ-01-REVIEW.md) have no remaining finding after the
+test-host repair. NRQ-01 closes here; NRQ-02 through NRQ-06, real Start-browser
+migration, packed native hooks and aggregate beta.2 acceptance remain separate.

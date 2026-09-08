@@ -246,8 +246,9 @@ Run changed-file format/lint and `git diff --check` for each slice; run
 `quality:full` before independent review and the release-sensitive gates before
 closing combined delivery. These are planned commands, not execution results.
 
-NRQ-00's separate authority projection is complete. NRQ-01's public-factory
-consumer is green, but its first broader gate found size-budget and generated
-artifact updates to finish. Follow [NRQ-01 evidence](NRQ-01-EVIDENCE.md) for the
-current repair frontier. Do not reopen the accepted interface or mark the
-PostgreSQL/browser successor tickets complete from synthetic HTTP evidence.
+NRQ-00 and NRQ-01 are complete. [NRQ-01 evidence](NRQ-01-EVIDENCE.md) records
+the repaired test-host defect, five frozen relocation passes and the complete
+release gate. NRQ-02 and NRQ-03 are now unblocked for their disjoint consumers;
+their final integration still follows the retirement-owner edge above. Do not
+reopen the accepted interface or mark successor tickets complete from synthetic
+HTTP evidence.
