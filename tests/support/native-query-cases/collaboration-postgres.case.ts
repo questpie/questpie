@@ -324,6 +324,9 @@ postgresTest(
 			).toHaveLength(1);
 			expect(streamOpens).toBe(initialStreams);
 			expect(ordinaryReads()).toBe(initialOrdinaryReads);
+			const preGapIds = rows(cache.getQueryData(large.queryKey)).map(
+				(row) => row.id,
+			);
 
 			holdReconnect = reconnect.promise;
 			for (const controller of streams) controller.abort();
@@ -335,6 +338,12 @@ postgresTest(
 				channelId,
 				body: "Written in the disconnected gap",
 			});
+			// messages.page orders UUIDs descending, not publication time. A newer
+			// generated UUID need not enter the first=1 window.
+			const expectedPageIds = [...preGapIds, gap.id]
+				.filter((messageId) => messageId !== removedId)
+				.toSorted()
+				.toReversed();
 			await database!`DELETE FROM collaboration.messages WHERE id = ${removedId}`;
 			expect(JSON.stringify(cache.getQueryData(large.queryKey))).not.toContain(
 				"Written in the disconnected gap",
@@ -343,12 +352,19 @@ postgresTest(
 			reconnect.resolve();
 			await until(
 				() =>
-					rows(cache.getQueryData(small.queryKey))[0]?.id === gap.id &&
+					rows(cache.getQueryData(small.queryKey))[0]?.id ===
+						expectedPageIds[0] &&
+					JSON.stringify(
+						rows(cache.getQueryData(large.queryKey)).map((row) => row.id),
+					) === JSON.stringify(expectedPageIds) &&
 					JSON.stringify(cache.getQueryData(large.queryKey)).includes(
 						"Written in the disconnected gap",
 					) &&
 					JSON.stringify(cache.getQueryData(detail.queryKey)).includes(
 						"Written in the disconnected gap",
+					) &&
+					!rows(cache.getQueryData(detail.queryKey), "messages").some(
+						(row) => row.id === removedId,
 					),
 				"both replacement families after the gap",
 			);
@@ -369,8 +385,10 @@ postgresTest(
 			).toBe(false);
 			expect(
 				rows(cache.getQueryData(small.queryKey)).map((row) => row.id),
-			).toEqual([gap.id]);
-			expect(rows(cache.getQueryData(large.queryKey))).toHaveLength(3);
+			).toEqual(expectedPageIds.slice(0, 1));
+			expect(
+				rows(cache.getQueryData(large.queryKey)).map((row) => row.id),
+			).toEqual(expectedPageIds);
 			expect(
 				rows(cache.getQueryData(detail.queryKey), "messages"),
 			).toHaveLength(3);
@@ -396,7 +414,7 @@ postgresTest(
 			expect(rows(cache.getQueryData(large.queryKey))).toHaveLength(3);
 			expect(
 				rows(cache.getQueryData(small.queryKey)).map((row) => row.id),
-			).toEqual([gap.id]);
+			).toEqual(expectedPageIds.slice(0, 1));
 			expect(
 				rows(cache.getQueryData(detail.queryKey), "messages"),
 			).toHaveLength(3);

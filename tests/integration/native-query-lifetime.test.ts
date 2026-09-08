@@ -11,5 +11,5 @@ test("production native lifetime and invalidation preserve the generated consume
 		"query-adapter",
 		"userland-optimism",
 	]);
-	expect(result).toEqual({ tests: 52, assertions: 243 });
+	expect(result).toEqual({ tests: 53, assertions: 249 });
 }, 120_000);

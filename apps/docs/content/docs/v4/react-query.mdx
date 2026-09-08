@@ -52,6 +52,15 @@ an atomic combined view.
 Native fetch status does not report Query Resource connection attempts or
 delivery metadata.
 
+For browser live Queries, native cache removal, including `gcTime`, releases
+watch ownership; the QueryClient can fetch again with the same options. Terminal
+watch failure instead retains a failed-key marker that fences equivalent old
+options. Each marker contains Operation identity, execution mode and scoped
+fingerprints, but no Query input, result or failure payload. Distinct terminal
+failures accumulate without a cap or expiry until you dispose the adapter.
+Disposal releases these markers but is terminal: continuing requires a fresh
+generated scope and adapter, not rebinding the retired scope.
+
 The [framework-neutral Query Resource](/docs/v4/reactive-query-resources)
 remains available to non-React consumers. Choose one owner for a displayed
 result; do not create a Query Resource merely to feed TanStack's cache.

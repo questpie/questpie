@@ -340,6 +340,53 @@ test("native cache eviction releases live ownership but reusable options can fet
 	}
 });
 
+test("native timed GC removes inactive data while the same captured live options remain reusable", async () => {
+	const peer = externalPeer();
+	const cache = new QueryClient({
+		defaultOptions: { queries: { gcTime: 10 } },
+	});
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: peer.transport,
+	});
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	const options = adapter.queries["tasks.detail"].options({ id });
+	let stopRemoval: (() => void) | undefined;
+	let deadline: ReturnType<typeof setTimeout> | undefined;
+	try {
+		expect((await cache.fetchQuery(options))?.title).toBe("Initial");
+		expect(cache.getQueryData(options.queryKey)?.title).toBe("Initial");
+		const query = cache.getQueryCache().find({
+			queryKey: options.queryKey,
+			exact: true,
+		});
+		const removed = Promise.withResolvers<void>();
+		stopRemoval = cache.getQueryCache().subscribe((event) => {
+			if (event.type === "removed" && event.query === query) removed.resolve();
+		});
+		deadline = setTimeout(
+			() =>
+				removed.reject(new Error("Native timed GC did not remove the Query")),
+			1_500,
+		);
+		await removed.promise;
+		expect(cache.getQueryState(options.queryKey)).toBeUndefined();
+		expect((await cache.fetchQuery(options))?.title).toBe("Initial");
+		expect(
+			peer.commands.filter((command) => command.command === "open"),
+		).toHaveLength(2);
+		expect(peer.ordinaryReads).toBe(0);
+	} finally {
+		clearTimeout(deadline);
+		stopRemoval?.();
+		await adapter.dispose();
+		cache.clear();
+	}
+}, 3_000);
+
 test("an already hydrated active Query opens one watch without a second one-shot fetch", async () => {
 	const peer = externalPeer();
 	const cache = new QueryClient();
