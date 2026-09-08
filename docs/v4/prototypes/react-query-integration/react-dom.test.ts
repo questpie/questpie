@@ -151,6 +151,7 @@ test("StrictMode consumes native Query selectors and Mutation options, then reti
 			await flush();
 		});
 		expect(host.textContent).not.toContain("Protected task");
+		expect(host.textContent).not.toContain("Committed task");
 		// Removing the Query lets the retained native observer rebuild once. Its
 		// guarded queryFn rejects; the next notification delivers the terminal error.
 		await act(async () => {

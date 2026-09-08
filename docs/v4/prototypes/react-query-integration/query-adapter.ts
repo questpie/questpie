@@ -8,6 +8,7 @@ import type {
 
 import { createCacheIdentity, type QueryBootstrap } from "./cache-identity";
 import { createLiveQueryOptions } from "./live-options";
+import { createMutationLifetime } from "./mutation-lifetime";
 import {
 	projectionVersion,
 	type ForwardReadDescriptor,
@@ -86,17 +87,17 @@ const bindings = new WeakMap<
 	Projection,
 	WeakMap<
 		QueryClient,
-		{ binding: unknown; ssr: boolean; liveReady?: Promise<void> }
+		{ binding: unknown; ssr: boolean; ready?: Promise<void> }
 	>
 >();
 const bootstrapOwners = new WeakMap<QueryClient, Map<string, Projection>>();
 export type BindingOptions = Readonly<{
 	hydrate?: QueryBootstrap;
 	ssr?: boolean;
-	liveReady?: Promise<void>;
+	ready?: Promise<void>;
 }>;
 
-async function waitForLiveReady(
+async function waitForReady(
 	ready: Promise<void>,
 	signal: AbortSignal,
 ): Promise<void> {
@@ -124,20 +125,20 @@ export function bindProjection<Source extends Projection>(
 		throw new Error("CLIENT_PROJECTION_INCOMPATIBLE");
 	if (
 		Object.keys(options).some(
-			(key) => key !== "hydrate" && key !== "ssr" && key !== "liveReady",
+			(key) => key !== "hydrate" && key !== "ssr" && key !== "ready",
 		) ||
 		(options.ssr !== undefined && typeof options.ssr !== "boolean") ||
-		(options.liveReady !== undefined &&
-			(typeof options.liveReady?.then !== "function" ||
-				typeof options.liveReady?.catch !== "function" ||
+		(options.ready !== undefined &&
+			(typeof options.ready?.then !== "function" ||
+				typeof options.ready?.catch !== "function" ||
 				options.ssr === true))
 	)
 		throw new Error("QUERY_BINDING_INVALID");
 	const ssr = options.ssr === true;
-	const liveReady = options.liveReady;
+	const ready = options.ready;
 	// Host rejection is observed even if no Query is executed. A Query that
 	// does execute still receives the original failure; no timeout bypass.
-	void liveReady?.catch(() => {});
+	void ready?.catch(() => {});
 	let owners = bindings.get(source);
 	if (!owners) {
 		owners = new WeakMap();
@@ -149,7 +150,7 @@ export function bindProjection<Source extends Projection>(
 		options.hydrate,
 	);
 	if (existing) {
-		if (existing.ssr !== ssr || existing.liveReady !== liveReady)
+		if (existing.ssr !== ssr || existing.ready !== ready)
 			throw new Error("QUERY_BINDING_MISMATCH");
 		const binding = existing.binding as Binding<Source>;
 		if (
@@ -169,6 +170,7 @@ export function bindProjection<Source extends Projection>(
 	active.set(identityOwner.bootstrap.scope, source);
 	let retired = false;
 	const prefix = identityOwner.prefix;
+	const mutationLifetime = createMutationLifetime(client, prefix);
 	const liveEntries = new Map<
 		string,
 		ReturnType<typeof createLiveQueryOptions<unknown>> | "retired"
@@ -230,13 +232,15 @@ export function bindProjection<Source extends Projection>(
 									// Native hooks otherwise default pageParams to unknown[].
 									// Identity selection preserves the generated cursor type.
 									select: (data: InfiniteData<unknown, string | null>) => data,
-									queryFn: ({
+									queryFn: async ({
 										signal,
 										pageParam,
 									}: {
 										signal: AbortSignal;
 										pageParam: string | null;
 									}) => {
+										if (retired) throw new Error("SCOPE_RETIRED");
+										if (ready) await waitForReady(ready, signal);
 										if (retired) throw new Error("SCOPE_RETIRED");
 										return captured.call(pageParam, { signal });
 									},
@@ -257,9 +261,9 @@ export function bindProjection<Source extends Projection>(
 						| undefined;
 					const queryFn = async ({ signal }: { signal: AbortSignal }) => {
 						if (retired) throw new Error("SCOPE_RETIRED");
-						if (!captured.watch || ssr) return captured.call({ signal });
-						if (liveReady) await waitForLiveReady(liveReady, signal);
+						if (ready) await waitForReady(ready, signal);
 						if (retired) throw new Error("SCOPE_RETIRED");
+						if (!captured.watch || ssr) return captured.call({ signal });
 						const identity = JSON.stringify(key);
 						if (live && !live.retired && liveEntries.get(identity) !== live)
 							live = undefined;
@@ -309,8 +313,7 @@ export function bindProjection<Source extends Projection>(
 						mutationKey: Object.freeze([...prefix, descriptor.identity]),
 						retry: false,
 						mutationFn: (input: never) => {
-							if (retired) throw new Error("SCOPE_RETIRED");
-							return descriptor.invoke(input);
+							return mutationLifetime.invoke(descriptor, input);
 						},
 					};
 				},
@@ -331,6 +334,12 @@ export function bindProjection<Source extends Projection>(
 		async dispose() {
 			if (retired) return;
 			retired = true;
+			let mutationFailure: unknown;
+			try {
+				mutationLifetime.dispose();
+			} catch (error) {
+				mutationFailure = error;
+			}
 			active.delete(identityOwner.bootstrap.scope);
 			unsubscribeCache();
 			const liveClosures = [...liveEntries.values()].map((entry) =>
@@ -351,8 +360,9 @@ export function bindProjection<Source extends Projection>(
 			liveEntries.clear();
 			await cancelled;
 			await Promise.all(liveClosures);
+			if (mutationFailure !== undefined) throw mutationFailure;
 		},
 	});
-	owners.set(client, { binding, ssr, liveReady });
+	owners.set(client, { binding, ssr, ready });
 	return binding;
 }

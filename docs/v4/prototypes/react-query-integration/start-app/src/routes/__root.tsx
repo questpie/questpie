@@ -21,6 +21,7 @@ export const Route = createRootRouteWithContext<{
 		<html lang="en">
 			<head>
 				<HeadContent />
+				<script src="/__fault-observer.js" />
 			</head>
 			<body>
 				<img src="/__load-barrier" alt="" width="1" height="1" />

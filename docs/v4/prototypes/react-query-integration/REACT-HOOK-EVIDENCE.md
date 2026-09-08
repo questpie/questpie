@@ -1,5 +1,11 @@
 # Native React hook evidence
 
+Historical checkpoint. The later [Mutation lifetime evidence](MUTATION-LIFETIME-EVIDENCE.md)
+repairs the retirement failures recorded below; the
+[Start lifetime evidence](SSR-LIFETIME-EVIDENCE.md) records actual browser tests.
+The diagnostic command now compares the repaired candidate with native cleanup
+alone. Its current output is not the historical table below.
+
 This checkpoint tests the Proposed generated adapter with React 19.2.8 and
 TanStack React Query 5.102.8. It does not accept a public React integration.
 All transport responses come from an external Fetch peer, not PostgreSQL.

@@ -1,5 +1,5 @@
 // Proof-only compiler/runtime seam. No production export or wire contract.
-export const projectionVersion = "questpie.client-projection.prototype.v2";
+export const projectionVersion = "questpie.client-projection.prototype.v3";
 
 export interface CallOptions {
 	readonly callId?: string;
@@ -47,7 +47,12 @@ export interface MutationDescriptor<Input, Output, DeclaredError> {
 	readonly identity: string;
 	invoke(input: Input, options?: CallOptions): Promise<Output>;
 	isError(error: unknown): error is DeclaredError;
+	failure(error: unknown): DecodedMutationFailure | undefined;
 }
+
+export type DecodedMutationFailure =
+	| Readonly<{ kind: "committed"; callId: string; transactionId: string }>
+	| Readonly<{ kind: "rejected"; callId: string }>;
 
 export interface Projection {
 	readonly version: typeof projectionVersion;

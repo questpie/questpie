@@ -1,5 +1,6 @@
 import { renderCodecType } from "../../../../packages/compiler/src/runtime/client";
 import type { NormalizedResource } from "../../../../packages/compiler/src/types";
+import { projectionVersion } from "./projection-contract";
 
 type ProjectionResource = Pick<
 	NormalizedResource,
@@ -32,6 +33,22 @@ export function instrumentClient(
 	const end = "}), withContext: scope });";
 	if (source.split(start).length !== 2 || source.split(end).length !== 2)
 		throw new Error("PROOF_RENDERER_SEAM_CHANGED");
+	// Stamp only validated decoder outcomes, never public constructors or catches.
+	const decoderThrows = [
+		[
+			"throw new CommittedResultUnavailable(input.callId, detail.transactionId);",
+			"throw recordDecodedMutationFailure(input, new CommittedResultUnavailable(input.callId, detail.transactionId), detail.transactionId);",
+		],
+		[
+			"throw publicError({ code: detail.code, status: contract.status, payload });",
+			"throw recordDecodedMutationFailure(input, publicError({ code: detail.code, status: contract.status, payload }));",
+		],
+	] as const;
+	for (const [before, after] of decoderThrows) {
+		if (source.split(before).length !== 2)
+			throw new Error("PROOF_RENDERER_SEAM_CHANGED");
+		source = source.replace(before, after);
+	}
 	// Proof-only extraction from the unchanged renderer's existing identity.
 	// Production projection must use those renderer inputs directly.
 	const contract = [
@@ -76,11 +93,11 @@ export function instrumentClient(
 				const forward = page
 					? `, forward: Object.freeze({ capture: (input: Omit<Parameters<typeof ${method}>[0], ${JSON.stringify(page.after)}>) => captureForwardRead(${id}, ${method}, input, ${JSON.stringify(page.after)}), next: (page: Awaited<ReturnType<typeof ${method}>>) => page.pageInfo.hasNextPage ? page.pageInfo.endCursor ?? undefined : undefined })`
 					: "";
-				return `${JSON.stringify(resource.name)}: Object.freeze({ identity: ${id}, ${kind === "query" ? `capture: (input: Parameters<typeof ${method}>[0]) => captureClientRead(${id}, ${method}, input${watchable.includes(resource.identity) ? `, ${method}.watch` : ""})` : `invoke: ${method}`}, isError: (error: unknown): error is ${errorType(resource)} => matchesClientError(${id}, error)${forward} }),`;
+				return `${JSON.stringify(resource.name)}: Object.freeze({ identity: ${id}, ${kind === "query" ? `capture: (input: Parameters<typeof ${method}>[0]) => captureClientRead(${id}, ${method}, input${watchable.includes(resource.identity) ? `, ${method}.watch` : ""})` : `invoke: ${method}, failure: (error: unknown) => decodedMutationFailure(${id}, error)`}, isError: (error: unknown): error is ${errorType(resource)} => matchesClientError(${id}, error)${forward} }),`;
 			})
 			.join("\n");
 	return (
-		`import type { CapturedRead, ReadDescriptor, MutationDescriptor, ProjectionWatchFailure, CapturedForwardRead, ForwardReadDescriptor } from "../projection-contract";\n` +
+		`import type { CapturedRead, ReadDescriptor, MutationDescriptor, DecodedMutationFailure, ProjectionWatchFailure, CapturedForwardRead, ForwardReadDescriptor } from "../projection-contract";\n` +
 		source
 			.replace(
 				start,
@@ -93,13 +110,31 @@ export function instrumentClient(
 		`
 
 export interface ClientProjection {
-	readonly version: "questpie.client-projection.prototype.v2";
+	readonly version: ${JSON.stringify(projectionVersion)};
 	readonly canonicalScope: string;
 	readonly queries: Readonly<{ ${declarations("query")} }>;
 	readonly mutations: Readonly<{ ${declarations("mutation")} }>;
 }
 
 const clientProjections = new WeakMap<GeneratedClientScope, ClientProjection | undefined>();
+
+const decodedMutationFailures = new WeakMap<Error, Readonly<{ operation: string; outcome: DecodedMutationFailure }>>();
+
+function recordDecodedMutationFailure(input: Readonly<{ operation: string; callId: string; kind: string }>, error: Error, transactionId?: string): Error {
+	if (input.kind === "mutation") decodedMutationFailures.set(error, Object.freeze({
+		operation: input.operation,
+		outcome: Object.freeze(transactionId === undefined
+			? { kind: "rejected", callId: input.callId }
+			: { kind: "committed", callId: input.callId, transactionId }),
+	}));
+	return error;
+}
+
+function decodedMutationFailure(operation: string, error: unknown): DecodedMutationFailure | undefined {
+	if (!(error instanceof Error)) return undefined;
+	const decoded = decodedMutationFailures.get(error);
+	return decoded?.operation === operation ? decoded.outcome : undefined;
+}
 
 function captureForwardRead<Input, Output>(identity: string, call: (input: Input, options?: CallOptions) => Promise<Output>, input: unknown, after: string): CapturedForwardRead<Output> {
 	const base = wireRecord(input);
@@ -141,7 +176,7 @@ export function getClientProjection(scope: GeneratedClientScope): ClientProjecti
 	const retained = clientProjections.get(scope);
 	if (retained) return retained;
 	const projection: ClientProjection = Object.freeze({
-		version: "questpie.client-projection.prototype.v2",
+		version: ${JSON.stringify(projectionVersion)},
 		canonicalScope: JSON.stringify([${JSON.stringify(contract)}, encode(contextCodec, scope.context)]),
 		queries: Object.freeze({ ${members("query")} }),
 		mutations: Object.freeze({ ${members("mutation")} }),

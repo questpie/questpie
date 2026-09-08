@@ -11,6 +11,8 @@ export function createPeer() {
 		ReadableStreamDefaultController<Uint8Array>
 	>();
 	const opens: string[] = [];
+	const activeBindings = new Set<string>();
+	const closes: string[] = [];
 	const stats = {
 		serverReads: 0,
 		serverStreams: 0,
@@ -33,6 +35,8 @@ export function createPeer() {
 	return {
 		stats,
 		opens,
+		closes,
+		activeBindings,
 		releaseDelayed() {
 			delayed.resolve();
 		},
@@ -107,6 +111,7 @@ export function createPeer() {
 			}
 			const command = await request.json();
 			if (command.command === "open") {
+				activeBindings.add(command.bindingId);
 				const id = command.input.id;
 				opens.push(id);
 				send(carriers.get(command.scopeId)!, {
@@ -121,6 +126,10 @@ export function createPeer() {
 					resetReason: null,
 					resumeToken: `tracer-${++token}`,
 				});
+			}
+			if (command.command === "close") {
+				activeBindings.delete(command.bindingId);
+				closes.push(command.bindingId);
 			}
 			return new Response(null, { status: 202 });
 		},

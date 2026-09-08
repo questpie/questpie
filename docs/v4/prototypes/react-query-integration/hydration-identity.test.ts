@@ -9,6 +9,64 @@ const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const otherId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7132";
 const time = "2026-09-08T10:00:00.000Z";
 
+test("ordinary browser reads wait for native hydration before publishing a newer result", async () => {
+	const ready = Promise.withResolvers<void>();
+	let calls = 0;
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: (async (request: Request) => {
+			calls++;
+			return new Response(
+				JSON.stringify({
+					callId: request.headers.get("Questpie-Call-Id"),
+					result: null,
+				}),
+				{ headers: { "content-type": "application/json; charset=utf-8" } },
+			);
+		}) as typeof fetch,
+	});
+	const serverCache = new QueryClient();
+	const browserCache = new QueryClient();
+	const server = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		serverCache,
+		{ ssr: true },
+	);
+	const browser = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		browserCache,
+		{
+			hydrate: server.dehydrate(),
+			ready: ready.promise,
+		},
+	);
+	try {
+		const options = browser.queries["tasks.detail"].options({ id });
+		serverCache.setQueryData(
+			options.queryKey,
+			() => ({ id, title: "Old SSR task", updatedAt: new Date(time) }),
+			{ updatedAt: Date.now() + 60_000 },
+		);
+		const completion = browserCache.fetchQuery(options);
+		await Bun.sleep(0);
+		expect(calls).toBe(0);
+		hydrate(browserCache, dehydrate(serverCache));
+		expect(browserCache.getQueryData(options.queryKey)?.title).toBe(
+			"Old SSR task",
+		);
+		ready.resolve();
+		expect(await completion).toBeNull();
+		expect(browserCache.getQueryData(options.queryKey)).toBeNull();
+		expect(calls).toBe(1);
+	} finally {
+		ready.resolve();
+		await browser.dispose();
+		await server.dispose();
+		browserCache.clear();
+		serverCache.clear();
+	}
+});
+
 test("abandoned options have no adapter capture quota or cache entry", async () => {
 	const cache = new QueryClient();
 	const client = createClient({ baseUrl: "https://proof.invalid" });

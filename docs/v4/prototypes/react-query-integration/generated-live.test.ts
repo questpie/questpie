@@ -168,7 +168,7 @@ test("live handover waits for host hydration readiness while native SSR data rem
 	const adapter = createQueryAdapter(
 		client.withContext({ companyId: id }),
 		cache,
-		{ liveReady: ready.promise },
+		{ ready: ready.promise },
 	);
 	const options = adapter.queries["tasks.detail"].options({ id });
 	cache.setQueryData(options.queryKey, () => ({
@@ -211,7 +211,7 @@ test("failed hydration readiness or retirement while waiting never opens a late 
 		const adapter = createQueryAdapter(
 			client.withContext({ companyId: id }),
 			cache,
-			{ liveReady: ready.promise },
+			{ ready: ready.promise },
 		);
 		try {
 			const options = adapter.queries["tasks.detail"].options({ id });

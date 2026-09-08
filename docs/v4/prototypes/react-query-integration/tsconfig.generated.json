@@ -10,6 +10,7 @@
 		"react-dom.test.ts",
 		"diagnose-retirement.ts",
 		"diagnose-hydration.ts",
-		"hydration-identity.test.ts"
+		"hydration-identity.test.ts",
+		"mutation-lifetime.test.ts"
 	]
 }

@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 
-import { InfiniteQueryObserver, QueryClient } from "@tanstack/query-core";
+import {
+	dehydrate,
+	hydrate,
+	InfiniteQueryObserver,
+	QueryClient,
+} from "@tanstack/query-core";
 
 import { createClient } from "./generated/support-desk/client";
 import { createQueryAdapter } from "./generated/support-desk/client.react-query";
@@ -10,6 +15,7 @@ const timestamp = "2026-09-08T10:00:00.000Z";
 function pagePeer() {
 	const calls: string[] = [];
 	const requests: URL[] = [];
+	let visible = true;
 	const client = createClient({
 		baseUrl: "https://proof.invalid",
 		fetch: (async (request: Request) => {
@@ -25,22 +31,24 @@ function pagePeer() {
 				JSON.stringify({
 					callId: request.headers.get("Questpie-Call-Id"),
 					result: {
-						nodes: [
-							{
-								id,
-								organizationId: id,
-								teamId: id,
-								requesterMembershipId: id,
-								assigneeMembershipId: null,
-								assignee: null,
-								team: null,
-								priority: "normal",
-								reference: `T-${index}`,
-								status: "open",
-								summary: `Ticket ${index}`,
-								updatedAt: timestamp,
-							},
-						],
+						nodes: visible
+							? [
+									{
+										id,
+										organizationId: id,
+										teamId: id,
+										requesterMembershipId: id,
+										assigneeMembershipId: null,
+										assignee: null,
+										team: null,
+										priority: "normal",
+										reference: `T-${index}`,
+										status: "open",
+										summary: `Ticket ${index}`,
+										updatedAt: timestamp,
+									},
+								]
+							: [],
 						pageInfo: { endCursor: `cursor-${index}`, hasNextPage: index < 3 },
 					},
 				}),
@@ -48,8 +56,99 @@ function pagePeer() {
 			);
 		}) as typeof fetch,
 	});
-	return { client, calls, requests };
+	return {
+		client,
+		calls,
+		requests,
+		removeRows() {
+			visible = false;
+		},
+	};
 }
+
+test("infinite browser reads wait for native hydration before replacing old pages", async () => {
+	const ready = Promise.withResolvers<void>();
+	const peer = pagePeer();
+	const serverCache = new QueryClient();
+	const browserCache = new QueryClient();
+	const context = { membershipId: id, organizationId: id };
+	const server = createQueryAdapter(
+		peer.client.withContext(context),
+		serverCache,
+		{ ssr: true },
+	);
+	const browser = createQueryAdapter(
+		peer.client.withContext(context),
+		browserCache,
+		{
+			hydrate: server.dehydrate(),
+			ready: ready.promise,
+		},
+	);
+	try {
+		const input = { first: 1, statuses: null, teamIds: null };
+		const serverOptions =
+			server.queries["tickets.queue"].infiniteOptions(input);
+		await serverCache.fetchInfiniteQuery(serverOptions);
+		serverCache.setQueryData(serverOptions.queryKey, (value) => value, {
+			updatedAt: Date.now() + 60_000,
+		});
+		peer.removeRows();
+		const options = browser.queries["tickets.queue"].infiniteOptions(input);
+		const completion = browserCache.fetchInfiniteQuery(options);
+		await Bun.sleep(0);
+		expect(peer.calls).toEqual(["~null"]);
+		hydrate(browserCache, dehydrate(serverCache));
+		expect(
+			browserCache.getQueryData(options.queryKey)?.pages[0]?.nodes,
+		).toHaveLength(1);
+		ready.resolve();
+		expect((await completion).pages[0]?.nodes).toEqual([]);
+		expect(
+			browserCache.getQueryData(options.queryKey)?.pages[0]?.nodes,
+		).toEqual([]);
+		expect(peer.calls).toEqual(["~null", "~null"]);
+	} finally {
+		ready.resolve();
+		await browser.dispose();
+		await server.dispose();
+		browserCache.clear();
+		serverCache.clear();
+	}
+});
+
+test("retiring an infinite Query during hydration readiness prevents late page dispatch", async () => {
+	const ready = Promise.withResolvers<void>();
+	const peer = pagePeer();
+	const cache = new QueryClient();
+	const adapter = createQueryAdapter(
+		peer.client.withContext({ membershipId: id, organizationId: id }),
+		cache,
+		{ ready: ready.promise },
+	);
+	try {
+		const completion = cache
+			.fetchInfiniteQuery(
+				adapter.queries["tickets.queue"].infiniteOptions({
+					first: 1,
+					statuses: null,
+					teamIds: null,
+				}),
+			)
+			.catch((error: unknown) => error);
+		await Bun.sleep(0);
+		await adapter.dispose();
+		ready.resolve();
+		expect(await completion).toBeInstanceOf(Error);
+		await Bun.sleep(0);
+		expect(peer.calls).toEqual([]);
+		expect(cache.getQueryCache().getAll()).toHaveLength(0);
+	} finally {
+		ready.resolve();
+		await adapter.dispose();
+		cache.clear();
+	}
+});
 
 test("infinite input is captured once and caller-owned cursor overrides fail before transport", async () => {
 	const { client, calls, requests } = pagePeer();

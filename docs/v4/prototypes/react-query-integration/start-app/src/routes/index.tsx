@@ -15,6 +15,7 @@ export const Route = createFileRoute("/")({
 
 function Page() {
 	const { owner } = Route.useRouteContext();
+	const navigate = Route.useNavigate();
 	const { data } = useSuspenseQuery(
 		owner.api.queries["tasks.detail"].options({ id: firstId }),
 	);
@@ -24,8 +25,13 @@ function Page() {
 			isDate: data?.updatedAt instanceof Date,
 			title: data?.title,
 			...owner.metrics(),
+		}).then(() => {
+			if (
+				new URL(window.location.href).searchParams.get("fault") === "navigate"
+			)
+				void navigate({ to: "/left" });
 		});
-	}, [data, owner]);
+	}, [data, owner, navigate]);
 	useEffect(() => {
 		if (data !== null) return;
 		const timer = setTimeout(() => {

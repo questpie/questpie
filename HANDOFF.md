@@ -854,9 +854,14 @@ The computed-identity prototype and native Start production build now have real
 Firefox evidence, including a successful delayed-stream-to-live handover with
 clock skew. Read
 `docs/v4/prototypes/react-query-integration/IDENTITY-EVIDENCE.md` for exact gates
-and remaining hostiles. Do not mark R1/R2/SSR1 complete: interrupted hydration,
-one-shot/infinite hydration races, full credential retirement, pending Mutation
-outcomes, optimism/invalidation and production migration are still open.
+and the follow-up `SSR-LIFETIME-EVIDENCE.md` and
+`MUTATION-LIFETIME-EVIDENCE.md` beside it. The follow-up covers interrupted
+streams, failed JavaScript, navigation during hydration, ordinary/infinite
+readiness races, and attached Mutation state plus pending-outcome retirement.
+Do not mark R1/R2/SSR1 complete: full credential-switch consumers,
+optimism/invalidation, production migration and the focused superseding
+architecture acceptance are still open. Native callbacks which already received
+a result cannot be cancelled or have their copied data erased by disposal.
 Parent prototype generation and Start builds must run sequentially. Use writable
 task-owned temporary storage; this host's `/tmp` currently reports `EDQUOT`.
 

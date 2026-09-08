@@ -125,6 +125,16 @@ scope disposal, a denied response, or testing full replacement without optimism.
 
 ## Supersession ledger to carry into the focused ADR
 
+Current construction follow-up: [Start readiness and fault evidence](../../prototypes/react-query-integration/SSR-LIFETIME-EVIDENCE.md)
+covers native hydration/live handover, interrupted streams, failed JavaScript,
+navigation and ordinary/infinite readiness races. The
+[Mutation lifetime evidence](../../prototypes/react-query-integration/MUTATION-LIFETIME-EVIDENCE.md)
+closes attached observer cleanup and fences pending decoded outcomes without
+claiming rollback or cancellation of already-started native callbacks. Private
+projection v3 replaces v1/v2 without compatibility. Full credential-switch
+consumers, R3/R4, production migration and architecture acceptance remain open;
+earlier checkpoint counts and counterexamples above are historical evidence.
+
 | Existing authority                                      | Candidate change                                                                                                        | Remains unchanged                                                                                                         |
 | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | ADR-0035 React recommendation / excluded TanStack scope | Add native TanStack Query integration; decide how the thin React export is retired after consumer migration             | Existing `.watch` transport, Query Resource consumers unless explicitly migrated; no duplicate cache owner for one result |

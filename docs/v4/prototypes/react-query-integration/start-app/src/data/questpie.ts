@@ -21,7 +21,7 @@ export function createOwner(server: boolean) {
 	if (server) skewServerSnapshots(cache);
 	const setup = Promise.withResolvers<void>();
 	let ready = false;
-	const liveReady = server
+	const executionReady = server
 		? undefined
 		: firstDocumentReady(setup.promise, () => {
 				ready = true;
@@ -66,7 +66,7 @@ export function createOwner(server: boolean) {
 		}) {
 			adapter = createQueryAdapter(scope, cache, {
 				hydrate: state.identity,
-				liveReady,
+				ready: executionReady,
 			});
 			serverCalls = state.serverCalls;
 		},

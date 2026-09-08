@@ -21,6 +21,10 @@ const server = Bun.serve({
 	port: 0,
 	async fetch(request) {
 		const path = new URL(request.url).pathname;
+		if (path === "/__fault-observer.js")
+			return new Response("", {
+				headers: { "content-type": "text/javascript" },
+			});
 		if (path === "/__report" && request.method === "POST") {
 			const report: unknown = await request.json();
 			reports.push(report);

@@ -25,6 +25,7 @@ From this directory:
 bun run build
 bun run types:check
 bun run test:browser
+bun run test:browser:faults
 ```
 
 The recorded runs use Bun 1.3.14, `/usr/bin/firefox`, and a writable task-owned
@@ -76,11 +77,58 @@ native Router hydrate callback has returned, `window.load` has fired, and one
 browser task boundary has passed. The wrapper does not replace native
 hydration. This is a conservative successful-document proof: unrelated assets
 can delay live activation. `load` is not a promise that every script executed
-successfully. Truncated responses, failed serialization scripts, navigation
-during hydration, and every React failure mode are **not** established by this
-tracer. They require separate evidence before this gate becomes an unconditional
-product guarantee. No private Router globals, custom serializer, second cache,
-or adapter timestamp manipulation is used.
+successfully. The fault tracer below establishes specific interrupted-document
+and navigation behavior, not every React or script failure mode. No private
+Router globals, custom serializer, second cache, or adapter timestamp
+manipulation is used.
+
+## Interrupted document and navigation evidence
+
+`test:browser:faults` runs four real Firefox scenarios against the same built
+Start application, with 45 assertions across the four scenarios. Two consecutive
+final runs passed alongside the original 37-assertion tracer, build, strict
+typecheck, lint, formatting and `git diff --check`. The fault host changes transport behavior, not TanStack
+hydration internals. A separate fixture script reports document state even when
+application modules cannot load; its reporting timer never releases adapter
+readiness.
+
+| Fault                                                                                                        | Observed result                                                                                        | Meaning                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cleanly end HTML after finite hydration, before the delayed SSR payload                                      | `load` fires; one SSE starts; the finite row becomes `null`, the other becomes the current live result | Readiness is not a document-integrity check. The terminated response cannot later deliver omitted stale bytes.                                                                |
+| Error the response stream at the same point                                                                  | Same final UI and live behavior; the host logs the deliberate `TEST_SSR_CONNECTION_INTERRUPTED` error  | This is an actual interrupted response, not only an omitted closing tag. No stale resurrection was observed.                                                                  |
+| Return 503 for application JavaScript modules                                                                | Static SSR HTML remains, resource errors are observed, no framework Query or SSE executes              | An upstream nonhydrated page, not a new framework recovery guarantee.                                                                                                         |
+| Navigate through the native Router to `/left` while the SSR Query is pending, then finish the old SSR stream | Destination remains visible; old Query components are absent; zero active bindings remain              | A never-committed Suspense fetch opens one temporary first-result binding after readiness, then closes it. Navigation does not imply no speculative Query work ever occurred. |
+
+All scenarios preserve zero SSR streams and zero browser one-shot Query calls.
+The interrupted responses still use the test-only +60 second server timestamps.
+The original hypothesis that `load` would prevent all execution after truncation
+failed; these assertions instead pin the actual behavior and distinguish it from
+stale publication. The normal 37-assertion tracer separately proves delayed
+intact SSR bytes finish before fresh live replacement.
+
+The smallest supported preconditions remain ordinary native Start ownership:
+one request-local server QueryClient, one browser owner for the current logical
+scope, standard integration installed before loading/rendering, and a first
+document boundary before fresh browser execution. The host must not replay or
+manually hydrate old document snapshots after that boundary. A new login or
+tenant lifetime must retire the old adapter; a route change alone need not
+retire an owner shared by other routes. Observed native speculative work may
+finish once and close when it has no active observers.
+
+This does not establish replayed/repaired serialization scripts, bfcache
+restoration, auth-scope replacement during an initial stream, or an indefinitely
+held script/resource. Those must not be advertised as automatically recovered.
+No completion sentinel, private Router flag, custom serializer, or global cache
+timestamp fence is justified by these counterexamples.
+
+The source explains the distinction: the native [Query integration's hydrate
+callback](https://github.com/TanStack/router/blob/main/packages/router-ssr-query-core/src/index.ts)
+launches its stream reader without awaiting the complete loop, whereas the
+browser [load event](https://developer.mozilla.org/en-US/docs/Web/API/Window/load_event)
+describes the document/resource loading lifecycle. Neither API declares
+successful application execution. The test host cancels its upstream reader
+after cutting the response and releases held synthetic work before shutdown;
+each browser uses a fresh profile that is removed afterward.
 
 Two construction failures were informative: an incomplete fake peer response
 failed the generated protocol decoder, and Bun's default user agent caused
@@ -99,7 +147,8 @@ private package and lock. Seroval 1.6.6 matches the upstream integration probe.
 shell; `src/client.tsx` owns normal React hydration plus tracer error reporting.
 `src/tracer/scenario.ts` owns the test-only clock skew and document-ready gate;
 `tracer-peer.ts` owns synthetic Query/SSE responses; `tracer.ts` owns loopback
-hosting, browser control and assertions. Generated
+hosting, browser control and assertions; `tracer-faults.ts` owns deliberate
+transport faults and independent document observation. Generated
 route trees and build output stay ignored.
 
 This follows the [official Start setup](https://tanstack.com/start/latest/docs/framework/react/build-from-scratch)

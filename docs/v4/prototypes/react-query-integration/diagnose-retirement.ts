@@ -3,8 +3,8 @@ import { MutationObserver, QueryClient } from "@tanstack/query-core";
 import { createClient } from "./generated/client";
 import { createQueryAdapter } from "./generated/client.react-query";
 
-// Counterexample diagnostic, deliberately not a PASS gate. No adapter fix is
-// selected here: compare the public native cleanup primitives on the same race.
+// Compare the candidate's retirement fence with native cache cleanup alone.
+// This diagnostic is not an acceptance gate; mutation-lifetime.test.ts asserts it.
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 async function inspect(mode: "dispose" | "remove" | "reset-and-remove") {
 	const received = Promise.withResolvers<Request>();
@@ -30,14 +30,19 @@ async function inspect(mode: "dispose" | "remove" | "reset-and-remove") {
 		},
 	});
 	const unsubscribe = observer.subscribe(() => {});
-	const completion = observer.mutate({
-		id,
-		expectedVersion: 1,
-		targetStatus: "done",
-	});
+	const completion = observer
+		.mutate({
+			id,
+			expectedVersion: 1,
+			targetStatus: "done",
+		})
+		.then(
+			(result) => ({ kind: "result" as const, result }),
+			(error: unknown) => ({ kind: "error" as const, error }),
+		);
 	try {
 		const request = await received.promise;
-		await adapter.dispose();
+		if (mode === "dispose") await adapter.dispose();
 		retired = true;
 		if (mode === "reset-and-remove") observer.reset();
 		if (mode !== "dispose") {
@@ -63,7 +68,10 @@ async function inspect(mode: "dispose" | "remove" | "reset-and-remove") {
 			mode,
 			observerExposesLateResult:
 				observer.getCurrentResult().data?.title === "Old authority result",
-			completionExposesLateResult: result?.title === "Old authority result",
+			completionExposesLateResult:
+				result.kind === "result" &&
+				result.result.title === "Old authority result",
+			completionRejected: result.kind === "error",
 			callbacksAfterRetirement,
 			retainedMutations: cache.getMutationCache().getAll().length,
 		};

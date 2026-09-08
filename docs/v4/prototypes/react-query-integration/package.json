@@ -12,6 +12,7 @@
 		"test": "bun test live-options.test.ts",
 		"test:generated": "bun run generate:proof && bun test generated-client.test.ts query-adapter.test.ts generation.test.ts",
 		"test:live": "bun run generate:proof && bun test generated-live.test.ts",
+		"test:mutation-lifetime": "bun run generate:proof && bun test mutation-lifetime.test.ts",
 		"test:react": "bun run generate:proof && bun test react-suspense.test.ts && bun test react-dom.test.ts",
 		"test:pagination-source": "bun test pagination-source.test.ts",
 		"test:pagination-renamed": "bun test renamed-pagination.test.ts",

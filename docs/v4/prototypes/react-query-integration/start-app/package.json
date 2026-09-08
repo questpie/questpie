@@ -6,7 +6,8 @@
 		"dev": "vite --host 127.0.0.1",
 		"build": "vite build",
 		"types:check": "tsc --noEmit",
-		"test:browser": "bun run tracer.ts"
+		"test:browser": "bun run tracer.ts",
+		"test:browser:faults": "bun run tracer-faults.ts"
 	},
 	"dependencies": {
 		"@tanstack/query-core": "5.102.8",

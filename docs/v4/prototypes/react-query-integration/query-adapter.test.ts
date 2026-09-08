@@ -30,6 +30,29 @@ test("the superseded ordinal projection is rejected instead of receiving a hydra
 	}
 });
 
+test("the replaced projection and readiness spelling are rejected without compatibility paths", () => {
+	const cache = new QueryClient();
+	const client = createClient({ baseUrl: "https://proof.invalid" });
+	const source = getClientProjection(client.withContext({ companyId: id }));
+	try {
+		expect(() =>
+			Reflect.apply(bindProjection, undefined, [
+				{ ...source, version: "questpie.client-projection.prototype.v2" },
+				cache,
+			]),
+		).toThrow("CLIENT_PROJECTION_INCOMPATIBLE");
+		expect(() =>
+			Reflect.apply(bindProjection, undefined, [
+				source,
+				cache,
+				{ liveReady: Promise.resolve() },
+			]),
+		).toThrow("QUERY_BINDING_INVALID");
+	} finally {
+		cache.clear();
+	}
+});
+
 test("separately bundled adapter copies cannot alias inputs or evict each other's Query cache", async () => {
 	const bundle = await Bun.build({
 		entrypoints: [join(import.meta.dir, "query-adapter.ts")],
