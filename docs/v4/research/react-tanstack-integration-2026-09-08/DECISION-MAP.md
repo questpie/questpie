@@ -72,6 +72,14 @@ callback and resolves the original Promise with the result. R2 must separate
 UI publication lifetime from committed/unknown write outcome before R3 optimism;
 cache removal alone cannot close that edge.
 
+The [pagination source audit](../../prototypes/react-query-integration/PAGINATION-RESEARCH.md)
+finds existing exact forward cursor/page-size metadata for direct structural
+Queries. Project it without new authored DTOs or cursor mappings; keep arbitrary
+handler results ineligible until their paging relationship is established.
+The next finite consumer must include a nonempty terminal page, renamed cursor
+parameter, native infinite/Suspense type inference and ordinary/infinite cache
+separation. Independent page watches do not establish contiguous live lists.
+
 | Slice                                               | Depends on                                      | Falsifiable exit                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | R1: Descriptor and ordinary Query/Mutation vertical | Focused public-surface decision                 | Compiler emits one reusable descriptor; native options infer input, output and declared errors; direct/generated transport behavior unchanged; no repeated schema/key registry                                 |

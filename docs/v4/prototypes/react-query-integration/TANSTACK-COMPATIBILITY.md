@@ -24,6 +24,10 @@ Infinite Query owns `pages` and `pageParams`; it requires `initialPageParam` and
 page-navigation callbacks. It cannot be obtained by relabelling ordinary options.
 Where the compiler knows the pagination contract, the adapter should project it;
 an arbitrary named Query result must not have its cursor semantics guessed.
+The [pagination research](PAGINATION-RESEARCH.md) identifies the existing
+structural template metadata that can supply this mapping without another
+authored cursor definition. It specifies the next executable consumer; it
+does not claim an implemented infinite capability.
 Source: [official infinite Query guide](https://tanstack.com/query/latest/docs/framework/react/guides/infinite-queries).
 
 Suspense excludes conditional enabled/disabled behavior and placeholderData.

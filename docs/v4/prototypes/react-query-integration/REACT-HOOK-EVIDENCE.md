@@ -96,6 +96,9 @@ The runtime suites pass 27 tests with 102 assertions: 23 existing tests with
 86 assertions and four React tests with 16 assertions. All four strict
 TypeScript projects pass with TypeScript 6.0.2. Server and DOM tests run in
 separate processes so the DOM environment cannot contaminate SSR evidence.
+An additional `bun test --rerun-each 10 react-dom.test.ts` run passes all
+20 executions with 110 assertions. This checks local repeatability, not browser
+coverage or a soak-test release budget.
 Dependencies are isolated to this private prototype; no production package
 or export changes.
 
