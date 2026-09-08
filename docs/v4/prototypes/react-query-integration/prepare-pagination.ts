@@ -64,10 +64,10 @@ const source = instrumentClient(
 await Bun.write(join(directory, "client.ts"), source);
 await Bun.write(
 	join(directory, "client.react-query.ts"),
-	`import { bindProjection } from "../../query-adapter";
+	`import { bindProjection, type BindingOptions } from "../../query-adapter";
 import { getClientProjection, type GeneratedClientScope } from "./client";
 import type { QueryClient } from "@tanstack/query-core";
-export function createQueryAdapter(scope: GeneratedClientScope, cache: QueryClient) { return bindProjection(getClientProjection(scope), cache); }
+export function createQueryAdapter(scope: GeneratedClientScope, cache: QueryClient, options?: BindingOptions) { return bindProjection(getClientProjection(scope), cache, options); }
 `,
 );
 console.log("Prepared pagination consumer from full Support Desk compilation");

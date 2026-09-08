@@ -1,5 +1,5 @@
 // Proof-only compiler/runtime seam. No production export or wire contract.
-export const projectionVersion = "questpie.client-projection.prototype.v1";
+export const projectionVersion = "questpie.client-projection.prototype.v2";
 
 export interface CallOptions {
 	readonly callId?: string;
@@ -51,7 +51,7 @@ export interface MutationDescriptor<Input, Output, DeclaredError> {
 
 export interface Projection {
 	readonly version: typeof projectionVersion;
-	readonly scopeId: string;
+	readonly canonicalScope: string;
 	readonly queries: Readonly<
 		Record<string, ReadDescriptor<never, unknown, unknown>>
 	>;

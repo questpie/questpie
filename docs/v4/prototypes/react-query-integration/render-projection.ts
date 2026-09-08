@@ -32,6 +32,19 @@ export function instrumentClient(
 	const end = "}), withContext: scope });";
 	if (source.split(start).length !== 2 || source.split(end).length !== 2)
 		throw new Error("PROOF_RENDERER_SEAM_CHANGED");
+	// Proof-only extraction from the unchanged renderer's existing identity.
+	// Production projection must use those renderer inputs directly.
+	const contract = [
+		"Questpie-Application",
+		"Questpie-Client-Contract",
+		"Questpie-Wire-Digest",
+	].map((header) => {
+		const match = source.match(
+			new RegExp(`"${header}": ("(?:[^"\\\\]|\\\\.)*")`),
+		);
+		if (!match?.[1]) throw new Error("PROOF_RENDERER_SEAM_CHANGED");
+		return JSON.parse(match[1]);
+	});
 	const declarations = (kind: "query" | "mutation") =>
 		resources
 			.filter(
@@ -80,8 +93,8 @@ export function instrumentClient(
 		`
 
 export interface ClientProjection {
-	readonly version: "questpie.client-projection.prototype.v1";
-	readonly scopeId: string;
+	readonly version: "questpie.client-projection.prototype.v2";
+	readonly canonicalScope: string;
 	readonly queries: Readonly<{ ${declarations("query")} }>;
 	readonly mutations: Readonly<{ ${declarations("mutation")} }>;
 }
@@ -128,8 +141,8 @@ export function getClientProjection(scope: GeneratedClientScope): ClientProjecti
 	const retained = clientProjections.get(scope);
 	if (retained) return retained;
 	const projection: ClientProjection = Object.freeze({
-		version: "questpie.client-projection.prototype.v1",
-		scopeId: crypto.randomUUID(),
+		version: "questpie.client-projection.prototype.v2",
+		canonicalScope: JSON.stringify([${JSON.stringify(contract)}, encode(contextCodec, scope.context)]),
 		queries: Object.freeze({ ${members("query")} }),
 		mutations: Object.freeze({ ${members("mutation")} }),
 	});

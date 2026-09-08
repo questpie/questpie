@@ -134,6 +134,14 @@ export function createLiveQueryOptions<Output>(
 	} satisfies QueryObserverOptions<Output>;
 	return {
 		options,
+		get retired() {
+			return retired;
+		},
+		detach() {
+			release();
+			unsubscribeCache();
+			latest = undefined;
+		},
 		dispose: () => retire(new Error("SCOPE_RETIRED")),
 	};
 }

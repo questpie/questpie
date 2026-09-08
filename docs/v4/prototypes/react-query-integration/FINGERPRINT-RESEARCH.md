@@ -1,8 +1,11 @@
 # Scope-private Query input fingerprints
 
 Status: Proposed research, 2026-09-08. This selects no Accepted contract and
-claims no implemented or verified adapter behavior. SSR/hydration compatibility
-remains a separate unresolved design obligation.
+claims no implemented or verified adapter behavior. This records the original
+browser-only alternative. The later [SSR candidate](SSR-CANDIDATE.md) changes
+the seed-transfer assumption, and the [identity checkpoint](IDENTITY-EVIDENCE.md)
+records its executable result; do not apply the original no-serialization
+assumption to that explicitly resumed SSR lifetime.
 
 ## Recommended dependency and use
 

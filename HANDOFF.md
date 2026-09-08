@@ -840,6 +840,32 @@ byte-identical release dry-runs pass.
 
 ## Immediate continuation
 
+The active React construction work is isolated in
+`/home/drepkovsky/code/questpie-v4-react-query-proof`. The owner requires native
+React Query, Suspense, forward infinite Queries, safe authority lifetime and
+TanStack Start SSR/hydration before beta.2. DB integration, live infinite and
+offline/persistence remain outside this cut. The authoritative continuation map
+for this Proposed work is
+`docs/v4/research/react-tanstack-integration-2026-09-08/DECISION-MAP.md`.
+Existing ADR-0035/0042 product exports remain unchanged until the focused
+superseding decision and consumer migration; no compatibility adapter is added.
+
+The computed-identity prototype and native Start production build now have real
+Firefox evidence, including a successful delayed-stream-to-live handover with
+clock skew. Read
+`docs/v4/prototypes/react-query-integration/IDENTITY-EVIDENCE.md` for exact gates
+and remaining hostiles. Do not mark R1/R2/SSR1 complete: interrupted hydration,
+one-shot/infinite hydration races, full credential retirement, pending Mutation
+outcomes, optimism/invalidation and production migration are still open.
+Parent prototype generation and Start builds must run sequentially. Use writable
+task-owned temporary storage; this host's `/tmp` currently reports `EDQUOT`.
+
+The schedule acceptance follow-up has since produced the committed verified
+`docs/v4/prototypes/static-job-schedules/REVIEW.json` PASS. Its public authority
+projection is owned separately by the static-schedule integrated worktree.
+The schedule construction notes below are historical, not permission to repeat
+that acceptance or to call the aggregate beta.2 release ready.
+
 The active frontier is static Job schedules and the minimum named-Mutation
 checkpoint needed by a minute sweep, tracked in #365 and
 `docs/v4/research/static-job-schedules/DECISION-MAP.md`. The human explicitly

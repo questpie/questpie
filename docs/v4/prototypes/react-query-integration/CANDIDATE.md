@@ -65,11 +65,12 @@ than repeat their codecs. Only declared-error types are newly projected from
 the existing declared-error contract. The shared optional adapter owns native
 options; the generated client retains canonical capture and invocation.
 
-Keys contain a random scope partition, public Operation identity and an opaque
-input slot, not Context or canonical payload bytes. The construction prototype
-uses a provisional 128-capture ceiling to make allocation finite. It is not a
-ratified adapter limit or a measured capacity recommendation; cache-eviction
-and abandoned-options ownership still need closure before production selection.
+The initial construction used random scope partitions and opaque input slots
+with a provisional 128-capture ceiling. The [identity checkpoint](IDENTITY-EVIDENCE.md)
+replaces that registry with computed fingerprints and explicit SSR bootstrap
+resumption. Unused options allocate no adapter-owned input slot. Successful
+live work follows native cache lifetime; terminal failure retains an opaque-key
+marker until disposal. Complete lifecycle budgeting remains open.
 
 Native cache key error tags and Mutation options use `unknown`. Query hooks
 retain TanStack's default `Error` unless the application configures its native
@@ -103,4 +104,5 @@ The [generated watch extension](GENERATED-LIVE-EVIDENCE.md) now connects the
 existing SSE client to the finite native Query experiment. Watchability is
 projected from the compiler contract, not authored again at the options call.
 This closes the synthetic-watch-only gap, not R2's browser or complete authority
-lifetime obligations. Its construction-time registry ownership remains open.
+lifetime obligations. The identity checkpoint removes its construction-time
+input registry without claiming that all remaining lifecycle obligations pass.

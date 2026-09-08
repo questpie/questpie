@@ -1,0 +1,29 @@
+{
+	"name": "questpie-start-browser-research",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite --host 127.0.0.1",
+		"build": "vite build",
+		"types:check": "tsc --noEmit",
+		"test:browser": "bun run tracer.ts"
+	},
+	"dependencies": {
+		"@tanstack/query-core": "5.102.8",
+		"@tanstack/react-query": "5.102.8",
+		"@tanstack/react-router": "1.170.33",
+		"@tanstack/react-router-ssr-query": "1.167.2",
+		"@tanstack/react-start": "1.168.50",
+		"react": "19.2.8",
+		"react-dom": "19.2.8",
+		"seroval": "1.6.6"
+	},
+	"devDependencies": {
+		"@types/bun": "1.3.14",
+		"@types/react": "19.2.18",
+		"@types/react-dom": "19.2.7",
+		"@vitejs/plugin-react": "6.1.1",
+		"typescript": "6.0.2",
+		"vite": "8.2.2"
+	}
+}

@@ -28,7 +28,7 @@ await Bun.write(
 );
 await Bun.write(
 	join(directory, "client.react-query.ts"),
-	`import { bindProjection } from "../query-adapter";\nimport { getClientProjection, type GeneratedClientScope } from "./client";\nimport type { QueryClient } from "@tanstack/query-core";\nexport function createQueryAdapter(scope: GeneratedClientScope, cache: QueryClient) { return bindProjection(getClientProjection(scope), cache); }\n`,
+	`import { bindProjection, type BindingOptions } from "../query-adapter";\nimport { getClientProjection, type GeneratedClientScope } from "./client";\nimport type { QueryClient } from "@tanstack/query-core";\nexport function createQueryAdapter(scope: GeneratedClientScope, cache: QueryClient, options?: BindingOptions) { return bindProjection(getClientProjection(scope), cache, options); }\n`,
 );
 console.log(
 	"Generated raw client and proof-instrumented sibling from the same Task IR",
@@ -58,5 +58,5 @@ await Bun.write(
 );
 await Bun.write(
 	join(directory, "live-client.react-query.ts"),
-	`import { bindProjection } from "../query-adapter";\nimport { getClientProjection, type GeneratedClientScope } from "./live-client";\nimport type { QueryClient } from "@tanstack/query-core";\nexport function createQueryAdapter(scope: GeneratedClientScope, cache: QueryClient) { return bindProjection(getClientProjection(scope), cache); }\n`,
+	`import { bindProjection, type BindingOptions } from "../query-adapter";\nimport { getClientProjection, type GeneratedClientScope } from "./live-client";\nimport type { QueryClient } from "@tanstack/query-core";\nexport function createQueryAdapter(scope: GeneratedClientScope, cache: QueryClient, options?: BindingOptions) { return bindProjection(getClientProjection(scope), cache, options); }\n`,
 );

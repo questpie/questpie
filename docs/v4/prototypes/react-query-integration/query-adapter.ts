@@ -6,11 +6,10 @@ import type {
 	QueryFunction,
 } from "@tanstack/query-core";
 
+import { createCacheIdentity, type QueryBootstrap } from "./cache-identity";
 import { createLiveQueryOptions } from "./live-options";
 import {
 	projectionVersion,
-	type CapturedRead,
-	type CapturedForwardRead,
 	type ForwardReadDescriptor,
 	type MutationDescriptor,
 	type Projection,
@@ -69,7 +68,6 @@ type MutationFactory<
 	isError: Descriptor["isError"];
 }>;
 
-const proofCaptureLimit = 128;
 type Binding<Source extends Projection> = Readonly<{
 	queries: {
 		readonly [Name in keyof Source["queries"]]: QueryFactory<
@@ -82,34 +80,133 @@ type Binding<Source extends Projection> = Readonly<{
 		>;
 	};
 	dispose(): Promise<void>;
+	dehydrate(): QueryBootstrap;
 }>;
-const bindings = new WeakMap<Projection, WeakMap<QueryClient, unknown>>();
+const bindings = new WeakMap<
+	Projection,
+	WeakMap<
+		QueryClient,
+		{ binding: unknown; ssr: boolean; liveReady?: Promise<void> }
+	>
+>();
+const bootstrapOwners = new WeakMap<QueryClient, Map<string, Projection>>();
+export type BindingOptions = Readonly<{
+	hydrate?: QueryBootstrap;
+	ssr?: boolean;
+	liveReady?: Promise<void>;
+}>;
+
+async function waitForLiveReady(
+	ready: Promise<void>,
+	signal: AbortSignal,
+): Promise<void> {
+	signal.throwIfAborted();
+	const cancelled = Promise.withResolvers<never>();
+	const abort = () => cancelled.reject(signal.reason);
+	signal.addEventListener("abort", abort, { once: true });
+	try {
+		await Promise.race([ready, cancelled.promise]);
+	} finally {
+		signal.removeEventListener("abort", abort);
+	}
+	signal.throwIfAborted();
+}
 
 export function bindProjection<Source extends Projection>(
 	source: Source,
 	client: QueryClient,
+	options: BindingOptions = {},
 ): Binding<Source> {
-	if (source.version !== projectionVersion)
+	if (
+		source.version !== projectionVersion ||
+		typeof source.canonicalScope !== "string"
+	)
 		throw new Error("CLIENT_PROJECTION_INCOMPATIBLE");
+	if (
+		Object.keys(options).some(
+			(key) => key !== "hydrate" && key !== "ssr" && key !== "liveReady",
+		) ||
+		(options.ssr !== undefined && typeof options.ssr !== "boolean") ||
+		(options.liveReady !== undefined &&
+			(typeof options.liveReady?.then !== "function" ||
+				typeof options.liveReady?.catch !== "function" ||
+				options.ssr === true))
+	)
+		throw new Error("QUERY_BINDING_INVALID");
+	const ssr = options.ssr === true;
+	const liveReady = options.liveReady;
+	// Host rejection is observed even if no Query is executed. A Query that
+	// does execute still receives the original failure; no timeout bypass.
+	void liveReady?.catch(() => {});
 	let owners = bindings.get(source);
 	if (!owners) {
 		owners = new WeakMap();
 		bindings.set(source, owners);
 	}
 	const existing = owners.get(client);
-	if (existing) return existing as Binding<Source>;
+	const identityOwner = createCacheIdentity(
+		source.canonicalScope,
+		options.hydrate,
+	);
+	if (existing) {
+		if (existing.ssr !== ssr || existing.liveReady !== liveReady)
+			throw new Error("QUERY_BINDING_MISMATCH");
+		const binding = existing.binding as Binding<Source>;
+		if (
+			options.hydrate &&
+			binding.dehydrate().scope !== identityOwner.bootstrap.scope
+		)
+			throw new Error("QUERY_BOOTSTRAP_MISMATCH");
+		return binding;
+	}
+	let active = bootstrapOwners.get(client);
+	if (!active) {
+		active = new Map();
+		bootstrapOwners.set(client, active);
+	}
+	if (active.has(identityOwner.bootstrap.scope))
+		throw new Error("QUERY_BOOTSTRAP_IN_USE");
+	active.set(identityOwner.bootstrap.scope, source);
 	let retired = false;
-	let ordinal = 0;
-	const prefix = ["questpie", source.scopeId, crypto.randomUUID()] as const;
-	const captures = new Map<
+	const prefix = identityOwner.prefix;
+	const liveEntries = new Map<
 		string,
-		{
-			key: readonly string[];
-			captured: CapturedRead<unknown>;
-			forward?: CapturedForwardRead<unknown>;
-			live?: ReturnType<typeof createLiveQueryOptions<unknown>>;
-		}
+		ReturnType<typeof createLiveQueryOptions<unknown>> | "retired"
 	>();
+	const liveFunctions = new WeakSet<object>();
+	const unsubscribeCache = client.getQueryCache().subscribe((event) => {
+		if (
+			event.query.queryKey[0] !== prefix[0] ||
+			event.query.queryKey[1] !== prefix[1]
+		)
+			return;
+		const key = JSON.stringify(event.query.queryKey);
+		if (event.type === "removed") {
+			const entry = liveEntries.get(key);
+			if (entry === "retired") return;
+			// A terminal failure fences all equivalent options, including ones
+			// created before the failed execution. Retain only its opaque key.
+			if (entry?.retired) liveEntries.set(key, "retired");
+			else liveEntries.delete(key);
+			entry?.detach();
+		}
+		if (
+			!retired &&
+			(event.type === "observerAdded" ||
+				event.type === "observerOptionsUpdated") &&
+			event.query.isActive() &&
+			event.query.state.status === "success" &&
+			!liveEntries.has(key) &&
+			typeof event.query.options.queryFn === "function" &&
+			liveFunctions.has(event.query.options.queryFn)
+		) {
+			void client.refetchQueries({
+				queryKey: event.query.queryKey,
+				exact: true,
+				type: "active",
+			});
+		}
+	});
 	const queries = Object.fromEntries(
 		Object.entries(source.queries).map(([name, descriptor]) => [
 			name,
@@ -121,33 +218,12 @@ export function bindProjection<Source extends Projection>(
 								if (retired) throw new Error("SCOPE_RETIRED");
 								const forward = descriptor.forward!;
 								const captured = forward.capture(input);
-								const identity = JSON.stringify([
-									"infinite",
-									descriptor.identity,
-									captured.canonical,
-								]);
-								let entry = captures.get(identity);
-								if (!entry) {
-									if (captures.size >= proofCaptureLimit)
-										throw new Error("PROOF_CAPTURE_LIMIT");
-									entry = {
-										key: Object.freeze([
-											...prefix,
-											descriptor.identity,
-											"infinite",
-											String(++ordinal),
-										]),
-										captured: {
-											canonical: captured.canonical,
-											call: (options) => captured.call(null, options),
-										},
-										forward: captured,
-									};
-									captures.set(identity, entry);
-								}
-								const retained = entry.forward!;
 								return {
-									queryKey: entry.key,
+									queryKey: identityOwner.key(
+										descriptor.identity,
+										"infinite",
+										captured.canonical,
+									),
 									retry: false,
 									initialPageParam: null,
 									getNextPageParam: forward.next,
@@ -162,7 +238,7 @@ export function bindProjection<Source extends Projection>(
 										pageParam: string | null;
 									}) => {
 										if (retired) throw new Error("SCOPE_RETIRED");
-										return retained.call(pageParam, { signal });
+										return captured.call(pageParam, { signal });
 									},
 								};
 							},
@@ -171,39 +247,48 @@ export function bindProjection<Source extends Projection>(
 				options(input: never) {
 					if (retired) throw new Error("SCOPE_RETIRED");
 					const captured = descriptor.capture(input);
-					const identity = JSON.stringify([
+					const key = identityOwner.key(
 						descriptor.identity,
+						"query",
 						captured.canonical,
-					]);
-					let retained = captures.get(identity);
-					if (!retained) {
-						if (captures.size >= proofCaptureLimit)
-							throw new Error("PROOF_CAPTURE_LIMIT");
-						retained = {
-							key: Object.freeze([
-								...prefix,
-								descriptor.identity,
-								String(++ordinal),
-							]),
-							captured,
-						};
-						captures.set(identity, retained);
-						if (captured.watch)
-							retained.live = createLiveQueryOptions({
+					);
+					let live:
+						| ReturnType<typeof createLiveQueryOptions<unknown>>
+						| undefined;
+					const queryFn = async ({ signal }: { signal: AbortSignal }) => {
+						if (retired) throw new Error("SCOPE_RETIRED");
+						if (!captured.watch || ssr) return captured.call({ signal });
+						if (liveReady) await waitForLiveReady(liveReady, signal);
+						if (retired) throw new Error("SCOPE_RETIRED");
+						const identity = JSON.stringify(key);
+						if (live && !live.retired && liveEntries.get(identity) !== live)
+							live = undefined;
+						const retained = liveEntries.get(identity);
+						if (retained === "retired") throw new Error("SCOPE_RETIRED");
+						live ??= retained;
+						if (!live) {
+							live = createLiveQueryOptions({
 								client,
-								key: retained.key,
+								key,
 								watch: captured.watch,
 							});
-					}
-					const entry = retained;
-					if (entry.live) return entry.live.options;
+							liveEntries.set(identity, live);
+						}
+						return live.options.queryFn({ signal });
+					};
+					if (captured.watch && !ssr) liveFunctions.add(queryFn);
 					return {
-						queryKey: entry.key,
+						queryKey: key,
 						retry: false,
-						queryFn: ({ signal }: { signal: AbortSignal }) => {
-							if (retired) throw new Error("SCOPE_RETIRED");
-							return entry.captured.call({ signal });
-						},
+						...(captured.watch
+							? {
+									staleTime: Infinity,
+									refetchOnWindowFocus: false,
+									refetchOnReconnect: false,
+									refetchOnMount: false,
+								}
+							: {}),
+						queryFn,
 					};
 				},
 			}),
@@ -239,11 +324,17 @@ export function bindProjection<Source extends Projection>(
 	const binding = Object.freeze({
 		queries: Object.freeze(queries),
 		mutations: Object.freeze(mutations),
+		dehydrate() {
+			if (retired) throw new Error("SCOPE_RETIRED");
+			return identityOwner.bootstrap;
+		},
 		async dispose() {
 			if (retired) return;
 			retired = true;
-			const liveClosures = [...captures.values()].map((entry) =>
-				entry.live?.dispose(),
+			active.delete(identityOwner.bootstrap.scope);
+			unsubscribeCache();
+			const liveClosures = [...liveEntries.values()].map((entry) =>
+				entry === "retired" ? undefined : entry.dispose(),
 			);
 			const cancelled = client.cancelQueries(
 				{ queryKey: prefix },
@@ -257,11 +348,11 @@ export function bindProjection<Source extends Projection>(
 					fetchStatus: "idle",
 				});
 			client.removeQueries({ queryKey: prefix });
-			captures.clear();
+			liveEntries.clear();
 			await cancelled;
 			await Promise.all(liveClosures);
 		},
 	});
-	owners.set(client, binding);
+	owners.set(client, { binding, ssr, liveReady });
 	return binding;
 }

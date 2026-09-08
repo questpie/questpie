@@ -15,9 +15,11 @@ Resolve only the guarantees that research could not establish:
    generation first; new opaque wire receipt only if the cost or correctness
    evidence rejects that candidate. Specify committed-but-unobserved, unknown
    outcome, cancellation, retry and protected-state retirement independently.
-2. Set the release cut: include the bounded Query integration in beta 2 or make
-   it the next beta. Do not imply that optional DB or complete SSR is already
-   requested as a beta-2 blocker.
+2. The owner settled the release cut on 2026-09-08: native React Query,
+   Suspense, forward infinite Queries, safe scope lifetime **and TanStack Start
+   SSR/hydration are required before beta.2**. Use the standard TanStack
+   integration; do not build another hydration system. Optional TanStack DB,
+   live infinite lists and offline/persistence remain outside this beta.
 
 The framework should pick safe reversible implementation details autonomously.
 Escalate only a changed public guarantee or release scope, with evidence.
@@ -81,8 +83,24 @@ parameter, native infinite/Suspense type inference and ordinary/infinite cache
 separation. Independent page watches do not establish contiguous live lists.
 The first full-source Support Desk compilation consumer now passes one test
 with five assertions for the positive root mapping and negative handler case.
-The total is 28 tests / 107 assertions when this separate compiler suite runs
-alongside the 27 native/generated tests. Infinite execution is still next.
+The total at that checkpoint was 28 tests / 107 assertions alongside the
+27 native/generated tests. The [infinite checkpoint](../../prototypes/react-query-integration/INFINITE-EVIDENCE.md)
+now adds generated native page execution and strict ordinary/Suspense infinite
+consumers. A copied full-source fixture proves renamed cursor injection and
+rejects page-shaped handler inference. Identity/lifetime remains R1/R2 work.
+
+The owner subsequently made SSR1 a beta.2 blocker. The
+[Start candidate](../../prototypes/react-query-integration/SSR-CANDIDATE.md)
+reuses the official Router Query integration and selects a computed-identity
+experiment; it does not introduce another hydration owner.
+
+The [identity checkpoint](../../prototypes/react-query-integration/IDENTITY-EVIDENCE.md)
+now replaces ordinal capture slots with computed keys and explicit request-local
+bootstrap. Native Router serialization and an actual Start production build
+with Firefox prove Date-preserving hydration and streamed Suspense without a
+duplicate browser one-shot fetch. Watchable hydration handover and complete
+Mutation retirement remain open. The prototype rejects its replaced v1 contract;
+there is no compatibility identity path or production authority projection.
 
 | Slice                                               | Depends on                                      | Falsifiable exit                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -93,7 +111,7 @@ alongside the 27 native/generated tests. Infinite execution is still next.
 | R5: Conversation and Library counterexamples        | R3 + R4                                         | Nonce duplication, replay gap, composite windows, membership revocation and multi-family writes preserve behavior; mechanical logic removed without deleting domain semantics                                  |
 | R6: Public adapter and consumer migration           | R2–R5 + applicable acceptance                   | Recommended exports/docs/skills agree; current consumers migrated; obsolete paths deleted only once unused; browser/PostgreSQL and Standards/Spec evidence on exact candidate                                  |
 | DB1: Optional keyed Query collection proof          | R1 + R2; independent of R3–R6 release inclusion | Full snapshots remove omitted fields; keys proved or explicitly supplied; pending/cleanup/late completion safe; no queued-commit deadlock; no universal normalized Collection authority claim                  |
-| SSR1: Server prefetch and hydration                 | R1 + R2; separate scope decision                | Per-request cache/identity and codec-safe serialized values; no cross-user hydration; finite prefetch and single live handoff                                                                                  |
+| SSR1: Server prefetch and hydration                 | R1 + R2; required for beta.2                    | Per-request cache/identity and codec-safe serialized values; no cross-user hydration; finite prefetch and single live handoff                                                                                  |
 
 Tests precede implementation within each slice. Start with one generated
 reference app, then prove the Autopilot Task behavior before broad migration.

@@ -9,16 +9,16 @@ scope projection.
 
 ## Current coverage
 
-| Surface                                      | Current evidence                                                                                      | Next falsifying consumer                                                                                                                     |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ordinary Query and Mutation                  | Native hooks infer generated types; jsdom StrictMode executes Query selectors and Mutation submission | Real browser, complete Mutation retirement and error reset                                                                                   |
-| `useSuspenseQuery` / `useSuspenseQueries`    | Strict inference and server rendering pass; jsdom scope retirement reaches the error boundary         | Abandoned render, live remount, server denial and error-boundary reset                                                                       |
-| `useInfiniteQuery`                           | Generated forward prototype: full source compilation, native pages/maxPages and strict hook types     | Real browser and SSR identity/lifetime                                                                                                       |
-| `useSuspenseInfiniteQuery`                   | Generated options pass strict native hook and selector inference                                      | Infinite consumer plus actual suspense lifecycle                                                                                             |
-| Start loader prefetch                        | Only finite native fetch is proved                                                                    | `ensureQueryData` in an actual Start loader, client navigation and cancellation                                                              |
-| Start SSR, streaming, hydration              | Current independent scope keys miss hydrated data                                                     | Per-request isolation, matching authorized server/client identity, codec-safe data, one browser watch handoff                                |
-| Live infinite results                        | Not implemented                                                                                       | Page-boundary inserts/deletes, omitted fields, revocation, page eviction and complete replacement without duplicates or stale protected rows |
-| Persistence, offline replay, cross-tab cache | Not supported by current proof                                                                        | Explicit authority lifetime and stable call-identity decisions before making these claims                                                    |
+| Surface                                      | Current evidence                                                                                                               | Next falsifying consumer                                                                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ordinary Query and Mutation                  | Native hooks infer generated types; jsdom StrictMode executes Query selectors and Mutation submission                          | Real browser, complete Mutation retirement and error reset                                                                                   |
+| `useSuspenseQuery` / `useSuspenseQueries`    | Strict inference and server rendering pass; jsdom scope retirement reaches the error boundary                                  | Abandoned render, live remount, server denial and error-boundary reset                                                                       |
+| `useInfiniteQuery`                           | Generated forward prototype: full source compilation, native pages/maxPages and strict hook types                              | Real browser and SSR identity/lifetime                                                                                                       |
+| `useSuspenseInfiniteQuery`                   | Generated options pass strict native hook and selector inference                                                               | Infinite consumer plus actual suspense lifecycle                                                                                             |
+| Start loader prefetch                        | Actual Start loader uses generated `ensureQueryData`; production build and Firefox pass                                        | Client navigation, request cancellation and full authority lifetime                                                                          |
+| Start SSR, streaming, hydration              | Explicit bootstrap and native Start/Firefox hydration; successful delayed stream hands over to a shared watch under clock skew | Failed/interrupted hydration, navigation and credential retirement                                                                           |
+| Live infinite results                        | Not implemented                                                                                                                | Page-boundary inserts/deletes, omitted fields, revocation, page eviction and complete replacement without duplicates or stale protected rows |
+| Persistence, offline replay, cross-tab cache | Not supported by current proof                                                                                                 | Explicit authority lifetime and stable call-identity decisions before making these claims                                                    |
 
 Infinite Query owns `pages` and `pageParams`; it requires `initialPageParam` and
 page-navigation callbacks. It cannot be obtained by relabelling ordinary options.
@@ -41,7 +41,20 @@ that integration rather than duplicate it. It cannot make independently generate
 QUESTPIE keys match. Source:
 [official Router Query integration](https://tanstack.com/router/latest/docs/integrations/query).
 
-## Executed hydration diagnostic
+## Executed hydration diagnostic and repair
+
+The [identity checkpoint](IDENTITY-EVIDENCE.md) repairs the key miss with one
+explicit request-local bootstrap; ordinary browser-only bindings stay isolated.
+The [native Router probe](start-upstream/EVIDENCE.md) exercises actual hooks and
+emitted serialization. The [Start application](start-app/README.md) adds a real
+production build and Firefox hydration. TanStack owns the serializer and cache
+throughout. The 37-assertion Firefox consumer also proves successful-document
+watchable handover under delayed streaming and clock skew. Failed or interrupted
+hydration and navigation remain unproved; these results do not yet establish
+complete SSR1 support.
+
+The earlier diagnostic below remains useful as a negative control for two
+independent bindings without explicit bootstrap transfer.
 
 Run `bun run diagnose:hydration` for the committed
 [reproducer](diagnose-hydration.ts). Using Query Core 5.102.8, two generated client
@@ -66,11 +79,11 @@ actual Start server or browser and select no server/browser scope-transfer
 contract. ADR-0035's separate-scope isolation still applies until explicitly
 superseded; identical Context input alone is not permission to share a cache.
 
-The proposed private fingerprint in [FINGERPRINT-RESEARCH.md](FINGERPRINT-RESEARCH.md)
-would preserve that mismatch with independently generated secrets. Do not select
-it as the final general React/Start architecture while leaving this obligation
-unresolved. No deployment secret may be shipped to the browser to hide the gap.
-No fallback to raw input keys or a second result cache is selected.
+The earlier browser-only fingerprint in
+[FINGERPRINT-RESEARCH.md](FINGERPRINT-RESEARCH.md) would preserve that mismatch.
+The new candidate transfers client-visible random bootstrap material, not a
+deployment secret or authorization token. No fallback to raw input keys or a
+second result cache is selected.
 
 ## Versions and skills checked
 
@@ -94,7 +107,8 @@ Sources: [Query metadata](https://registry.npmjs.org/@tanstack%2Freact-query/5.1
 [React DB metadata](https://registry.npmjs.org/@tanstack%2Freact-db/0.3.7).
 These were research pins at the audit checkpoint. The subsequent hook proof
 installs Query Core, React Query and React/ReactDOM at these exact versions in
-the private prototype only. Start, Router and DB integration are still untested;
+the private prototype only. The isolated Start consumers also pin the listed
+Start, Router and SSR integration versions. DB integration remains untested;
 no broad repository upgrade ran.
 
 The exact published Start tarball contains `skills/react-start/SKILL.md`, which
@@ -115,9 +129,10 @@ DTOs, Policy or endpoints through a second set of Start server functions.
 
 ## Continuation order
 
-Reconcile server/browser identity before replacing the capture registry. Then
-extend the focused hook consumers, test typed pagination, and run an actual Start
-loader/SSR/hydration consumer before broader optimistic/invalidation work. Keep
+Computed identity, typed forward pagination and the initial actual Start
+loader/SSR/hydration consumer now have executable checkpoints. Finish the
+watchable hydration handover and authority lifetime before declaring those
+slices complete or relying on them for optimism and invalidation. Keep
 live infinite semantics separate from one-shot pagination; neither is accepted
 by an upstream hook merely accepting an options object. The release cut remains
 an explicit decision, not a claim that every TanStack feature is already ready.

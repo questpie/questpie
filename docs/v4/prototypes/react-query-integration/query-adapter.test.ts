@@ -9,6 +9,26 @@ import {
 
 import { createClient, getClientProjection } from "./generated/client";
 import { createQueryAdapter } from "./generated/client.react-query";
+import { bindProjection } from "./query-adapter";
+
+test("the superseded ordinal projection is rejected instead of receiving a hydration fallback", async () => {
+	const cache = new QueryClient();
+	const client = createClient({ baseUrl: "https://proof.invalid" });
+	const scope = client.withContext({ companyId: id });
+	const legacy = {
+		...getClientProjection(scope),
+		version: "questpie.client-projection.prototype.v1",
+	};
+	let created: ReturnType<typeof createQueryAdapter> | undefined;
+	try {
+		expect(() => {
+			created = Reflect.apply(bindProjection, undefined, [legacy, cache]);
+		}).toThrow("CLIENT_PROJECTION_INCOMPATIBLE");
+	} finally {
+		await created?.dispose();
+		cache.clear();
+	}
+});
 
 test("separately bundled adapter copies cannot alias inputs or evict each other's Query cache", async () => {
 	const bundle = await Bun.build({

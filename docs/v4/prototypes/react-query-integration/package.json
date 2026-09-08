@@ -8,6 +8,7 @@
 		"measure:generation": "bun run generate:proof && bun run measure-generation.ts",
 		"diagnose:retirement": "bun run generate:proof && bun run diagnose-retirement.ts",
 		"diagnose:hydration": "bun run generate:proof && bun run diagnose-hydration.ts",
+		"test:hydration-identity": "bun run generate:proof && bun test hydration-identity.test.ts",
 		"test": "bun test live-options.test.ts",
 		"test:generated": "bun run generate:proof && bun test generated-client.test.ts query-adapter.test.ts generation.test.ts",
 		"test:live": "bun run generate:proof && bun test generated-live.test.ts",
@@ -23,6 +24,7 @@
 		"types:generation": "tsc -p tsconfig.generation.json"
 	},
 	"dependencies": {
+		"@noble/hashes": "2.4.0",
 		"@tanstack/query-core": "5.102.8",
 		"@tanstack/react-query": "5.102.8"
 	},

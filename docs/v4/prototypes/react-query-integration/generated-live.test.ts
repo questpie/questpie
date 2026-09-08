@@ -105,6 +105,199 @@ function externalPeer() {
 	};
 }
 
+test("SSR uses one-shot generated reads and never opens an SSE stream", async () => {
+	const peer = externalPeer();
+	const cache = new QueryClient();
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: peer.transport,
+	});
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+		{ ssr: true },
+	);
+	try {
+		const value = await cache.ensureQueryData(
+			adapter.queries["tasks.detail"].options({ id }),
+		);
+		expect(value?.updatedAt.toISOString()).toBe(date);
+		expect(peer.ordinaryReads).toBe(1);
+		expect(peer.streams).toBe(0);
+	} finally {
+		await adapter.dispose();
+		cache.clear();
+	}
+});
+
+test("abandoned live options open no watch and consume no native cache slots", async () => {
+	const peer = externalPeer();
+	const cache = new QueryClient();
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: peer.transport,
+	});
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	try {
+		for (let index = 0; index < 1_000; index++) {
+			adapter.queries["tasks.detail"].options({
+				id: `018f5f6e-5f2c-7b41-a854-${index.toString(16).padStart(12, "0")}`,
+			});
+		}
+		expect(peer.streams).toBe(0);
+		expect(peer.commands).toHaveLength(0);
+		expect(peer.ordinaryReads).toBe(0);
+		expect(cache.getQueryCache().getAll()).toHaveLength(0);
+	} finally {
+		await adapter.dispose();
+		cache.clear();
+	}
+});
+
+test("live handover waits for host hydration readiness while native SSR data remains usable", async () => {
+	const peer = externalPeer();
+	const cache = new QueryClient();
+	const ready = Promise.withResolvers<void>();
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: peer.transport,
+	});
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+		{ liveReady: ready.promise },
+	);
+	const options = adapter.queries["tasks.detail"].options({ id });
+	cache.setQueryData(options.queryKey, () => ({
+		id,
+		title: "Hydrated",
+		updatedAt: new Date(date),
+	}));
+	const observer = new QueryObserver(cache, options);
+	const firstLive = Promise.withResolvers<void>();
+	const stop = observer.subscribe((result) => {
+		if (result.data?.title === "Initial") firstLive.resolve();
+	});
+	try {
+		await Bun.sleep(0);
+		expect(peer.streams).toBe(0);
+		expect(observer.getCurrentResult().data?.title).toBe("Hydrated");
+		ready.resolve();
+		await firstLive.promise;
+		expect(
+			peer.commands.filter((command) => command.command === "open"),
+		).toHaveLength(1);
+	} finally {
+		ready.resolve();
+		stop();
+		observer.destroy();
+		await adapter.dispose();
+		cache.clear();
+	}
+});
+
+test("failed hydration readiness or retirement while waiting never opens a late watch", async () => {
+	for (const mode of ["failed", "retired"] as const) {
+		const peer = externalPeer();
+		const cache = new QueryClient();
+		const ready = Promise.withResolvers<void>();
+		const client = createClient({
+			baseUrl: "https://proof.invalid",
+			fetch: peer.transport,
+		});
+		const adapter = createQueryAdapter(
+			client.withContext({ companyId: id }),
+			cache,
+			{ liveReady: ready.promise },
+		);
+		try {
+			const options = adapter.queries["tasks.detail"].options({ id });
+			const pending = cache
+				.fetchQuery(options)
+				.catch((error: unknown) => error);
+			if (mode === "failed") ready.reject(new Error("HOST_HYDRATION_FAILED"));
+			else {
+				await adapter.dispose();
+				ready.resolve();
+			}
+			expect(await pending).toBeInstanceOf(Error);
+			await Bun.sleep(0);
+			expect(peer.streams).toBe(0);
+			expect(peer.commands).toHaveLength(0);
+			expect(cache.getQueryData(options.queryKey)).toBeUndefined();
+		} finally {
+			ready.resolve();
+			await adapter.dispose();
+			cache.clear();
+		}
+	}
+});
+
+test("native cache eviction releases live ownership but reusable options can fetch again", async () => {
+	const peer = externalPeer();
+	const cache = new QueryClient();
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: peer.transport,
+	});
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	try {
+		const options = adapter.queries["tasks.detail"].options({ id });
+		await cache.fetchQuery(options);
+		cache.removeQueries({ queryKey: options.queryKey, exact: true });
+		const result = await cache.fetchQuery(options);
+		expect(result?.title).toBe("Initial");
+		expect(
+			peer.commands.filter((command) => command.command === "open"),
+		).toHaveLength(2);
+	} finally {
+		await adapter.dispose();
+		cache.clear();
+	}
+});
+
+test("an already hydrated active Query opens one watch without a second one-shot fetch", async () => {
+	const peer = externalPeer();
+	const cache = new QueryClient();
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: peer.transport,
+	});
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	const options = adapter.queries["tasks.detail"].options({ id });
+	cache.setQueryData(options.queryKey, () => ({
+		id,
+		title: "SSR result",
+		updatedAt: new Date(date),
+	}));
+	const observer = new QueryObserver(cache, options);
+	const updated = Promise.withResolvers<void>();
+	const stop = observer.subscribe((result) => {
+		if (result.data?.title === "Initial") updated.resolve();
+	});
+	try {
+		await updated.promise;
+		expect(peer.ordinaryReads).toBe(0);
+		expect(
+			peer.commands.filter((command) => command.command === "open"),
+		).toHaveLength(1);
+	} finally {
+		stop();
+		observer.destroy();
+		await adapter.dispose();
+		cache.clear();
+	}
+}, 1_000);
+
 test("unobserved generated watch prefetch releases its binding and stream after the first snapshot", async () => {
 	const peer = externalPeer();
 	const cache = new QueryClient();
@@ -144,6 +337,7 @@ test("generated authorization failure retires retained native data and cannot re
 		cache,
 	);
 	const options = adapter.queries["tasks.detail"].options({ id });
+	const siblingOptions = adapter.queries["tasks.detail"].options({ id });
 	const observer = new QueryObserver(cache, options);
 	const stop = observer.subscribe(() => {});
 	try {
@@ -162,6 +356,9 @@ test("generated authorization failure retires retained native data and cannot re
 		expect(observer.getCurrentResult().data).toBeUndefined();
 		expect(cache.getQueryData(options.queryKey)).toBeUndefined();
 		await expect(cache.fetchQuery(options)).rejects.toThrow("SCOPE_RETIRED");
+		await expect(cache.fetchQuery(siblingOptions)).rejects.toThrow(
+			"SCOPE_RETIRED",
+		);
 		expect(
 			peer.commands.filter((command) => command.command === "open"),
 		).toHaveLength(1);
