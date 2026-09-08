@@ -30,6 +30,14 @@ Query/watch seam now has [executable evidence](../../prototypes/react-query-inte
 install. This settles neither R1's generated descriptor nor R2's browser and
 generated-transport contract. It adds no release-scope or acceptance authority.
 
+The next [R1 construction checkpoint](../../prototypes/react-query-integration/GENERATED-EVIDENCE.md)
+adds nine tests / 38 assertions through production-rendered Query/Mutation
+transport and native options, plus strict generated-consumer inference and a
+browser bundle without React/TanStack imports in the core client. The input is
+normalized IR, not full application compilation. Capture reclamation, reserved
+overrides, pending Mutation retirement and live integration remain open; R1 is
+not marked complete.
+
 | Slice                                               | Depends on                                      | Falsifiable exit                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | R1: Descriptor and ordinary Query/Mutation vertical | Focused public-surface decision                 | Compiler emits one reusable descriptor; native options infer input, output and declared errors; direct/generated transport behavior unchanged; no repeated schema/key registry                                 |

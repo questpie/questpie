@@ -1,0 +1,4 @@
+{
+	"extends": "./tsconfig.json",
+	"include": ["prepare-generated.ts", "generation.test.ts"]
+}

@@ -57,6 +57,31 @@ optimistic layer, so it cannot prove that future layer's safety.
 
 ## Still blocking the recommended integration
 
+### R1 construction choice
+
+The next experiment uses a generated sibling and a lazy, module-private
+scope accessor. Input/output types reference existing generated methods rather
+than repeat their codecs. Only declared-error types are newly projected from
+the existing declared-error contract. The shared optional adapter owns native
+options; the generated client retains canonical capture and invocation.
+
+Keys contain a random scope partition, public Operation identity and an opaque
+input slot, not Context or canonical payload bytes. The construction prototype
+uses a provisional 128-capture ceiling to make allocation finite. It is not a
+ratified adapter limit or a measured capacity recommendation; cache-eviction
+and abandoned-options ownership still need closure before production selection.
+
+Native error remains `unknown`; an Operation-specific generated predicate
+narrows declared errors without wrapping arbitrary transport errors or claiming
+they belong to a closed union. One-shot transport and error decoding remain the
+production renderer's code. No ordinary Query is made watchable by this choice.
+
+This selects the narrow generated-sibling idea from the Opus consultation, not
+its proposed raw-input keys, error cause wrapper or per-module counter identity.
+The source instrumentation and internal accessor are proof-only, not a new
+public ABI. Import compatibility, generation cost, full source compilation,
+causal observation and live/Mutation integration remain evidence obligations.
+
 Generated descriptors and declared-error inference, codec-canonical identity,
 Task board plus Mutation, ordered optimism, full authorization retirement across
 pending writes, conservative dependency closure, post-commit observation,
