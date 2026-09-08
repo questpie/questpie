@@ -1,0 +1,181 @@
+{
+	"protocolVersion": 2,
+	"ticket": "NATIVE-REACT-QUERY",
+	"proof": "Ratify Proposed ADR-0044's native React Query architecture over the existing generated client, scoped watch, and Mutation outcome owners. The owner requires native Query/Suspense/forward-infinite and Start SSR/hydration for beta.2, but explicitly defers framework optimism and causal commit-observation guarantees. This is focused architecture acceptance of an isolated executable candidate, not production extraction, beta.2 aggregate acceptance, packed release certification, or publication.",
+	"diffBase": "ba336b234b5dc4cfff83a0da24c2a1e07f0898f0",
+	"reviewOutput": "docs/v4/prototypes/react-query-integration/REVIEW.json",
+	"authorityHeads": {
+		"inherited accepted core and committed schedule acceptance": "ba336b234b5dc4cfff83a0da24c2a1e07f0898f0",
+		"native streamed credential replacement proof": "667a048416bc182acbc8a1e7797d26782ea567e1",
+		"public factory and PostgreSQL hostile proof": "344dea8a2603d97ff441e45326f98e298605cedf",
+		"focused Proposed architecture and current evidence map": "fd5077f201e9f72eb72826d267312eda9b852764"
+	},
+	"acceptanceCriteria": [
+		"One public createQueryAdapter(generatedScope, host QueryClient, options) is the intended questpie/react-query surface. Exact Query/Mutation/error/forward types come from the generated contract. The generic factory reuses one adapter and needs no generated sibling import, authored DTO, key/endpoint registry, public descriptor getter, or provider SPI. Fixed opaque capability compatibility works across independently bundled copies and fails closed on mismatches; symbol reflection is explicitly not a same-realm security boundary.",
+		"Native TanStack Query owns cache, observers, React hooks, selectors, enabled state, prefetch, Suspense and forward infinite behavior. Ordinary watchable browser Queries resolve their first fetch then share the existing generated watch; full replacements remove omitted data. Infinite mode uses only compiler-proven root forward pagination, not page-shaped arbitrary handlers, and stays distinct from ordinary mode. No second realtime/cache/normalization kernel or live page union is introduced.",
+		"Options capture codec input once without transport, abandoned-render input registries or authored key duplication. Scoped fingerprints and per-request SSR identity bootstrap preserve canonical identity without raw Context/input/credentials in keys. Client-visible bootstrap is neither authorization nor a deployment secret/dictionary-resistance guarantee. Equal Context under a new credential lifetime requires retirement and a fresh owner.",
+		"Native Start integration remains the sole serializer, stream and Query hydration owner. Server requests have independent cache/identity and only finite reads. Fresh ordinary/infinite/live browser work waits for the host-owned initial-document readiness boundary; no private Router completion flag, timestamp causality, timeout bypass or second deserializer. Real browser evidence distinguishes successful, interrupted, failed-script, navigation and credential-switch outcomes and explicitly limits script replay/bfcache/never-settling document claims.",
+		"Retirement fences old options and clears attached native Query/Mutation state without changing a replacement scope. A temporary prefix guard prevents late initial hydration from restoring retired cache hits and ends at the existing readiness boundary. Already-disclosed copies and already-running application callbacks cannot be erased. A retired Mutation distinguishes not-dispatched/committed/rejected/unknown with safe correlated Call Identity and decoder-proven Transaction Identity, never domain payload/cause; disposal is not dispatched-write cancellation, rollback or replay.",
+		"Known decoded local commits, including validated correlated COMMITTED_RESULT_UNAVAILABLE, conservatively invalidate all generated public non-live families within the binding. No precise arbitrary-handler write-set is claimed or private Policy dependency graph exposed. Older reads are cancelled before native stale/refetch work; active live browser families are excluded, while infinite/server modes remain one-shot. Refresh failure does not replace Mutation outcome/callback; unknown or forged errors do not become commit evidence; remote writes/later Jobs require existing live or explicit refresh.",
+		"Owner-confirmed optimism stays in a tested native userland recipe: pending intent separate from current successful authorized base, no saved whole-cache rollback, ordered framework layers, automatic rebase or no-flicker/commit-observed guarantee. Query failure/omission and overlapping/retired writes have executable limits. TanStack DB, live infinite, offline/persistence and domain nonce/outbox deduplication stay outside this beta.",
+		"Actual PostgreSQL17 Collaboration consumer preserves immutable compiled Runtime artifacts, executes generated HTTP/SSE through native observers, tests two distinct one-shot families and independent live windows, response-loss no automatic retry despite host retry defaults, reconnect complete replacement, real Policy Field omission and membership loss. It does not recreate kernel receipt/replay/retention proofs or claim atomic/contiguous cross-Query windows. Owned loopback container/temp cleanup is explicit and all review findings are repaired.",
+		"Retain Accepted framework-neutral Query Resource and its real non-React consumer. After native Support Desk migration delete only the obsolete questpie/react hook/export with no forwarding alias. Preserve exactly two npm packages questpie and questpie-opentelemetry. Root/generated client runtime isolation is proved; type-only native peer imports do not establish missing-peer import failure. Direct compiler lowering, final peer metadata, packed relocation and production consumer/docs/skills/deletion remain explicit implementation gates, not claimed done by isolated bundles.",
+		"ADR-0044 remains Proposed until a committed generated record verifies PASS, then separate authority projection and test-first production extraction follow. SPEC/CONTEXT and released public docs have not silently accepted this candidate. Existing lifecycle/Policy/Query/Mutation/Operation Wire/Change Ledger semantics remain unchanged. This one default pinned Opus-medium review has a 60-minute transport allowance under the owner's timeout correction; no fallback or automatic NO_RESULT retry. Aggregate ADR0039, final combined quality/PG/browser/double-pack/stable-runner gates, manual preview and explicit release authority remain separate."
+	],
+	"authorityDocuments": [
+		{
+			"name": ".agents/skills/questpie-v4/references/proof.md",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "abac0cf7fcefd7b8604fc9c0d7d60f7801f34454ed805924e60bf4b12421c498"
+		},
+		{
+			"name": "docs/v4/DELIVERY-FLOW.md",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "4041c0f4f7f450928a33a51c0c096211d851c255a319f009a64be3fe6ab74cfc"
+		},
+		{
+			"name": "SPEC.md",
+			"path": "SPEC.md",
+			"sha256": "8cd06c68afee320cef230ca8da9b9e7f5f5293e5268423562a9d26bc47ce257b"
+		},
+		{
+			"name": "CONTEXT.md",
+			"path": "CONTEXT.md",
+			"sha256": "35923bba65f4b5d4906110711df42e53617455a1ef71fc575aee3361644b6466"
+		},
+		{
+			"name": "docs/adr/0012-freeze-live-query-and-change-ledger.md",
+			"path": "docs/adr/0012-freeze-live-query-and-change-ledger.md",
+			"sha256": "14cfc6eceae76c8411d8c9193486e3d89f16fa66dd605fad30aeeb2cdb8bd9b8"
+		},
+		{
+			"name": "docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"path": "docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"sha256": "650e88f7a78ec9c0fa105c9c7209aa470b611feaba10d79fb55fc621f586f7e4"
+		},
+		{
+			"name": "docs/adr/0023-freeze-post-commit-operation-outcome.md",
+			"path": "docs/adr/0023-freeze-post-commit-operation-outcome.md",
+			"sha256": "47a26be509b42d8a8b82c0ef1bbde6b70667234b6b4c9c7d0a2d5ac3e439acdf"
+		},
+		{
+			"name": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "docs/adr/0032-freeze-bounded-inverse-tomany-query-projection.md",
+			"path": "docs/adr/0032-freeze-bounded-inverse-tomany-query-projection.md",
+			"sha256": "9f6bd2231e736d88fd09655408ca4ef1f53510939262d4bb24214a62bc5a589d"
+		},
+		{
+			"name": "docs/adr/0035-freeze-query-resource-and-react-client-integration.md",
+			"path": "docs/adr/0035-freeze-query-resource-and-react-client-integration.md",
+			"sha256": "370ba64359f9ef204d5045bea41a971c1a24717d04ff359046ff02ba64002e32"
+		},
+		{
+			"name": "docs/adr/0042-freeze-public-package-identities.md",
+			"path": "docs/adr/0042-freeze-public-package-identities.md",
+			"sha256": "fa1f8158b7c73e90aa6792f7baffa226d329744ed4fd5deaf341e73d4ca52acd"
+		},
+		{
+			"name": "docs/v4/research/react-tanstack-integration-2026-09-08/BETA2-SCOPE-DECISION.md",
+			"path": "docs/v4/research/react-tanstack-integration-2026-09-08/BETA2-SCOPE-DECISION.md",
+			"sha256": "e14f079825e661072f16d5711e20f8f405b4138104feaaf5729d51cc71bd0592"
+		},
+		{
+			"name": "docs/adr/0044-native-react-query-integration.md",
+			"path": "docs/adr/0044-native-react-query-integration.md",
+			"sha256": "c61b9d52f143e50f9817dd08e31e9348db6b951a1f02e2b5e72b24ccb97c2318"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/SSR-CANDIDATE.md",
+			"path": "docs/v4/prototypes/react-query-integration/SSR-CANDIDATE.md",
+			"sha256": "a9cbfe88bc717467f3220fabfd2131e50120d75ffe9fa05ab57fff70777e88b5"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/IDENTITY-EVIDENCE.md",
+			"path": "docs/v4/prototypes/react-query-integration/IDENTITY-EVIDENCE.md",
+			"sha256": "d6df56660c450c3a73bb4ee4549596c31cd19d49ffb2548f8ec49a47691e3b5b"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/SSR-LIFETIME-EVIDENCE.md",
+			"path": "docs/v4/prototypes/react-query-integration/SSR-LIFETIME-EVIDENCE.md",
+			"sha256": "aa0de373debc18006dcd89f90abf0565dd30a3ebfc848cd072e0ff810930b77a"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/MUTATION-LIFETIME-EVIDENCE.md",
+			"path": "docs/v4/prototypes/react-query-integration/MUTATION-LIFETIME-EVIDENCE.md",
+			"sha256": "664c1bc0286441eaecfc30b8d4f96bff13a4a063164bfc709aff6053aa1949bf"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/INVALIDATION-CANDIDATE.md",
+			"path": "docs/v4/prototypes/react-query-integration/INVALIDATION-CANDIDATE.md",
+			"sha256": "661b20bec6b352d50e5b6a3465d73992e9a21f472ec5b2b8b23d771b05f674ce"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/INVALIDATION-EVIDENCE.md",
+			"path": "docs/v4/prototypes/react-query-integration/INVALIDATION-EVIDENCE.md",
+			"sha256": "123a59555a3fbf7e0af4762f12507b825da3b3a167a41bad418b9d0d10fec7e5"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/USERLAND-OPTIMISM-CANDIDATE.md",
+			"path": "docs/v4/prototypes/react-query-integration/USERLAND-OPTIMISM-CANDIDATE.md",
+			"sha256": "47c26cec6d2a73f9d5c6f3daf14eb765ac8b72079f3d010f46fe72865bdc7e7c"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/INFINITE-EVIDENCE.md",
+			"path": "docs/v4/prototypes/react-query-integration/INFINITE-EVIDENCE.md",
+			"sha256": "f6ecf7d136a69bdeb5cd22d1884e4d686061e6c0cc8927f0eaffbb74e728fc73"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/start-app/CREDENTIAL-SWITCH-EVIDENCE.md",
+			"path": "docs/v4/prototypes/react-query-integration/start-app/CREDENTIAL-SWITCH-EVIDENCE.md",
+			"sha256": "4626ddb8514d940d56a7d6f067eac063a685d677e44d3d1816a482e6342024c8"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/collaboration-native-EVIDENCE.md",
+			"path": "docs/v4/prototypes/react-query-integration/collaboration-native-EVIDENCE.md",
+			"sha256": "87d9f30a239eb2b83c208394ea0e1cb2cc7a0a788d350864383f2a5a1e53621c"
+		},
+		{
+			"name": "docs/v4/prototypes/react-query-integration/factory-seam-evidence.md",
+			"path": "docs/v4/prototypes/react-query-integration/factory-seam-evidence.md",
+			"sha256": "79be9e8ae6822d37a506feb1d721f523b2d4db7bb97864138aa376f2292555e5"
+		}
+	],
+	"verification": [
+		{
+			"command": "In docs/v4/prototypes/react-query-integration with task-owned writable TMPDIR: bun test live-options.test.ts generated-client.test.ts query-adapter.test.ts generation.test.ts generated-live.test.ts hydration-identity.test.ts infinite-query.test.ts pagination-source.test.ts renamed-pagination.test.ts react-suspense.test.ts mutation-lifetime.test.ts invalidation.test.ts userland-optimism.test.ts (76 PASS, 315 assertions after final retirement guard)",
+			"result": "PASS"
+		},
+		{
+			"command": "In prototype: bun test react-dom.test.ts (2 PASS, 12 assertions); bun run types:generated; bun run types:infinite; bun run types:react-errors; bun run types:generation; bun run types:renamed; bun run types:check (all six strict projects PASS)",
+			"result": "PASS"
+		},
+		{
+			"command": "In prototype/start-app with task-owned writable TMPDIR and parent generation frozen: bun run build; bun run types:check; bun run test:browser; bun run test:browser:faults; bun run test:browser:credentials (actual Firefox baseline37, faults45, credential-switch26 assertions PASS; credential suite passed twice after repair)",
+			"result": "PASS"
+		},
+		{
+			"command": "In prototype: bun run test:factory (full-source Support Desk pagination preparation; isolated separate-bundle factory 4 PASS/27 assertions; strict public native factory types PASS)",
+			"result": "PASS"
+		},
+		{
+			"command": "In prototype: bun run test:collaboration; bun run types:collaboration (owned PostgreSQL17 runner 2 PASS/39 assertions, strict harness types PASS; no shared database)",
+			"result": "PASS"
+		},
+		{
+			"command": "Changed-file repository formatting/lint; independent Standards/Spec review of invalidation, userland recipe, public factory, PostgreSQL consumer and Proposed ADR/retirement guard. Concrete peer/URL/window/cleanup/outcome-wording findings reproduced or adjudicated and repaired; no outstanding code blocker. These are ordinary reviews, not a formal architecture PASS.",
+			"result": "PASS"
+		},
+		{
+			"command": "Unchanged findAcceptancePacketSecret scanner over final collaboration-native.test.ts and collaboration-native-run.ts: PASS after approved local-URL source-form repair; no scanner modification.",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run format:ratchet; bun run skill:check; git diff --check (current candidate docs and owned source PASS; public skill remains existing released syntax)",
+			"result": "PASS"
+		}
+	]
+}
