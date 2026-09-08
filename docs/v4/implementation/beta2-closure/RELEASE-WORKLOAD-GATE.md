@@ -16,7 +16,7 @@ dry-run. The repository's `test:load`, `test:soak`, and `bench:micro` scripts
 remain their execution owners. This selected matrix is not all 19 manifests.
 
 The workflow pins checkout to the triggering commit and checks that identity
-before work and before publication. Failure, cancellation, missing PostgreSQL
+and unchanged tracked content before work and before publication. Failure, cancellation, missing PostgreSQL
 configuration, or missing evidence must prevent publication. Logs identify the
 exact commit and run attempt. No reusable PASS file or operator-supplied success
 flag authorizes publishing.
@@ -50,6 +50,13 @@ the volume-removal flag. Docker documents
 [loopback port publication](https://docs.docker.com/engine/network/port-publishing/).
 These are inspected implementation facts, not evidence of an executed workflow.
 
+Workload output is streamed to the Actions log and uploaded as a commit/run-bound
+artifact, including output from failed attempts. The workflow then removes only
+its own generated log directory, after checking its exact parent, basename and
+real path. A symlink or outside path fails closed rather than being followed.
+GitHub owns service-container teardown; the workflow never calls a broad Docker
+or filesystem cleanup command.
+
 ## Verification and remaining prerequisites
 
 Tests inspect the parsed executable workflow: mandatory ordering, exact checkout,
@@ -64,3 +71,20 @@ runner is release evidence; local workflow tests are not performance evidence.
 Schedule acceptance and the subsequent beta.2 acceptance/projection remain
 separate prerequisites. No new benchmark, provisioning framework, database
 fallback, or publication permission is introduced.
+
+## Local implementation evidence
+
+The initial workflow test failed because publication had no workload predecessor.
+Subsequent red tests exposed absent service ownership, absent manual-event
+restriction, inherited database environment, and missing owned-log cleanup.
+Executing the actual workflow Bash body with only the Bun process boundary
+stubbed caught a further defect: a failed first operand in an `&&` list did not
+stop under `set -e`. Separate mandatory port checks now reject missing, zero,
+out-of-range and malformed ports before any database command.
+
+The focused workflow and existing scenario-selection suite passes 15 tests and
+84 assertions. Actual shell failure propagation and exact-owned cleanup run
+locally; the benchmark command and PostgreSQL process boundary are not executed.
+Strict TypeScript with `--noUncheckedIndexedAccess`, warning-denying lint,
+focused format checking and `git diff --check` pass. The workflow has not been
+dispatched, and no container, runner registration, tag or package was created.

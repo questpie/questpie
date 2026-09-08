@@ -53,6 +53,17 @@ show the red/green evidence, list commands actually run, and call out every
 deferred edge. Releases use the repository release workflow; never publish a
 package directly from a developer checkout.
 
+The release workflow runs the fixed beta.2 workload matrix on the dedicated
+`questpie-release` runner after quality checks and before publication. Its
+PostgreSQL 17 service is disposable and loopback-only; never substitute a
+shared database. Manual workflow dispatch runs validation without publishing,
+even when the selected ref is a tag. It still needs authorization and the
+protected `npm` environment. Workload logs are retained with the exact commit
+and run attempt. See the
+[release workload gate](docs/v4/implementation/beta2-closure/RELEASE-WORKLOAD-GATE.md)
+for its selected scenarios and remaining runner prerequisites. Local workflow
+tests and performance-manifest validation are not stable-runner evidence.
+
 If a command is slow, first confirm that it belongs to the selected lane. The
 changed loop targets seconds; PostgreSQL concurrency, managed providers, load,
 and soak run outside each red-green step.
