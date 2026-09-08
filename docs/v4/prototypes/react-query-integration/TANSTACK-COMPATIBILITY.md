@@ -13,8 +13,8 @@ scope projection.
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Ordinary Query and Mutation                  | Native hooks infer generated types; jsdom StrictMode executes Query selectors and Mutation submission | Real browser, complete Mutation retirement and error reset                                                                                   |
 | `useSuspenseQuery` / `useSuspenseQueries`    | Strict inference and server rendering pass; jsdom scope retirement reaches the error boundary         | Abandoned render, live remount, server denial and error-boundary reset                                                                       |
-| `useInfiniteQuery`                           | Not implemented; ordinary queryFn ignores pageParam and has no page envelope                          | Compiler-known cursor mapping, distinct normal/infinite identities, next/previous pages, maxPages and refetch                                |
-| `useSuspenseInfiniteQuery`                   | Not implemented                                                                                       | Infinite consumer plus suspense lifecycle                                                                                                    |
+| `useInfiniteQuery`                           | Generated forward prototype: full source compilation, native pages/maxPages and strict hook types     | Real browser and SSR identity/lifetime                                                                                                       |
+| `useSuspenseInfiniteQuery`                   | Generated options pass strict native hook and selector inference                                      | Infinite consumer plus actual suspense lifecycle                                                                                             |
 | Start loader prefetch                        | Only finite native fetch is proved                                                                    | `ensureQueryData` in an actual Start loader, client navigation and cancellation                                                              |
 | Start SSR, streaming, hydration              | Current independent scope keys miss hydrated data                                                     | Per-request isolation, matching authorized server/client identity, codec-safe data, one browser watch handoff                                |
 | Live infinite results                        | Not implemented                                                                                       | Page-boundary inserts/deletes, omitted fields, revocation, page eviction and complete replacement without duplicates or stale protected rows |
@@ -26,8 +26,8 @@ Where the compiler knows the pagination contract, the adapter should project it;
 an arbitrary named Query result must not have its cursor semantics guessed.
 The [pagination research](PAGINATION-RESEARCH.md) identifies the existing
 structural template metadata that can supply this mapping without another
-authored cursor definition. It specifies the next executable consumer; it
-does not claim an implemented infinite capability.
+authored cursor definition. The [infinite checkpoint](INFINITE-EVIDENCE.md)
+executes that forward capability; it does not establish live infinite support.
 Source: [official infinite Query guide](https://tanstack.com/query/latest/docs/framework/react/guides/infinite-queries).
 
 Suspense excludes conditional enabled/disabled behavior and placeholderData.

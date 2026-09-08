@@ -1,7 +1,9 @@
 # Pagination projection research
 
-Research and source-compilation evidence, 2026-09-08. No infinite implementation,
-acceptance, or infinite-hook support claim. Inspected compiler/Runtime sources and the prototype's installed
+Research and source-compilation evidence, 2026-09-08. The later
+[infinite checkpoint](INFINITE-EVIDENCE.md) implements the preferred finite
+prototype; this research is not acceptance or public support authority.
+Inspected compiler/Runtime sources and the prototype's installed
 TanStack Query **5.102.8**. Upstream web documentation was checked, but its
 `latest` redirects can describe newer APIs; installed source controls the
 version-specific findings below.
@@ -64,7 +66,7 @@ not prove identity-preserving pagination dataflow.
 
 ## Two bounded interface candidates
 
-These are sketches, not callable prototype exports.
+Candidate 1 is now callable in the linked prototype, not a public export.
 
 1. **Generated forward capability for proven root pages (preferred).**
    `rq.queries["tickets.queue"].infiniteOptions({ statuses: null, teamIds: null, first: 25 })`

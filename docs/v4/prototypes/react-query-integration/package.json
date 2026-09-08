@@ -4,6 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"generate:proof": "bun run prepare-generated.ts",
+		"generate:pagination": "bun run prepare-pagination.ts",
 		"measure:generation": "bun run generate:proof && bun run measure-generation.ts",
 		"diagnose:retirement": "bun run generate:proof && bun run diagnose-retirement.ts",
 		"diagnose:hydration": "bun run generate:proof && bun run diagnose-hydration.ts",
@@ -12,9 +13,13 @@
 		"test:live": "bun run generate:proof && bun test generated-live.test.ts",
 		"test:react": "bun run generate:proof && bun test react-suspense.test.ts && bun test react-dom.test.ts",
 		"test:pagination-source": "bun test pagination-source.test.ts",
+		"test:pagination-renamed": "bun test renamed-pagination.test.ts",
+		"test:infinite": "bun run generate:pagination && bun test infinite-query.test.ts",
 		"types:check": "tsc -p tsconfig.json",
 		"types:generated": "tsc -p tsconfig.generated.json",
 		"types:react-errors": "tsc -p tsconfig.react-errors.json",
+		"types:infinite": "tsc -p tsconfig.infinite.json",
+		"types:renamed": "tsc -p tsconfig.renamed.json",
 		"types:generation": "tsc -p tsconfig.generation.json"
 	},
 	"dependencies": {

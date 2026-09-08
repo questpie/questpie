@@ -1,5 +1,6 @@
 import type {
 	DataTag,
+	InfiniteData,
 	MutationObserverOptions,
 	QueryClient,
 	QueryFunction,
@@ -9,6 +10,8 @@ import { createLiveQueryOptions } from "./live-options";
 import {
 	projectionVersion,
 	type CapturedRead,
+	type CapturedForwardRead,
+	type ForwardReadDescriptor,
 	type MutationDescriptor,
 	type Projection,
 	type ReadDescriptor,
@@ -34,7 +37,27 @@ type QueryFactory<Descriptor extends ReadDescriptor<never, unknown, unknown>> =
 			refetchOnMount?: false;
 		};
 		isError: Descriptor["isError"];
-	}>;
+	}> &
+		(Descriptor extends {
+			readonly forward: ForwardReadDescriptor<infer Input, infer Output>;
+		}
+			? Readonly<{
+					infiniteOptions(input: Input): {
+						queryKey: DataTag<
+							readonly string[],
+							InfiniteData<Output, string | null>,
+							unknown
+						>;
+						queryFn: QueryFunction<Output, readonly string[], string | null>;
+						initialPageParam: string | null;
+						getNextPageParam: (page: Output) => string | undefined;
+						select: (
+							data: InfiniteData<Output, string | null>,
+						) => InfiniteData<Output, string | null>;
+						retry: false;
+					};
+				}>
+			: unknown);
 type MutationFactory<
 	Descriptor extends MutationDescriptor<never, unknown, unknown>,
 > = Readonly<{
@@ -83,6 +106,7 @@ export function bindProjection<Source extends Projection>(
 		{
 			key: readonly string[];
 			captured: CapturedRead<unknown>;
+			forward?: CapturedForwardRead<unknown>;
 			live?: ReturnType<typeof createLiveQueryOptions<unknown>>;
 		}
 	>();
@@ -91,6 +115,59 @@ export function bindProjection<Source extends Projection>(
 			name,
 			Object.freeze({
 				isError: descriptor.isError,
+				...(descriptor.forward
+					? {
+							infiniteOptions(input: never) {
+								if (retired) throw new Error("SCOPE_RETIRED");
+								const forward = descriptor.forward!;
+								const captured = forward.capture(input);
+								const identity = JSON.stringify([
+									"infinite",
+									descriptor.identity,
+									captured.canonical,
+								]);
+								let entry = captures.get(identity);
+								if (!entry) {
+									if (captures.size >= proofCaptureLimit)
+										throw new Error("PROOF_CAPTURE_LIMIT");
+									entry = {
+										key: Object.freeze([
+											...prefix,
+											descriptor.identity,
+											"infinite",
+											String(++ordinal),
+										]),
+										captured: {
+											canonical: captured.canonical,
+											call: (options) => captured.call(null, options),
+										},
+										forward: captured,
+									};
+									captures.set(identity, entry);
+								}
+								const retained = entry.forward!;
+								return {
+									queryKey: entry.key,
+									retry: false,
+									initialPageParam: null,
+									getNextPageParam: forward.next,
+									// Native hooks otherwise default pageParams to unknown[].
+									// Identity selection preserves the generated cursor type.
+									select: (data: InfiniteData<unknown, string | null>) => data,
+									queryFn: ({
+										signal,
+										pageParam,
+									}: {
+										signal: AbortSignal;
+										pageParam: string | null;
+									}) => {
+										if (retired) throw new Error("SCOPE_RETIRED");
+										return retained.call(pageParam, { signal });
+									},
+								};
+							},
+						}
+					: {}),
 				options(input: never) {
 					if (retired) throw new Error("SCOPE_RETIRED");
 					const captured = descriptor.capture(input);

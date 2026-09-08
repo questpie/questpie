@@ -30,6 +30,17 @@ export interface ReadDescriptor<Input, Output, DeclaredError> {
 	readonly identity: string;
 	capture(input: Input): CapturedRead<Output>;
 	isError(error: unknown): error is DeclaredError;
+	readonly forward?: ForwardReadDescriptor<never, Output>;
+}
+
+export interface CapturedForwardRead<Output> {
+	readonly canonical: string;
+	call(pageParam: string | null, options?: CallOptions): Promise<Output>;
+}
+
+export interface ForwardReadDescriptor<Input, Output> {
+	capture(input: Input): CapturedForwardRead<Output>;
+	next(page: Output): string | undefined;
 }
 
 export interface MutationDescriptor<Input, Output, DeclaredError> {

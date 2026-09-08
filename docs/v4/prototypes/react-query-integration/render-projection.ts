@@ -1,7 +1,12 @@
 import { renderCodecType } from "../../../../packages/compiler/src/runtime/client";
 import type { NormalizedResource } from "../../../../packages/compiler/src/types";
 
-function errorType(resource: NormalizedResource): string {
+type ProjectionResource = Pick<
+	NormalizedResource,
+	"kind" | "name" | "identity" | "contract"
+>;
+
+function errorType(resource: ProjectionResource): string {
 	const errors = resource.contract.declaredErrors as Record<
 		string,
 		{ code: string; status: number; payload: unknown }
@@ -19,8 +24,9 @@ function errorType(resource: NormalizedResource): string {
 /** Throwaway instrumentation: reuses the unchanged renderer's codecs/transport. */
 export function instrumentClient(
 	source: string,
-	resources: readonly NormalizedResource[],
+	resources: readonly ProjectionResource[],
 	watchable: readonly string[] = [],
+	pages: readonly { identity: string; after: string }[] = [],
 ): string {
 	const start = "return Object.freeze({ context, queries: Object.freeze({";
 	const end = "}), withContext: scope });";
@@ -34,7 +40,11 @@ export function instrumentClient(
 			)
 			.map((resource) => {
 				const method = `GeneratedClientScope[${JSON.stringify(kind === "query" ? "queries" : "mutations")}][${JSON.stringify(resource.name)}]`;
-				return `${JSON.stringify(resource.name)}: ${kind === "query" ? "ReadDescriptor" : "MutationDescriptor"}<Parameters<${method}>[0], Awaited<ReturnType<${method}>>, ${errorType(resource)}>;`;
+				const page =
+					kind === "query"
+						? pages.find((page) => page.identity === resource.identity)
+						: undefined;
+				return `${JSON.stringify(resource.name)}: ${kind === "query" ? "ReadDescriptor" : "MutationDescriptor"}<Parameters<${method}>[0], Awaited<ReturnType<${method}>>, ${errorType(resource)}>${page ? ` & { readonly forward: ForwardReadDescriptor<Omit<Parameters<${method}>[0], ${JSON.stringify(page.after)}>, Awaited<ReturnType<${method}>>> }` : ""};`;
 			})
 			.join("\n");
 	const members = (kind: "query" | "mutation") =>
@@ -46,11 +56,18 @@ export function instrumentClient(
 			.map((resource) => {
 				const id = JSON.stringify(resource.identity);
 				const method = `scope.${kind === "query" ? "queries" : "mutations"}[${JSON.stringify(resource.name)}]`;
-				return `${JSON.stringify(resource.name)}: Object.freeze({ identity: ${id}, ${kind === "query" ? `capture: (input: Parameters<typeof ${method}>[0]) => captureClientRead(${id}, ${method}, input${watchable.includes(resource.identity) ? `, ${method}.watch` : ""})` : `invoke: ${method}`}, isError: (error: unknown): error is ${errorType(resource)} => matchesClientError(${id}, error) }),`;
+				const page =
+					kind === "query"
+						? pages.find((page) => page.identity === resource.identity)
+						: undefined;
+				const forward = page
+					? `, forward: Object.freeze({ capture: (input: Omit<Parameters<typeof ${method}>[0], ${JSON.stringify(page.after)}>) => captureForwardRead(${id}, ${method}, input, ${JSON.stringify(page.after)}), next: (page: Awaited<ReturnType<typeof ${method}>>) => page.pageInfo.hasNextPage ? page.pageInfo.endCursor ?? undefined : undefined })`
+					: "";
+				return `${JSON.stringify(resource.name)}: Object.freeze({ identity: ${id}, ${kind === "query" ? `capture: (input: Parameters<typeof ${method}>[0]) => captureClientRead(${id}, ${method}, input${watchable.includes(resource.identity) ? `, ${method}.watch` : ""})` : `invoke: ${method}`}, isError: (error: unknown): error is ${errorType(resource)} => matchesClientError(${id}, error)${forward} }),`;
 			})
 			.join("\n");
 	return (
-		`import type { CapturedRead, ReadDescriptor, MutationDescriptor, ProjectionWatchFailure } from "../projection-contract";\n` +
+		`import type { CapturedRead, ReadDescriptor, MutationDescriptor, ProjectionWatchFailure, CapturedForwardRead, ForwardReadDescriptor } from "../projection-contract";\n` +
 		source
 			.replace(
 				start,
@@ -70,6 +87,16 @@ export interface ClientProjection {
 }
 
 const clientProjections = new WeakMap<GeneratedClientScope, ClientProjection | undefined>();
+
+function captureForwardRead<Input, Output>(identity: string, call: (input: Input, options?: CallOptions) => Promise<Output>, input: unknown, after: string): CapturedForwardRead<Output> {
+	const base = wireRecord(input);
+	if (Object.hasOwn(base, after)) return protocolFailure();
+	const canonical = encode(inputCodecs[identity], { ...base, [after]: null });
+	return Object.freeze({
+		canonical: JSON.stringify(canonical),
+		call: (pageParam: string | null, options?: CallOptions) => call({ ...wireRecord(decode(inputCodecs[identity], canonical)), [after]: pageParam } as Input, options),
+	});
+}
 
 function captureClientRead<Input, Output>(identity: string, call: (input: Input, options?: CallOptions) => Promise<Output>, input: Input, watch?: (input: Input, callback: (value: Output) => void, options?: { onError?: (failure: ProjectionWatchFailure) => void }) => () => void): CapturedRead<Output> {
 	const canonical = encode(inputCodecs[identity], input);
