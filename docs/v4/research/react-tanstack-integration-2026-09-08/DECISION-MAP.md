@@ -7,14 +7,17 @@ work and dirty Autopilot migration remain separate.
 ## Ratification delta
 
 Already requested: real TanStack Query integration; generated/inferred contracts;
-useful invalidation and optimism; investigate TanStack DB. Do not re-grill these.
+useful invalidation and native userland optimism; investigate TanStack DB. The
+later [owner-confirmed scope decision](BETA2-SCOPE-DECISION.md) defers framework
+optimistic layers and a no-flicker commit-to-observation guarantee. Do not
+re-grill these choices.
 
 Resolve only the guarantees that research could not establish:
 
-1. Choose and prove the initial observation boundary: fresh post-commit watch
-   generation first; new opaque wire receipt only if the cost or correctness
-   evidence rejects that candidate. Specify committed-but-unobserved, unknown
-   outcome, cancellation, retry and protected-state retirement independently.
+1. Keep commit outcome separate from Query freshness. A causal observation
+   fence, fresh-watch confirmation and new observation receipt are not beta.2
+   blockers after the owner-confirmed scope reduction. Preserve known commit,
+   unknown outcome, cancellation, retry and protected-state retirement rules.
 2. The owner settled the release cut on 2026-09-08: native React Query,
    Suspense, forward infinite Queries, safe scope lifetime **and TanStack Start
    SSR/hydration are required before beta.2**. Use the standard TanStack
@@ -106,9 +109,9 @@ there is no compatibility identity path or production authority projection.
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | R1: Descriptor and ordinary Query/Mutation vertical | Focused public-surface decision                 | Compiler emits one reusable descriptor; native options infer input, output and declared errors; direct/generated transport behavior unchanged; no repeated schema/key registry                                 |
 | R2: Live Task detail and terminal scope lifetime    | R1                                              | First fetch resolves; active observers share one watch; disabled observer/prefetch/GC behavior explicit; browser credential switch, denied result and old references cannot restore protected state            |
-| R3: Task detail + board transition                  | R2 and chosen observation semantics             | Known commit distinguished from observed snapshot; no-op/delete/filter cases; overlapping A/B optimistic layers; expectedVersion conflict; cancellation/lost ack; separate Query views never advertised atomic |
+| R3: Native userland optimism recipe                 | R1 + R2                                         | Generated native callback/state types; pending intent separate from authorized base; error and disposal limits; no blind whole-cache rollback or framework-owned layers                                        |
 | R4: Conservative inferred invalidation              | R1; integrates with R3                          | Policy/Context/relation/lifecycle/cascade cases have no false negatives; opaque dependencies handled explicitly; no private write-set disclosure; active live recompute not duplicated by blanket HTTP refresh |
-| R5: Conversation and Library counterexamples        | R3 + R4                                         | Nonce duplication, replay gap, composite windows, membership revocation and multi-family writes preserve behavior; mechanical logic removed without deleting domain semantics                                  |
+| R5: Conversation and Library counterexamples        | R2 + R4                                         | Nonce duplication, replay gap, composite windows, membership revocation and multi-family writes preserve generated/live behavior; no automatic optimistic reconciliation claim                                 |
 | R6: Public adapter and consumer migration           | R2–R5 + applicable acceptance                   | Recommended exports/docs/skills agree; current consumers migrated; obsolete paths deleted only once unused; browser/PostgreSQL and Standards/Spec evidence on exact candidate                                  |
 | DB1: Optional keyed Query collection proof          | R1 + R2; independent of R3–R6 release inclusion | Full snapshots remove omitted fields; keys proved or explicitly supplied; pending/cleanup/late completion safe; no queued-commit deadlock; no universal normalized Collection authority claim                  |
 | SSR1: Server prefetch and hydration                 | R1 + R2; required for beta.2                    | Per-request cache/identity and codec-safe serialized values; no cross-user hydration; finite prefetch and single live handoff                                                                                  |
@@ -118,10 +121,11 @@ reference app, then prove the Autopilot Task behavior before broad migration.
 Actual Autopilot port remains subject to its released-artifact gate; source
 inspection here did not waive it.
 
-R3 and DB1 must also test an authorized replacement which removes a formerly
-visible field or row while an older optimistic write is pending. The pending
-layer must not restore removed protected data. This is not covered by terminal
-scope disposal, a denied response, or testing full replacement without optimism.
+R3 must demonstrate that its recommended pending-UI recipe does not restore
+old authorized rows/Fields through a whole-cache rollback. Arbitrary application
+cache mutation remains user-owned. The stronger ordered-layer omission/rebase
+proof remains a requirement for any future framework optimism or optional DB
+claim, not permission to reintroduce that engine into beta.2.
 
 ## Supersession ledger to carry into the focused ADR
 
@@ -132,7 +136,7 @@ navigation and ordinary/infinite readiness races. The
 closes attached observer cleanup and fences pending decoded outcomes without
 claiming rollback or cancellation of already-started native callbacks. Private
 projection v3 replaces v1/v2 without compatibility. Full credential-switch
-consumers, R3/R4, production migration and architecture acceptance remain open;
+consumers, revised R3/R4, production migration and architecture acceptance remain open;
 earlier checkpoint counts and counterexamples above are historical evidence.
 
 | Existing authority                                      | Candidate change                                                                                                        | Remains unchanged                                                                                                         |

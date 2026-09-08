@@ -3,6 +3,12 @@
 Research recommendation, 8 September 2026. Not an Accepted decision, implementation,
 published export, or beta readiness claim.
 
+The later [owner-confirmed beta.2 scope decision](BETA2-SCOPE-DECISION.md)
+defers this recommendation's framework-owned optimistic layers and causal
+commit-to-observation guarantee. Native userland optimism gets an executable
+recipe; inferred invalidation remains required. The broader design below is
+retained research, not the current beta.2 implementation checklist.
+
 ## The decision I recommend
 
 Make `questpie/react-query` a real TanStack Query integration over generated

@@ -850,6 +850,12 @@ for this Proposed work is
 Existing ADR-0035/0042 product exports remain unchanged until the focused
 superseding decision and consumer migration; no compatibility adapter is added.
 
+The owner-confirmed `BETA2-SCOPE-DECISION.md` in that research directory defers
+framework-owned optimistic layers, automatic rollback/rebase and a no-flicker
+commit-to-observed guarantee. Native userland optimism needs a typed executable
+recipe. Conservative inferred invalidation remains a beta.2 blocker; do not
+reopen this scope choice or introduce an optimistic engine to finish the recipe.
+
 The computed-identity prototype and native Start production build now have real
 Firefox evidence, including a successful delayed-stream-to-live handover with
 clock skew. Read
@@ -859,7 +865,7 @@ and the follow-up `SSR-LIFETIME-EVIDENCE.md` and
 streams, failed JavaScript, navigation during hydration, ordinary/infinite
 readiness races, and attached Mutation state plus pending-outcome retirement.
 Do not mark R1/R2/SSR1 complete: full credential-switch consumers,
-optimism/invalidation, production migration and the focused superseding
+inferred invalidation, the userland recipe, production migration and the focused superseding
 architecture acceptance are still open. Native callbacks which already received
 a result cannot be cancelled or have their copied data erased by disposal.
 Parent prototype generation and Start builds must run sequentially. Use writable
