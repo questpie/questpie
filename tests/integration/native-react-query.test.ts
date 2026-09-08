@@ -205,7 +205,32 @@ test("full-source native options preserve generated transport, codecs and inferr
 		console.log(
 			JSON.stringify({ scenario: "native-react-query-consumer", measurements }),
 		);
-		expect(relocated.generatedFiles).toEqual(first.generatedFiles);
+		try {
+			expect(relocated.generatedFiles).toEqual(first.generatedFiles);
+		} catch (error) {
+			// Preserve this rare failure after both builds, without instrumenting
+			// resolution or changing the inter-build schedule. These are synthetic
+			// fixture artifacts, not request data or environment values.
+			try {
+				const evidence = await mkdtemp(
+					join(tmpdir(), "questpie-native-relocation-failure-"),
+				);
+				await Promise.all([
+					writeFile(
+						join(evidence, "original.json"),
+						JSON.stringify(first.generatedFiles),
+					),
+					writeFile(
+						join(evidence, "relocated.json"),
+						JSON.stringify(relocated.generatedFiles),
+					),
+				]);
+				console.error(JSON.stringify({ relocationFailureArtifacts: evidence }));
+			} catch {
+				console.error("Could not retain native relocation failure artifacts");
+			}
+			throw error;
+		}
 		const consumer = await import(
 			pathToFileURL(join(temporary, "consumer.ts")).href
 		);
