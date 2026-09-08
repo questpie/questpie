@@ -865,8 +865,13 @@ Support Desk relocation, then stopped on two narrow Knip dependency classificati
 Those are repaired; strict Knip, its negative control, package contracts and
 the remaining packed OTel/performance gates pass separately. No end-to-end
 `quality:release` PASS or explanation of the earlier bundle mismatch is claimed.
-Next: freeze this extraction for independent Standards/Spec review and repeated
-real relocation, then rerun the complete release gate before closing NRQ-01.
+The extraction checkpoint is clean commit `ddc3c8462`. Independent Standards
+review found no confirmed breach; Spec review retains one deterministic-artifact
+verification blocker. Frozen repeated relocation reproduced the mismatch on its
+first standalone run with unchanged clean HEAD, so this is a current defect,
+not just broad-suite history. See `NRQ-01-REVIEW.md` beside the evidence.
+Next: capture both outputs and exact bundle inputs/resolved graph in disposable
+diagnostics, fix the cause, then repeat real relocation and the full release gate.
 Follow
 `docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md` for the repair
 frontier; NRQ-01 is not closed before the broader gate and independent reviews.

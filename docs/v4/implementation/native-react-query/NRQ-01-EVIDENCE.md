@@ -218,6 +218,11 @@ normalize bundles, or call that history repaired merely because these runs are
 green. Frozen-source repeated relocation and independent review remain required,
 followed by one complete release invocation on the finished slice.
 
-Independent Standards and Spec reviews remain pending. NRQ-02's complete
+Independent Standards and Spec reviews of the extraction checkpoint are recorded
+in [NRQ-01-REVIEW.md](./NRQ-01-REVIEW.md). Standards found no confirmed breach;
+Spec retains deterministic-artifact closure. Frozen repetition then failed on
+its first standalone run with unchanged clean HEAD. This is a current defect;
+diagnostics must now preserve both emitted maps and actual bundle graph inputs.
+NRQ-02's complete
 PostgreSQL/lifetime closure and NRQ-03's actual Start browser evidence are still
 outstanding.
