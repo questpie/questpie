@@ -1,5 +1,5 @@
 import { cp, mkdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 
@@ -43,6 +43,7 @@ export async function installQuestpieForTracer(
 			exports: {
 				".": "./index.ts",
 				"./react": "./react.ts",
+				"./react-query": "./react-query/index.ts",
 				"./internal/observability": "./internal/observability.ts",
 				"./internal/client-projection": "./internal/client-projection.ts",
 			},
@@ -57,6 +58,11 @@ export async function installQuestpieForTracer(
 		resolve(repositoryRoot, "packages/questpie/src/react.ts"),
 		join(packageRoot, "react.ts"),
 		"file",
+	);
+	await symlink(
+		resolve(repositoryRoot, "packages/questpie/src/react-query"),
+		join(packageRoot, "react-query"),
+		"dir",
 	);
 	await symlink(
 		resolve(repositoryRoot, "packages/questpie/src/internal/observability.ts"),
@@ -131,14 +137,17 @@ export async function installOpenTelemetryForTracer(
 export async function installReactForTracer(
 	applicationRoot: string,
 ): Promise<void> {
-	for (const dependency of ["react", "react-dom"]) {
+	for (const dependency of ["react", "react-dom", "@tanstack/react-query"]) {
 		const installed = join(applicationRoot, "node_modules", dependency);
 		await rm(installed, { force: true, recursive: true });
+		await mkdir(dirname(installed), { recursive: true });
 		await symlink(
 			await realpath(
 				resolve(
 					repositoryRoot,
-					"fixtures/team-support-desk/node_modules",
+					dependency === "@tanstack/react-query"
+						? "node_modules"
+						: "fixtures/team-support-desk/node_modules",
 					dependency,
 				),
 			),
