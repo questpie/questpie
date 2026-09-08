@@ -24,3 +24,8 @@ candidate merely to retry transport, select another reviewer, or project
 product authority. ADR-0043 and aggregate ADR-0039 remain Proposed. Resumption
 requires an explicitly authorized resolution of the review transport boundary.
 Completed deterministic proof and quality evidence remain retained.
+
+The owner's subsequent five-minute-deadline correction and the bounded
+60-minute follow-up are recorded separately in
+[ACCEPTANCE-TIMEOUT-CORRECTION.md](./ACCEPTANCE-TIMEOUT-CORRECTION.md).
+That direction resumes the lane; it does not change this historical outcome.

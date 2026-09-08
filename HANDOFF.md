@@ -910,9 +910,13 @@ The one formal review of candidate `2a40103a1` ended on 2026-09-08 in terminal
 `NO_RESULT: timeout` after the unchanged 300-second limit. No review record was
 generated. The
 [transport record](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-TRANSPORT-NO-RESULT.md)
-binds the exact invocation and packet. This acceptance lane is stopped: no retry
-of the head, fresh-head transport retry, fallback reviewer or authority
-projection is permitted without explicit resolution of that boundary.
+binds the exact invocation and packet. The owner then corrected the five-minute
+deadline, explaining that Opus may need approximately 50 minutes. The
+[timeout correction](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-TIMEOUT-CORRECTION.md)
+resumes this lane for one fresh Opus-medium follow-up with the existing
+`--timeout-ms 3600000` option. Preserve the terminal original result. Do not
+replace the reviewer, run a parallel review, relax acceptance criteria, or
+automatically repeat another NO_RESULT.
 Public authority projection requires a verified PASS, followed by the replacement
 aggregate beta.2 review. ADR-0043 and ADR-0039
 remain Proposed. Tagged stable-runner release evidence and the user's manual

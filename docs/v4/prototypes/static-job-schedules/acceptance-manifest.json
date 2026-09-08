@@ -28,7 +28,7 @@
 		"Real generated compiler, packed CLI, PostgreSQL 17, worker restart/checkpoint recovery, Collaboration, and Team Support Desk Firefox tracers establish integration rather than synthetic-model-only acceptance. The four PG environment skips cover only PG18 catalog features and optional PgBouncer, not this ADR's requirements. The example preserves immutable migrations/Seeds and uses documented domain-local Definitions and product web independent of tracer automation.",
 		"Supporting test/compiler/package repairs preserve ordinary lifecycle, Policy, Mutation ownership, receipt semantics, and fixed budgets. Earlier failed full-PostgreSQL and timing runs remain recorded, including the unexplained original schedule stall; a reproduced Mutation-test promise ownership repair is not presented as the cause of that stall.",
 		"Verification distinguishes exact implementation-head complete quality/PG and four-scenario reference-local load/soak evidence, subsequent test/document-only checks, and two byte-identical forced-build package dry-runs. No tagged stable-runner performance certification, manual user approval, beta.2 aggregate acceptance, publication, or production-readiness claim follows.",
-		"ADR-0043 remains Proposed throughout this candidate, with public schedule material retained as an internal draft. Only a committed credential-free-verified formal PASS permits a separate authority/public-documentation projection. ADR-0039 requires a fresh schedule-inclusive aggregate manifest; its Fable exception does not apply here. One pinned Opus-medium review, no fallback, no manufactured PASS, and terminal NO_RESULT rules remain unchanged.",
+		"ADR-0043 remains Proposed throughout this candidate, with public schedule material retained as an internal draft. Only a committed credential-free-verified formal PASS permits a separate authority/public-documentation projection. ADR-0039 requires a fresh schedule-inclusive aggregate manifest; its Fable exception does not apply here. The original pinned Opus-medium invocation ended in terminal timeout after five minutes. The owner corrected that deadline; this fresh follow-up uses the same reviewer with the supported --timeout-ms 3600000 option. No fallback or manufactured PASS is permitted; another NO_RESULT remains terminal.",
 		"The owner-approved packet-safety repair permits only one explicitly selected removed historical README database URL, binds the original complete raw diff and its exact redaction location, and retains all other review bytes and normal new-code/authority secret checks. Committed TypeScript source-form recognition changes only the scan shadow. Existing 16 protocol-v2 PASS records verify unchanged; the default pinned reviewer and terminal rules are unchanged.",
 		"Post-packet full quality failures are retained: the first long-process Bun segmentation fault remains unexplained; a later run failed temporary-file writes with EDQUOT. The unchanged candidate passed the complete lane with isolated disk-backed TMPDIR and unchanged tests/budgets. No claim is made that quota caused or repaired the earlier crash. Release CI currently validates performance manifests only and still needs actual stable-runner workload evidence before publication; this focused acceptance grants no release certification."
 	],
@@ -196,7 +196,7 @@
 		{
 			"name": "HANDOFF.md",
 			"path": "HANDOFF.md",
-			"sha256": "4d0bfce0ed36a54df6420f9561e7ff43bb4145e6ee01d4961454219d60cabd91"
+			"sha256": "eca1e9bd98e72a95705413deeac43d0e0a7022661961caf66656529871431f6b"
 		},
 		{
 			"name": "candidate preflight rejection and owner decision boundary",
@@ -217,6 +217,16 @@
 			"name": "post-packet-repair full quality evidence and retained failures",
 			"path": "docs/v4/prototypes/static-job-schedules/PACKET-GATE-CONTROL-EVIDENCE.md",
 			"sha256": "ecf584e3d8fd3cd99e2cd4da1a98d3831bfa5e81d542be0a8c044eb052c6221c"
+		},
+		{
+			"name": "docs/v4/prototypes/static-job-schedules/ACCEPTANCE-TRANSPORT-NO-RESULT.md",
+			"path": "docs/v4/prototypes/static-job-schedules/ACCEPTANCE-TRANSPORT-NO-RESULT.md",
+			"sha256": "489b3b0a3514daf64796e07595934c61fb4a3dae7ebcdaa9f07b7fa75296c9de"
+		},
+		{
+			"name": "docs/v4/prototypes/static-job-schedules/ACCEPTANCE-TIMEOUT-CORRECTION.md",
+			"path": "docs/v4/prototypes/static-job-schedules/ACCEPTANCE-TIMEOUT-CORRECTION.md",
+			"sha256": "d635ff7a04b04c249f5845aafeb492fff0305e00a7356cb0ef54edaba4577826"
 		}
 	],
 	"verification": [
@@ -314,6 +324,10 @@
 		},
 		{
 			"command": "bun test tests/unit/static-schedule-compiler-candidate.test.ts (f616b17e2: 9 PASS, 52 assertions; isolated control does not explain preceding Bun segmentation fault)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:negative-control (timeout-correction docs-only follow-up: 124 PASS, 217 assertions; no reviewer or Runtime code changes)",
 			"result": "PASS"
 		}
 	],
