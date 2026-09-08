@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { createClient } from "./generated/raw-client";
+import { createClient } from "#questpie/test-client";
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const updatedAt = "2026-09-08T10:00:00.000Z";

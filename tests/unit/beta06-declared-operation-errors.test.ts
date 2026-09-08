@@ -16,6 +16,7 @@ import {
 	mapCollectionIssueToDeclaredError,
 	OperationFailure,
 } from "../../packages/runtime/src/operation";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 
 const callId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4";
 const timestamp = new Date("2026-08-16T08:09:10.000Z");
@@ -288,6 +289,7 @@ test("rejects a lifecycle Issue borrowed across Collection artifact bindings", (
 test("generated client verifies declared-error status and decodes its exact payload", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-declared-error-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<Record<string, never>>;\n",

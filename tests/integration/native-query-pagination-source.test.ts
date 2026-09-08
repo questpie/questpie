@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { compileApplication } from "../../../../packages/compiler/src/index";
+import { compileApplication } from "@questpie/compiler";
 
 test("compiled Support Desk binds root paging to tickets.queue but not its detail handler", async () => {
 	const temporary = await mkdtemp(
@@ -13,7 +13,7 @@ test("compiled Support Desk binds root paging to tickets.queue but not its detai
 		const compiled = await compileApplication({
 			applicationRoot: resolve(
 				import.meta.dir,
-				"../../../../fixtures/team-support-desk",
+				"../../fixtures/team-support-desk",
 			),
 			outputDirectory: join(temporary, "generated"),
 		});

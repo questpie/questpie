@@ -18,6 +18,7 @@ import {
 	embeddedProductionDependencies,
 	validateEmbeddedProductionDependencies,
 } from "./package-contract-dependencies";
+import { validateNativeQueryPackage } from "./package-contract-native-query";
 
 type PackageJson = {
 	name?: string;
@@ -121,9 +122,23 @@ for (const { path, json } of publicPackages) {
 	if (
 		json.name === "questpie" &&
 		JSON.stringify(Object.keys(json.exports).sort()) !==
-			JSON.stringify([".", "./internal/observability", "./react"])
+			JSON.stringify([
+				".",
+				"./internal/client-projection",
+				"./internal/observability",
+				// Existing consumers retain the old hook until NRQ-04/05 migration.
+				"./react",
+				"./react-query",
+			])
 	)
 		fail(`${label}: exports an unexpected public surface`);
+	if (json.name === "questpie") {
+		try {
+			validateNativeQueryPackage(json, inspection);
+		} catch (error) {
+			fail(error instanceof Error ? error.message : String(error));
+		}
+	}
 	if (
 		json.name === "questpie" &&
 		(json.peerDependencies?.react !== "^19.2.0" ||

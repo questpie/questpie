@@ -4,14 +4,170 @@ import {
 	MutationObserver,
 	QueryClient,
 	QueryObserver,
-} from "@tanstack/query-core";
+} from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
 
-import { CommittedResultUnavailable, createClient } from "./generated/client";
-import { createQueryAdapter } from "./generated/client.react-query";
+import {
+	CommittedResultUnavailable,
+	createClient,
+} from "#questpie/test-client";
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const updatedAt = "2026-09-08T10:00:00.000Z";
 const variables = { id, expectedVersion: 1, targetStatus: "done" };
+
+test("commit preserves native disabled and static observer behavior without unsolicited refresh", async () => {
+	let reads = 0;
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: (async (request: Request) => {
+			if (request.method === "GET") reads++;
+			return reply(request, {
+				result: { id, title: "Authorized result", updatedAt },
+			});
+		}) as typeof fetch,
+	});
+	const cache = new QueryClient();
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	const disabledOptions = adapter.queries["tasks.detail"].options({ id });
+	const staticOptions = adapter.queries["tasks.summary"].options({ id });
+	await cache.fetchQuery(disabledOptions);
+	await cache.fetchQuery(staticOptions);
+	const disabled = new QueryObserver(cache, {
+		...disabledOptions,
+		enabled: false,
+	});
+	const fixed = new QueryObserver(cache, {
+		...staticOptions,
+		staleTime: "static",
+	});
+	const stopDisabled = disabled.subscribe(() => {});
+	const stopStatic = fixed.subscribe(() => {});
+	const mutation = new MutationObserver(
+		cache,
+		adapter.mutations["tasks.transition"].options(),
+	);
+	try {
+		expect(reads).toBe(2);
+		await mutation.mutate(variables);
+		await Bun.sleep(0);
+		expect(reads).toBe(2);
+		expect(cache.getQueryState(disabledOptions.queryKey)?.isInvalidated).toBe(
+			true,
+		);
+		expect(cache.getQueryState(staticOptions.queryKey)?.isInvalidated).toBe(
+			true,
+		);
+		expect(disabled.getCurrentResult().isStale).toBe(false);
+		expect(fixed.getCurrentResult().isStale).toBe(false);
+		expect(disabled.getCurrentResult().isFetching).toBe(false);
+		expect(fixed.getCurrentResult().isFetching).toBe(false);
+		expect(mutation.getCurrentResult().isSuccess).toBe(true);
+	} finally {
+		stopDisabled();
+		stopStatic();
+		disabled.destroy();
+		fixed.destroy();
+		mutation.reset();
+		await adapter.dispose();
+		cache.clear();
+	}
+});
+
+test("a correlated committed-result failure refreshes two generated public families without touching another owner", async () => {
+	const refreshed = Promise.withResolvers<void>();
+	const refreshedPaths: string[] = [];
+	let committed = false;
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: (async (request: Request) => {
+			if (request.method !== "GET") {
+				committed = true;
+				return reply(
+					request,
+					{
+						error: {
+							code: "COMMITTED_RESULT_UNAVAILABLE",
+							retryable: true,
+							transactionId: "17",
+						},
+					},
+					500,
+				);
+			}
+			if (committed) {
+				refreshedPaths.push(new URL(request.url).pathname);
+				if (refreshedPaths.length === 2) refreshed.resolve();
+			}
+			return reply(request, {
+				result: committed
+					? { id, title: "Refreshed after commit", updatedAt }
+					: null,
+			});
+		}) as typeof fetch,
+	});
+	const cache = new QueryClient();
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	const other = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	const detail = adapter.queries["tasks.detail"].options({ id });
+	const summary = adapter.queries["tasks.summary"].options({ id });
+	const otherSummary = other.queries["tasks.summary"].options({ id });
+	await Promise.all([
+		cache.fetchQuery(detail),
+		cache.fetchQuery(summary),
+		cache.fetchQuery(otherSummary),
+	]);
+	const first = new QueryObserver(cache, { ...detail, staleTime: Infinity });
+	const second = new QueryObserver(cache, { ...summary, staleTime: Infinity });
+	const stopFirst = first.subscribe(() => {});
+	const stopSecond = second.subscribe(() => {});
+	const mutation = new MutationObserver(
+		cache,
+		adapter.mutations["tasks.transition"].options(),
+	);
+	try {
+		const failure = await mutation
+			.mutate(variables)
+			.catch((error: unknown) => error);
+		await refreshed.promise;
+		await Bun.sleep(0);
+		expect(failure).toMatchObject({
+			code: "COMMITTED_RESULT_UNAVAILABLE",
+			payload: { transactionId: "17" },
+		});
+		expect(refreshedPaths.sort()).toEqual([
+			"/_questpie/query/tasks.detail",
+			"/_questpie/query/tasks.summary",
+		]);
+		expect(first.getCurrentResult().data?.title).toBe("Refreshed after commit");
+		expect(second.getCurrentResult().data?.title).toBe(
+			"Refreshed after commit",
+		);
+		expect(cache.getQueryData(otherSummary.queryKey)).toBeNull();
+		expect(cache.getQueryState(otherSummary.queryKey)?.isInvalidated).toBe(
+			false,
+		);
+		expect(mutation.getCurrentResult().isError).toBe(true);
+	} finally {
+		stopFirst();
+		stopSecond();
+		first.destroy();
+		second.destroy();
+		mutation.reset();
+		await adapter.dispose();
+		await other.dispose();
+		cache.clear();
+	}
+});
 
 for (const boundary of ["retirement", "next-commit"] as const) {
 	test(`${boundary} fences an in-flight refresh without changing the original Mutation result`, async () => {
@@ -48,7 +204,7 @@ for (const boundary of ["retirement", "next-commit"] as const) {
 			cache,
 			adapter.mutations["tasks.transition"].options(),
 		);
-		let replacement: ReturnType<typeof createQueryAdapter> | undefined;
+		let replacement: typeof adapter | undefined;
 		let request: Request | undefined;
 		try {
 			expect((await mutation.mutate(variables)).title).toBe("Committed");

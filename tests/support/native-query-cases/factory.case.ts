@@ -1,11 +1,19 @@
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { MutationObserver, QueryClient } from "@tanstack/query-core";
+import { MutationObserver, QueryClient } from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
 
-import { createQueryAdapter } from "./factory-seam";
-import { prepareFactoryClients } from "./factory-seam-render";
+async function prepareFactoryClients(directory: string) {
+	await copyFile(
+		join(import.meta.dir, "ordinary-client.ts"),
+		join(directory, "client.ts"),
+	);
+	await copyFile(join(import.meta.dir, "app.ts"), join(directory, "app.ts"));
+}
 
 test("a separately bundled generated client works with the public generic factory", async () => {
 	const directory = await mkdtemp(
@@ -59,7 +67,7 @@ test("a separately bundled generated client works with the public generic factor
 			target: "browser",
 		});
 		const factoryBuild = await Bun.build({
-			entrypoints: [join(import.meta.dir, "factory-seam.ts")],
+			entrypoints: [fileURLToPath(import.meta.resolve("questpie/react-query"))],
 			target: "browser",
 		});
 		expect(clientBuild.success).toBe(true);
@@ -73,7 +81,7 @@ test("a separately bundled generated client works with the public generic factor
 			factoryBuild.outputs[0]!,
 		);
 		const clientModule = await import(join(directory, "client.bundle.mjs"));
-		const factoryModule: typeof import("./factory-seam") = await import(
+		const factoryModule: typeof import("questpie/react-query") = await import(
 			join(directory, "factory.bundle.mjs")
 		);
 		const scope = clientModule
@@ -151,7 +159,7 @@ test("core and generated browser bundles resolve no React or TanStack runtime", 
 		await prepareFactoryClients(directory);
 		for (const entrypoint of [
 			join(directory, "client.ts"),
-			join(import.meta.dir, "../../../../packages/questpie/src/index.ts"),
+			fileURLToPath(import.meta.resolve("questpie")),
 		]) {
 			const forbidden: string[] = [];
 			const build = await Bun.build({
@@ -185,19 +193,15 @@ test("incompatible capability versions fail before invoking their reader", () =>
 	const cache = new QueryClient();
 	let reads = 0;
 	const scope = {};
-	Object.defineProperty(
-		scope,
-		Symbol.for("questpie.client-scope.factory-seam.v1"),
-		{
-			value: {
-				version: "incompatible",
-				read() {
-					reads++;
-					throw new Error("READER_MUST_NOT_RUN");
-				},
+	Object.defineProperty(scope, Symbol.for("questpie.client-scope.v1"), {
+		value: {
+			version: "incompatible",
+			read() {
+				reads++;
+				throw new Error("READER_MUST_NOT_RUN");
 			},
 		},
-	);
+	});
 	try {
 		expect(() => createQueryAdapter(scope as never, cache)).toThrow(
 			"CLIENT_PROJECTION_INCOMPATIBLE",

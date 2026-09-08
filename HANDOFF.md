@@ -844,6 +844,33 @@ The active production worktree is
 `/home/drepkovsky/code/questpie-v4-native-react-integration`. It combines the
 accepted React architecture with the accepted schedule/release closure. Follow
 NRQ-01 in the production plan; do not edit the preserved accepted proof tree.
+The production extraction is now in progress: the public native factory,
+compiler-rendered neutral scope capability and optional package build exist.
+The focused native/code-generation suite passes 34 parent tests / 138 assertions
+and checks the exact child counts. The first full gate exposed a declaration-byte
+budget violation, stale goldens/checksums, a detached type-fixture mapping and
+non-portable prototype tests. These are repaired in focused controls. Real
+PostgreSQL startup and native live/refresh controls pass 2 scenarios / 39
+assertions, with container cleanup. The next `quality:release` finished with
+1,204 passing tests and three failures: two stale package checksum controls and
+order-dependent full Support Desk bundle relocation equality. The checksum pin
+has since been regenerated and both controls pass in a 7-test / 32-assertion
+focused group with native identity, bundle and React DOM controls. That compiler
+defect remains under diagnosis; isolated green runs do not close it. Independent
+review also found throwing-observer cleanup defects in scope disposal and
+terminal live denial. Both now pass their red-first production regressions;
+the strict generated lifetime/invalidation suite is 52 tests / 243 assertions.
+A subsequent broad run passed the full test/build/docs stage, including complete
+Support Desk relocation, then stopped on two narrow Knip dependency classifications.
+Those are repaired; strict Knip, its negative control, package contracts and
+the remaining packed OTel/performance gates pass separately. No end-to-end
+`quality:release` PASS or explanation of the earlier bundle mismatch is claimed.
+Next: freeze this extraction for independent Standards/Spec review and repeated
+real relocation, then rerun the complete release gate before closing NRQ-01.
+Follow
+`docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md` for the repair
+frontier; NRQ-01 is not closed before the broader gate and independent reviews.
+No actual Start-browser or aggregate release claim is made yet.
 The merge control verifies both acceptance records, skill validation, docs
 typecheck/build, public-package build and 33 affected tests / 154 assertions.
 The initial test attempt lacked built package output in the fresh worktree;
@@ -858,8 +885,9 @@ offline/persistence remain outside this cut. The authoritative continuation map
 for this work is
 `docs/v4/research/react-tanstack-integration-2026-09-08/DECISION-MAP.md`.
 ADR-0044 has a committed, verified manifest-bound Opus PASS. Its authority
-projection is separate from the review record. Existing production exports
-remain unchanged until consumer migration; no compatibility adapter is added.
+projection is separate from the review record. The new optional production
+export is under test. The old React hook remains only until golden-consumer
+migration, then is deleted; no compatibility adapter is added.
 
 The owner-confirmed `BETA2-SCOPE-DECISION.md` in that research directory defers
 framework-owned optimistic layers, automatic rollback/rebase and a no-flicker

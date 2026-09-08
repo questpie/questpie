@@ -517,6 +517,7 @@ export async function createArtifacts(
 				(resource) => resource.kind === "context",
 			)?.contract.input ?? { kind: "object", properties: {} },
 			realtime: realtimeEnabled ? realtime : undefined,
+			queryProjection: relational.query,
 		}),
 		"committed-migrations.json": runtimeArtifactBytes(committedMigrations),
 		"context-projection.json": canonicalBytes(executionComposition.context),

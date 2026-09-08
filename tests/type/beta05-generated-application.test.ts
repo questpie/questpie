@@ -214,6 +214,12 @@ void useGeneratedApp;
 						questpie: [
 							resolve(repositoryRoot, "packages/questpie/src/index.ts"),
 						],
+						"questpie/internal/client-projection": [
+							resolve(
+								repositoryRoot,
+								"packages/questpie/src/internal/client-projection.ts",
+							),
+						],
 					},
 					skipLibCheck: true,
 					strict: true,

@@ -26,7 +26,7 @@
 			"project": ["src/**/*.{ts,tsx}!", "*.ts!"]
 		},
 		"packages/questpie": {
-			"ignoreDependencies": ["react"]
+			"ignoreDependencies": ["react", "@tanstack/react-query", "@noble/hashes"]
 		}
 	}
 }

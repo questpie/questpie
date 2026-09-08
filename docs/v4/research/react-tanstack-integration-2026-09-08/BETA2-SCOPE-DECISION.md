@@ -42,3 +42,14 @@ cannot be erased by disposing the adapter.
 Production extraction, the focused superseding React decision, consumer/docs/
 skill migration and all final release gates remain required. No publish, tag,
 deprecation or registry change is authorized by this scope decision.
+
+## Deferred owner follow-up
+
+The owner later raised compiler-derived Mutation-to-Query dependency maps as
+possible assistance for userland optimism, including Actions that compose
+Queries and Mutations, and explicitly deferred the idea. Investigate this after
+beta.2 without asking authors to repeat inferable contracts or keys. A dependency
+relation alone does not define a safe optimistic result transformation: filtering,
+ordering, pagination, Policy projection, conditional execution and external
+effects still need concrete evidence. This records an investigation interest,
+not an accepted API or an expansion of this release.

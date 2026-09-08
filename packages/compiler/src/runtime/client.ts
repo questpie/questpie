@@ -2,6 +2,7 @@ import { canonicalBytes, compareAscii } from "../canonical";
 import type { NormalizedResource } from "../types";
 import { renderClientHttpResponse } from "./client-http-response";
 import { renderClientPostHttp } from "./client-post-http";
+import { renderClientProjection } from "./client-projection";
 import { renderClientQueryHttp } from "./client-query-http";
 import { renderClientQueryResource } from "./client-query-resource";
 import { renderClientRealtime } from "./client-realtime";
@@ -63,6 +64,7 @@ export function renderClientContract(
 		httpContractDigest: string;
 		contextCodec?: unknown;
 		realtime?: RealtimeWireContractV1;
+		queryProjection?: Readonly<Record<string, unknown>>;
 	}>,
 ): string {
 	const queries = resources.filter(
@@ -91,8 +93,9 @@ export function renderClientContract(
 		.join("\n\t\t");
 	const implementations = queries
 		.map((resource) => {
-			const operationInput = renderCodecType(resource.contract.input);
-			const operationOutput = renderCodecType(resource.contract.output);
+			const method = `GeneratedClientScope["queries"][${JSON.stringify(resource.name)}]`;
+			const operationInput = `Parameters<${method}>[0]`;
+			const operationOutput = `Awaited<ReturnType<${method}>>`;
 			const call = `(operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options)`;
 			return watchableQueries.has(resource.identity)
 				? `${JSON.stringify(resource.name)}: Object.assign(${call}, { watch: (operationInput: ${operationInput}, callback: (result: ${operationOutput}, delivery: QueryDelivery) => void, options?: WatchOptions): (() => void) => watchBinding<${operationOutput}>(${JSON.stringify(resource.identity)}, operationInput, callback, options), observe: (operationInput: ${operationInput}): QueryResource<${operationOutput}> => queryResources.observe<${operationOutput}>(${JSON.stringify(resource.identity)}, encode(inputCodecs[${JSON.stringify(resource.identity)}], operationInput)) }),`
@@ -107,8 +110,9 @@ export function renderClientContract(
 		.join("\n\t\t");
 	const mutationImplementations = mutations
 		.map((resource) => {
-			const operationInput = renderCodecType(resource.contract.input);
-			const operationOutput = renderCodecType(resource.contract.output);
+			const method = `GeneratedClientScope["mutations"][${JSON.stringify(resource.name)}]`;
+			const operationInput = `Parameters<${method}>[0]`;
+			const operationOutput = `Awaited<ReturnType<${method}>>`;
 			return `${JSON.stringify(resource.name)}: (operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options),`;
 		})
 		.join("\n\t\t\t");
@@ -120,8 +124,9 @@ export function renderClientContract(
 		.join("\n\t\t");
 	const actionImplementations = actions
 		.map((resource) => {
-			const operationInput = renderCodecType(resource.contract.input);
-			const operationOutput = renderCodecType(resource.contract.output);
+			const method = `GeneratedClientScope["actions"][${JSON.stringify(resource.name)}]`;
+			const operationInput = `Parameters<${method}>[0]`;
+			const operationOutput = `Awaited<ReturnType<${method}>>`;
 			return `${JSON.stringify(resource.name)}: (operationInput: ${operationInput}, options: ActionCallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options),`;
 		})
 		.join("\n\t\t\t");
@@ -161,7 +166,13 @@ export function renderClientContract(
 		realtime: input.realtime,
 	});
 	const queryResource = renderClientQueryResource(watchableQueries.size > 0);
+	const projection = renderClientProjection(
+		resources,
+		{ ...input, watchable: watchableQueries },
+		renderCodecType,
+	);
 	return `import type { AppContextInput } from "./app";
+${projection.imports}
 
 export type JsonValue =
 	| null
@@ -187,7 +198,8 @@ export interface ActionCallOptions extends CallOptions {
 ${watchTypes}
 ${queryResource.types}
 
-export interface GeneratedClientScope {
+${projection.declarations}
+export interface GeneratedClientScope extends ClientScope<ClientProjection> {
 	readonly context: AppContextInput;
 	readonly queries: Readonly<{
 		${declarations}
@@ -326,12 +338,12 @@ function decodeJson(value: unknown, active = new Set<object>()): unknown {
 		return Object.freeze(output);
 	} finally { active.delete(value); }
 }
-function transform(codecValue: unknown, value: unknown, direction: "decode" | "encode"): unknown {
+function transform(codecValue: unknown, value: unknown, direction: "decode" | "encode" | "restoreInput"): unknown {
 	const descriptor = wireRecord(codecValue);
 	if (descriptor.kind === "nullable")
 		return value === null ? null : transform(descriptor.codec, value, direction);
 	if (descriptor.kind === "optional")
-		return direction === "decode"
+		return direction !== "encode"
 			? transform(descriptor.codec, value, direction)
 			: protocolFailure();
 	if (descriptor.kind === "array") {
@@ -422,7 +434,7 @@ function transform(codecValue: unknown, value: unknown, direction: "decode" | "e
 		const optional = new Set(Object.keys(properties).filter((key) => wireRecord(properties[key]).kind === "optional"));
 		if (Object.keys(source).some((key) => !Object.hasOwn(properties, key))) return protocolFailure();
 		if (Object.keys(properties).some((key) => !optional.has(key) && !Object.hasOwn(source, key))) return protocolFailure();
-		if (direction === "decode")
+		if (direction !== "encode")
 			return Object.freeze(
 				Object.fromEntries(
 					Object.keys(source)
@@ -465,6 +477,7 @@ function immutableContext(input: AppContextInput): AppContextInput {
 	return context;
 }
 ${renderClientHttpResponse()}${renderClientQueryHttp(input)}${renderClientPostHttp(input)}
+${projection.runtime}
 
 export function createClient(input: Readonly<{
 	readonly baseUrl: string;
@@ -493,13 +506,15 @@ export function createClient(input: Readonly<{
 		const context = immutableContext(next);
 		${realtimeScope}
 		${queryResource.scope}
-		return Object.freeze({ context, queries: Object.freeze({
+		let projection: ClientProjection | undefined;
+		const generatedScope: GeneratedClientScope = attachClientScope({ context, queries: Object.freeze({
 			${implementations}
 		}), mutations: Object.freeze({
 			${mutationImplementations}
 		}), actions: Object.freeze({
 			${actionImplementations}
-		}), withContext: scope });
+		}), withContext: scope }, () => projection ??= projectClientScope(generatedScope));
+		return Object.freeze(generatedScope);
 	};
 	return Object.freeze({ withContext: scope });
 }

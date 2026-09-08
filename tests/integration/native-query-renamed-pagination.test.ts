@@ -3,11 +3,10 @@ import { cp, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { InfiniteQueryObserver, QueryClient } from "@tanstack/query-core";
+import { InfiniteQueryObserver, QueryClient } from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
 
-import { compileApplication } from "../../../../packages/compiler/src/index";
-import { bindProjection } from "./query-adapter";
-import { instrumentClient } from "./render-projection";
+import { compileApplication } from "@questpie/compiler";
 
 test("compiled cursor names drive native pagination without granting page-shaped handlers a paging capability", async () => {
 	const temporary = await mkdtemp(
@@ -20,7 +19,7 @@ test("compiled cursor names drive native pagination without granting page-shaped
 	try {
 		const original = resolve(
 			import.meta.dir,
-			"../../../../fixtures/team-support-desk",
+			"../../fixtures/team-support-desk",
 		);
 		await cp(original, fixture, {
 			recursive: true,
@@ -65,9 +64,6 @@ export const pageShapedHandler = defineQuery({
 			applicationRoot: fixture,
 			outputDirectory: join(fixture, ".questpie/generated"),
 		});
-		const operations = JSON.parse(
-			compiled.generatedFiles["operation-contracts.json"]!,
-		);
 		const http = JSON.parse(
 			compiled.generatedFiles["operation-http-contract.json"]!,
 		);
@@ -106,26 +102,8 @@ export const pageShapedHandler = defineQuery({
 					page.identity === "query:tickets.pageShapedHandler",
 			),
 		).toBe(false);
-		const resources: Parameters<typeof instrumentClient>[1] =
-			operations.operations
-				.filter((entry: { identity: string }) => exposed.has(entry.identity))
-				.map((entry: { identity: string }) => ({
-					identity: entry.identity,
-					kind: entry.identity.slice(0, entry.identity.indexOf(":")),
-					name: entry.identity.slice(entry.identity.indexOf(":") + 1),
-					contract: { ...entry, exposure: "network" },
-				}));
 		const generatedPath = join(fixture, ".questpie/generated/client.ts");
-		await Bun.write(
-			generatedPath,
-			instrumentClient(
-				compiled.generatedFiles["client.ts"]!,
-				resources,
-				[],
-				pages,
-			),
-		);
-		const { createClient, getClientProjection } = await import(generatedPath);
+		const { createClient } = await import(generatedPath);
 		const requests: URL[] = [];
 		const client = createClient({
 			baseUrl: "https://proof.invalid",
@@ -147,10 +125,10 @@ export const pageShapedHandler = defineQuery({
 			},
 		});
 		const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
-		const projection = getClientProjection(
+		const adapter = createQueryAdapter(
 			client.withContext({ membershipId: id, organizationId: id }),
+			cache,
 		);
-		const adapter = bindProjection(projection, cache);
 		dispose = adapter.dispose;
 		expect(adapter.queries["tickets.pageShapedHandler"]).not.toHaveProperty(
 			"infiniteOptions",

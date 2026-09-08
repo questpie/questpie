@@ -6,10 +6,10 @@ import {
 	InfiniteQueryObserver,
 	MutationObserver,
 	QueryClient,
-} from "@tanstack/query-core";
+} from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
 
-import { createClient } from "./generated/support-desk/client";
-import { createQueryAdapter } from "./generated/support-desk/client.react-query";
+import { createClient } from "#questpie/test-pagination";
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const timestamp = "2026-09-08T10:00:00.000Z";

@@ -38,7 +38,9 @@ test("public beta.2 guides state version availability and expose the exact previ
 	expect(overview).toContain("[Review the beta.2 preview inventory]");
 	expect(navigation.pages).toContain("beta2-release");
 	expect(inventory).toContain("`questpie@4.0.0-beta.2`");
-	expect(inventory).toContain("`questpie/react`");
+	expect(inventory).toContain("`questpie/react-query`");
+	expect(inventory).not.toContain("`questpie/react`");
+	expect(navigation.pages).toContain("react-query");
 	expect(inventory).toContain("`questpie-opentelemetry@4.0.0-beta.2`");
 	expect(inventory).not.toContain("`@questpie/react`");
 	expect(inventory).not.toContain("`@questpie/opentelemetry`");

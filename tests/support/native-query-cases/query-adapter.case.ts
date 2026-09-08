@@ -1,28 +1,35 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
 	MutationObserver,
 	QueryClient,
 	QueryObserver,
-} from "@tanstack/query-core";
+} from "@tanstack/react-query";
+import {
+	attachClientScope,
+	readClientScope,
+} from "questpie/internal/client-projection";
+import { createQueryAdapter } from "questpie/react-query";
 
-import { createClient, getClientProjection } from "./generated/client";
-import { createQueryAdapter } from "./generated/client.react-query";
-import { bindProjection } from "./query-adapter";
+import { createClient } from "#questpie/test-client";
 
 test("the superseded ordinal projection is rejected instead of receiving a hydration fallback", async () => {
 	const cache = new QueryClient();
 	const client = createClient({ baseUrl: "https://proof.invalid" });
 	const scope = client.withContext({ companyId: id });
 	const legacy = {
-		...getClientProjection(scope),
+		...readClientScope(scope),
 		version: "questpie.client-projection.prototype.v1",
 	};
 	let created: ReturnType<typeof createQueryAdapter> | undefined;
 	try {
 		expect(() => {
-			created = Reflect.apply(bindProjection, undefined, [legacy, cache]);
+			created = Reflect.apply(createQueryAdapter, undefined, [
+				attachClientScope({}, () => legacy as never),
+				cache,
+			]);
 		}).toThrow("CLIENT_PROJECTION_INCOMPATIBLE");
 	} finally {
 		await created?.dispose();
@@ -33,17 +40,25 @@ test("the superseded ordinal projection is rejected instead of receiving a hydra
 test("the replaced projection and readiness spelling are rejected without compatibility paths", () => {
 	const cache = new QueryClient();
 	const client = createClient({ baseUrl: "https://proof.invalid" });
-	const source = getClientProjection(client.withContext({ companyId: id }));
+	const scope = client.withContext({ companyId: id });
+	const source = readClientScope(scope);
 	try {
 		expect(() =>
-			Reflect.apply(bindProjection, undefined, [
-				{ ...source, version: "questpie.client-projection.prototype.v2" },
+			Reflect.apply(createQueryAdapter, undefined, [
+				attachClientScope(
+					{},
+					() =>
+						({
+							...source,
+							version: "questpie.client-projection.prototype.v2",
+						}) as never,
+				),
 				cache,
 			]),
 		).toThrow("CLIENT_PROJECTION_INCOMPATIBLE");
 		expect(() =>
-			Reflect.apply(bindProjection, undefined, [
-				source,
+			Reflect.apply(createQueryAdapter, undefined, [
+				scope,
 				cache,
 				{ liveReady: Promise.resolve() },
 			]),
@@ -55,19 +70,19 @@ test("the replaced projection and readiness spelling are rejected without compat
 
 test("separately bundled adapter copies cannot alias inputs or evict each other's Query cache", async () => {
 	const bundle = await Bun.build({
-		entrypoints: [join(import.meta.dir, "query-adapter.ts")],
+		entrypoints: [fileURLToPath(import.meta.resolve("questpie/react-query"))],
 		target: "browser",
 	});
 	if (!bundle.success || !bundle.outputs[0])
 		throw new Error("Independent adapter bundle failed");
-	const copyPath = join(import.meta.dir, "generated", "independent-adapter.js");
+	const copyPath = join(import.meta.dir, "independent-adapter.js");
 	await Bun.write(copyPath, bundle.outputs[0]);
-	const copy: typeof import("./query-adapter") = await import(copyPath);
+	const copy: typeof import("questpie/react-query") = await import(copyPath);
 	const client = createClient({ baseUrl: "https://proof.invalid" });
 	const cache = new QueryClient();
 	const scope = client.withContext({ companyId: id });
 	const first = createQueryAdapter(scope, cache);
-	const second = copy.bindProjection(getClientProjection(scope), cache);
+	const second = copy.createQueryAdapter(scope, cache);
 	try {
 		const one = first.queries["tasks.detail"].options({
 			id,
@@ -92,6 +107,85 @@ test("separately bundled adapter copies cannot alias inputs or evict each other'
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const date = "2026-09-08T10:00:00.000Z";
+
+test("a throwing Query cleanup subscriber cannot retain another owned Query or disturb a separate scope", async () => {
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: (async (request: Request) =>
+			Response.json(
+				{
+					callId: request.headers.get(
+						request.method === "GET" ? "Questpie-Call-Id" : "Idempotency-Key",
+					),
+					result: { id, title: "Protected result", updatedAt: date },
+				},
+				{ headers: { "content-type": "application/json; charset=utf-8" } },
+			)) as typeof fetch,
+	});
+	const cache = new QueryClient();
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	const other = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	const firstOptions = adapter.queries["tasks.detail"].options({ id });
+	const secondOptions = adapter.queries["tasks.summary"].options({ id });
+	const otherOptions = other.queries["tasks.detail"].options({ id });
+	await Promise.all([
+		cache.fetchQuery(firstOptions),
+		cache.fetchQuery(secondOptions),
+		cache.fetchQuery(otherOptions),
+	]);
+	const mutation = new MutationObserver(
+		cache,
+		adapter.mutations["tasks.transition"].options(),
+	);
+	await mutation.mutate({ id, expectedVersion: 1, targetStatus: "done" });
+	const first = new QueryObserver(cache, { ...firstOptions, enabled: false });
+	const sibling = new QueryObserver(cache, { ...firstOptions, enabled: false });
+	const second = new QueryObserver(cache, { ...secondOptions, enabled: false });
+	let closing = false;
+	const stopFirst = first.subscribe(() => {
+		if (closing) throw new Error("Application Query subscriber failure");
+	});
+	const stopSecond = second.subscribe(() => {});
+	const stopSibling = sibling.subscribe(() => {});
+	try {
+		expect(second.getCurrentResult().data?.title).toBe("Protected result");
+		expect(sibling.getCurrentResult().data?.title).toBe("Protected result");
+		closing = true;
+		await expect(adapter.dispose()).rejects.toThrow();
+		expect(first.getCurrentResult().data).toBeUndefined();
+		expect(sibling.getCurrentResult().data).toBeUndefined();
+		expect(second.getCurrentResult().data).toBeUndefined();
+		expect(cache.getQueryData(firstOptions.queryKey)).toBeUndefined();
+		expect(cache.getQueryData(secondOptions.queryKey)).toBeUndefined();
+		expect(cache.getQueryCache().getAll()).toHaveLength(1);
+		expect(mutation.getCurrentResult().data).toBeUndefined();
+		expect(cache.getMutationCache().getAll()).toHaveLength(0);
+		expect(cache.getQueryData(otherOptions.queryKey)?.title).toBe(
+			"Protected result",
+		);
+		await expect(cache.fetchQuery(secondOptions)).rejects.toThrow(
+			"SCOPE_RETIRED",
+		);
+	} finally {
+		closing = false;
+		stopFirst();
+		stopSibling();
+		stopSecond();
+		first.destroy();
+		sibling.destroy();
+		second.destroy();
+		mutation.reset();
+		await adapter.dispose();
+		await other.dispose();
+		cache.clear();
+	}
+});
 
 test("retiring one scope clears retained Query observers without touching another scope or reopening transport", async () => {
 	let calls = 0;
@@ -285,6 +379,7 @@ test("binding is idempotent, equivalent codec inputs share keys, and equal Conte
 			}).queryKey,
 		).not.toEqual(first.queryKey);
 		expect(() =>
+			// @ts-expect-error Explicit undefined is not a codec-valid optional input.
 			adapter.queries["tasks.detail"].options({ id, asOf: undefined }),
 		).toThrow("PROTOCOL_UNSUPPORTED");
 	} finally {

@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 
-import { QueryClient, QueryObserver } from "@tanstack/query-core";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 
-import { createLiveQueryOptions } from "./live-options";
+import { createLiveQueryOptions } from "../../packages/questpie/src/react-query/live-options";
 
 type Task = Readonly<{ id: string; title: string; staffNote?: string }>;
 

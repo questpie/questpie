@@ -9,6 +9,7 @@ import {
 	renderClientContract,
 } from "../../packages/compiler/src/runtime";
 import type { NormalizedResource } from "../../packages/compiler/src/types";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 
 const query = {
 	identity: "query:messages.page",
@@ -68,6 +69,7 @@ async function verifyCloseOrder(
 	});
 	const directory = await mkdtemp(join(tmpdir(), "questpie-client-close-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>;\n",

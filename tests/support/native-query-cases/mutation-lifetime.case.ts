@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
 
-import { MutationObserver, QueryClient } from "@tanstack/query-core";
+import { MutationObserver, QueryClient } from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
 
-import { CommittedResultUnavailable, createClient } from "./generated/client";
-import { createQueryAdapter } from "./generated/client.react-query";
+import {
+	CommittedResultUnavailable,
+	createClient,
+} from "#questpie/test-client";
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const variables = { id, expectedVersion: 1, targetStatus: "done" };

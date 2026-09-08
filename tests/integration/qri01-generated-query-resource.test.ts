@@ -12,6 +12,7 @@ import {
 } from "../../packages/compiler/src/runtime";
 import { renderClientQueryResource } from "../../packages/compiler/src/runtime/client-query-resource";
 import type { NormalizedResource } from "../../packages/compiler/src/types";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 
 const input = {
 	kind: "object",
@@ -268,6 +269,7 @@ test("generates lazy scope-local Query Resource identity only for a watchable Qu
 
 	const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-client-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",
@@ -486,6 +488,7 @@ test("runs a compiler-generated packed client through one real loopback Live Que
 test("does not block a sibling binding behind an acknowledgement", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-ack-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",
@@ -589,6 +592,7 @@ test("does not block a sibling binding behind an acknowledgement", async () => {
 test("backs off and resumes after an acknowledgement rejection", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-ack-retry-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",
@@ -697,6 +701,7 @@ test("direct watch validates and canonically encodes input once", async () => {
 		join(tmpdir(), "questpie-qri01-watch-codec-"),
 	);
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",
@@ -768,6 +773,7 @@ test.each([
 	async (expectedCode, mode) => {
 		const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-terminal-"));
 		try {
+			await installQuestpieForTracer(directory);
 			await writeFile(
 				join(directory, "app.ts"),
 				"export type AppContextInput = Readonly<{ companyId: string }>\n",
@@ -821,6 +827,7 @@ test.each([
 test("captures canonical input and shares one watch across independent subscriptions", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-watch-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",
@@ -929,6 +936,7 @@ test("isolates subscriber failure and recovers from terminal failure only by fre
 	const reported: unknown[] = [];
 	globalThis.reportError = (error) => reported.push(error);
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",
@@ -1058,6 +1066,7 @@ test("isolates subscriber failure and recovers from terminal failure only by fre
 test("bounds each scope and tombstones a retained idle eviction", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-capacity-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",
@@ -1155,6 +1164,7 @@ test("bounds each scope and tombstones a retained idle eviction", async () => {
 test("evicts the true idle LRU after an existing observation is touched", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-lru-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",
@@ -1206,6 +1216,7 @@ test("evicts the true idle LRU after an existing observation is touched", async 
 test("rejects late delivery and failure from reopened and evicted generations", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-stale-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "resource.ts"),
 			renderQueryResourceHarness(),
@@ -1267,6 +1278,7 @@ test("rejects late delivery and failure from reopened and evicted generations", 
 test("retains complete data through reconnect and cancels stale reconnect work", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-qri01-reconnect-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",

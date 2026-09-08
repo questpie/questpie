@@ -9,6 +9,7 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { JSDOM } from "jsdom";
+import { createQueryAdapter } from "questpie/react-query";
 import {
 	act,
 	Component,
@@ -18,8 +19,7 @@ import {
 	type ReactNode,
 } from "react";
 
-import { createClient } from "./generated/client";
-import { createQueryAdapter } from "./generated/client.react-query";
+import { createClient } from "#questpie/test-client";
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", {
 	url: "https://proof.invalid",

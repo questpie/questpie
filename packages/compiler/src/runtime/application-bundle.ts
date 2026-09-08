@@ -2,6 +2,7 @@ import { basename, resolve } from "node:path";
 
 import { compilerSourceFiles } from "../build-source";
 import type { ApplicationConfiguration, PackageInventory } from "../types";
+import { applicationSource } from "./application-source";
 
 export async function bundleApplicationEntry(
 	input: Readonly<{
@@ -38,6 +39,11 @@ export async function bundleApplicationEntry(
 			{
 				name: "questpie-application-bundle",
 				setup(builder) {
+					const source = applicationSource(
+						builder,
+						input.applicationRoot,
+						packageEntries,
+					);
 					builder.onResolve({ filter: /^questpie:application-entry$/ }, () => ({
 						path: "application-entry",
 						namespace: "questpie-entry",
@@ -62,13 +68,15 @@ export async function bundleApplicationEntry(
 							loader: "js",
 						}),
 					);
-					builder.onResolve({ filter: /^#questpie\/source\// }, (args) => ({
-						path: resolve(
-							input.applicationRoot,
-							input.configuration.source.root,
-							args.path.slice("#questpie/source/".length),
+					builder.onResolve({ filter: /^#questpie\/source\// }, (args) =>
+						source(
+							resolve(
+								input.applicationRoot,
+								input.configuration.source.root,
+								args.path.slice("#questpie/source/".length),
+							),
 						),
-					}));
+					);
 					builder.onResolve({ filter: /^questpie:runtime-core$/ }, () => ({
 						path: input.runtimeCoreBundleEntry,
 					}));

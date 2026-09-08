@@ -12,6 +12,21 @@ export function renderClientHttpResponse(): string {
 const canonicalFailures: WireRecord = Object.freeze({
 ${failures}
 });
+const decodedMutationFailures = new WeakMap<Error, Readonly<{ operation: string; outcome: DecodedMutationFailure }>>();
+function recordDecodedMutationFailure(input: Readonly<{ operation: string; callId: string; kind: string }>, error: Error, transactionId?: string): Error {
+	if (input.kind === "mutation") decodedMutationFailures.set(error, Object.freeze({
+		operation: input.operation,
+		outcome: Object.freeze(transactionId === undefined
+			? { kind: "rejected", callId: input.callId }
+			: { kind: "committed", callId: input.callId, transactionId }),
+	}));
+	return error;
+}
+function decodedMutationFailure(operation: string, error: unknown): DecodedMutationFailure | undefined {
+	if (!(error instanceof Error)) return undefined;
+	const decoded = decodedMutationFailures.get(error);
+	return decoded?.operation === operation ? decoded.outcome : undefined;
+}
 function decodeCanonicalHttpResponse<Result>(input: Readonly<{
 	response: Response;
 	frame: WireRecord;
@@ -34,7 +49,7 @@ function decodeCanonicalHttpResponse<Result>(input: Readonly<{
 		if (input.kind !== "mutation" || !correlated) return protocolFailure();
 		exactKeys(detail, ["code", "retryable", "transactionId"]);
 		if (detail.retryable !== true || input.response.status !== 500 || !isTransactionIdentity(detail.transactionId)) return protocolFailure();
-		throw new CommittedResultUnavailable(input.callId, detail.transactionId);
+		throw recordDecodedMutationFailure(input, new CommittedResultUnavailable(input.callId, detail.transactionId), detail.transactionId);
 	}
 	if (detail.code === "ACTION_OUTCOME_AMBIGUOUS") {
 		if (input.kind !== "action" || !correlated) return protocolFailure();
@@ -56,7 +71,7 @@ function decodeCanonicalHttpResponse<Result>(input: Readonly<{
 		const contract = allowedErrors.map(wireRecord).find((candidate) => candidate.code === detail.code);
 		if (!contract || input.response.status !== contract.status) return protocolFailure();
 		const payload = contract.payload === null ? detail.payload === null ? null : protocolFailure() : decode(contract.payload, detail.payload);
-		throw publicError({ code: detail.code, status: contract.status, payload });
+		throw recordDecodedMutationFailure(input, publicError({ code: detail.code, status: contract.status, payload }));
 	}
 	exactKeys(detail, ["code", "retryable"]);
 	if (typeof detail.code !== "string" || typeof detail.retryable !== "boolean") return protocolFailure();

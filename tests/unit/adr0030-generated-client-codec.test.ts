@@ -13,6 +13,7 @@ import {
 	decodeRuntimeCodecDescriptor,
 	encodeRuntimeCodec,
 } from "../../packages/runtime/src/codec";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 
 const output = {
 	kind: "object",
@@ -43,6 +44,7 @@ test("generated declarations preserve lossless scalar runtime value types", () =
 test("compiler-owned input codec encodes no-zone timestamps before transport", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-adr0030-client-"));
 	try {
+		await installQuestpieForTracer(directory);
 		const runtimeCodec = decodeRuntimeCodecDescriptor(input);
 		const directInput = decodeRuntimeCodec<{
 			at: Date;
@@ -157,6 +159,7 @@ test("compiler-owned input codec encodes no-zone timestamps before transport", a
 test("compiler-owned input codec rejects lossy tagged JSON before transport", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-adr0030-client-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<Record<string, never>>;\n",
@@ -225,6 +228,7 @@ test("compiler-owned input codec rejects lossy tagged JSON before transport", as
 test("generated transform preserves optional, array, cursor, and object direction", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-adr0030-client-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<Record<string, never>>;\n",
@@ -345,6 +349,7 @@ test("generated JSON declarations preserve the exact recursive value grammar", a
 		join(tmpdir(), "questpie-adr0030-client-types-"),
 	);
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<Record<string, never>>;\n",

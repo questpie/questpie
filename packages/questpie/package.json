@@ -17,6 +17,14 @@
 			"types": "./dist/react.d.ts",
 			"import": "./dist/react.js"
 		},
+		"./react-query": {
+			"types": "./dist/react-query/index.d.ts",
+			"import": "./dist/react-query/index.js"
+		},
+		"./internal/client-projection": {
+			"types": "./dist/internal/client-projection.d.ts",
+			"import": "./dist/internal/client-projection.js"
+		},
 		"./internal/observability": {
 			"types": "./dist/internal/observability.d.ts",
 			"import": "./dist/internal/observability.js"
@@ -32,13 +40,19 @@
 		"typescript": "6.0.2"
 	},
 	"devDependencies": {
+		"@noble/hashes": "2.4.0",
+		"@tanstack/react-query": "5.102.8",
 		"@types/react": "19.2.17",
 		"react": "19.2.8"
 	},
 	"peerDependencies": {
+		"@tanstack/react-query": "^5.102.8",
 		"react": "^19.2.0"
 	},
 	"peerDependenciesMeta": {
+		"@tanstack/react-query": {
+			"optional": true
+		},
 		"react": {
 			"optional": true
 		}

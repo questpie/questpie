@@ -246,5 +246,8 @@ Run changed-file format/lint and `git diff --check` for each slice; run
 `quality:full` before independent review and the release-sensitive gates before
 closing combined delivery. These are planned commands, not execution results.
 
-Next action: finish NRQ-00's separate authority projection, then write NRQ-01's
-failing full-source public-factory consumer. Do not reopen the accepted interface.
+NRQ-00's separate authority projection is complete. NRQ-01's public-factory
+consumer is green, but its first broader gate found size-budget and generated
+artifact updates to finish. Follow [NRQ-01 evidence](NRQ-01-EVIDENCE.md) for the
+current repair frontier. Do not reopen the accepted interface or mark the
+PostgreSQL/browser successor tickets complete from synthetic HTTP evidence.

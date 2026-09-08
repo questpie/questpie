@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { renderClientContract } from "../../packages/compiler/src/runtime/client";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 import {
 	http02ActionIdentity,
 	http02Context,
@@ -17,6 +18,7 @@ import {
 test("generated Mutation and Action use exact canonical POST endpoints", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-http02-client-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ tenantId: string }>;\n",

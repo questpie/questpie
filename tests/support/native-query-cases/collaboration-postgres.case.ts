@@ -1,36 +1,33 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { cp, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 
 import {
 	MutationObserver,
 	QueryClient,
 	QueryObserver,
-} from "@tanstack/query-core";
+} from "@tanstack/react-query";
 import { SQL } from "bun";
+import { createQueryAdapter } from "questpie/react-query";
 
+import { createApp } from "#questpie/app";
+import { createClient } from "#questpie/client";
 import {
 	applyCommittedMigrations,
-	compileApplication,
 	loadCommittedMigration,
-} from "../../../../packages/compiler/src/index";
-import { CleanupStack } from "../../../../packages/testkit/src";
-import { beta05Ids as ids } from "../../../../tests/integration/postgres/helpers/beta05-runtime";
-import { installQuestpieForTracer } from "../../../../tests/support/beta12-packed-questpie";
-import { bindProjection } from "./query-adapter";
-import { instrumentClient } from "./render-projection";
+} from "@questpie/compiler";
+import { CleanupStack } from "@questpie/testkit";
 
-// This proof exercises dynamically compiled consumers; static inference is covered separately.
-const owned = /^[a-f0-9]{64}$/.test(process.env.QUESTPIE_R5_CONTAINER ?? "");
+import { beta05Ids as ids } from "./test-ids";
+
+// This case is strict-checked against its freshly compiled application/client before execution.
+const owned = /^[a-f0-9]{64}$/.test(
+	process.env.QUESTPIE_NATIVE_QUERY_CONTAINER ?? "",
+);
 const postgresTest = owned ? test : test.skip;
-let temporary: string | undefined;
 let database: SQL | undefined;
-let application:
-	| { fetch(request: Request): Promise<Response>; close(): Promise<void> }
-	| undefined;
+let application: Awaited<ReturnType<typeof createApp>> | undefined;
 let server: ReturnType<typeof Bun.serve> | undefined;
-let generated: Record<string, Function>;
 let session: string;
 const requests: { path: string; method: string; callId: string | null }[] = [];
 const streams = new Set<AbortController>();
@@ -52,7 +49,7 @@ beforeAll(async () => {
 	const inspected = Bun.spawnSync([
 		"docker",
 		"port",
-		process.env.QUESTPIE_R5_CONTAINER!,
+		process.env.QUESTPIE_NATIVE_QUERY_CONTAINER!,
 		"5432/tcp",
 	]);
 	if (
@@ -72,25 +69,7 @@ beforeAll(async () => {
 	url.username = process.env.PGUSER!;
 	url.pathname = `/${process.env.PGDATABASE!}`;
 	const connectionString = url.toString();
-	const original = resolve(
-		import.meta.dir,
-		"../../../../fixtures/collaboration",
-	);
-	temporary = await mkdtemp(join(tmpdir(), "collaboration-native-"));
-	await cp(original, temporary, {
-		recursive: true,
-		filter: (path) =>
-			!["node_modules", ".questpie"].some((part) =>
-				path.split("/").includes(part),
-			),
-	});
-	await installQuestpieForTracer(temporary);
-	await symlink(
-		join(original, "node_modules/@questpie"),
-		join(temporary, "node_modules/@questpie"),
-		"dir",
-	);
-	const migrationRoot = join(original, "questpie/migrations");
+	const migrationRoot = join(import.meta.dir, "questpie/migrations");
 	const names = (await readdir(migrationRoot, { withFileTypes: true }))
 		.filter((entry) => entry.isDirectory())
 		.map((entry) => entry.name)
@@ -107,40 +86,7 @@ beforeAll(async () => {
 	await database`INSERT INTO collaboration.channels (id, space_id, name) VALUES (${ids.channel}, ${ids.space}, 'General')`;
 	await database`INSERT INTO collaboration.memberships (id, company_id, principal_id, role, scope_key, status) VALUES (${ids.membership}, ${ids.company}, ${ids.principal}, 'admin', 'company', 'active')`;
 	await database`INSERT INTO collaboration.messages (id, channel_id, author_membership_id, body, created_at) VALUES (${ids.message}, ${ids.channel}, ${ids.membership}, 'Initial protected body', '2026-08-15T10:00:00.000Z')`;
-	const compiled = await compileApplication({ applicationRoot: temporary });
-	const output = join(temporary, ".questpie/generated");
-	const exposed = new Set(
-		JSON.parse(
-			compiled.generatedFiles["operation-http-contract.json"]!,
-		).operations.map((operation: { identity: string }) => operation.identity),
-	);
-	const resources = JSON.parse(
-		compiled.generatedFiles["operation-contracts.json"]!,
-	)
-		.operations.filter((entry: { identity: string }) =>
-			exposed.has(entry.identity),
-		)
-		.map((entry: { identity: string }) => ({
-			identity: entry.identity,
-			kind: entry.identity.split(":")[0],
-			name: entry.identity.slice(entry.identity.indexOf(":") + 1),
-			contract: { ...entry, exposure: "network" },
-		}));
-	const watchable = JSON.parse(
-		compiled.generatedFiles["realtime-wire-contract.json"]!,
-	).watchableQueries.map((entry: { identity: string }) => entry.identity);
-	const proofClient = join(temporary, ".questpie/client.native-proof.ts");
-	await Bun.write(
-		proofClient,
-		instrumentClient(
-			compiled.generatedFiles["client.ts"]!,
-			resources,
-			watchable,
-		),
-	);
-	generated = await import(proofClient);
-	const { createApp } = await import(join(output, "app.ts"));
-	const credentials = await import(join(temporary, "src/route-auth.ts"));
+	const credentials = await import("./src/route-auth");
 	session = `${credentials.demoSessionCookieName}=${credentials.demoSessionToken}`;
 	application = await createApp({
 		postgres: {
@@ -161,9 +107,6 @@ beforeAll(async () => {
 afterAll(async () => {
 	const cleanup = new CleanupStack();
 	cleanup.defer(async () => {
-		if (temporary) await rm(temporary, { recursive: true, force: true });
-	});
-	cleanup.defer(async () => {
 		await database?.close({ timeout: 0 });
 	});
 	cleanup.defer(async () => {
@@ -177,40 +120,44 @@ afterAll(async () => {
 });
 
 function client() {
-	return generated.createClient!({
+	return createClient({
 		baseUrl: server!.url.origin,
-		fetch: async (input: Request) => {
-			const path = new URL(input.url).pathname;
-			const isStream =
-				input.method === "GET" &&
-				input.headers.get("accept")?.includes("text/event-stream");
-			if (isStream && holdReconnect) {
-				reconnectWaits++;
-				await holdReconnect;
-			}
-			const headers = new Headers(input.headers);
-			headers.set("cookie", session);
-			const controller = isStream ? new AbortController() : undefined;
-			if (controller) {
-				streams.add(controller);
-				streamOpens++;
-			}
-			const signal = controller
-				? AbortSignal.any([input.signal, controller.signal])
-				: input.signal;
-			requests.push({
-				path,
-				method: input.method,
-				callId: input.headers.get("Idempotency-Key"),
-			});
-			const response = await fetch(new Request(input, { headers, signal }));
-			if (loseMutationResponse && path.includes("/mutation/")) {
-				loseMutationResponse = false;
-				await response.arrayBuffer();
-				throw new Error("TEST_RESPONSE_LOST_AFTER_EXECUTION");
-			}
-			return response;
-		},
+		fetch: Object.assign(
+			async (request: RequestInfo | URL, init?: RequestInit) => {
+				const input = new Request(request, init);
+				const path = new URL(input.url).pathname;
+				const isStream =
+					input.method === "GET" &&
+					input.headers.get("accept")?.includes("text/event-stream");
+				if (isStream && holdReconnect) {
+					reconnectWaits++;
+					await holdReconnect;
+				}
+				const headers = new Headers(input.headers);
+				headers.set("cookie", session);
+				const controller = isStream ? new AbortController() : undefined;
+				if (controller) {
+					streams.add(controller);
+					streamOpens++;
+				}
+				const signal = controller
+					? AbortSignal.any([input.signal, controller.signal])
+					: input.signal;
+				requests.push({
+					path,
+					method: input.method,
+					callId: input.headers.get("Idempotency-Key"),
+				});
+				const response = await fetch(new Request(input, { headers, signal }));
+				if (loseMutationResponse && path.includes("/mutation/")) {
+					loseMutationResponse = false;
+					await response.arrayBuffer();
+					throw new Error("TEST_RESPONSE_LOST_AFTER_EXECUTION");
+				}
+				return response;
+			},
+			{ preconnect: fetch.preconnect },
+		),
 	});
 }
 
@@ -229,15 +176,9 @@ postgresTest(
 		const cache = new QueryClient();
 		const root = client();
 		const scope = root.withContext({ companyId: ids.company });
-		const adapter = bindProjection(
-			generated.getClientProjection!(scope),
-			cache,
-			{ ssr: true },
-		);
-		const other = bindProjection(
-			generated.getClientProjection!(
-				root.withContext({ companyId: ids.company }),
-			),
+		const adapter = createQueryAdapter(scope, cache, { ssr: true });
+		const other = createQueryAdapter(
+			root.withContext({ companyId: ids.company }),
 			cache,
 			{ ssr: true },
 		);
@@ -274,10 +215,12 @@ postgresTest(
 				"Two families",
 			);
 		} finally {
-			mutation.reset();
-			await adapter.dispose();
-			await other.dispose();
-			cache.clear();
+			const cleanup = new CleanupStack();
+			cleanup.defer(() => cache.clear());
+			cleanup.defer(() => other.dispose());
+			cleanup.defer(() => adapter.dispose());
+			cleanup.defer(() => mutation.reset());
+			await cleanup.dispose();
 		}
 	},
 );
@@ -305,10 +248,7 @@ postgresTest(
 		});
 		const root = client();
 		const scoped = root.withContext({ companyId: ids.company });
-		const adapter = bindProjection(
-			generated.getClientProjection!(scoped),
-			cache,
-		);
+		const adapter = createQueryAdapter(scoped, cache);
 		const small = adapter.queries["messages.page"]!.options({
 			channelId,
 			first: 1,
@@ -322,9 +262,11 @@ postgresTest(
 		const detail = adapter.queries["channels.detail"]!.options({
 			id: channelId,
 		});
-		const observers = [small, large, detail].map(
-			(options) => new QueryObserver(cache, options),
-		);
+		const observers = [
+			new QueryObserver(cache, small),
+			new QueryObserver(cache, large),
+			new QueryObserver(cache, detail),
+		];
 		const stops = observers.map((observer) => observer.subscribe(() => {}));
 		const mutation = new MutationObserver(
 			cache,
@@ -475,9 +417,13 @@ postgresTest(
 			);
 			for (const options of [small, large, detail]) {
 				expect(cache.getQueryData(options.queryKey)).toBeUndefined();
-				await expect(cache.fetchQuery(options)).rejects.toThrow(
-					"SCOPE_RETIRED",
-				);
+			}
+			for (const read of [
+				() => cache.fetchQuery(small),
+				() => cache.fetchQuery(large),
+				() => cache.fetchQuery(detail),
+			]) {
+				await expect(read()).rejects.toThrow("SCOPE_RETIRED");
 			}
 			expect(mutation.getCurrentResult().isError).toBe(true);
 			await adapter.dispose();
@@ -486,12 +432,16 @@ postgresTest(
 		} finally {
 			holdReconnect = undefined;
 			reconnect.resolve();
-			for (const stop of stops) stop();
-			for (const observer of observers) observer.destroy();
-			mutation.reset();
-			await adapter.dispose();
-			cache.clear();
-			await database!`UPDATE collaboration.memberships SET status = 'active', role = 'admin' WHERE id = ${ids.membership}`;
+			const cleanup = new CleanupStack();
+			cleanup.defer(async () => {
+				await database!`UPDATE collaboration.memberships SET status = 'active', role = 'admin' WHERE id = ${ids.membership}`;
+			});
+			cleanup.defer(() => cache.clear());
+			cleanup.defer(() => adapter.dispose());
+			cleanup.defer(() => mutation.reset());
+			for (const observer of observers) cleanup.defer(() => observer.destroy());
+			for (const stop of stops) cleanup.defer(stop);
+			await cleanup.dispose();
 		}
 	},
 );

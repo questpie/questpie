@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { renderClientContract } from "../../packages/compiler/src/runtime/client";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 
 type GeneratedClientModule = Readonly<{
 	createClient(
@@ -34,6 +35,7 @@ type GeneratedClientModule = Readonly<{
 test("generated Query uses its visible bodyless canonical GET endpoint", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-http01-query-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>\n",

@@ -9,6 +9,7 @@ import {
 	renderClientContract,
 } from "../../packages/compiler/src/runtime";
 import type { NormalizedResource } from "../../packages/compiler/src/types";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 
 const input = {
 	kind: "object",
@@ -216,6 +217,7 @@ test("multiplexes private resume acknowledgements behind the public watch method
 	});
 	const directory = await mkdtemp(join(tmpdir(), "questpie-beta07-client-"));
 	try {
+		await installQuestpieForTracer(directory);
 		await writeFile(
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ companyId: string }>;\n",

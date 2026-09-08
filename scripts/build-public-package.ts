@@ -105,6 +105,43 @@ function rewriteEmbeddedRuntimeImports(directory: string): void {
 
 rewriteEmbeddedRuntimeImports(resolve(internal, "compiler"));
 
+// The optional adapter bundles its fingerprint implementation, but never its
+// host's native cache or React. Declaration files retain their normal layout.
+const queryAdapterDirectory = resolve(
+	repositoryRoot,
+	"packages/questpie/dist/react-query",
+);
+const queryAdapter = await Bun.build({
+	entrypoints: [
+		resolve(repositoryRoot, "packages/questpie/src/react-query/index.ts"),
+	],
+	target: "browser",
+	format: "esm",
+	external: [
+		"react",
+		"react-dom",
+		"@tanstack/react-query",
+		"@tanstack/query-core",
+	],
+	outdir: queryAdapterDirectory,
+	naming: "index.js",
+});
+if (!queryAdapter.success)
+	throw new Error(
+		`Query Adapter build failed: ${queryAdapter.logs.map((log) => log.message).join("; ")}`,
+	);
+for (const entry of readdirSync(queryAdapterDirectory)) {
+	if (entry.endsWith(".js") && entry !== "index.js")
+		rmSync(resolve(queryAdapterDirectory, entry));
+}
+cpSync(
+	resolve(
+		repositoryRoot,
+		"packages/questpie/node_modules/@noble/hashes/LICENSE",
+	),
+	resolve(queryAdapterDirectory, "THIRD-PARTY-LICENSE.txt"),
+);
+
 const built = await Bun.build({
 	entrypoints: [resolve(repositoryRoot, "packages/questpie/cli/questpie.ts")],
 	target: "bun",

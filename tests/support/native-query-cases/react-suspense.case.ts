@@ -6,11 +6,11 @@ import {
 	useSuspenseQuery,
 	useSuspenseQueries,
 } from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
 import { createElement, Suspense } from "react";
 import { renderToReadableStream } from "react-dom/server";
 
-import { createClient } from "./generated/client";
-import { createQueryAdapter } from "./generated/client.react-query";
+import { createClient } from "#questpie/test-client";
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const date = "2026-09-08T10:00:00.000Z";

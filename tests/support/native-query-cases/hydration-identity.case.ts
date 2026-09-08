@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { dehydrate, hydrate, QueryClient } from "@tanstack/query-core";
+import { dehydrate, hydrate, QueryClient } from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
 
-import { createClient } from "./generated/client";
-import { createQueryAdapter } from "./generated/client.react-query";
+import { createClient } from "#questpie/test-client";
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const otherId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7132";
@@ -144,7 +144,7 @@ test("one request bootstrap matches native hydrated keys without depending on op
 		client.withContext({ companyId: id }),
 		serverCache,
 	);
-	let browser: ReturnType<typeof createQueryAdapter> | undefined;
+	let browser: typeof server | undefined;
 	try {
 		const first = server.queries["tasks.detail"].options({ id });
 		server.queries["tasks.detail"].options({ id: otherId });
@@ -186,7 +186,7 @@ test("bootstrap cannot cross Context or alias another active scope owner", async
 		client.withContext({ companyId: id }),
 		serverCache,
 	);
-	let browser: ReturnType<typeof createQueryAdapter> | undefined;
+	let browser: typeof server | undefined;
 	try {
 		const bootstrap = server.dehydrate();
 		expect(() =>

@@ -40,6 +40,9 @@ export async function typecheckCurrentContract(
 		}
 		const paths: Record<string, string[]> = {
 			questpie: [input.frameworkTypeEntry],
+			"questpie/internal/client-projection": [
+				join(dirname(input.frameworkTypeEntry), "internal/client-projection"),
+			],
 			"#questpie/app": [join(temporary, "generated/app.ts")],
 			"#questpie/client": [join(temporary, "generated/client.ts")],
 			"#questpie/source/*": [join(input.applicationSourceRoot, "*")],

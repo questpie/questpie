@@ -9,9 +9,9 @@ import {
 } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { attachRouterServerSsrUtils } from "@tanstack/react-router/ssr/server";
+import { createQueryAdapter } from "questpie/react-query";
 
-import { createClient } from "../generated/client";
-import { createQueryAdapter } from "../generated/client.react-query";
+import { createClient } from "#questpie/test-client";
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const otherId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7132";
@@ -56,7 +56,7 @@ test("generated options resume through native Router hooks and serialization wit
 		secondPeer.client.withContext({ companyId: otherId }),
 		secondCache,
 	);
-	let browser: ReturnType<typeof createQueryAdapter> | undefined;
+	let browser: typeof first | undefined;
 	const serverRouter = createRouter({
 		routeTree: createRootRoute(),
 		history: createMemoryHistory({ initialEntries: ["/"] }),

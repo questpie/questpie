@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { renderClientContract } from "../../packages/compiler/src/runtime/client";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 
 const mediaType = "application/json; charset=utf-8";
 
@@ -36,6 +37,7 @@ async function generatedClient(): Promise<
 	Readonly<{ directory: string; module: Generated }>
 > {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-action-client-v3-"));
+	await installQuestpieForTracer(directory);
 	await writeFile(
 		join(directory, "app.ts"),
 		"export type AppContextInput = Readonly<Record<string, never>>;\n",

@@ -4,10 +4,10 @@ import {
 	MutationObserver,
 	QueryClient,
 	QueryObserver,
-} from "@tanstack/query-core";
+} from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
 
-import { createClient } from "./generated/live-client";
-import { createQueryAdapter } from "./generated/live-client.react-query";
+import { createClient } from "#questpie/test-live-client";
 
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
 const date = "2026-09-08T10:00:00.000Z";
@@ -398,6 +398,48 @@ test("unobserved generated watch prefetch releases its binding and stream after 
 		expect(peer.streamClosed).toBe(true);
 		expect(peer.ordinaryReads).toBe(0);
 	} finally {
+		await adapter.dispose();
+		cache.clear();
+	}
+}, 2_000);
+
+test("terminal watch denial clears same-key observers even when one subscriber throws", async () => {
+	const peer = externalPeer();
+	const cache = new QueryClient();
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: peer.transport,
+	});
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	const options = adapter.queries["tasks.detail"].options({ id });
+	const first = new QueryObserver(cache, options);
+	const sibling = new QueryObserver(cache, options);
+	let denying = false;
+	const stopFirst = first.subscribe(() => {
+		if (denying) throw new Error("Application denial subscriber failure");
+	});
+	const stopSibling = sibling.subscribe(() => {});
+	try {
+		await cache.fetchQuery(options);
+		expect(sibling.getCurrentResult().data?.title).toBe("Initial");
+		denying = true;
+		peer.fail();
+		await peer.closed;
+		await Bun.sleep(0);
+		expect(first.getCurrentResult().data).toBeUndefined();
+		expect(sibling.getCurrentResult().data).toBeUndefined();
+		expect(sibling.getCurrentResult().error).toMatchObject({
+			message: "AUTHORIZATION_FAILED",
+		});
+		expect(cache.getQueryData(options.queryKey)).toBeUndefined();
+		await expect(cache.fetchQuery(options)).rejects.toThrow("SCOPE_RETIRED");
+	} finally {
+		denying = false;
+		stopFirst();
+		stopSibling();
 		await adapter.dispose();
 		cache.clear();
 	}

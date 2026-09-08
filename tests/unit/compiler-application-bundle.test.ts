@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -84,6 +84,30 @@ test("application source reads preserve inferred loaders, assets, and external i
 			expect(external["internal/application.js"]).toContain(
 				JSON.stringify(specifier),
 			);
+		await writeFile(
+			join(root, "lazy.ts"),
+			'export { default as value } from "./typed";',
+		);
+		const dynamicEntry =
+			'export const read = () => import("#questpie/source/lazy.ts");';
+		const dynamic = await bundleApplicationEntry({
+			...input,
+			entry: dynamicEntry,
+		});
+		const relocatedRoot = await mkdtemp(
+			join(tmpdir(), "questpie-bundle-relocated-"),
+		);
+		try {
+			await cp(root, relocatedRoot, { recursive: true });
+			const relocated = await bundleApplicationEntry({
+				...input,
+				applicationRoot: relocatedRoot,
+				entry: dynamicEntry,
+			});
+			expect(relocated).toEqual(dynamic);
+		} finally {
+			await rm(relocatedRoot, { recursive: true, force: true });
+		}
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
