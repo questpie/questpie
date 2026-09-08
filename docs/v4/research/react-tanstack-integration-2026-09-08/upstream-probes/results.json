@@ -1,0 +1,65 @@
+{
+	"status": "observed",
+	"packages": {
+		"db": "0.8.7",
+		"queryCore": "5.102.8"
+	},
+	"findings": [
+		{
+			"probe": "complete-row-update",
+			"mode": "default-partial",
+			"retainsOmittedField": true
+		},
+		{
+			"probe": "complete-row-update",
+			"mode": "full",
+			"retainsOmittedField": false
+		},
+		{
+			"probe": "truncate-with-pending-write",
+			"retainsOptimisticRow": true
+		},
+		{
+			"probe": "cleanup",
+			"emptyAfterCleanupAndLateCallback": true,
+			"repopulatesAfterPendingSettlement": true,
+			"rowAfterSettlement": {
+				"id": "task",
+				"title": "pending",
+				"staffNote": "synthetic-note",
+				"$synced": false,
+				"$origin": "local",
+				"$key": "task",
+				"$collectionId": "research-3"
+			}
+		},
+		{
+			"probe": "retained-handle-preload",
+			"canRestartAfterCleanup": true
+		},
+		{
+			"probe": "queued-sync-receipt",
+			"waitsForPersistingHandler": true,
+			"appliesAfterHandlerResolves": true
+		},
+		{
+			"probe": "full-replacement-with-pending-overlay",
+			"appliedReplacementStillHasOmittedFieldInVisibleOverlay": true
+		},
+		{
+			"probe": "retired-completion-guard",
+			"failedLocallyWithoutRepopulating": true
+		},
+		{
+			"probe": "invalidate-denied-refetch",
+			"invalidationResolved": true,
+			"retainsOldDataInErrorState": true
+		},
+		{
+			"probe": "stream-first-snapshot",
+			"dataAvailable": true,
+			"fetchingUntilStreamEnds": true,
+			"finitePrefetchNotSettled": true
+		}
+	]
+}
