@@ -60,11 +60,11 @@ holds its correlated HTTP response, disposes the adapter and then releases the
 response. It compares public native cleanup primitives; it changes no adapter
 execution code. Query Core 5.102.8 produces these observations:
 
-| Cleanup after disposal      | Hook observer exposes late result | Original Promise exposes late result | Late `onSuccess` calls | Retained cache entries |
-| --------------------------- | --------------------------------- | ------------------------------------ | ---------------------- | ---------------------- |
-| No additional cleanup       | Yes                               | Yes                                  | 1                      | 1                      |
-| Remove Mutation from cache  | Yes                               | Yes                                  | 1                      | 0                      |
-| Reset observer, then remove | No                                | Yes                                  | 1                      | 0                      |
+| Cleanup after disposal      | Native observer exposes late result | Original Promise exposes late result | Late `onSuccess` calls | Retained cache entries |
+| --------------------------- | ----------------------------------- | ------------------------------------ | ---------------------- | ---------------------- |
+| No additional cleanup       | Yes                                 | Yes                                  | 1                      | 1                      |
+| Remove Mutation from cache  | Yes                                 | Yes                                  | 1                      | 0                      |
+| Reset observer, then remove | No                                  | Yes                                  | 1                      | 0                      |
 
 Removing native cache entries is not an authority fence. Observer reset is
 useful but does not fence Mutation-option callbacks or Promise consumers.

@@ -6,6 +6,7 @@
 		"generate:proof": "bun run prepare-generated.ts",
 		"measure:generation": "bun run generate:proof && bun run measure-generation.ts",
 		"diagnose:retirement": "bun run generate:proof && bun run diagnose-retirement.ts",
+		"diagnose:hydration": "bun run generate:proof && bun run diagnose-hydration.ts",
 		"test": "bun test live-options.test.ts",
 		"test:generated": "bun run generate:proof && bun test generated-client.test.ts query-adapter.test.ts generation.test.ts",
 		"test:live": "bun run generate:proof && bun test generated-live.test.ts",

@@ -8,6 +8,7 @@
 		"react-consumer.types.ts",
 		"react-suspense.test.ts",
 		"react-dom.test.ts",
-		"diagnose-retirement.ts"
+		"diagnose-retirement.ts",
+		"diagnose-hydration.ts"
 	]
 }

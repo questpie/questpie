@@ -39,12 +39,28 @@ QUESTPIE keys match. Source:
 
 ## Executed hydration diagnostic
 
-Using Query Core 5.102.8, two generated client scopes with identical Context and
+Run `bun run diagnose:hydration` for the committed
+[reproducer](diagnose-hydration.ts). Using Query Core 5.102.8, two generated client
+scopes with identical Context and
 Query input were bound to separate native caches. A synthetic Task was placed
 in the server cache, then `hydrate(browserCache, dehydrate(serverCache))` ran.
-Result: `sameKey: false`, `hydratedQueries: 1`, `browserScopeCacheHit: false`.
-This was an in-memory diagnostic, not an actual SSR render or serialized round
-trip. It establishes the key mismatch before either of those additional tests.
+Result: `sameKey: false`, `hydratedQueries: 1`, `originalKeyCacheHit: true`,
+`browserScopeCacheHit: false`. Hydration itself restores the Query; the browser
+adapter cannot address it through its independently generated key.
+
+The same diagnostic now compares in-memory hydration with a plain JSON round
+trip. The former preserves the fixture's `Date`; plain JSON does not. This is
+not a Start serializer result. Native Query supports serialization transforms,
+and Start's integration needs its own end-to-end consumer. Do not add a second
+codec implementation or raw inline JSON to conceal either gap. The upstream
+[SSR guide](https://tanstack.com/query/latest/docs/framework/react/guides/ssr)
+also warns that plain JSON embedded in HTML needs protection against script
+injection. This script prints diagnostic flags and counts, not payloads or HTML.
+
+Both observations are diagnostics, not acceptance gates. They run without an
+actual Start server or browser and select no server/browser scope-transfer
+contract. ADR-0035's separate-scope isolation still applies until explicitly
+superseded; identical Context input alone is not permission to share a cache.
 
 The proposed private fingerprint in [FINGERPRINT-RESEARCH.md](FINGERPRINT-RESEARCH.md)
 would preserve that mismatch with independently generated secrets. Do not select
