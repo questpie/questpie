@@ -60,8 +60,10 @@ The local prompt and response are retained in the owned
 The candidate adopts the generated sibling and lazy scope accessor. It rejects
 the suggested canonical-input keys because they expose input values, and the
 per-module counter identity because separate generated client copies can
-collide. It also rejects a new unknown-error wrapper: native `unknown` plus a
-generated predicate preserves the actual transport contract. Declared errors
+collide. It also rejects a new unknown-error wrapper: `unknown` plus a
+generated predicate preserves the actual transport contract. Native Query hook
+defaults require the qualification in [React evidence](REACT-HOOK-EVIDENCE.md).
+Declared errors
 have `code`, `status` and `payload`, not an invented `retryable` field. Lazy
 registration adds a WeakMap entry; the result is not described as zero-cost.
 

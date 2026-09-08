@@ -71,9 +71,12 @@ uses a provisional 128-capture ceiling to make allocation finite. It is not a
 ratified adapter limit or a measured capacity recommendation; cache-eviction
 and abandoned-options ownership still need closure before production selection.
 
-Native error remains `unknown`; an Operation-specific generated predicate
-narrows declared errors without wrapping arbitrary transport errors or claiming
-they belong to a closed union. One-shot transport and error decoding remain the
+Native cache key error tags and Mutation options use `unknown`. Query hooks
+retain TanStack's default `Error` unless the application configures its native
+Register; the [React consumer evidence](REACT-HOOK-EVIDENCE.md) tests both
+configurations. An Operation-specific generated predicate narrows declared
+errors without wrapping arbitrary transport failures into a closed union.
+One-shot transport and error decoding remain the
 production renderer's code. No ordinary Query is made watchable by this choice.
 
 This selects the narrow generated-sibling idea from the Opus consultation, not
@@ -85,7 +88,10 @@ causal observation and live/Mutation integration remain evidence obligations.
 Generated descriptors and declared-error inference, codec-canonical identity,
 Task board plus Mutation, ordered optimism, full authorization retirement across
 pending writes, conservative dependency closure, post-commit observation,
-browser/StrictMode, PostgreSQL races, optional DB and SSR are not proved here.
+real-browser lifecycle, PostgreSQL races, optional DB and Start hydration are
+not proved here. Native hooks, limited server Suspense and jsdom StrictMode
+Query retirement now have [focused evidence](REACT-HOOK-EVIDENCE.md), not full
+React lifecycle coverage.
 No scope inclusion in beta 2 is inferred from permission to construct this proof.
 
 Production should replace this experiment when the relevant consumer passes;

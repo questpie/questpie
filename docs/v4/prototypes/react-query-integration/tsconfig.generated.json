@@ -4,6 +4,9 @@
 		"query-adapter.test.ts",
 		"generated-live.test.ts",
 		"generated-client.test.ts",
-		"generated-consumer.types.ts"
+		"generated-consumer.types.ts",
+		"react-consumer.types.ts",
+		"react-suspense.test.ts",
+		"react-dom.test.ts"
 	]
 }

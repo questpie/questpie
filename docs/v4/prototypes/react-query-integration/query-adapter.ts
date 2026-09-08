@@ -2,7 +2,7 @@ import type {
 	DataTag,
 	MutationObserverOptions,
 	QueryClient,
-	QueryObserverOptions,
+	QueryFunction,
 } from "@tanstack/query-core";
 
 import { createLiveQueryOptions } from "./live-options";
@@ -24,11 +24,14 @@ type OutputOf<Descriptor> =
 		: never;
 type QueryFactory<Descriptor extends ReadDescriptor<never, unknown, unknown>> =
 	Readonly<{
-		options(input: InputOf<Descriptor>): QueryObserverOptions<
-			OutputOf<Descriptor>,
-			unknown
-		> & {
+		options(input: InputOf<Descriptor>): {
 			queryKey: DataTag<readonly string[], OutputOf<Descriptor>, unknown>;
+			queryFn: QueryFunction<OutputOf<Descriptor>>;
+			retry: false;
+			staleTime?: number;
+			refetchOnWindowFocus?: false;
+			refetchOnReconnect?: false;
+			refetchOnMount?: false;
 		};
 		isError: Descriptor["isError"];
 	}>;

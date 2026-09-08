@@ -56,6 +56,15 @@ None is supported merely because Query Core tests pass. This refines the design
 evidence required before selecting the interface; it does not silently expand
 the beta-2 release cut or declare SSR1 complete.
 
+The [native React checkpoint](../../prototypes/react-query-integration/REACT-HOOK-EVIDENCE.md)
+repairs the options type through failing native-hook consumers and adds four
+React tests. The combined suite now has 27 tests / 102 assertions. Server
+Suspense streams a shell and decoded results; jsdom StrictMode exercises native
+Query/Mutation hooks and Query retirement. A completed Mutation result still
+survives scope disposal. Actual browser transport was unavailable. Start key
+identity, full Mutation retirement and infinite pagination remain open; no
+slice or release gate is marked complete by these narrower results.
+
 | Slice                                               | Depends on                                      | Falsifiable exit                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | R1: Descriptor and ordinary Query/Mutation vertical | Focused public-surface decision                 | Compiler emits one reusable descriptor; native options infer input, output and declared errors; direct/generated transport behavior unchanged; no repeated schema/key registry                                 |

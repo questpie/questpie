@@ -1,6 +1,7 @@
 # TanStack compatibility audit
 
-This records what the prototype at `9250f5ea3` can support, what remains unproved,
+This records the prototype's support, including the subsequent
+[native React hook checkpoint](REACT-HOOK-EVIDENCE.md), what remains unproved,
 and why a native-options return type is not sufficient evidence of complete
 TanStack Start compatibility. The owner explicitly raised infinite and suspense
 queries on 2026-09-08. This is research, not accepted public support or a release
@@ -8,16 +9,16 @@ scope projection.
 
 ## Current coverage
 
-| Surface                                      | Current evidence                                                                                         | Next falsifying consumer                                                                                                                     |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ordinary Query and Mutation                  | Native QueryClient/QueryObserver/MutationObserver and generated transport pass; React hooks not executed | `useQuery`, `useMutation`, selectors and error reset in React                                                                                |
-| `useSuspenseQuery` / `useSuspenseQueries`    | Not verified; current broad QueryObserverOptions also admits a skipToken type that suspense excludes     | Strict hook inference, first suspension, abandoned render, denial after data and error-boundary reset                                        |
-| `useInfiniteQuery`                           | Not implemented; ordinary queryFn ignores pageParam and has no page envelope                             | Compiler-known cursor mapping, distinct normal/infinite identities, next/previous pages, maxPages and refetch                                |
-| `useSuspenseInfiniteQuery`                   | Not implemented                                                                                          | Infinite consumer plus suspense lifecycle                                                                                                    |
-| Start loader prefetch                        | Only finite native fetch is proved                                                                       | `ensureQueryData` in an actual Start loader, client navigation and cancellation                                                              |
-| Start SSR, streaming, hydration              | Current independent scope keys miss hydrated data                                                        | Per-request isolation, matching authorized server/client identity, codec-safe data, one browser watch handoff                                |
-| Live infinite results                        | Not implemented                                                                                          | Page-boundary inserts/deletes, omitted fields, revocation, page eviction and complete replacement without duplicates or stale protected rows |
-| Persistence, offline replay, cross-tab cache | Not supported by current proof                                                                           | Explicit authority lifetime and stable call-identity decisions before making these claims                                                    |
+| Surface                                      | Current evidence                                                                                      | Next falsifying consumer                                                                                                                     |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Ordinary Query and Mutation                  | Native hooks infer generated types; jsdom StrictMode executes Query selectors and Mutation submission | Real browser, complete Mutation retirement and error reset                                                                                   |
+| `useSuspenseQuery` / `useSuspenseQueries`    | Strict inference and server rendering pass; jsdom scope retirement reaches the error boundary         | Abandoned render, live remount, server denial and error-boundary reset                                                                       |
+| `useInfiniteQuery`                           | Not implemented; ordinary queryFn ignores pageParam and has no page envelope                          | Compiler-known cursor mapping, distinct normal/infinite identities, next/previous pages, maxPages and refetch                                |
+| `useSuspenseInfiniteQuery`                   | Not implemented                                                                                       | Infinite consumer plus suspense lifecycle                                                                                                    |
+| Start loader prefetch                        | Only finite native fetch is proved                                                                    | `ensureQueryData` in an actual Start loader, client navigation and cancellation                                                              |
+| Start SSR, streaming, hydration              | Current independent scope keys miss hydrated data                                                     | Per-request isolation, matching authorized server/client identity, codec-safe data, one browser watch handoff                                |
+| Live infinite results                        | Not implemented                                                                                       | Page-boundary inserts/deletes, omitted fields, revocation, page eviction and complete replacement without duplicates or stale protected rows |
+| Persistence, offline replay, cross-tab cache | Not supported by current proof                                                                        | Explicit authority lifetime and stable call-identity decisions before making these claims                                                    |
 
 Infinite Query owns `pages` and `pageParams`; it requires `initialPageParam` and
 page-navigation callbacks. It cannot be obtained by relabelling ordinary options.
@@ -71,8 +72,10 @@ Sources: [Query metadata](https://registry.npmjs.org/@tanstack%2Freact-query/5.1
 [React metadata](https://registry.npmjs.org/react/19.2.8),
 [DB metadata](https://registry.npmjs.org/@tanstack%2Fdb/0.8.7),
 [React DB metadata](https://registry.npmjs.org/@tanstack%2Freact-db/0.3.7).
-These are research pins, not a new installed dependency graph or an integration
-test result. Query Core already matches the latest version; no broad upgrade ran.
+These were research pins at the audit checkpoint. The subsequent hook proof
+installs Query Core, React Query and React/ReactDOM at these exact versions in
+the private prototype only. Start, Router and DB integration are still untested;
+no broad repository upgrade ran.
 
 The exact published Start tarball contains `skills/react-start/SKILL.md`, which
 was read in full. Its referenced Start Core entry and execution-model skill were
@@ -93,7 +96,7 @@ DTOs, Policy or endpoints through a second set of Start server functions.
 ## Continuation order
 
 Reconcile server/browser identity before replacing the capture registry. Then
-test ordinary and suspense hook consumers, typed pagination, and an actual Start
+extend the focused hook consumers, test typed pagination, and run an actual Start
 loader/SSR/hydration consumer before broader optimistic/invalidation work. Keep
 live infinite semantics separate from one-shot pagination; neither is accepted
 by an upstream hook merely accepting an options object. The release cut remains
