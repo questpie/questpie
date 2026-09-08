@@ -3,6 +3,7 @@
 	"include": [
 		"prepare-generated.ts",
 		"generation.test.ts",
-		"measure-generation.ts"
+		"measure-generation.ts",
+		"pagination-source.test.ts"
 	]
 }

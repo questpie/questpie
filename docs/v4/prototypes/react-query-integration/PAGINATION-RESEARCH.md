@@ -1,7 +1,7 @@
 # Pagination projection research
 
-Research only, 2026-09-08. No implementation, acceptance, or infinite-hook
-support claim. Inspected compiler/Runtime sources and the prototype's installed
+Research and source-compilation evidence, 2026-09-08. No infinite implementation,
+acceptance, or infinite-hook support claim. Inspected compiler/Runtime sources and the prototype's installed
 TanStack Query **5.102.8**. Upstream web documentation was checked, but its
 `latest` redirects can describe newer APIs; installed source controls the
 version-specific findings below.
@@ -158,6 +158,24 @@ page is individually watchable. A finite ordinary infinite proof can proceed
 without selecting that stronger guarantee.
 
 ## Exact next executable consumer
+
+The first source consumer is now executable in
+[pagination-source.test.ts](pagination-source.test.ts): full Support Desk
+compilation passes one test with five assertions. It binds `tickets.queue` to
+the forward template, verifies the nullable cursor input and generated page-info
+contract, and rejects inferring a public page mapping for `tickets.detail` from
+its internal structural plan. This proves availability of compiler facts, not
+native infinite execution.
+
+Run `bun run test:pagination-source` from this prototype after installing the
+repository's frozen workspace dependencies and building the public packages
+with their existing `build` scripts. Do not point this worktree's workspace
+dependencies at another worktree: the first attempt resolved an older Runtime
+without its required schedule export. A local frozen install and package builds
+removed that mismatch without source or lockfile changes. The system `/tmp`
+also rejected compiler temporary writes with `EDQUOT`; using a dedicated writable
+`TMPDIR` for this process allowed full compilation. No unrelated files were
+deleted to make space.
 
 Use the existing authored `tickets.queue` through isolated full compilation and
 the production client renderer. Derive the descriptor from its actual

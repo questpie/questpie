@@ -79,6 +79,10 @@ handler results ineligible until their paging relationship is established.
 The next finite consumer must include a nonempty terminal page, renamed cursor
 parameter, native infinite/Suspense type inference and ordinary/infinite cache
 separation. Independent page watches do not establish contiguous live lists.
+The first full-source Support Desk compilation consumer now passes one test
+with five assertions for the positive root mapping and negative handler case.
+The total is 28 tests / 107 assertions when this separate compiler suite runs
+alongside the 27 native/generated tests. Infinite execution is still next.
 
 | Slice                                               | Depends on                                      | Falsifiable exit                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
