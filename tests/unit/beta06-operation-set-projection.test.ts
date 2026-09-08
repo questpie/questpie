@@ -6,8 +6,50 @@ import { join, resolve } from "node:path";
 import { compileApplication } from "@questpie/compiler";
 
 import { digest } from "../../packages/compiler/src/canonical";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
+
+test("rejects inverse child lists before exposing a generated Mutation Collection capability", async () => {
+	const temporary = await mkdtemp(
+		join(tmpdir(), "questpie-operation-set-inverse-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		await installQuestpieForTracer(temporary);
+		await writeFile(
+			join(temporary, "src/channel-inverse-list.ts"),
+			`import { codec, defineCollectionOperations } from "questpie";
+import { channels } from "./channels";
+import { messages } from "./messages";
+import { channelPolicy } from "./message-policy";
+
+export const channelInverse = defineCollectionOperations(channels, {
+  name: "channelInverse",
+  policy: channelPolicy,
+  list: { data: channels.list({
+    parameters: { channelId: codec.uuid(), first: codec.integer({ minimum: 1, maximum: 100 }), after: codec.nullable(codec.cursor()) },
+    where: ({ row, parameters }) => row.id.equal(parameters.channelId),
+    orderBy: { id: "asc" },
+    select: { id: true, messages: messages.list({ first: 50, orderBy: { createdAt: "desc", id: "desc" }, select: { id: true, createdAt: true } }) },
+    page: ({ parameters }) => ({ first: parameters.first, after: parameters.after }),
+  }) },
+});
+`,
+		);
+		await expect(
+			compileApplication({ applicationRoot: temporary }),
+		).rejects.toMatchObject({
+			code: "QP-COMPOSE-013",
+			diagnosticClass: "structuralTypeError",
+			message: expect.stringContaining(
+				"query:channelInverse.list cannot project an inverse child list",
+			),
+		});
+	} finally {
+		await rm(temporary, { recursive: true, force: true });
+	}
+});
 
 test("lowers an unbranded Collection Operation Set to exact P3 programs", async () => {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-operation-set-"));

@@ -1,19 +1,23 @@
-# Draft: sweep due tickets every minute
+# Public projection: sweep due tickets every minute
 
-Internal candidate only. ADR-0043 remains Proposed. Do not project this guide
-into public documentation until its committed formal PASS is verified. The
-how-to below describes the implemented candidate; it makes no acceptance claim.
+ADR-0043 has a committed, verified formal PASS. The public guide is projected at
+`apps/docs/content/docs/v4/scheduled-jobs.mdx`; it preserves the two exact
+Team Support Desk fences below. The remaining body is retained draft evidence,
+not a second public guide or a new source of product authority.
+
+Projection status: verified. Independent fact, prose, and example reviews,
+source adjudication of their findings, and the affected documentation checks
+are complete. The [projection evidence](../../implementation/static-schedule-public-projection/EVIDENCE.md)
+records that ordinary Product review. Aggregate beta.2 acceptance remains
+separate.
 
 ## Projection plan
 
-Add one how-to page at `apps/docs/content/docs/v4/scheduled-jobs.mdx` after
-acceptance. Link it from the ordinary Job section of `durable-reactions.mdx`
-and the v4 navigation. Keep the existing guide's shared acceptance, heartbeat,
-retry, cancellation, and retention explanation. Replace its closing statement
-that Cron and checkpoints are absent with this exact slice's availability and
-link. Do not copy the Reaction effect example into the new page. Add the
-protocol-v9 cutover qualification to `runtime-and-studio.mdx` and the release
-inventory.
+The projection adds the how-to, ordinary Job and navigation links, protocol-v9
+deployment guidance, the beta.2 preview inventory entry, portable skill
+guidance, and the Team Support Desk setup instructions. The ordinary durable
+guide retains shared acceptance, heartbeat, retry, cancellation, and retention
+explanation. The new page does not copy its Reaction effect example.
 
 The page body begins below. Its Team Support Desk source files and application
 prerequisites must be available to readers when projected.
@@ -275,6 +279,6 @@ kept in application data. Proposed ADR-0043 records that intent. The how-to
 therefore promises a bounded sweep and receipt recovery, not backlog completion
 or exactly-once physical handler execution.
 
-Projection remains blocked on ADR-0043's verified committed PASS and review of
-the deployment wording against the final release cut. No additional product
-choice is requested by this draft.
+The acceptance prerequisite is complete. Final deployment wording, public
+example parity, and independent documentation reviews belong to the projection
+status above. No additional product choice is requested by this retained draft.

@@ -12,6 +12,7 @@
 		"reactive-query-resources",
 		"react-query",
 		"durable-reactions",
+		"scheduled-jobs",
 		"multi-instance",
 		"semantic-kernels-and-public-surface",
 		"services",

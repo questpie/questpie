@@ -37,6 +37,7 @@ src/
     operations.ts     Collection Operation declarations
     queries.ts
     mutations.ts
+    sla-sweep.ts
     sla-follow-up.ts
   auth/
 web/
@@ -70,6 +71,10 @@ The Compiled Manifest is desired state, committed migrations are reviewed
 history, and the Schema Fingerprint is observed database state. Follow the
 application's compile, plan, review, commit, apply, and Drift-verification
 workflow. A build is not permission to apply a migration.
+
+For the protocol-v9 cutover and explicit schedule activation, follow
+[durable deployment](jobs-and-observability.md).
+Schema migration and Runtime startup do not activate a schedule set.
 
 Model database guarantees as Constraints and Indexes where PostgreSQL owns the
 invariant. Keep stable Resource and Field identities separate from physical

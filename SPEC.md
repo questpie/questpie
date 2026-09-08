@@ -353,12 +353,57 @@ attempt, lease, fencing, retry, cancellation, result, retention, executable-
 compatibility, and event kernel as Reaction. Removing a schedule prevents
 future ticks and never cancels an accepted run.
 
+ADR-0043 fixes static scheduled acceptance and the minimum named-Mutation
+checkpoint. An application Job's optional `schedule` has exactly `cron`,
+`execution: { principal, context }`, and `input`. The service Principal grants
+no privilege; existing Context and Job codecs own input types. Context resolves
+at acceptance and again for each attempt. Dynamic due times remain application
+rows processed by a bounded sweep, not framework schedule CRUD.
+
+Numeric five-field UTC cron selects the latest matching minute after the stored
+frontier and through PostgreSQL's single post-lock observation. Missed unaccepted
+minutes coalesce to one tick; accepted runs retain independent retry and
+cancellation. New, changed and readded programs start after activation minute.
+Unchanged adjacent programs retain their frontier; clock regression never
+rewinds it. Tick, frontier and ordinary Job acceptance commit atomically.
+
+`questpie schedule activate --expect-revision <revision>` owns explicit
+revision-fenced activation, including empty-set removal. Runtime boot and schema
+migration cannot activate schedules. Exact request replay precedes revision
+comparison; an ABA content rollback cannot admit a stale request. Desired-set
+digest, activation revision, logical tick and executable compatibility remain
+distinct. Retained compiled builds execute their own accepted work.
+
+`ctx.run.step.mutation(name, ctx.mutations.<qualified.name>, input)` consumes an
+inert generated Mutation reference with inferred input, output and errors.
+Reservation, the existing Mutation transaction and checkpoint completion are
+separate transactions. Stable Mutation Call Identity recovers through the
+existing immutable result receipt after commit-before-completion failure.
+Replay requires fresh Context and Operation admission, not rerun Collection
+Policy. A missing or changed required receipt refuses replay before claim or
+handler work. Retained checkpoint history requires retention of its receipts.
+
+Changed, duplicate, reordered or truncated checkpoint history fails closed.
+Step failures doom further dispatch and successful attempt settlement even when
+caught; declared errors retain permanent `REACTION_ERROR` semantics. The worker
+joins every started step promise before settlement. A racing cancellation can
+leave a committed Mutation; a stale lease cannot complete its checkpoint.
+
+The fixed subset bounds are 64 scheduled Jobs, 262,144 canonical schedule bytes,
+UTC years 1–9999, a finite 146,097-day/1,440-minute-candidate calendar search,
+10-second activation/producer transactions, 64 ordered checkpoint names with
+one command in flight, 5-second checkpoint transactions, and existing 1 MiB
+canonical input/result limits. A failed reconciliation commits no partial work.
+Ordinary worker polling owns reconciliation; producer failure does not starve
+accepted runs. Its diagnostic exposes only `SCHEDULE_PRODUCER_FAILED`, not SQL,
+Principal, Context/input or exception details. No new telemetry payload follows.
+
 Reaction is the committed-fact projection of that kernel. Its causation and
 deduplication derive from the exact transaction fact and static dispatch slot;
 it has no independent producer or author-supplied second key.
 
 A checkpointed Job is a checkpoint/history projection over the same kernel.
-Its closed commands call a generated Mutation or Action, sleep on a durable
+Its broader architectural commands call a generated Mutation or Action, sleep on a durable
 timer, or wait for a typed durable signal. It does not expose a generic callback
 step or create a second Resource/runtime. Live histories pin semantic version
 and executable bytes instead of replaying arbitrary latest TypeScript.
@@ -367,6 +412,8 @@ Queue names the operational scheduling, admission, lease, and backpressure
 surface, not a Definition or composition container. Complete Job checkpoint
 breadth still requires signal authorization, child work, compensation, bounded
 continuation/history, and multi-version evidence before public release.
+Only the named-Mutation subset above is implemented for beta.2; Action
+checkpoints, durable sleep, signals, child Jobs and workflows remain outside it.
 
 ## 10. Execution Envelope and Studio
 
@@ -436,6 +483,16 @@ with zero or one first-acceptance link. Internal protocol v8 is the exact v7
 catalog plus those three columns and their completeness constraint. V7 to v8 is
 an explicit non-rolling cutover: mixed v7/v8 operation and in-place downgrade
 are unsupported.
+
+ADR-0043 advances current Runtime readiness to exact protocol v9 while preserving
+immutable v8 SQL and its trace data. Stop incompatible Runtime instances before
+upgrading. Existing v8 requires `--allow-non-rolling-protocol-v9`; supported
+exact v6/v7 additionally requires `--allow-non-rolling-protocol-v8`. The owner
+rechecks protocol state after lock acquisition. Fresh bootstrap needs neither
+flag; an older catalog installed while waiting is not fresh bootstrap. Each
+version upgrade owns its transaction, so a failed v9 upgrade may leave a valid
+preceding v8 upgrade committed. There is no mixed-version fallback or automatic
+schedule activation.
 
 Studio shows:
 

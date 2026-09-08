@@ -220,6 +220,12 @@ chosen by the Mutation enter through the disjoint trusted `values` lane. An
 unknown trusted Field or caller/trusted overlap fails before SQL. Use `ctx.now`
 when several rows describe the same business instant.
 
+Inside a Mutation, `ctx.data.<collection>.get({ key })` locks the keyed row
+before reading its current state and applying fresh read Policy. It holds
+that row lock until the owning transaction ends. A missing or Policy-invisible
+row returns `null`. Standalone Queries use their read snapshot instead; they
+do not acquire this Mutation row lock.
+
 The mapping refers to a key in this Mutation's `errors` map. The target error
 must be payloadless. Another Mutation may map the same Collection issue to a
 different public error. A Collection never borrows the calling Mutation's error

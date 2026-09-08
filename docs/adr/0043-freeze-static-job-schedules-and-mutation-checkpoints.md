@@ -1,7 +1,8 @@
 # ADR-0043: Freeze static Job schedules and Mutation checkpoints
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-06
+- Accepted: 2026-09-08 after committed, credential-free-verified Opus PASS
 - Owners: durable execution, compiler, deployment
 - Ticket: #365; blocks beta.2 acceptance #364
 
@@ -10,8 +11,8 @@
 ADR-0016, ADR-0017, and ADR-0026 already place static schedules and closed
 checkpoints on one Job Resource and one PostgreSQL durable kernel. They do not
 settle autonomous producer identity, calendar evaluation, missed ticks, or
-deployment activation. The current compiler rejects non-null schedules and the
-current Job Context cannot call a Mutation.
+deployment activation. Before this decision, the compiler rejected non-null
+schedules and the Job Context could not call a Mutation.
 
 The concrete consumer is a minute sweep. A static Job calls one named Mutation;
 that Mutation processes a bounded page of application-owned due rows, accepts
@@ -19,10 +20,12 @@ independent Jobs, and advances application due times in one transaction. The
 owner selected one latest catch-up run after downtime. Dynamic schedule CRUD,
 Action checkpoints, signals, sleep, child work, and workflows are not required.
 
-This is a candidate contract, not implementation or acceptance evidence. The
-linked decision map records source findings and the proof still required.
+The connected compiler, Runtime and PostgreSQL proof received the committed
+[Opus PASS](../v4/prototypes/static-job-schedules/REVIEW.json), verified through
+the credential-free repository verifier before this authority projection.
+The linked decision map retains the investigation and evidence qualifications.
 
-## Candidate decision
+## Decision
 
 ### One authored schedule, existing execution authority
 
@@ -102,7 +105,7 @@ Runtime boot reads deployment state; it cannot activate a schedule set. Otherwis
 an old Runtime restart could restore a removed schedule. Schema migration is not
 schedule activation either: a cron-only edit must not require invented DDL.
 
-The proposed deployment command is `questpie schedule activate --expect-revision
+The deployment command is `questpie schedule activate --expect-revision
 <revision>`. It verifies the local generated artifact and existing application/
 protocol binding, then performs one application-scoped PostgreSQL transaction.
 Revision zero means no activation yet. Revisions are PostgreSQL `bigint` values
@@ -171,7 +174,7 @@ callback step, direct Mutation call, Query capability, Service, Action, direct
 Job acceptance, database facade, or transaction facade added to Job Context.
 
 Checkpoint names are nonempty ASCII letters/digits/`-`/`_`, at most 64 bytes.
-Names are unique within a run and ordered by invocation. The proposed first
+Names are unique within a run and ordered by invocation. The first
 history cap is 64 checkpoints per run, with one in-flight command. Concurrent
 step calls fail before the second command is dispatched. Ordinary Jobs that
 never use a checkpoint allocate no checkpoint history.
@@ -286,7 +289,7 @@ Context, input, SQL state, or exception message. `questpie start` drives the
 existing worker poll loop. A custom host owns that same loop and its shutdown,
 as it already does for ordinary Jobs. Neither host activates schedules at boot.
 
-The candidate's fixed work bounds are:
+The fixed work bounds are:
 
 | Boundary                                                | Limit                                                                   |
 | ------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -331,12 +334,12 @@ It requires the deployment database connection, not an unrelated realtime HMAC
 key, ingress Principal, Context execution, or application Service startup.
 There is no generated `durable.schedules` management API.
 
-Acceptance is blocked until executable evidence verifies finite calendar-search,
-schedule-count, transaction-time, history/result-byte, and reconciliation-work
-bounds and the exact safe failure projections. Existing Mutation and Job bounds
+The accepted executable proof verifies finite calendar-search, schedule-count,
+transaction-time, history/result-byte, and reconciliation-work bounds and the
+exact safe failure projections. Existing Mutation and Job bounds
 remain in force; the Mutation's 100 accepted-Job-command cap is not a checkpoint
 cap. No unmeasured throughput, exactly-once physical execution, or production
-readiness claim follows from this candidate.
+readiness claim follows from this acceptance.
 
 ## Supersession ledger
 
@@ -354,7 +357,7 @@ valid v8 upgrade committed. Runtime readiness requires exact v9. Migration
 never activates a schedule set, and there is no mixed-version Runtime fallback
 or in-place downgrade.
 
-If accepted, this ADR adds the missing schedule producer/calendar/activation
+This ADR adds the missing schedule producer/calendar/activation
 contract to ADR-0016/0017/0026 and fixes the subset of named-Mutation checkpoint
 semantics above. Latest-only catch-up explicitly qualifies scheduled acceptance:
 unaccepted missed calendar instants may be coalesced. It preserves one durable
@@ -367,9 +370,9 @@ slice. Named-zone support, general checkpoint breadth, and browser controls do
 not become public by implication. The old beta.2 manifest excludes Cron and
 must be replaced after this vertical; ADR-0039 remains Proposed.
 
-SPEC, CONTEXT, public documentation, skills, and the ADR index must not describe
-this decision as Accepted before a committed verified formal PASS. The beta.2
-Fable reviewer exception does not apply to this ticket.
+This authority projection follows the committed verified formal PASS. The beta.2
+Fable reviewer exception did not apply to this ticket; its accepted record uses
+the pinned Opus-medium reviewer.
 
 ## Required falsification
 

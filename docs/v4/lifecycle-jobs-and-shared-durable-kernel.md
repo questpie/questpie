@@ -4,6 +4,22 @@ ADR-0016 preserves the useful v3 lifecycle and background-work jobs while
 assigning each one a v4 owner. It adds no general hook catalogue and no second
 durable runtime.
 
+## Implemented subset
+
+ADR-0043 implements static UTC Job schedules and only the named-Mutation
+checkpoint on that kernel. Explicit revision-fenced activation owns schedule
+changes; the existing worker reconciles one latest missed tick. A checkpoint
+uses `ctx.run.step.mutation(name, ctx.mutations.<qualified.name>, input)` and
+recovers through the existing Mutation result receipt with fresh Context and
+Operation admission. It does not acquire Query, Action, Service, sleep, signal
+or child-Job capabilities.
+
+The wider checkpoint vocabulary below records the ADR-0016/0026 architectural
+boundary, not the beta.2 shipped surface. Action checkpoints, durable timers,
+signals, child work and compensation remain later verticals. The exact current
+bounds, cutover and failure semantics are in ADR-0043 and the public
+[scheduled-Job guide](../../apps/docs/content/docs/v4/scheduled-jobs.mdx).
+
 ## Lifecycle mapping
 
 | V3 job           | V4 owner                                                                                           | Forbidden failure mode                                             |

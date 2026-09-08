@@ -840,6 +840,16 @@ byte-identical release dry-runs pass.
 
 ## Immediate continuation
 
+The active production worktree is
+`/home/drepkovsky/code/questpie-v4-native-react-integration`. It combines the
+accepted React architecture with the accepted schedule/release closure. Follow
+NRQ-01 in the production plan; do not edit the preserved accepted proof tree.
+The merge control verifies both acceptance records, skill validation, docs
+typecheck/build, public-package build and 33 affected tests / 154 assertions.
+The initial test attempt lacked built package output in the fresh worktree;
+building the package resolved that setup failure. No native implementation or
+aggregate release readiness is implied by this control.
+
 The accepted React architecture and its construction evidence are isolated in
 `/home/drepkovsky/code/questpie-v4-react-query-proof`. The owner requires native
 React Query, Suspense, forward infinite Queries, safe authority lifetime and
@@ -892,119 +902,96 @@ isolation, portable proof temporary storage, actual ordinary/infinite browser
 readiness coverage, and exact-command evidence. Do not repeat architecture
 acceptance or treat it as ADR-0039's aggregate release PASS.
 
-The schedule acceptance follow-up has since produced the committed verified
-`docs/v4/prototypes/static-job-schedules/REVIEW.json` PASS. Its public authority
-projection is owned separately by the static-schedule integrated worktree.
-The schedule construction notes below are historical, not permission to repeat
-that acceptance or to call the aggregate beta.2 release ready.
+ADR-0043 is Accepted. The original five-minute Opus invocation ended in
+`NO_RESULT: timeout`; the owner corrected that deadline. The same pinned
+Opus-medium reviewer returned PASS for fresh candidate `911d96bab` under the
+existing 60-minute option. The original review record is committed at
+`ba336b234` and `review:accept:verify` passes. The separate authority projection
+updates this handoff, SPEC, CONTEXT, ADR index, public guides and portable skills.
+The timeout history and exact packet bindings remain in the linked
+`docs/v4/prototypes/static-job-schedules/` records; do not recreate acceptance
+or treat the timeout as a product finding.
 
-The active frontier is static Job schedules and the minimum named-Mutation
-checkpoint needed by a minute sweep, tracked in #365 and
-`docs/v4/research/static-job-schedules/DECISION-MAP.md`. The human explicitly
-keeps dynamic schedules as application-owned data, not framework schedule CRUD.
-The human also selected one catch-up run after downtime, rather than replaying
-every missed minute; preserve already accepted runs and their independent retries.
-ADR-0016/0017/0026 own the accepted direction. Proposed ADR-0043 now records the
-candidate producer, UTC calendar, explicit revision-fenced activation/removal,
-and minimum Mutation checkpoint contract. The isolated
-`work/static-schedule-integrated-proof` candidate now contains the connected
-compiler, Runtime, deployment CLI and reference-consumer implementation. It is
-not accepted product authority and has not been merged into canonical `feat/v4`.
-The existing executable-pinning gap is repaired: generated workers filter
-admission by their verified Runtime Build and recheck it under the run lock.
-The two-build PostgreSQL regression proves Job and Reaction isolation, no
-attempt consumption for another build, and recovery through retained artifacts.
-`EXECUTABLE-PINNING.md` records the reproduced defect, regression matrix, and
-whole-build retention cost. Pre-repair candidate workers must be drained and
-stopped before new work; overlapping unguarded workers remain unsafe.
-That earlier repair passed the affected PostgreSQL 17 and both Firefox tracers,
-`quality:release`, and two byte-identical forced-build release dry-runs. Those
-results are historical and do not describe the latest integrated gate outcome.
-The candidate's generated workers now exercise stable checkpoint identity,
-retained-receipt recovery, caught-error doom, owned promise joining, cancellation,
-lease takeover and Context/admission versus Collection-only replay authority.
-Actual PostgreSQL owners replace the synthetic activation/checkpoint models;
-the Runtime calendar retains its PostgreSQL UTC oracle. The Team Support Desk
-minute sweep has PostgreSQL/Firefox evidence. Detailed results and historical
-red/green records live under `docs/v4/prototypes/static-job-schedules`.
+The implemented scope is static numeric five-field UTC Job schedules,
+explicit revision-fenced activation, one latest catch-up tick, and only the
+named-Mutation checkpoint. Dynamic due times stay application-owned rows.
+One existing compiler, Mutation receipt owner and durable worker kernel own
+execution. Removal preserves accepted runs; retained compiled builds execute
+their own accepted work. Protocol v9 is an explicit non-rolling cutover.
+Action checkpoints, sleep, signals, child Jobs and workflows remain outside
+this beta.2 subset.
 
-Release-wide regression uncovered compiler source-read ownership, explicit
-database-target, fenced-outcome and retained protocol-upgrade defects. Their
-focused repairs remain in the candidate. The v9 cutover preserves the existing
-v8 acknowledgement and rechecks current protocol state after its lock wait.
-The integrated candidate passes `quality:release`, the complete PostgreSQL 17
-lane (185 passes, four environment skips, 1,983 assertions across 44 roots), and
-the focused proof TypeScript project. A single predeclared, sequential run of
-all four affected load/soak scenarios also passes with unchanged workloads and
-budgets. It is `reference-local` evidence, not tagged stable-runner evidence.
-The
-[owner-deadline evidence](docs/v4/prototypes/static-job-schedules/OWNER-DEADLINE-EVIDENCE.md)
-records the exact candidate, commands, package checks and cleanup; the
-[contention evidence](docs/v4/prototypes/static-job-schedules/CONTENTION-CANDIDATE-EVIDENCE.md#integrated-reference-local-run)
-records the complete local matrix. Earlier failures remain retained. The
-Mutation test's late promise ownership was reproduced and repaired; the original
-60-second schedule stall remains unexplained despite the subsequent complete
-lane PASS. No production limit was changed.
+The release integration worktree is
+`/home/drepkovsky/code/questpie-v4-beta2-final-integration`.
+Canonical `feat/v4` is still clean at `97910dac9`; the isolated changes are not
+yet merged. Preserve all unrelated auxiliary worktrees.
 
-The ADR-0043 manifest is committed. Its initial credential-free packet preflight
-rejected a credential-bearing URL in removed historical README content; nothing
-was sent to a reviewer. The owner then approved the narrow docs-first
-[packet-safety repair](docs/v4/implementation/acceptance-packet-safety/DECISION.md):
-explicit removed-URL locations, original full-diff integrity bindings, and
-unchanged checks on new code. Its affected suite passes 124 tests and all 16
-existing v2 PASS records still verify without model credentials. Independent
-Standards and Spec/security reviews found no findings. The fresh bound candidate
-passes real packet preflight with the complete diff and one explicit historical
-URL redaction. The later formal invocation ended in terminal transport timeout,
-as recorded below.
-The
-[preflight blocker](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-PREFLIGHT-BLOCKER.md)
-records the original boundary and authorized repair. Do not substitute the diff
-base or omit review paths. The additional 64-program PostgreSQL owner proof passes
-the full affected file with five tests and 254 assertions; its evidence does not
-relabel the preceding integrated lanes as rerun.
+The public schedule and portable-skill projection is verified. Three independent
+ordinary Opus documentation reviews produced findings; source adjudication and
+the affected deterministic checks closed their three blockers. The
+[projection evidence](docs/v4/implementation/static-schedule-public-projection/EVIDENCE.md)
+records the checks and preserves the distinction from formal Kernel acceptance.
 
-The one formal review of candidate `2a40103a1` ended on 2026-09-08 in terminal
-`NO_RESULT: timeout` after the unchanged 300-second limit. No review record was
-generated. The
-[transport record](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-TRANSPORT-NO-RESULT.md)
-binds the exact invocation and packet. The owner then corrected the five-minute
-deadline, explaining that Opus may need approximately 50 minutes. The
-[timeout correction](docs/v4/prototypes/static-job-schedules/ACCEPTANCE-TIMEOUT-CORRECTION.md)
-resumes this lane for one fresh Opus-medium follow-up with the existing
-`--timeout-ms 3600000` option. Preserve the terminal original result. Do not
-replace the reviewer, run a parallel review, relax acceptance criteria, or
-automatically repeat another NO_RESULT.
-Public authority projection requires a verified PASS, followed by the replacement
-aggregate beta.2 review. ADR-0043 and ADR-0039
-remain Proposed. Tagged stable-runner release evidence and the user's manual
-preview remain pending. The example's reserved loopback port is 43122; the host
-is currently stopped and existing tailnet mappings are preserved. Local passes do not make this candidate
-release-ready.
+The inherited Mutation inverse-list concern is closed by executable rejection,
+not a second row-budget implementation. The compiler does not expose inverse
+child lists through that Collection capability, and the Runtime rejects
+re-signed inverse templates. See
+[the negative proof](docs/v4/implementation/mutation-inverse-list-restriction/EVIDENCE.md).
+Do not integrate the unrelated dirty inverse-budget worktree.
 
-The post-packet-repair full quality control also passes on `f616b17e2` with
-isolated disk-backed temporary storage: 1,158 passes, 196 gated skips and zero
-failures, plus React and packed OTel gates. Its
+Release workflow ordering is repaired: actual unchanged-budget workloads must
+precede publication. The beta publish command also explicitly selects the
+`beta` npm dist-tag for both packages. Its isolated process-boundary test runs
+only a local npm recorder, never publication. The affected workflow suite passes
+12 tests / 79 assertions, strict TypeScript and changed-file checks. The
+subsequent `quality:release` passes on this integration tree; PostgreSQL skips
+and performance-manifest validation are not actual stable-runner evidence.
+
+The remaining frontier is:
+
+- finish the owner-required native React Query and Start SSR/hydration vertical
+  in `/home/drepkovsky/code/questpie-v4-react-query-proof`, including its focused
+  superseding decision and production migration; its isolated proofs are not
+  the released `questpie/react-query` package surface yet;
+- integrate the focused repairs, bind exact final PostgreSQL/browser and quality
+  evidence, and produce two byte-identical package dry-runs;
+- replace the old Cron-excluding aggregate manifest and complete ADR-0039
+  acceptance, then project aggregate release authority separately.
+
+ADR-0039 remains Proposed. The BETA2-ACCEPTANCE-only Fable profile exception
+remains ticket-scoped; no exception or reviewer identity is inherited from
+another ticket. No publication is authorized by either acceptance.
+
+The last complete PostgreSQL 17 lane at `fcf2adeeb` passes 185 tests with four
+PG18/PgBouncer environment skips and 1,983 assertions across 44 roots.
+The 64-program bound addition passes its full affected PG file, five tests and
+254 assertions. The four affected load/soak scenarios pass as
+`reference-local`, not tagged stable evidence. Complete post-packet-repair
+`quality:release` at `f616b17e2` passes 1,158 tests with 196 gated skips and
+zero failures, plus React and packed OTel checks. Its
 [control evidence](docs/v4/prototypes/static-job-schedules/PACKET-GATE-CONTROL-EVIDENCE.md)
-retains the earlier Bun segmentation fault and subsequent `/tmp` quota failure.
-The crash remains unexplained. Release CI still needs actual stable workload
-execution: its current performance step validates manifests only.
+retains the earlier Bun segmentation fault and temporary-storage quota failures.
+The original 60-second schedule stall and Bun crash remain unexplained; later
+passes are not claimed as their causal repairs.
 
-The owner additionally requires a manually inspectable Team Support Desk before
-publication, with domain-local backend Definitions, a product `web/` independent
-of `tracer/`, and consistent README/public-skill guidance. Immutable migration
-and Seed history must survive the source reorganization. Provide a coverage
-checklist distinguishing UI scenarios from automated crash, contention and
-corruption proof. The fixture host is not a production deployment template.
+Use an owned disk-backed `TMPDIR` for further full checks: the shared `/tmp`
+has a user quota that caused actual artifact-write failures. Do not delete
+unrelated temporary data. Release CI still needs a registered dedicated runner
+and actual workload evidence; the runner API last reported zero runners.
 
-The behavior-preserving DX cleanup #360 through #363 is complete. The preserved
-pre-schedule candidate `863120698` has final `quality:release` PASS and a valid
-manifest preflight, but no acceptance review was invoked. PostgreSQL 17/Firefox
-and two forced-build dry-runs passed on the preceding implementation head.
-Aggregate acceptance #364 is now blocked by #365: the old manifest explicitly
-excludes Cron and must not be submitted for the extended scope. ADR-0039 remains
-Proposed. The human-authorized Fable 5.1 profile applies only to its exact beta.2
-release ticket; do not relabel another reviewer or reuse that exception elsewhere.
+The manually inspectable Team Support Desk uses domain-local `src/`,
+product `web/`, Runtime adapters, immutable migration/Seed history and separate
+`tracer/` automation. At the last check, the preview worktree at `fcf2adeeb`
+served the normal app on loopback 43122 and its receiver on 43121. App, Scalar
+and OpenAPI returned HTTP 200. No browser connection was available for a fresh
+visual check; do not claim that inspection occurred. Existing tailnet mappings
+are unchanged. The fixture host is not a production deployment template.
+User inspection remains required before publication.
+
+The behavior-preserving DX cleanup #360 through #363 remains complete.
+Aggregate #364 follows the schedule/public-documentation closure in #365 and
+the final release gates above. Do not push, tag, publish or deploy without
+explicit authority.
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status. ADR-0030 provenance/trusted values and ADR-0031 lifecycle/issue

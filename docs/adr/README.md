@@ -46,13 +46,13 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 38. [Freeze basic MCP Operation projection](./0038-freeze-basic-mcp-operation-projection.md)
 39. [Freeze projection-neutral Operation documentation](./0040-freeze-projection-neutral-operation-documentation.md)
 40. [Freeze public package identities](./0042-freeze-public-package-identities.md)
-41. [Native React Query integration](./0044-native-react-query-integration.md)
+41. [Freeze static Job schedules and Mutation checkpoints](./0043-freeze-static-job-schedules-and-mutation-checkpoints.md)
+42. [Native React Query integration](./0044-native-react-query-integration.md)
 
 ## Proposed
 
 - [Slice the beta.2 DX release](./0039-slice-the-beta-two-dx-release.md)
 - [Freeze local OpenAPI projection explanation](./0041-freeze-local-openapi-projection-explanation.md)
-- [Freeze static Job schedules and Mutation checkpoints](./0043-freeze-static-job-schedules-and-mutation-checkpoints.md)
 
 ## Open decisions
 

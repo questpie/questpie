@@ -24,7 +24,8 @@ Load only the reference that matches the work:
   read [operations and projections](references/operations-http-openapi-and-mcp.md).
 - Relations, inverse selection, Query Resources, React, or discriminated
   unions: read [reactive queries and Relations](references/query-resources-react-and-relations.md).
-- Reaction, Job, retry-safe effects, Runtime observation, or OpenTelemetry:
+- Reaction, Job, static schedule, Mutation checkpoint, retry-safe effects,
+  Runtime observation, or OpenTelemetry:
   read [durable work and observability](references/jobs-and-observability.md).
 
 ## Shared workflow
@@ -49,5 +50,7 @@ credentials out of source, commands, logs, and generated examples.
 Use the installed version's generated contracts instead of parallel wrappers or copied
 schemas. Beta.2 has no Workflow Resource, polymorphic Relation or codec,
 application-generated skill, Files, Search, Studio, split Runtime roles,
-compatibility endpoint, or fallback execution path. Durable checkpointed work
-belongs to Job; heterogeneous domain values use ordinary TypeScript helpers.
+compatibility endpoint, or fallback execution path. Static schedules use UTC;
+Job checkpoints call named Mutations. Dynamic due times belong in application
+rows processed by a bounded sweep. Heterogeneous domain values use ordinary
+TypeScript helpers.
