@@ -11,6 +11,9 @@
 		"diagnose-retirement.ts",
 		"diagnose-hydration.ts",
 		"hydration-identity.test.ts",
-		"mutation-lifetime.test.ts"
+		"mutation-lifetime.test.ts",
+		"invalidation.test.ts",
+		"userland-optimism.types.ts",
+		"userland-optimism.test.ts"
 	]
 }

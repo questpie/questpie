@@ -4,6 +4,7 @@ import {
 	dehydrate,
 	hydrate,
 	InfiniteQueryObserver,
+	MutationObserver,
 	QueryClient,
 } from "@tanstack/query-core";
 
@@ -19,6 +20,23 @@ function pagePeer() {
 	const client = createClient({
 		baseUrl: "https://proof.invalid",
 		fetch: (async (request: Request) => {
+			if (request.method === "POST") {
+				visible = false;
+				return new Response(
+					JSON.stringify({
+						callId: request.headers.get("Idempotency-Key"),
+						error: {
+							code: "COMMITTED_RESULT_UNAVAILABLE",
+							retryable: true,
+							transactionId: "17",
+						},
+					}),
+					{
+						status: 500,
+						headers: { "content-type": "application/json; charset=utf-8" },
+					},
+				);
+			}
 			const url = new URL(request.url);
 			requests.push(url);
 			calls.push(url.searchParams.get("after")!);
@@ -65,6 +83,50 @@ function pagePeer() {
 		},
 	};
 }
+
+test("a compiled watchable family's infinite mode refreshes after commit without invalidating its ordinary live mode", async () => {
+	const peer = pagePeer();
+	const cache = new QueryClient();
+	const adapter = createQueryAdapter(
+		peer.client.withContext({ membershipId: id, organizationId: id }),
+		cache,
+	);
+	const input = { first: 1, statuses: null, teamIds: null };
+	const options = {
+		...adapter.queries["tickets.queue"].infiniteOptions(input),
+		staleTime: 60_000,
+	};
+	const ordinary = adapter.queries["tickets.queue"].options({
+		...input,
+		after: null,
+	});
+	const first = await cache.fetchInfiniteQuery(options);
+	cache.setQueryData(ordinary.queryKey, () => first.pages[0]!);
+	const observer = new InfiniteQueryObserver(cache, options);
+	const refreshed = Promise.withResolvers<void>();
+	const stop = observer.subscribe((result) => {
+		if (result.data?.pages[0]?.nodes.length === 0) refreshed.resolve();
+	});
+	const mutation = new MutationObserver(
+		cache,
+		adapter.mutations["ticket.reopen"].options(),
+	);
+	try {
+		await expect(mutation.mutate({ ticketId: id })).rejects.toMatchObject({
+			code: "COMMITTED_RESULT_UNAVAILABLE",
+		});
+		await refreshed.promise;
+		expect(peer.calls).toEqual(["~null", "~null"]);
+		expect(observer.getCurrentResult().data?.pages[0]?.nodes).toEqual([]);
+		expect(cache.getQueryState(ordinary.queryKey)?.isInvalidated).toBe(false);
+	} finally {
+		stop();
+		observer.destroy();
+		mutation.reset();
+		await adapter.dispose();
+		cache.clear();
+	}
+});
 
 test("infinite browser reads wait for native hydration before replacing old pages", async () => {
 	const ready = Promise.withResolvers<void>();

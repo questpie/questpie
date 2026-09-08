@@ -21,6 +21,7 @@ export class RetiredMutation extends Error {
 export function createMutationLifetime(
 	client: QueryClient,
 	prefix: readonly string[],
+	onCommitted: () => void,
 ) {
 	let retired = false;
 	const cache = client.getMutationCache();
@@ -49,14 +50,21 @@ export function createMutationLifetime(
 			try {
 				result = await descriptor.invoke(input, { callId });
 			} catch (error) {
+				const failure = descriptor.failure(error);
+				if (
+					!retired &&
+					failure?.kind === "committed" &&
+					failure.callId === callId
+				)
+					onCommitted();
 				if (retired) {
-					const failure = descriptor.failure(error);
 					throw new RetiredMutation(
 						failure?.callId === callId ? failure : { kind: "unknown", callId },
 					);
 				}
 				throw error;
 			}
+			if (!retired) onCommitted();
 			if (retired) throw new RetiredMutation({ kind: "committed", callId });
 			return result;
 		},

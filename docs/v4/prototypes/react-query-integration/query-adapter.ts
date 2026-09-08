@@ -16,6 +16,7 @@ import {
 	type Projection,
 	type ReadDescriptor,
 } from "./projection-contract";
+import { createScopeInvalidation } from "./scope-invalidation";
 
 type InputOf<Descriptor> =
 	Descriptor extends ReadDescriptor<infer Input, unknown, unknown>
@@ -170,7 +171,12 @@ export function bindProjection<Source extends Projection>(
 	active.set(identityOwner.bootstrap.scope, source);
 	let retired = false;
 	const prefix = identityOwner.prefix;
-	const mutationLifetime = createMutationLifetime(client, prefix);
+	const invalidation = createScopeInvalidation(client, prefix, source, ssr);
+	const mutationLifetime = createMutationLifetime(
+		client,
+		prefix,
+		invalidation.committed,
+	);
 	const liveEntries = new Map<
 		string,
 		ReturnType<typeof createLiveQueryOptions<unknown>> | "retired"
@@ -334,6 +340,7 @@ export function bindProjection<Source extends Projection>(
 		async dispose() {
 			if (retired) return;
 			retired = true;
+			const invalidationClosed = invalidation.retire();
 			let mutationFailure: unknown;
 			try {
 				mutationLifetime.dispose();
@@ -360,6 +367,7 @@ export function bindProjection<Source extends Projection>(
 			liveEntries.clear();
 			await cancelled;
 			await Promise.all(liveClosures);
+			await invalidationClosed;
 			if (mutationFailure !== undefined) throw mutationFailure;
 		},
 	});

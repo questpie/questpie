@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { QueryClient, QueryObserver } from "@tanstack/query-core";
+import {
+	MutationObserver,
+	QueryClient,
+	QueryObserver,
+} from "@tanstack/query-core";
 
 import { createClient } from "./generated/live-client";
 import { createQueryAdapter } from "./generated/live-client.react-query";
@@ -41,10 +45,12 @@ function externalPeer() {
 		});
 	const transport = (async (request: Request): Promise<Response> => {
 		if (new URL(request.url).pathname !== "/_questpie/realtime") {
-			ordinaryReads++;
+			if (request.method === "GET") ordinaryReads++;
 			return new Response(
 				JSON.stringify({
-					callId: request.headers.get("Questpie-Call-Id"),
+					callId: request.headers.get(
+						request.method === "GET" ? "Questpie-Call-Id" : "Idempotency-Key",
+					),
 					result: { id, title: "Initial", updatedAt: date },
 				}),
 				{ headers: { "content-type": "application/json; charset=utf-8" } },
@@ -104,6 +110,78 @@ function externalPeer() {
 		},
 	};
 }
+
+test("local commit does not reopen a live Query or invalidate an inactive hydrated live family", async () => {
+	const peer = externalPeer();
+	const cache = new QueryClient();
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: peer.transport,
+	});
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+	);
+	const options = adapter.queries["tasks.detail"].options({ id });
+	const inactive = adapter.queries["tasks.detail"].options({
+		id,
+		asOf: new Date(date),
+	});
+	cache.setQueryData(inactive.queryKey, () => null);
+	const observer = new QueryObserver(cache, options);
+	const stop = observer.subscribe(() => {});
+	const mutation = new MutationObserver(
+		cache,
+		adapter.mutations["tasks.transition"].options(),
+	);
+	try {
+		await cache.fetchQuery(options);
+		await mutation.mutate({ id, expectedVersion: 1, targetStatus: "done" });
+		await Bun.sleep(0);
+		expect(
+			peer.commands.filter((command) => command.command === "open"),
+		).toHaveLength(1);
+		expect(peer.ordinaryReads).toBe(0);
+		expect(cache.getQueryState(options.queryKey)?.isInvalidated).toBe(false);
+		expect(cache.getQueryState(inactive.queryKey)?.isInvalidated).toBe(false);
+	} finally {
+		stop();
+		observer.destroy();
+		mutation.reset();
+		await adapter.dispose();
+		cache.clear();
+	}
+});
+
+test("server-mode watchable Query remains a one-shot invalidation target", async () => {
+	const peer = externalPeer();
+	const cache = new QueryClient();
+	const client = createClient({
+		baseUrl: "https://proof.invalid",
+		fetch: peer.transport,
+	});
+	const adapter = createQueryAdapter(
+		client.withContext({ companyId: id }),
+		cache,
+		{ ssr: true },
+	);
+	const options = adapter.queries["tasks.detail"].options({ id });
+	const mutation = new MutationObserver(
+		cache,
+		adapter.mutations["tasks.transition"].options(),
+	);
+	try {
+		await cache.fetchQuery(options);
+		await mutation.mutate({ id, expectedVersion: 1, targetStatus: "done" });
+		await Bun.sleep(0);
+		expect(cache.getQueryState(options.queryKey)?.isInvalidated).toBe(true);
+		expect(peer.streams).toBe(0);
+	} finally {
+		mutation.reset();
+		await adapter.dispose();
+		cache.clear();
+	}
+});
 
 test("SSR uses one-shot generated reads and never opens an SSE stream", async () => {
 	const peer = externalPeer();

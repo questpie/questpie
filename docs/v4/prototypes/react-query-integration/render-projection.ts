@@ -93,7 +93,7 @@ export function instrumentClient(
 				const forward = page
 					? `, forward: Object.freeze({ capture: (input: Omit<Parameters<typeof ${method}>[0], ${JSON.stringify(page.after)}>) => captureForwardRead(${id}, ${method}, input, ${JSON.stringify(page.after)}), next: (page: Awaited<ReturnType<typeof ${method}>>) => page.pageInfo.hasNextPage ? page.pageInfo.endCursor ?? undefined : undefined })`
 					: "";
-				return `${JSON.stringify(resource.name)}: Object.freeze({ identity: ${id}, ${kind === "query" ? `capture: (input: Parameters<typeof ${method}>[0]) => captureClientRead(${id}, ${method}, input${watchable.includes(resource.identity) ? `, ${method}.watch` : ""})` : `invoke: ${method}, failure: (error: unknown) => decodedMutationFailure(${id}, error)`}, isError: (error: unknown): error is ${errorType(resource)} => matchesClientError(${id}, error)${forward} }),`;
+				return `${JSON.stringify(resource.name)}: Object.freeze({ identity: ${id}, ${kind === "query" ? `watchable: ${watchable.includes(resource.identity)}, capture: (input: Parameters<typeof ${method}>[0]) => captureClientRead(${id}, ${method}, input${watchable.includes(resource.identity) ? `, ${method}.watch` : ""})` : `invoke: ${method}, failure: (error: unknown) => decodedMutationFailure(${id}, error)`}, isError: (error: unknown): error is ${errorType(resource)} => matchesClientError(${id}, error)${forward} }),`;
 			})
 			.join("\n");
 	return (

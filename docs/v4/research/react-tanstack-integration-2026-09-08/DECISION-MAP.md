@@ -135,8 +135,15 @@ navigation and ordinary/infinite readiness races. The
 [Mutation lifetime evidence](../../prototypes/react-query-integration/MUTATION-LIFETIME-EVIDENCE.md)
 closes attached observer cleanup and fences pending decoded outcomes without
 claiming rollback or cancellation of already-started native callbacks. Private
-projection v3 replaces v1/v2 without compatibility. Full credential-switch
-consumers, revised R3/R4, production migration and architecture acceptance remain open;
+projection v3 replaced v1/v2 without compatibility. The subsequent
+[invalidation checkpoint](../../prototypes/react-query-integration/INVALIDATION-EVIDENCE.md)
+uses v4 to add compiler-owned watchability and a conservative public-family
+superset, not a precise write-set claim. Native userland pending-intent types
+and HTTP tests pass without a framework optimistic engine. The combined suite
+has 75 tests / 311 assertions, two DOM tests / 12 assertions, six TypeScript
+projects and the existing Start/Firefox baseline and fault scenarios passing.
+Full credential-switch consumers, R4's PostgreSQL coverage, remaining R5
+counterexamples, production migration and architecture acceptance remain open;
 earlier checkpoint counts and counterexamples above are historical evidence.
 
 | Existing authority                                      | Candidate change                                                                                                        | Remains unchanged                                                                                                         |

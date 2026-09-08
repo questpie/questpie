@@ -1,5 +1,5 @@
 // Proof-only compiler/runtime seam. No production export or wire contract.
-export const projectionVersion = "questpie.client-projection.prototype.v3";
+export const projectionVersion = "questpie.client-projection.prototype.v4";
 
 export interface CallOptions {
 	readonly callId?: string;
@@ -28,6 +28,7 @@ export type ProjectionWatchFailure = Readonly<{
 
 export interface ReadDescriptor<Input, Output, DeclaredError> {
 	readonly identity: string;
+	readonly watchable: boolean;
 	capture(input: Input): CapturedRead<Output>;
 	isError(error: unknown): error is DeclaredError;
 	readonly forward?: ForwardReadDescriptor<never, Output>;
