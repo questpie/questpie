@@ -1,18 +1,10 @@
 import { expect, test } from "bun:test";
-import {
-	cp,
-	mkdir,
-	mkdtemp,
-	readFile,
-	rm,
-	symlink,
-	writeFile,
-} from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { compileApplication } from "@questpie/compiler";
+import type { CompileApplicationResult } from "@questpie/compiler";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
@@ -87,36 +79,40 @@ test("full-source native options preserve generated transport, codecs and inferr
 			join(temporary, "node_modules"),
 			"dir",
 		);
-		const first = await compileApplication({
-			applicationRoot: join(repositoryRoot, "fixtures/team-support-desk"),
-			outputDirectory: join(temporary, "generated"),
-		});
-		const relocatedRoot = join(temporary, "relocated");
-		await cp(
-			join(repositoryRoot, "fixtures/team-support-desk"),
-			relocatedRoot,
+		const compiler = Bun.spawn(
+			[
+				process.execPath,
+				join(repositoryRoot, "tests/support/native-full-source-compile.ts"),
+				repositoryRoot,
+				temporary,
+			],
 			{
-				recursive: true,
-				filter: (source) =>
-					!["node_modules", ".questpie"].includes(basename(source)),
+				cwd: repositoryRoot,
+				env: { ...process.env, TMPDIR: temporary },
+				stdout: "pipe",
+				stderr: "pipe",
+				timeout: 45_000,
 			},
 		);
-		await symlink(
-			join(repositoryRoot, "fixtures/team-support-desk/node_modules"),
-			join(relocatedRoot, "node_modules"),
-			"dir",
+		const [compilerExit, compilerOutput, compilerError] = await Promise.all([
+			compiler.exited,
+			new Response(compiler.stdout).text(),
+			new Response(compiler.stderr).text(),
+		]);
+		expect(compilerExit, compilerOutput + compilerError).toBe(0);
+		expect(compilerOutput.trim()).toBe(
+			JSON.stringify({
+				scenario: "native-full-source-compile",
+				compilations: 2,
+			}),
 		);
-		const relocatedOutput = join(relocatedRoot, ".questpie/generated");
-		await mkdir(relocatedOutput, { recursive: true });
-		const staleClient =
-			'throw new Error("stale generated client was loaded");\n';
-		await writeFile(join(relocatedOutput, "client.ts"), staleClient);
-		for (const path of ["query-projection.json", "query-watchability.json"])
-			await writeFile(join(relocatedOutput, path), '{"stale":true}\n');
-		const relocated = await compileApplication({
-			applicationRoot: relocatedRoot,
-			outputDirectory: relocatedOutput,
-		});
+		const { first, relocated } = (await Bun.file(
+			join(temporary, "compilations.json"),
+		).json()) as Readonly<{
+			first: CompileApplicationResult;
+			relocated: CompileApplicationResult;
+		}>;
+		const relocatedOutput = join(temporary, "relocated/.questpie/generated");
 		expect(await readFile(join(relocatedOutput, "client.ts"), "utf8")).toBe(
 			first.generatedFiles["client.ts"]!,
 		);
@@ -231,6 +227,22 @@ test("full-source native options preserve generated transport, codecs and inferr
 			}
 			throw error;
 		}
+		// Equal maps must not hide both builds selecting the same wrong package.
+		// The pinned Runtime pg 8.22 and application pg 8.23 each own a Client;
+		// only 8.23 contains the pipelined queue implementation. These are emitted
+		// dependency-byte witnesses, not a claim about PostgreSQL execution.
+		const applicationBundles = Object.entries(first.generatedFiles)
+			.filter(([path]) =>
+				/^internal\/application(?:-[a-z0-9]+)?\.js$/.test(path),
+			)
+			.map(([, source]) => source)
+			.join("\n");
+		expect(applicationBundles.match(/\b_pulseQueryQueue\(\)\{/g)).toHaveLength(
+			2,
+		);
+		expect(
+			applicationBundles.match(/\b_pulsePipelinedQueryQueue\(\)\{/g),
+		).toHaveLength(1);
 		const consumer = await import(
 			pathToFileURL(join(temporary, "consumer.ts")).href
 		);

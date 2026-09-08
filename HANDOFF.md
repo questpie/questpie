@@ -844,38 +844,32 @@ The active production worktree is
 `/home/drepkovsky/code/questpie-v4-native-react-integration`. It combines the
 accepted React architecture with the accepted schedule/release closure. Follow
 NRQ-01 in the production plan; do not edit the preserved accepted proof tree.
-The production extraction is now in progress: the public native factory,
-compiler-rendered neutral scope capability and optional package build exist.
-The focused native/code-generation suite passes 34 parent tests / 138 assertions
-and checks the exact child counts. The first full gate exposed a declaration-byte
-budget violation, stale goldens/checksums, a detached type-fixture mapping and
-non-portable prototype tests. These are repaired in focused controls. Real
-PostgreSQL startup and native live/refresh controls pass 2 scenarios / 39
-assertions, with container cleanup. The next `quality:release` finished with
-1,204 passing tests and three failures: two stale package checksum controls and
-order-dependent full Support Desk bundle relocation equality. The checksum pin
-has since been regenerated and both controls pass in a 7-test / 32-assertion
-focused group with native identity, bundle and React DOM controls. That compiler
-defect remains under diagnosis; isolated green runs do not close it. Independent
-review also found throwing-observer cleanup defects in scope disposal and
-terminal live denial. Both now pass their red-first production regressions;
-the strict generated lifetime/invalidation suite is 52 tests / 243 assertions.
-A subsequent broad run passed the full test/build/docs stage, including complete
-Support Desk relocation, then stopped on two narrow Knip dependency classifications.
-Those are repaired; strict Knip, its negative control, package contracts and
-the remaining packed OTel/performance gates pass separately. No end-to-end
-`quality:release` PASS or explanation of the earlier bundle mismatch is claimed.
-The extraction checkpoint is clean commit `ddc3c8462`. Independent Standards
-review found no confirmed breach; Spec review retains one deterministic-artifact
-verification blocker. Frozen repeated relocation reproduced the mismatch on its
-first standalone run with unchanged clean HEAD, so this is a current defect,
-not just broad-suite history. See `NRQ-01-REVIEW.md` beside the evidence.
-Next: capture both outputs and exact bundle inputs/resolved graph in disposable
-diagnostics, fix the cause, then repeat real relocation and the full release gate.
-Follow
-`docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md` for the repair
-frontier; NRQ-01 is not closed before the broader gate and independent reviews.
-No actual Start-browser or aggregate release claim is made yet.
+The public native factory, compiler-rendered neutral scope capability and optional
+package build are implemented. Declaration budgets, generated artifacts, detached
+types, prototype-test migration and narrow Knip classifications have focused
+passing controls. Throwing-observer cleanup defects were repaired test-first;
+the strict generated lifetime/invalidation suite passes 52 tests / 243 assertions.
+Real PostgreSQL startup and native live/refresh controls pass 2 scenarios / 39
+assertions, with container cleanup.
+
+The complete relocation failure is now explained by a reproduced Bun 1.3.14
+test-host defect: the original fixture resolved its `pg` dependency to the
+ancestor's 8.22 package instead of its installed 8.23 package. A pre-existing
+minimal source tree reproduces the same silent substitution under `bun test`,
+while the identical two-build body passes under ordinary Bun. The full-source
+tracer therefore runs both original and relocated compilations sequentially in
+one ordinary child, retaining complete map equality, stale output, strict types,
+native transport and dependency-byte controls. No production resolver or package
+pin changes for this repair. The changed-scope gate passes 3 tests / 20 assertions
+and both affected workspace typechecks.
+
+Next: repeat the frozen full-source tracer and run one complete `quality:release`
+on this test-host repair. Earlier separate passing stages are not that final
+invocation. Follow the [NRQ-01 evidence](docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md)
+and [independent reviews](docs/v4/implementation/native-react-query/NRQ-01-REVIEW.md).
+NRQ-01 remains open through those gates; NRQ-02–06's final lifetime/Start browser,
+golden UI and packed/docs/skills migration still follow. No actual Start-browser
+or aggregate beta.2 readiness is claimed.
 The merge control verifies both acceptance records, skill validation, docs
 typecheck/build, public-package build and 33 affected tests / 154 assertions.
 The initial test attempt lacked built package output in the fresh worktree;
@@ -982,10 +976,16 @@ and performance-manifest validation are not actual stable-runner evidence.
 
 The remaining frontier is:
 
-- finish the owner-required native React Query and Start SSR/hydration vertical
-  in `/home/drepkovsky/code/questpie-v4-react-query-proof`, including its focused
-  superseding decision and production migration; its isolated proofs are not
-  the released `questpie/react-query` package surface yet;
+- finish production migration in
+  `/home/drepkovsky/code/questpie-v4-native-react-integration` under the already
+  Accepted ADR-0044; the proof worktree is historical evidence, not the active
+  implementation tree. NRQ-01 has the generated public factory and migrated
+  native tests. Its full-source tracer now uses one ordinary Bun child for both
+  original and relocated compiles after an independently reproduced Bun test-host
+  dependency-resolution defect. See the [current evidence](docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md).
+  Finish its broad gates, then NRQ-02–06's lifetime/Start browser, golden UI,
+  packed/docs/skills migration and old-hook deletion. Do not repeat architecture
+  acceptance or treat this extraction as beta.2 readiness;
 - integrate the focused repairs, bind exact final PostgreSQL/browser and quality
   evidence, and produce two byte-identical package dry-runs;
 - replace the old Cron-excluding aggregate manifest and complete ADR-0039

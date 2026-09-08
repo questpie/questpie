@@ -148,11 +148,11 @@ tests / 138 assertions** with its then-current exact child counts. The subsequen
 `quality:release` passed architecture, format ratchet, zero-warning lint and
 workspace types/builds, then finished with **1,204 tests passing / 3 failing**
 in 503 seconds. Two failures are the package checksum pin becoming stale after
-the formatted-source rebuild. The remaining failure is complete Support Desk
-relocation equality: shared CommonJS module ordering differs only in the broad
-test process. Isolated equality and targeted predecessor groups pass, but do
-not close this order-dependent defect. No equality assertion or inventory is
-weakened; diagnostic bisection remains active.
+the formatted-source rebuild. The remaining failure was complete Support Desk
+relocation equality. Truncated output initially suggested shared CommonJS
+ordering; the complete failure capture below disproves that explanation.
+Isolated green runs did not explain the mismatch. No equality assertion or
+integrity inventory was weakened.
 
 Independent lifetime review added native disabled/static invalidation and
 two-family correlated committed-result-failure controls, then exposed a real
@@ -226,3 +226,48 @@ diagnostics must now preserve both emitted maps and actual bundle graph inputs.
 NRQ-02's complete
 PostgreSQL/lifetime closure and NRQ-03's actual Start browser evidence are still
 outstanding.
+
+## Complete failure capture and test-host isolation
+
+The original tracked test now retains both complete generated maps only after
+its equality assertion fails. Its first frozen run failed and preserved the
+evidence without instrumenting either build. The original application contained
+only Runtime's `pg` 8.22 implementation; the relocated application contained
+both Runtime's 8.22 and Support Desk's independently pinned 8.23. This was a
+wrong dependency selection, not chunk ordering.
+
+A narrow resolver trace then reproduced the failure: `Bun.resolveSync("pg",
+fixtureRuntimeDirectory)` itself returned 8.22 for the original fixture and
+8.23 for the relocated copy. After the builds finished, the incorrect original
+resolution persisted through `Bun.resolveSync`, a trailing-slash directory,
+`import.meta.resolve` and `createRequire(...).resolve`. The physical application
+symlink still pointed to 8.23. Replaying the captured resolver calls alone did
+not reproduce the corruption.
+
+The independent [test-host reduction](COMPILER-TEST-HOST.md) reproduces the same
+silent ancestor-package selection without QUESTPIE or PostgreSQL. Its source
+tree exists before process startup. The same function runs two builds in both
+hosts: `bun test` selects the wrong ancestor dependency, while ordinary `bun`
+selects the nearer application dependency. This matches the upstream
+[scanner-cached directory descriptor defect](https://github.com/oven-sh/bun/pull/36245).
+The upstream patch is not installed or claimed as merged.
+
+The full-source tracer now runs its two original/relocated compiles sequentially
+in one ordinary Bun child. It retains the original-before-copy order, hostile
+stale output, complete generated-map equality, strict inferred types and native
+transport assertions. A bounded child must exit successfully and emit an exact
+two-compilation completion record. Neither compilation gets a fresh process.
+No production resolver, dependency pin, chunk naming or integrity inventory
+changes for this repair.
+
+Two emitted dependency-byte witnesses additionally require two Client queue
+implementations and exactly one 8.23 pipelined implementation. The captured
+incorrect map has one and zero respectively, so equal-but-incorrect builds
+cannot satisfy these controls. These are pinned dependency-byte checks, not
+PostgreSQL execution evidence.
+
+The changed-scope command passes **3 tests / 20 assertions**, compiler and
+`questpie` typechecks, formatting, warning-denying lint and `git diff --check`.
+Frozen repetitions, independent review of the host change and a complete
+`quality:release` invocation remain before NRQ-01 closes. This isolation does
+not certify the private compiler API inside arbitrary Bun test-runner processes.

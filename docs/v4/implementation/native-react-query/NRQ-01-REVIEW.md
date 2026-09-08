@@ -55,3 +55,28 @@ timing and digest evidence was retained in the task-owned diagnostic directory.
 Next work must preserve both outputs in a disposable reproducer, compare actual
 bundle inputs/resolved graph identities, and repair the cause without filtering
 the integrity inventory or normalizing output names. NRQ-01 stays open.
+
+## Focused test-host repair review
+
+The [complete reduction](COMPILER-TEST-HOST.md) explains the frozen failure as
+test-host dependency selection. The repair after `3fb785621` changes test
+orchestration, not production resolution. Both compilations share one ordinary
+Bun child and return unmodified maps to the existing equality check.
+
+Independent `start_ssr_boundary` review found one cleanup gap: a terminated
+compiler child could leave evaluator/typecheck directories outside the parent's
+temporary tree. The child now sets `TMPDIR` to its parent-owned directory. The
+reviewer confirmed the repair and found no remaining issue.
+
+Independent Spec review (`nrq01_spec`) found no weakened NRQ-01 guarantee or
+unauthorized expansion. Original-before-copy ordering, stale-output controls,
+full-map equality, types, transport and the two-version dependency-byte controls
+remain enforced. The code neither resets the process between compilations nor
+normalizes generated output.
+
+Independent Standards review (`nrq01_standards`) found no code blocker and one
+documentation inconsistency: the earlier Immediate continuation still requested
+diagnosis while its later paragraph described the repair. That paragraph now
+names the reproduced host defect and the remaining repetition/release gates.
+These focused reviews do not replace those execution gates or claim a beta.2
+acceptance result.
