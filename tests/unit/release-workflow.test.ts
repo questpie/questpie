@@ -50,6 +50,45 @@ const workflow = Bun.YAML.parse(
 	),
 ) as ReleaseWorkflow;
 
+test("both beta archives publish only to the explicit beta dist-tag", () => {
+	const root = mkdtempSync(join(tmpdir(), "questpie-release-tag-"));
+	try {
+		// Only this recorder is executable through PATH: no real npm or network.
+		writeFileSync(join(root, "npm"), '#!/bin/sh\nprintf "%s\\n" "$*"\n', {
+			mode: 0o700,
+		});
+		for (const name of ["questpie", "opentelemetry"]) {
+			const directory = join(root, "packages", name);
+			mkdirSync(directory, { recursive: true });
+			writeFileSync(
+				join(directory, "package.json"),
+				readFileSync(join(repositoryRoot, "packages", name, "package.json")),
+			);
+		}
+		const result = Bun.spawnSync(
+			[process.execPath, join(repositoryRoot, "scripts/release.ts")],
+			{
+				cwd: root,
+				env: {
+					PATH: root,
+					GITHUB_ACTIONS: "true",
+					GITHUB_REF_TYPE: "tag",
+					npm_config_tag: "latest",
+				},
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout.toString().trim().split("\n")).toEqual([
+			"publish --provenance --access public --tag beta",
+			"publish --provenance --access public --tag beta",
+		]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test("publication follows successful execution of the five unchanged release workloads", () => {
 	const steps = workflow.jobs.release.steps;
 	const quality = steps.findIndex(

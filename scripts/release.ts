@@ -499,7 +499,7 @@ if (dryRun) {
 
 for (const { root } of packages) {
 	const result = Bun.spawnSync(
-		["npm", "publish", "--provenance", "--access", "public"],
+		["npm", "publish", "--provenance", "--access", "public", "--tag", "beta"],
 		{
 			cwd: root,
 			stdin: "inherit",

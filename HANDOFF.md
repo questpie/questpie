@@ -859,8 +859,8 @@ their own accepted work. Protocol v9 is an explicit non-rolling cutover.
 Action checkpoints, sleep, signals, child Jobs and workflows remain outside
 this beta.2 subset.
 
-The active worktree remains
-`/home/drepkovsky/code/questpie-v4-static-schedule-integrated-proof`.
+The release integration worktree is
+`/home/drepkovsky/code/questpie-v4-beta2-final-integration`.
 Canonical `feat/v4` is still clean at `97910dac9`; the isolated changes are not
 yet merged. Preserve all unrelated auxiliary worktrees.
 
@@ -870,12 +870,27 @@ the affected deterministic checks closed their three blockers. The
 [projection evidence](docs/v4/implementation/static-schedule-public-projection/EVIDENCE.md)
 records the checks and preserves the distinction from formal Kernel acceptance.
 
-The final frontier is release closure, not another DX design:
+The inherited Mutation inverse-list concern is closed by executable rejection,
+not a second row-budget implementation. The compiler does not expose inverse
+child lists through that Collection capability, and the Runtime rejects
+re-signed inverse templates. See
+[the negative proof](docs/v4/implementation/mutation-inverse-list-restriction/EVIDENCE.md).
+Do not integrate the unrelated dirty inverse-budget worktree.
 
-- repair the inherited inverse-child row under-accounting in Mutation/lifecycle
-  lists using the existing shared budget, with rollback and caught-error proof;
-- repair release workflow ordering so real unchanged-budget workloads precede
-  publication; its current performance command only validates manifests;
+Release workflow ordering is repaired: actual unchanged-budget workloads must
+precede publication. The beta publish command also explicitly selects the
+`beta` npm dist-tag for both packages. Its isolated process-boundary test runs
+only a local npm recorder, never publication. The affected workflow suite passes
+12 tests / 79 assertions, strict TypeScript and changed-file checks. The
+subsequent `quality:release` passes on this integration tree; PostgreSQL skips
+and performance-manifest validation are not actual stable-runner evidence.
+
+The remaining frontier is:
+
+- finish the owner-required native React Query and Start SSR/hydration vertical
+  in `/home/drepkovsky/code/questpie-v4-react-query-proof`, including its focused
+  superseding decision and production migration; its isolated proofs are not
+  the released `questpie/react-query` package surface yet;
 - integrate the focused repairs, bind exact final PostgreSQL/browser and quality
   evidence, and produce two byte-identical package dry-runs;
 - replace the old Cron-excluding aggregate manifest and complete ADR-0039

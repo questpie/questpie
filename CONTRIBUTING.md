@@ -53,6 +53,11 @@ show the red/green evidence, list commands actually run, and call out every
 deferred edge. Releases use the repository release workflow; never publish a
 package directly from a developer checkout.
 
+The beta publisher explicitly selects npm's `beta` dist-tag for both archives;
+it never relies on an ambient/default tag. A stable release needs a separate
+channel decision before changing that command. Registry deprecation of v3
+versions remains a separate, explicitly authorized operation.
+
 The release workflow runs the fixed beta.2 workload matrix on the dedicated
 `questpie-release` runner after quality checks and before publication. Its
 PostgreSQL 17 service is disposable and loopback-only; never substitute a
