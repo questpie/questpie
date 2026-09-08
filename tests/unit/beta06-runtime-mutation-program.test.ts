@@ -334,6 +334,52 @@ test("rejects an unknown nested Data Query member even with a matching digest", 
 	);
 });
 
+test.each([
+	["v2 template", 2, true, "dataQuery keys is invalid"],
+	["v2 header under v1 keys", 2, false, "dataQuery header is invalid"],
+	[
+		"inverse selection relabelled v1",
+		1,
+		false,
+		"dataQuery selection 0 keys is invalid",
+	],
+] as const)(
+	"rejects a re-signed %s in the Mutation Collection linker",
+	(_label, version, maximumRelationEdges, reason) => {
+		const input = artifacts();
+		const list = input.collectionOperations.operations[1]!;
+		Object.assign(list.dataQuery!, {
+			version,
+			...(maximumRelationEdges ? { maximumRelationEdges: 4 } : {}),
+			select: [
+				{
+					kind: "inverseList",
+					key: "comments",
+					relation: "collection:comments/relation:message",
+					source: "collection:comments",
+					first: 50,
+					filter: null,
+					order: [
+						{
+							field: "collection:comments/field:id",
+							direction: "asc",
+							nulls: "last",
+						},
+					],
+					select: [
+						{ kind: "field", key: "id", field: "collection:comments/field:id" },
+					],
+				},
+			],
+		});
+		list.dataQueryDigest = digest(
+			`questpie-data-query-template-v${version}`,
+			list.dataQuery,
+		);
+		expect(() => linkCollectionMutationPrograms(input)).toThrow(reason);
+	},
+);
+
 test("rejects an unreferenced write program", () => {
 	const input = artifacts();
 	input.collectionOperations.operations[0]!.normalizerProgramDigest = null;
