@@ -246,9 +246,11 @@ Run changed-file format/lint and `git diff --check` for each slice; run
 `quality:full` before independent review and the release-sensitive gates before
 closing combined delivery. These are planned commands, not execution results.
 
-NRQ-00 and NRQ-01 are complete. [NRQ-01 evidence](NRQ-01-EVIDENCE.md) records
+NRQ-00 through NRQ-03 are complete. [NRQ-01 evidence](NRQ-01-EVIDENCE.md) records
 the repaired test-host defect, five frozen relocation passes and the complete
-release gate. NRQ-02 and NRQ-03 are now unblocked for their disjoint consumers;
-their final integration still follows the retirement-owner edge above. Do not
+release gate. [The NRQ-02/03 review](NRQ-02-03-REVIEW.md) records the next combined
+gate, real PostgreSQL/browser evidence and closed review repairs. NRQ-04 is
+unblocked. NRQ-05 may prepare its installer/packaging controls in parallel but
+cannot close or delete the old React export before golden migration. Do not
 reopen the accepted interface or mark successor tickets complete from synthetic
 HTTP evidence.

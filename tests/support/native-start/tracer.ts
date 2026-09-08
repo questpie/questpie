@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createPeer } from "./tracer-peer";
+import { createPeer, ticketDetail } from "./tracer-peer";
 
 const entry = await import(
 	new URL("./dist/server/server.js", import.meta.url).href
@@ -16,11 +16,45 @@ const browserHeaders = {
 	"user-agent":
 		"Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0",
 };
+// Synthetic process-only cookies distinguish callers; Context remains equal.
+const users = [
+	{ cookie: `nrq-session=${crypto.randomUUID()}`, marker: "Private caller A" },
+	{ cookie: `nrq-session=${crypto.randomUUID()}`, marker: "Private caller B" },
+] as const;
+const pendingUsers = new Set<string>();
+const requestContexts = new Set<string>();
+const concurrentReads = Promise.withResolvers<void>();
 const server = Bun.serve({
 	hostname: "127.0.0.1",
 	port: 0,
 	async fetch(request) {
 		const path = new URL(request.url).pathname;
+		const user = users.find(
+			(candidate) => request.headers.get("cookie") === candidate.cookie,
+		);
+		if (user && path === "/_questpie/query/tickets.detail") {
+			const id = new URL(request.url).searchParams.get("id")!;
+			const context = request.headers.get("Questpie-Context");
+			if (!context)
+				throw new Error("Synthetic caller must carry generated Context");
+			requestContexts.add(context);
+			const streamed = id.endsWith("7132");
+			if (streamed) {
+				pendingUsers.add(user.marker);
+				if (pendingUsers.size === users.length) concurrentReads.resolve();
+				await concurrentReads.promise;
+			}
+			return Response.json(
+				{
+					callId: decodeURIComponent(request.headers.get("Questpie-Call-Id")!),
+					result: ticketDetail(
+						id,
+						`${user.marker} ${streamed ? "streamed" : "finite"}`,
+					),
+				},
+				{ headers: { "content-type": "application/json; charset=utf-8" } },
+			);
+		}
 		if (path === "/__fault-observer.js")
 			return new Response("", {
 				headers: { "content-type": "text/javascript" },
@@ -121,6 +155,57 @@ try {
 		"Each SSR request must emit its identity bootstrap",
 	);
 	assert.notEqual(seed, secondSeed);
+	// Fresh identity seeds alone cannot falsify a shared cache leaking another
+	// caller's serialized Query. Exercise actual request owners with overlapping SSR.
+	const isolationAbort = new AbortController();
+	const isolationDeadline = setTimeout(() => isolationAbort.abort(), 10_000);
+	try {
+		const documents = await Promise.all(
+			users.map(async (user) => {
+				const document = await fetch(address, {
+					headers: { ...browserHeaders, cookie: user.cookie },
+					signal: isolationAbort.signal,
+				});
+				assert.equal(document.status, 200);
+				return document.text();
+			}),
+		);
+		assert.equal(
+			pendingUsers.size,
+			2,
+			"Both users must have overlapping pending SSR reads",
+		);
+		assert.equal(
+			requestContexts.size,
+			1,
+			"Different callers must use equal generated Context",
+		);
+		const callerSeeds = documents.map((document, index) => {
+			const own = users[index]!;
+			const other = users[1 - index]!;
+			assert.ok(
+				document.includes(`${own.marker} finite`),
+				"Own finite result missing",
+			);
+			assert.ok(
+				document.includes(`${own.marker} streamed`),
+				"Own streamed result missing",
+			);
+			assert.equal(
+				document.includes(other.marker),
+				false,
+				"Complete SSR document leaked another caller's Query data",
+			);
+			const callerSeed = /seed:"([a-f0-9]{64})"/.exec(document)?.[1];
+			assert.ok(callerSeed, "Caller identity bootstrap missing");
+			return callerSeed;
+		});
+		assert.notEqual(callerSeeds[0], callerSeeds[1]);
+	} finally {
+		clearTimeout(isolationDeadline);
+		isolationAbort.abort();
+		concurrentReads.resolve();
+	}
 	assert.ok(
 		[...html.matchAll(/dataUpdatedAt:(\d+)/g)].some(
 			(match) => Number(match[1]) > Date.now() + 30_000,
@@ -204,10 +289,11 @@ try {
 	console.log(
 		JSON.stringify({
 			tracer: "actual-start-firefox",
-			assertions: 37,
+			assertions: 50,
 			ssrFinite: true,
 			suspenseStreamed: true,
 			requestIsolated: true,
+			crossUserSerializedIsolation: true,
 			dateHydrated: true,
 			browserCalls: report.browserCalls,
 			interactive: true,

@@ -60,7 +60,7 @@ retention until disposal, and clarified that disposal is terminal. Recovery need
 a fresh generated scope, not rebinding the retired one. The marker contains no
 input, result or failure payload. No example or public interface was added.
 
-NRQ-01's complete release gate is predecessor evidence, not a final beta.2 gate
-for these changes. Focused lint/format, generated tests, PostgreSQL and docs checks
-belong to this slice. Final combined quality/release, Start readiness, golden UI,
-packed migration and aggregate acceptance remain owned by successor tickets.
+The subsequent [combined release gate and independent review](NRQ-02-03-REVIEW.md)
+pass. Standards and Spec have no open NRQ-02 finding. This closes the native
+lifetime/local-commit slice, not beta.2 release readiness. Golden UI, packed
+migration and aggregate acceptance remain owned by successor tickets.

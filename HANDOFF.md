@@ -874,9 +874,13 @@ without changing Runtime behavior. NRQ-03's production Start build and Firefox
 baseline, four fault scenarios, credential replacement and three all-mode
 readiness scenarios pass. See [NRQ-02 evidence](docs/v4/implementation/native-react-query/NRQ-02-EVIDENCE.md)
 and [NRQ-03 evidence](docs/v4/implementation/native-react-query/NRQ-03-EVIDENCE.md).
-Next: combined quality/release and independent Standards/Spec review, then
-NRQ-04 golden UI and NRQ-05 packed/docs/skills migration. No aggregate beta.2
-readiness is claimed.
+The combined pre-review `quality:release` passes 1,209 tests with 197 gated
+skips and zero failures. Independent review exposed two test gaps: actual
+cross-user SSR isolation and parent-owned timeout cleanup. Both have falsifying
+negative controls and passing repairs; Standards and Spec have no open finding.
+Final Start baseline passes 50 assertions, faults 45, credentials 26, and all
+three readiness scenarios. NRQ-02 and NRQ-03 are complete. Next: NRQ-04 golden UI,
+then NRQ-05 packed/docs/skills migration. No aggregate beta.2 readiness is claimed.
 The merge control verifies both acceptance records, skill validation, docs
 typecheck/build, public-package build and 33 affected tests / 154 assertions.
 The initial test attempt lacked built package output in the fresh worktree;

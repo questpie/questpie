@@ -37,7 +37,7 @@ Policy evidence; [NRQ-02](NRQ-02-EVIDENCE.md) owns that separate control.
 
 The final complete run passes the production build and strict TypeScript, then:
 
-- Baseline: 37 assertions for finite server calls, request isolation, Date
+- Baseline: 50 assertions for finite server calls, cross-user request isolation, Date
   hydration, pending Suspense streaming, future server timestamps, interactive
   browser controls, shared live handoff and full null replacement.
 - Faults: four scenarios, 45 assertions, for truncated and errored streams,
@@ -69,6 +69,13 @@ that native `refetchQueries` skips disabled observers; explicit invalidation plu
 The watchable Date echo then exposed the ordinary-control partition above.
 None of these test repairs changes the production adapter or adds a fallback.
 
+Independent review required a stronger request-isolation control. Two actual
+Start requests now carry distinct process-only cookies with equal Context and
+overlapping pending reads. Each complete HTML response contains only its own
+finite and streamed markers. A temporary shared-QueryClient test-host control
+failed exactly on foreign data in the HTML; it was immediately removed. The
+full browser command passes with request-local ownership restored.
+
 ## Limits and cleanup
 
 Document `load` is an ordering signal, not an integrity check. In the interrupted
@@ -85,8 +92,18 @@ temporary root on success or failure. Existing dependencies are symlinked,
 not modified. The three root devDependencies select versions already present
 in the lockfile; no package version was upgraded for this tracer.
 
+Review also exposed an outer timeout that could kill the build runner before
+its cleanup. The integration test now supervises a detached process group and
+owns the containing temporary root. A short negative control reproduced the
+surviving descendant and retained output pipe. Two final controls verify both
+cooperative termination and a TERM-ignoring descendant stopped by bounded KILL
+escalation. Both require scratch removal and a stopped or reaped descendant.
+The supervisor is for the POSIX test host; it changes no product runtime.
+
 The changed-scope command passes one build test / one assertion, format, lint,
-the questpie typecheck and `git diff --check`. Combined quality/release and
-independent Standards/Spec review still follow this focused evidence. Golden
-consumer migration, packed/docs/skills closure and aggregate beta.2 acceptance
-remain separate successor work.
+the questpie typecheck and `git diff --check`. The two timeout controls add
+12 assertions. Full Start browser verification passes after the review repairs.
+The [combined gate and independent review](NRQ-02-03-REVIEW.md) distinguish the
+pre-review full release checkpoint from focused repair verification. NRQ-03 is
+complete. Golden consumer migration, packed/docs/skills closure and aggregate
+beta.2 acceptance remain separate successor work.
