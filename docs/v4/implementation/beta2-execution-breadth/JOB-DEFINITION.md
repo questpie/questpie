@@ -9,7 +9,24 @@
 - Non-goals: changing an ADR, selecting cron/DST semantics, publishing signals,
   adding child work or compensation, or defining a browser Job client
 
-## Outcome
+## Supersession for the implemented beta.2 subset
+
+Accepted ADR-0043 supersedes this workbench's provisional schedule and checkpoint
+recommendations. The implemented schedule is exactly
+`{ cron, execution: { principal, context }, input }`, using numeric five-field
+UTC cron and existing Context/Job codecs. There is no authored `timeZone`.
+Schedule program, desired-set, Job execution compatibility and executable
+bindings remain separate; do not implement the combined digest recommendation
+below for schedule edits.
+
+Generated Job Context adds only the inert named Mutation references and
+`ctx.run.step.mutation(name, reference, input)`. It adds no Query, callable
+Mutation, Action, Service, sleep or signal capability. The wider member/type
+recommendations below remain historical planning input, not instructions to
+expand this release. ADR-0043 and the public scheduled-Job guide own the exact
+implemented boundary and its receipt-recovery semantics.
+
+## Historical recommendation
 
 Implement one Job Definition and one handler shape. The recommended authored
 member set is:

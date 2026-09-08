@@ -7,7 +7,7 @@ input, not Accepted authority or a shipping claim.
 - Owner request: static schedules attached to Jobs. Dynamic schedules remain
   application-owned rows processed by a minute sweep; no framework schedule CRUD.
 - Tracker: #365. Aggregate beta.2 acceptance #364 is blocked by this work.
-- Candidate: [Proposed ADR-0043](../../../adr/0043-freeze-static-job-schedules-and-mutation-checkpoints.md).
+- Authority: [Accepted ADR-0043](../../../adr/0043-freeze-static-job-schedules-and-mutation-checkpoints.md).
 - Baseline: the pre-schedule beta.2 candidate remains preserved in Git. Its
   manifest excludes Cron and must not be reviewed as evidence for this extension.
 
@@ -196,6 +196,23 @@ suggestion were discarded after source review. Recovery must enter the existing
 executor; consultation output is neither repository authority nor acceptance.
 
 ## Delivery order
+
+### Accepted closure
+
+The pinned Opus-medium follow-up received a genuine PASS, committed at
+`ba336b234` and verified against candidate `911d96bab`. The owner corrected the
+first five-minute timeout to 60 minutes; the original NO_RESULT remains in its
+record. ADR-0043 now fixes the implemented boundary. The table and investigation
+below retain the earlier candidate milestones, not current acceptance status.
+
+Compiler/artifact/types, activation/tick execution, checkpoint receipt recovery
+and both reference consumers have their recorded proof. The public projection
+follows that PASS. Aggregate ADR-0039 remains Proposed and requires a fresh
+schedule-inclusive manifest plus exact final release gates. The separate
+inherited Mutation-list inverse-row budget issue is a focused correctness
+repair, not a reopening of schedule design.
+
+### Historical candidate delivery record
 
 The isolated integrated candidate now runs the real generated application.
 These results do not accept ADR-0043 or count as a shipped capability. The

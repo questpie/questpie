@@ -11,6 +11,7 @@
 		"realtime",
 		"reactive-query-resources",
 		"durable-reactions",
+		"scheduled-jobs",
 		"multi-instance",
 		"semantic-kernels-and-public-surface",
 		"services",

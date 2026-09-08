@@ -649,14 +649,47 @@ delay, or from a durable schedule.
 
 ### Durable Schedule
 
-A persisted producer of independently deduplicated Job ticks. Removing a
-schedule prevents future acceptance and never cancels an already accepted run.
+A persisted producer of independently deduplicated Job ticks from an
+application-owned static UTC cron program and an ordinary service Execution
+recipe. Removing a schedule prevents future acceptance and never cancels an
+already accepted run. Dynamic business due times are application data.
+
+### Schedule Set
+
+The compiler-owned desired catalog of static Job programs identified by its
+content digest. It is deployment data, not an activation occurrence or a Job's
+execution compatibility identity.
+
+### Schedule Activation Revision
+
+An application-scoped monotonically increasing PostgreSQL bigint encoded as
+decimal text. It fences an explicit desired-set switch and does not repeat
+when older schedule content is reactivated.
+
+### Schedule Tick
+
+One logical application, Job Resource and scheduled UTC minute identity. It
+excludes activation revision, execution recipe and executable digest.
+
+### Schedule Frontier
+
+The latest examined UTC minute of an active Job program. Reconciliation may
+coalesce earlier unaccepted matches; the frontier advances atomically with any
+accepted tick and never moves backward.
 
 ### Job Checkpoint
 
 One named ordered durable Job command and its canonical digest, stable
 Mutation Call Identity or Effect Identity, and validated result, timer, or
 signal receipt. Arbitrary callback effects are not checkpoints.
+
+### Mutation Checkpoint
+
+The implemented Job checkpoint that consumes an inert named Mutation reference,
+reserves an ordered command, invokes the existing Mutation transaction and binds
+its immutable result receipt in a separate fenced completion transaction.
+Stable Mutation Call Identity recovers a committed write without another result
+ledger. Recovery requires fresh Context and Operation admission.
 
 ### Checkpointed Job
 

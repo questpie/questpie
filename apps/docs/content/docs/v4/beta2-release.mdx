@@ -33,6 +33,7 @@ or third publishable archive.
 | Query Resource and optional React adapter                                   | [Reactive Query state](/docs/v4/reactive-query-resources)                                       |
 | Canonical Operation HTTP, shared documentation, and OpenAPI 3.1             | [Operation HTTP and OpenAPI](/docs/v4/operation-http-and-openapi)                               |
 | Stateless MCP Tools projection                                              | [Basic MCP](/docs/v4/basic-mcp)                                                                 |
+| Static UTC Job schedules and named Mutation checkpoints                     | [Scheduled Jobs](/docs/v4/scheduled-jobs)                                                       |
 | Runtime observation and the official OpenTelemetry adapter                  | [OpenTelemetry](/docs/v4/opentelemetry)                                                         |
 | Ordinary TypeScript discriminated-value helpers                             | [Discriminated values](/docs/v4/reactive-query-resources#model-a-discriminated-reference-value) |
 | Portable QUESTPIE Agent Skill                                               | Framework authoring guidance for the exact beta.2 contract                                      |
@@ -65,9 +66,16 @@ Beta.2 adds no polymorphic Relation, polymorphic codec, descriptor, registry,
 or Runtime traversal kernel. Heterogeneous values use the ordinary TypeScript
 helpers.
 
-Beta.2 also adds no Workflow Resource, Cron, trigger system, generic browser
-Job control, application-generated skill, broad explain command, or expanded
-OpenTelemetry authority. Job remains the owner of checkpointed durable work.
+Beta.2 adds no Workflow Resource, dynamic schedule CRUD, named timezones,
+trigger system, generic browser Job control, application-generated skill,
+broad explain command, or expanded OpenTelemetry authority. Job checkpoints
+call named Mutations only; Action checkpoints, timers, signals, and arbitrary
+callback steps are absent.
+
+The schedule and checkpoint boundary has
+[fixed transaction, calendar, history, and byte limits](/docs/v4/scheduled-jobs#stay-within-fixed-bounds).
+It requires the [protocol-v9 non-rolling upgrade](/docs/v4/runtime-and-studio#upgrade-the-internal-protocol)
+for existing installations and explicit schedule activation after migration.
 
 No new Files, Search, Studio, split Runtime roles, Autopilot, or landing-page
 surface is part of this package release.

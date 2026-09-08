@@ -1,0 +1,351 @@
+---
+title: Sweep due tickets every minute
+description: Run a UTC-scheduled Job through one named Mutation checkpoint, activate it explicitly, and recover committed work.
+kind: guide
+---
+
+Run a minute sweep when due times live in your application's rows. In Team
+Support Desk, each accepted tick creates one Job run that calls the
+`ticket.sweepSla` Mutation through a
+named Mutation checkpoint. The Mutation advances one due ticket and accepts an
+independent follow-up Job in the same transaction.
+
+Use this example inside the Team Support Desk reference application at
+`fixtures/team-support-desk` in the QUESTPIE repository. It depends on its
+Ticket Collection, Collection Operations and Policy, Context, demo identifiers,
+and `ticket.slaFollowUp` Job. It is not a standalone application.
+
+## Give the sweep an application identity
+
+The schedule uses a service Principal and the application's existing Context
+input. The service needs an active Membership with the `agent` role. This Seed
+adds that Membership after the application's identity Seed:
+
+```ts title="src/memberships/sweep-seed.ts"
+import { defineSeed, seed } from "questpie";
+
+import { demoIds } from "../demo-ids";
+import { memberships } from "./index";
+
+export const supportSweepIdentity = defineSeed({
+	name: "teamSupport.sweepIdentity.v1",
+	dependsOn: ["teamSupport.identity.v1"],
+	steps: [
+		seed.insert(memberships, {
+			id: demoIds.memberships.sweep,
+			organizationId: demoIds.organization,
+			principalId: demoIds.principals.sweep,
+			role: "agent",
+			status: "active",
+			createdAt: "2026-09-06T00:00:00.000Z",
+			updatedAt: "2026-09-06T00:00:00.000Z",
+		}),
+	],
+});
+```
+
+`principal.service({ name })` identifies the caller; it grants no privilege.
+The Support Desk Context checks the Membership's organization, Principal, and
+active status. Schedule acceptance and every Job attempt resolve current
+Context. A removed Membership cannot gain access from the worker's location or
+the deployment operator's permissions. Keep credentials out of static schedule
+values.
+
+## Put the batch in a named Mutation
+
+The existing `tickets.list` Operation selects open tickets with a non-null due
+time, ordered by `slaFollowUpDueAt` and then `id`. Its page limit is one. The
+Mutation locks that candidate through `get`, then checks its current status and
+due time against the transaction's `ctx.now` before updating it.
+
+```ts title="src/tickets/sla-sweep.ts"
+import { codec, durable, operation, policy, principal } from "questpie";
+
+import { defineJob, defineMutation } from "#questpie/app";
+
+import { demoIds } from "../demo-ids";
+
+export const sweepSla = defineMutation({
+	name: "ticket.sweepSla",
+	network: false,
+	input: codec.object({}),
+	output: codec.object({
+		processed: codec.integer({ minimum: 0, maximum: 1 }),
+	}),
+	policy: policy.authenticated(),
+	errors: {
+		invalidTicket: operation.error({ code: "SLA_TICKET_INVALID", status: 422 }),
+	},
+	issueMappings: { tickets: { invalidReference: "invalidTicket" } },
+	handler: async ({ ctx }) => {
+		const due = await ctx.data.tickets.list({ first: 1, after: null });
+		let processed = 0;
+		for (const candidate of due.nodes) {
+			// A nested get locks the row and reads fresh Policy/state after waiting.
+			const current = await ctx.data.tickets.get({ key: { id: candidate.id } });
+			if (
+				current === null ||
+				current.status !== "open" ||
+				current.slaFollowUpDueAt === null ||
+				current.slaFollowUpDueAt.getTime() > ctx.now.getTime()
+			)
+				continue;
+			const advanced = await ctx.data.tickets.update({
+				key: { id: current.id },
+				values: {
+					lastSlaFollowUpAt: ctx.now,
+					slaFollowUpDueAt: new Date(ctx.now.getTime() + 60 * 60 * 1000),
+				},
+			});
+			// Ticket afterWrite accepts the ordinary follow-up Job in this transaction.
+			if (advanced !== null) processed++;
+		}
+		return { processed };
+	},
+});
+
+export const sweepSlaJob = defineJob({
+	name: "ticket.sweepSla",
+	input: codec.object({}),
+	output: codec.object({
+		processed: codec.integer({ minimum: 0, maximum: 1 }),
+	}),
+	runAs: durable.caller({ whenDenied: "fail" }),
+	retry: durable.retry({
+		maximumAttempts: 5,
+		initialDelay: "1s",
+		backoff: "exponential",
+		maximumDelay: "10s",
+		jitter: "full",
+		horizon: "1h",
+	}),
+	schedule: {
+		cron: "* * * * *",
+		execution: {
+			principal: principal.service({ name: demoIds.principals.sweep }),
+			context: {
+				organizationId: demoIds.organization,
+				membershipId: demoIds.memberships.sweep,
+			},
+		},
+		input: {},
+	},
+	handler: ({ ctx }) =>
+		ctx.run.step.mutation("due-tickets", ctx.mutations.ticket.sweepSla, {}),
+});
+```
+
+The generated Current App Contract infers the checkpoint input and result from
+`ctx.mutations.ticket.sweepSla`. That value is a non-callable reference; pass it
+to `ctx.run.step.mutation`. The schedule's `context` uses the existing Context
+schema, and its `input` uses the Job's input codec. There is no second schedule
+schema to declare. Empty inputs remain explicit `{}`.
+
+The Job and Mutation deliberately share the name `ticket.sweepSla`. Their
+Resource Kinds distinguish `job:ticket.sweepSla` from
+`mutation:ticket.sweepSla`.
+
+On success, `processed` is zero or one. An updated Ticket records
+`lastSlaFollowUpAt` and moves `slaFollowUpDueAt` forward by one hour. Its existing
+`afterWrite` accepts `ticket.slaFollowUp` before the Mutation commits. A
+rollback preserves neither the update nor that acceptance. One ticket per tick
+is this example's deliberate batch bound; it does not clear a large overdue
+backlog in one run.
+
+The Mutation writes these server-owned Fields through the trusted `values`
+lane. This bypasses only caller Field authority; complete-candidate validation,
+candidate Policy, and PostgreSQL constraints still apply. See the
+[Collection write pipeline](./queries-and-mutations#follow-the-write-order).
+
+The five cron fields are evaluated in UTC: minute `0–59`, hour `0–23`, day of
+month `1–31`, month `1–12`, and day of week `0–6`, with Sunday zero.
+`* * * * *` matches every minute. Each field accepts
+`*`, a number, an ascending inclusive range, or a comma-separated list. A
+positive step may follow `*` or a range. It starts at that range's lower bound,
+does not carry into another field, and cannot exceed the field's cardinality.
+Equivalent field sets have identical
+calendar semantics.
+
+At least one day field must cover its complete allowed set. Restricting both
+is an error, not an implicit OR rule. There are no named months or days,
+wrapping ranges, aliases, seconds, years, Sunday seven, or timezone option.
+Compilation rejects impossible Gregorian dates.
+
+## Activate the schedule during deployment
+
+Stop the previous Runtime processes before upgrading a protocol-v8 installation
+to protocol v9. This is a non-rolling cutover. In the application directory,
+with the deployment database connection configured, run `questpie build`,
+then `questpie migration apply --allow-non-rolling-protocol-v9`, then
+`questpie seed apply`. Migration does not activate the schedule.
+
+Activation verifies the complete generated bundle as bytes before opening the
+deployment database connection. It then checks application, schema, migration,
+and protocol readiness. It does not evaluate handlers, resolve an ingress
+Principal, start application Services, or require a realtime HMAC key.
+
+For an existing v6/v7 installation, supply both
+`--allow-non-rolling-protocol-v8` and `--allow-non-rolling-protocol-v9` to
+`questpie migration apply`. Each upgrade keeps its own transaction: if v8
+commits and v9 later fails, the database stays at valid v8. Keep incompatible
+Runtimes stopped and repair forward; a failed command does not promise that
+every preceding upgrade rolled back. A fresh database needs no cutover flags.
+
+For the first activation, run
+`questpie schedule activate --expect-revision 0`. The receipt contains
+`acceptedRevision: "1"` and the current head. Keep revisions as decimal text,
+from `"0"` through `"9223372036854775807"`;
+do not convert them to JavaScript numbers.
+For later deployments, supply the revision you intend to replace. A stale
+revision returns `SCHEDULE_ACTIVATION_STALE` with the current revision and set
+digest; inspect the competing deployment before issuing a new request. If the
+response was lost, repeat the exact request against the same built artifacts
+to recover its receipt.
+
+Start the new Runtime with `questpie start`. Its existing Job worker reconciles
+the active schedule before admitting durable work. A custom host creates a worker
+with `app.durable.worker()`, repeatedly calls the returned handle's `poll()`,
+and owns the polling loop and shutdown. Startup alone
+never activates or restores a schedule.
+
+A newly activated or changed schedule starts strictly after its activation
+minute, even when activation occurs exactly on the minute boundary. An
+unchanged per-Job program retains its frontier across deployments. Removing
+and later re-adding it starts a new frontier; an older stored catalog does not
+restore its missed ticks.
+
+The program binds the Job identity, canonical cron fields, service Principal,
+Context input, and Job input. Changing that recipe starts a new frontier;
+changing only the spelling of an equivalent cron expression does not.
+
+PostgreSQL supplies the observed UTC minute after the producer acquires the
+activation lock. A regressing clock cannot move the frontier backward. After
+downtime, the producer accepts only the latest matching missed minute. The
+producer skips earlier unaccepted ticks; already accepted Jobs keep their own retries and
+cancellation state. Due tickets stay in application rows for later sweeps.
+
+Within one application, the Job Resource identity and scheduled UTC minute
+identify one logical tick. PostgreSQL accepts that tick at most once across
+workers and activations. Revision, recipe, and executable digest do not create
+another identity for the same tick.
+
+To remove this schedule, remove the Job's `schedule` member, rebuild, and
+activate that desired set with the expected revision. Removing every schedule
+activates an empty set. This stops future tick acceptance and preserves already
+accepted runs. Keep the executable artifacts needed to run those retained Jobs.
+A rollback
+activates the older schedule set at a new revision. It does not reuse an old
+activation revision. Removal and acceptance share the same lock: a run that
+commits first survives; removal that commits first suppresses the unaccepted
+tick. [Retain the original Runtime Build](./durable-reactions#deploy-without-stranding-a-run)
+until its nonterminal work finishes.
+
+A previously unsuccessful stale request fails even if its target content
+matches the active set again after a rollback. Repeating a previously committed
+request instead recovers its historical receipt without changing the head.
+
+## Keep the checkpoint stable across attempts
+
+`"due-tickets"` identifies the ordered checkpoint within the Durable Run. Its
+Mutation Call Identity stays stable across attempts. A crash after the Mutation
+commits but before checkpoint completion can therefore recover the same
+receipt without repeating the Ticket update or follow-up Job acceptance.
+
+Keep the checkpoint name, Mutation reference, input, and order stable for a
+retained run. Changed input or command, renamed or reordered checkpoints, and missing or
+changed recorded receipts fail closed with `CHECKPOINT_INVALID`. A successful
+handler must consume its recorded history. An ordinary handler error before
+reaching a recorded step retains its original failure and retry policy; an
+incomplete history cannot turn a failed handler into a different failure.
+Names are nonempty and allow ASCII letters, digits, `-`, and `_`, with at most
+64 bytes. A run supports 64 unique ordered names and
+one command in flight; await each command before starting the next.
+
+Receipt recovery still enters fresh Context and Mutation admission. If either
+denies access, the Job cannot finish that checkpoint even though the write may
+already be committed. When those checks allow replay, the receipt returns the
+original immutable result without rerunning the handler, lifecycle, or
+Collection Policy. A later Collection-only permission change does not turn
+that historical result into a new Collection read.
+
+A declared Mutation error rolls back its transaction and permanently fails the
+Job with the existing `REACTION_ERROR` code. Catching it does not permit another
+step or a successful return. Retryable failures use this Job's bounded retry
+policy; `ctx.run.step.mutation` adds no retry loop. Cancellation can race an
+already dispatched Mutation, so cancellation does not prove rollback. Its
+stable Call Identity remains the recovery identity for a valid successor. A
+stale worker cannot complete the checkpoint. The worker joins every started
+step, including an unawaited one, before terminal settlement and Execution
+cleanup. Observed cancellation retains its original reason.
+
+The Mutation transaction commits before the separate fenced checkpoint
+completion transaction. The checkpoint stores a reference and digest, not a
+second result copy. Mutation receipts do not expire; checkpoint history stays
+with its run. Missing or changed required receipts never authorize another
+application write.
+
+This Job capability covers named Mutation checkpoints only. It provides no
+external-effect Action, Service, timer, signal, callback step, or workflow
+surface. Keep external provider work outside this sweep example.
+
+## Stay within fixed bounds
+
+These bounds limit work and stored data. They are not configurable throughput
+targets. The Job's ordinary attempt deadline, retry horizon, and result bound
+also apply.
+
+| Boundary                                                | Limit                                               |
+| ------------------------------------------------------- | --------------------------------------------------- |
+| Static schedule set                                     | 64 scheduled Jobs; 262,144 canonical artifact bytes |
+| Activation, frontier, and observation instants          | UTC years 1 through 9999                            |
+| Calendar search                                         | 146,097 UTC days and 1,440 minute-of-day candidates |
+| Activation or producer transaction, including lock wait | 10 seconds                                          |
+| One reconciliation                                      | 64 programs; at most one accepted tick per program  |
+| Checkpoint history                                      | 64 ordered unique names; one command in flight      |
+| Checkpoint reservation, load, or completion transaction | 5 seconds                                           |
+| Checkpoint input and Mutation receipt result            | 1 MiB canonical UTF-8 bytes each                    |
+
+Caller or attempt cancellation may end these transactions earlier. A producer
+timeout rolls back its complete frontier, tick, and acceptance transaction.
+Context denial or acceptance failure also advances nothing. The next ordinary
+worker poll can try the latest due instant again; there is no per-tick retry
+queue. Failure of the producer does not block already accepted Jobs or Reactions.
+
+## Diagnose failures without exposing application values
+
+Compilation reports malformed cron, unsupported members, invalid static
+inputs, and impossible calendars at the authored source. Fix the Definition
+and rebuild before activation. Static schedule authoring belongs to the
+application; Package-owned schedules are unsupported.
+
+| Failure                       | Meaning and recovery                                                                                                                             |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SCHEDULE_ACTIVATION_STALE`   | Inspect the returned current revision and set digest before deliberately issuing a new activation.                                               |
+| `SCHEDULE_ARTIFACT_INVALID`   | Regenerate and verify the complete application artifact.                                                                                         |
+| `SCHEDULE_REVISION_OVERFLOW`  | Activation cannot advance beyond the maximum revision; no state changes.                                                                         |
+| `SCHEDULE_STATE_INVALID`      | Stored schedule state or the observed instant is invalid; no partial state changes commit.                                                       |
+| `SCHEDULE_ARGUMENTS_INVALID`  | Correct the activation arguments.                                                                                                                |
+| `SCHEDULE_DATABASE_NOT_READY` | Apply and verify the required schema and protocol before activation.                                                                             |
+| `SCHEDULE_ACTIVATION_FAILED`  | Resolve the deployment failure, then repeat the same request to recover any committed receipt.                                                   |
+| `CHECKPOINT_INVALID`          | Inspect the retained command, history, executable, and required receipt. Missing or changed receipts cannot authorize another application write. |
+| `RESOURCE_LIMIT`              | Keep checkpoint history and canonical values within the fixed bounds.                                                                            |
+
+Invalid checkpoint input rejects with the same safe `PROTOCOL_UNSUPPORTED`
+Operation failure as direct invocation. Declared Mutation errors keep their
+declared type at the step boundary. Failed reservation, dispatch, completion,
+concurrent steps, cancellation, or incomplete history prevent later steps and
+successful settlement of that attempt. Only existing retryable failures
+produce another bounded attempt.
+
+The server worker result has a separate `producer` entry. It reports
+`active` or `inactive` with bounded accepted/examined counts, `draining`, or
+`failed` with `SCHEDULE_PRODUCER_FAILED`. Durable operational facts record
+activation revisions, frontier progress, selected instants, accepted run links,
+and checkpoint transitions under existing operational authorization.
+
+Framework failures and telemetry omit actor identities, Context and input
+values, SQL details, and exception messages. Among failure outcomes, only stale
+activation returns the current revision and set digest. Schedule artifacts remain server/deployment
+data; they do not appear in browser contracts, OpenAPI, MCP, or observation
+payloads. [OpenTelemetry](./opentelemetry) helps diagnose execution; it does not
+decide which ticks exist.

@@ -273,6 +273,14 @@ the connected tracer; their assertions remain mandatory regressions below.
 - Complete Job checkpoint publication remains blocked until signal authorization,
   child work, compensation, continuation/history limits, and multi-version
   compatibility pass.
+- ADR-0043 closes only static UTC schedules and named-Mutation checkpoints.
+  Its real compiler/PostgreSQL/worker proof covers revision-fenced activation,
+  latest-only catch-up, ten contenders, removal, atomic frontiers/ticks,
+  retained executable admission, commit-before-completion receipt recovery,
+  terminal caught-error doom, cancellation, exact work bounds and nondisclosure.
+  This subset does not wait for Action checkpoints, timers or signals; it also
+  does not publish them. Protocol v9 uses the explicitly acknowledged
+  non-rolling upgrade and never activates schedules at Runtime boot.
 
 ## Gate 8: Execution Envelope and Studio
 

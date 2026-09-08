@@ -6,7 +6,8 @@ kind: guide
 
 QUESTPIE builds one immutable application bundle and runs it in one standalone
 Runtime. The Runtime owns HTTP requests, direct execution, Live Query
-reconciliation, Reaction workers, readiness, drain, and cleanup.
+reconciliation, Job and Reaction workers, schedule production, readiness, drain,
+and cleanup.
 
 ## Build, migrate, and start
 
@@ -92,7 +93,7 @@ QUESTPIE does not retry a Mutation automatically. If a response is lost after
 commit, the caller reuses the stable Call Identity to recover the stored result
 without applying the business change twice. Reusing its `callId` with different
 input fails with the operation-specialized `IDEMPOTENCY_CONFLICT` error. See
-[cancellation and response-loss behavior](./queries-and-mutations#handle-cancellation-and-response-loss).
+[cancellation and response-loss behavior](./queries-and-mutations#understand-time-retry-and-cancellation).
 
 ## Run a direct root
 
@@ -136,7 +137,7 @@ export async function readChannel(
 }
 ```
 
-The generated App exposes `fetch`, `execution`, `close`, and the compiler-owned
+The generated App exposes `fetch`, `execution`, `durable`, `close`, and the compiler-owned
 `routes` direct-invocation projection. Raw Routes remain outside the generated
 JSON Operation client. Direct, Fetch, generated-client, nested, recompute, and
 worker calls use the same Context, Policy, Operation, error, transaction, and
@@ -188,6 +189,37 @@ Compatibility is not inferred from one bundle digest. A retained
 [Resume Token](./realtime#recover-committed-changes) or a nonterminal
 [Durable Run](./durable-reactions#deploy-without-stranding-a-run) can prevent
 retirement of an older build.
+
+## Upgrade the internal protocol
+
+The Runtime requires exact internal protocol v9. Stop incompatible Runtime
+instances before applying an upgrade; this is a non-rolling cutover, not a
+mixed-version deployment.
+
+| Existing database           | Required migration acknowledgement                                           |
+| --------------------------- | ---------------------------------------------------------------------------- |
+| Fresh database              | None                                                                         |
+| Protocol v8                 | `--allow-non-rolling-protocol-v9`                                            |
+| Supported protocol v6 or v7 | Both `--allow-non-rolling-protocol-v8` and `--allow-non-rolling-protocol-v9` |
+
+If another process installs an older catalog while migration waits for its
+lock, the database is no longer fresh. The required acknowledgements still
+apply.
+
+Pass the required flags to `bunx questpie migration apply` after building the
+new application. Both acknowledgements are checked before protocol mutation.
+Each upgrade owns a transaction: if v8 commits and v9 fails, the database stays
+at valid v8. Keep incompatible processes stopped and repair forward. A failed
+command does not promise that all earlier upgrades rolled back. There is no
+in-place downgrade or mixed-version fallback.
+
+Migration and Runtime startup do not activate schedules. After migration and
+the application's required Seeds, activate the desired set explicitly with
+`bunx questpie schedule activate --expect-revision <revision>`. For the first
+activation, pass `--expect-revision 0`; its successful receipt records
+`acceptedRevision: "1"`. Keep revisions as decimal text and use the
+[schedule deployment and recovery procedure](./scheduled-jobs#activate-the-schedule-during-deployment)
+for later activations, response loss, and removal.
 
 ## Inspect the Execution Envelope
 

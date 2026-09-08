@@ -178,10 +178,15 @@ Acceptance:
 
 ## EB-05 — Cron schedule and tick tracer
 
+Status: implemented and accepted in the ADR-0043 static UTC subset. Its
+manifest-bound Opus PASS is committed and verified. Explicit revision-fenced
+activation, latest-only catch-up, ten contenders and removal are covered by
+the real compiler/PostgreSQL worker proof. Named zones/DST are not in beta.2.
+
 Red test:
 
 - ten schedulers race the same scheduled instant and create one tick/run;
-- time zone and cron bytes are compiled/validated, not interpreted ad hoc by
+- UTC cron bytes are compiled/validated, not interpreted ad hoc by
   each worker;
 - removing a schedule blocks future ticks and preserves an accepted run;
 - rolling compatible instances do not require a singleton leader.
@@ -199,6 +204,12 @@ Acceptance:
 
 ## EB-06 — Mutation checkpoint crash/resume
 
+Status: implemented and accepted for named-Mutation checkpoints under ADR-0043,
+including stable receipt recovery, retained executable admission, corrupt or
+missing receipts, terminal caught-error doom, cancellation and bounded history.
+Public projection and final aggregate release gates follow that verified PASS.
+The former `step.sleep` portion belongs to deferred EB-08, not this ticket.
+
 Red test:
 
 - crash after a named Mutation commits but before checkpoint result persistence;
@@ -211,10 +222,10 @@ Red test:
 
 Implementation:
 
-- add the closed Job `step.mutation`, `step.sleep`, and history projection over
+- add the closed Job `step.mutation` and history projection over
   the same run/attempt/lease state;
-- persist ordered checkpoint identity, canonical command digest, validated
-  result, timer state, and append-only transitions;
+- persist ordered checkpoint identity, canonical command digest, the binding
+  to the existing immutable Mutation result receipt, and append-only transitions;
 - refuse incompatible executable/version claims.
 
 Acceptance:

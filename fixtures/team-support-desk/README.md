@@ -12,6 +12,7 @@ application convention, not a compiler requirement: `questpie.json` selects
 
 ```text
 src/
+  demo-ids.ts                   public fixture Resource and actor identifiers
   execution.ts                  application Context
   tickets/
     index.ts                    Ticket Collection and lifecycle
@@ -90,6 +91,7 @@ bunx questpie migration apply
 bunx questpie seed apply
 bun run auth:migrate
 bun run auth:seed
+bunx questpie schedule activate --expect-revision 0
 bun tracer/host.ts --port=43122
 ```
 
@@ -99,10 +101,20 @@ login form. Their public fixture values are defined in
 browser automation. URLs with tracer parameters select a separate instrumented
 bundle for the automated tests.
 
-The static-schedule candidate has additional cutover and activation steps in
-its [internal draft](../../docs/v4/research/static-job-schedules/PUBLIC-GUIDE-DRAFT.md).
-Those commands remain candidate-only until formal acceptance; booting this host
-does not activate schedules.
+The activation above is for a database with no previous activation. For later
+deployments, deliberately supply the revision you intend to replace. Booting
+the host never activates or restores schedules. The
+[scheduled Job guide](../../apps/docs/content/docs/v4/scheduled-jobs.mdx) uses
+this application's exact Seed and sweep Definitions and explains activation,
+response-loss recovery, and checkpoint replay.
+
+An existing protocol-v8 database needs
+`--allow-non-rolling-protocol-v9` on `questpie migration apply`. Supported v6/v7
+installations need both `--allow-non-rolling-protocol-v8` and
+`--allow-non-rolling-protocol-v9`. Stop incompatible Runtimes first; each upgrade
+commits separately. Follow the
+[protocol upgrade procedure](../../apps/docs/content/docs/v4/runtime-and-studio.mdx#upgrade-the-internal-protocol)
+before running the remaining setup commands. Fresh databases need no flags.
 
 ## Manual review
 

@@ -9,6 +9,11 @@ it directly, and a Mutation can accept it in the same PostgreSQL transaction as
 its business writes. Use `notBefore` when it must not start until an absolute
 time.
 
+For a recurring sweep over application-owned due rows, use a
+[static UTC schedule and named Mutation checkpoint](./scheduled-jobs).
+Schedule activation is an explicit deployment command, separate from Runtime
+startup and schema migration.
+
 Reaction remains the committed-fact projection of the same durable kernel. A
 Mutation dispatches its typed intent in the owning PostgreSQL transaction, and
 a worker later runs it with a fresh authorized Context. Existing applications
@@ -364,6 +369,11 @@ value or grow state without a bound. Retention can erase payload, result,
 idempotency body, and old attempts. It preserves the minimal dispatch, run,
 causation, correlation, terminal, and audit identities.
 
+Named Mutation checkpoints retain their history with the run and refer to the
+existing Mutation result receipt. Mutation receipts have no expiry or pruning
+path. The ordinary retry horizon and payload-retention periods do not permit
+erasing a receipt required to recover retained checkpoint history.
+
 ## Deploy without stranding a run
 
 Each accepted run records its Runtime Build and executable contract. A worker
@@ -390,20 +400,20 @@ that it can execute every older pending run. Calling the generated App's
 `close()` stops new claims, then lets current claims finish or their leases
 expire; see [readiness and drain](./runtime-and-studio#understand-readiness-and-drain).
 
-Protocol v8 is a non-rolling cutover from v7. Stop every v7 Runtime before
-running `questpie migration apply --allow-non-rolling-protocol-v8`. Without that
-explicit acknowledgement, the migration refuses to write. Compatible v8
-Runtime builds may still roll normally after the cutover; mixed v7/v8 Runtimes
-fail readiness before work.
+The Runtime requires internal protocol v9. Upgrading an older installation is
+an explicit non-rolling cutover. Stop incompatible Runtimes first and follow
+the [protocol upgrade procedure](./runtime-and-studio#upgrade-the-internal-protocol).
+Compatible v9 Runtime builds can roll after the cutover while preserving the
+retained-build rule above.
 
 Durable events are append-only. They contain safe correlation identities and
 error codes, not credentials, raw payloads, secrets, or stack traces.
 
 Reaction is the committed-fact projection of the shared durable kernel. Job is
-the explicitly accepted projection. Generic browser worker controls remain
-absent. Cron, checkpoints, timers, and signals are separate Job slices; this
-ordinary Job boundary does not add them. ADR-0026 removes the separate Workflow
-Resource and assigns that future closed orchestration surface to Job.
+the explicitly accepted projection, including static UTC schedules and named
+Mutation checkpoints. [Sweep due tickets every minute](./scheduled-jobs) shows
+that complete boundary. Job has no Action checkpoint, durable timer, signal,
+callback step, or Workflow Resource. QUESTPIE has no generic browser Job control.
 
 QUESTPIE authors only ordinary B-tree Indexes for durable state. It emits no
 row-level security. Policy remains the authorization model.
