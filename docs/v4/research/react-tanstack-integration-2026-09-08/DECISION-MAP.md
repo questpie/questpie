@@ -65,6 +65,13 @@ survives scope disposal. Actual browser transport was unavailable. Start key
 identity, full Mutation retirement and infinite pagination remain open; no
 slice or release gate is marked complete by these narrower results.
 
+A follow-up [pending-Mutation diagnostic](../../prototypes/react-query-integration/REACT-HOOK-EVIDENCE.md#pending-mutation-counterexample)
+proves that removing native Mutation cache entries does not fence a late result.
+Resetting the observer prevents its publication but still runs the options
+callback and resolves the original Promise with the result. R2 must separate
+UI publication lifetime from committed/unknown write outcome before R3 optimism;
+cache removal alone cannot close that edge.
+
 | Slice                                               | Depends on                                      | Falsifiable exit                                                                                                                                                                                               |
 | --------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | R1: Descriptor and ordinary Query/Mutation vertical | Focused public-surface decision                 | Compiler emits one reusable descriptor; native options infer input, output and declared errors; direct/generated transport behavior unchanged; no repeated schema/key registry                                 |

@@ -53,6 +53,29 @@ The expect MCP is unavailable. The installed browser runtime reported no
 browser, and its browser list was empty. Consequently this checkpoint has no
 real-browser result. jsdom is not a substitute for that release gate.
 
+## Pending Mutation counterexample
+
+[The retirement diagnostic](diagnose-retirement.ts) starts a generated Mutation,
+holds its correlated HTTP response, disposes the adapter and then releases the
+response. It compares public native cleanup primitives; it changes no adapter
+execution code. Query Core 5.102.8 produces these observations:
+
+| Cleanup after disposal      | Hook observer exposes late result | Original Promise exposes late result | Late `onSuccess` calls | Retained cache entries |
+| --------------------------- | --------------------------------- | ------------------------------------ | ---------------------- | ---------------------- |
+| No additional cleanup       | Yes                               | Yes                                  | 1                      | 1                      |
+| Remove Mutation from cache  | Yes                               | Yes                                  | 1                      | 0                      |
+| Reset observer, then remove | No                                | Yes                                  | 1                      | 0                      |
+
+Removing native cache entries is not an authority fence. Observer reset is
+useful but does not fence Mutation-option callbacks or Promise consumers.
+The next construction must distinguish retired UI publication from the actual
+write outcome; retiring a scope must not claim that an already submitted
+Mutation rolled back. This diagnostic is a counterexample, not a passing
+retirement gate or a selected replacement contract.
+
+Run `bun run diagnose:retirement` separately. Its JSON explicitly sets
+`acceptance: false`; successful execution means only that the diagnostic ran.
+
 ## Reproduction
 
 From this prototype directory, with its pinned dependencies installed:
@@ -80,3 +103,12 @@ The [compatibility audit](TANSTACK-COMPATIBILITY.md) still blocks a full Start
 claim: independently created server/browser scopes have different cache keys.
 Infinite options, serialized hydration, optimistic ordering and complete
 authority retirement are not implemented by this checkpoint.
+
+## Independent checkpoint review
+
+Two independent Codex agents reviewed `d954b0bb8...dcaa96c58`, the native hook
+checkpoint before the pending-Mutation diagnostic. Standards: zero actionable
+findings. Spec: zero actionable findings within the documented limited scope.
+Both independently reran the four React tests (16 assertions), the generated
+and native-error strict projects, and exact-range `git diff --check`. These are
+ordinary code reviews, not a formal architecture acceptance record.
