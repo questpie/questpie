@@ -903,11 +903,27 @@ changes; Runtime and migrations are unchanged. The full rerun passes that native
 consumer and the 111-assertion Desk journey, then exposes the same Bun test-host
 resolver defect in the SLA browser helper. One ordinary Bun CLI build repairs
 that helper; its focused regression and the 32-assertion PostgreSQL/Firefox SLA
-sweep pass. Rerun full PostgreSQL and actual workloads from the next clean head.
+sweep pass. The next frozen candidate passes the complete PostgreSQL lane:
+187 tests, four environment skips, zero failures and 2,135 assertions, plus all
+four actual local load/soak scenarios. Final `quality:release` passes 1,229 tests
+with 198 gated skips and zero failures, plus the explicit packed/browser gates.
+Forward types, negative controls, two separately forced builds/dry-runs and
+direct archive byte comparison pass. The measured release check passes in
+14.58 seconds under its unchanged 15-second budget. Both verification
+coordinators completed cleanup. These remain `reference-local` results.
 The Proposed release ADR is now
 reconciled with Accepted ADR-0043/0044; the historical aggregate manifest still
 requires replacement after final evidence. See
 [NRQ-06 evidence](docs/v4/implementation/native-react-query/NRQ-06-EVIDENCE.md).
+The fresh normal Desk/Scalar preview is deliberately left running from the
+checked fixture snapshot. Its current control record is
+`/home/drepkovsky/code/questpie-desk-preview-control.DEFL38/control.json`;
+inspect it for the live endpoint and owned process before cleanup. App, Scalar
+and OpenAPI return HTTP 200. Interactive browser discovery is empty, so manual
+visual inspection is not claimed. Remaining release prerequisites are actual
+dedicated-runner evidence, user inspection, fresh aggregate manifest/review and
+the separate post-PASS authority projection. Do not repeat completed local
+gates unless the next change affects them.
 The merge control verifies both acceptance records, skill validation, docs
 typecheck/build, public-package build and 33 affected tests / 154 assertions.
 The initial test attempt lacked built package output in the fresh worktree;

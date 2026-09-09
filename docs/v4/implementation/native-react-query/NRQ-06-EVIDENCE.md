@@ -101,14 +101,55 @@ unchanged PostgreSQL/Firefox SLA sweep passes all 32 assertions in 13.16 seconds
 at `attempt-4lSHBe`, with completed owned-resource cleanup. Formatting, lint,
 strict helper types and `git diff --check` pass. An independent non-author review
 reports no finding in the unchanged bundle behavior, deadline or regression
-checks. Full-suite verification remains required after committing this repair.
+checks. These focused checks did not close full-suite verification; the frozen
+rerun below does.
 
-## Gates still required
+## Frozen local release checks
 
-The corrected full PostgreSQL 17 lane, four actual local load/soak scenarios,
-final quality/dependency/type checks, two forced byte-identical builds/dry-runs,
-final manifest binding and user's manual preview remain required. Local
-measurements are always `reference-local`.
+All following checks ran on clean `ecf03f317`, without changing HEAD or tracked
+files during either coordinator. They are `reference-local`, not dedicated
+release-runner measurements.
+
+| Check                                                     | Result                                                                                                                                                                             |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Complete PostgreSQL 17 lane                               | PASS: 187 tests, four PG18/PgBouncer environment skips, zero failures, 2,135 assertions across 45 roots; 405.934 seconds                                                           |
+| Worker contention                                         | PASS: 5.846 seconds                                                                                                                                                                |
+| Ten-instance workload                                     | PASS: 9.206 seconds                                                                                                                                                                |
+| Mutation transaction-tail workload                        | PASS: 13.691 seconds                                                                                                                                                               |
+| Soak/chaos workload                                       | PASS: 12.323 seconds                                                                                                                                                               |
+| `quality:release`                                         | PASS: 1,229 ordinary tests, 198 gated skips, zero failures; separate Desk DOM, real release contract, native packed browser, basic/Start tutorial browser, OTel and CLI gates pass |
+| Forward TypeScript; Knip and acceptance negative controls | PASS                                                                                                                                                                               |
+| Two separately forced builds and release dry-runs         | PASS; both public package archives directly compared byte-for-byte after both runs                                                                                                 |
+| Measured release budget                                   | PASS: 14,575.42 ms under the unchanged 15,000 ms limit; nine assertions                                                                                                            |
+| `git diff --check`                                        | PASS                                                                                                                                                                               |
+
+The PostgreSQL/workload coordinator retains logs and its successful cleanup
+record in `attempt-16F2eZ` under the local coordinator directory above. The final
+quality/build coordinator retains its result, logs, two tool-generated manifests
+and both archive pairs under
+`/home/drepkovsky/code/questpie-nrq06-final.LFBkPw/attempt-gxFoWj`.
+Its scratch cleanup completed. The two archives are 554,483 bytes (`questpie`)
+and 14,850 bytes (`questpie-opentelemetry`); their tool-derived identities match
+`quality/release/package-artifacts.json`.
+
+An independent non-author review checked both result records, summed the
+PostgreSQL logs, verified the separate release gates and compared both archive
+pairs and manifests. It reports no finding in this evidence or the handoff.
+
+## Manual preview and remaining release prerequisites
+
+A separate task-owned coordinator snapshots the checked fixture and uses its
+built public packages with a fresh loopback-only PostgreSQL 17 container. It
+starts the normal app, without tracer query parameters, and runs the existing
+migration, Seed, auth and explicit schedule activation commands. App, Scalar
+and OpenAPI each return HTTP 200. The current control record is
+`/home/drepkovsky/code/questpie-desk-preview-control.DEFL38/control.json`;
+read it for the live port and owned process before cleanup. This intentionally
+running preview is separate from the cleaned verification resources.
+
+Interactive browser discovery returned no available browser. No fresh manual
+visual inspection is claimed; the automated Firefox checks above are separate
+evidence. User inspection and final manifest binding remain required.
 
 Actual unchanged-budget execution on the dedicated `questpie-release` runner
 remains an external release prerequisite; the repository's runner inventory
