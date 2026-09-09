@@ -1,152 +1,145 @@
 ---
 title: QUESTPIE v4
-description: The PostgreSQL-native Static Application Compiler and Runtime for TypeScript.
-kind: guide
+description: Define your TypeScript backend once. Generate typed clients, HTTP endpoints, OpenAPI documentation, and MCP tools for your PostgreSQL app.
+kind: explanation
 ---
 
-QUESTPIE v4 combines an open, self-hostable Static Application Compiler with a
-PostgreSQL-native QUESTPIE Runtime. It compiles Definitions into one
-deterministic Compiled Manifest, one executable application, and one concrete
-App Contract.
+## Build your backend once. Use it across your app.
 
-Version availability: These pages are the beta.2 preview. Beta.2 is not
-published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
-released package contract.
+QUESTPIE is a TypeScript backend framework for apps built on PostgreSQL.
+Define your data, permissions, and operations in TypeScript. QUESTPIE generates
+the typed client and HTTP endpoints from those definitions. Enable OpenAPI and
+MCP to generate API documentation and tools that AI clients can call.
+
+You write the application logic. You do not maintain another set of input
+types, endpoint handlers, and tool schemas for each way of calling it.
+
+These pages are the beta.2 preview. Beta.2 is not published. The
+[frozen beta.1 inventory](/docs/v4/beta1-release) remains the released package
+contract.
 
 [Review the beta.2 preview inventory](/docs/v4/beta2-release)
 
-## The product
+## One operation, several ways to use it
 
-QUESTPIE owns the application semantics between TypeScript source and
-PostgreSQL. It owns Operation execution, transactions, Policy, durable change
-capture, Live Query recomputation, generated clients, Migrations, and Runtime
-observability.
+Take a Barbershop booking screen. It needs to list appointments, accept a
+booking, and show changes made by another member of staff.
 
-## Static application composition
+You define the data and its permissions, then write a Query to list
+appointments. Mark that Query `network: true` to make it callable over the
+network. From a Query named `appointments.list`, QUESTPIE derives:
 
-Every Resource has a stable Resource Identity, one Owner, and a recorded Origin.
-A Package can add an authorized Augmentation. Import order cannot change the
-application shape. The compiler rejects a duplicate Resource Identity and an
-unauthorized change. Installing a Package does not activate its composition.
+| Surface               | Generated result                                                                  |
+| --------------------- | --------------------------------------------------------------------------------- |
+| TypeScript client     | A scoped `queries["appointments.list"]` call with inferred input and result types |
+| HTTP                  | `GET /_questpie/query/appointments.list`                                          |
+| OpenAPI, when enabled | The endpoint, parameters, response types, and declared errors                     |
+| MCP, when enabled     | A `query.appointments.list` tool with generated arguments and result types        |
 
-The compiler produces a readable Compiled Manifest and a concrete App Contract.
-Application types do not expose Drizzle, Kysely, or a recursive generic
-builder state.
+Describe the operation once. OpenAPI and MCP use that shared documentation.
+Their calls run the same operation, not copies of its handler.
 
-[Compose Definitions and Packages](/docs/v4/definition-composition)
+Enabling MCP exposes every network operation in a public tool catalogue.
+Beta.2 has no per-operation MCP switch. Policy checks each call, not which
+tool names and descriptions a client can discover.
 
-## PostgreSQL is part of the contract
+A Mutation owns the PostgreSQL transaction that books an appointment. QUESTPIE
+recomputes supported live Queries after relevant data changes and sends each
+successful authorized result. A failed recompute publishes no partial update.
+The screen does not need a separate update-event schema.
 
-QUESTPIE uses PostgreSQL transactions, Constraints, Indexes, change capture,
-and durable coordination directly. QUESTPIE v4.0 runs only on PostgreSQL.
-Applications can run on local PostgreSQL or a managed service that passes the
-QUESTPIE provider profile.
+See [HTTP and OpenAPI](/docs/v4/operation-http-and-openapi),
+[MCP tools](/docs/v4/basic-mcp), and
+[Live Queries](/docs/v4/realtime) for the exact behavior and limits.
 
-The schema workflow has three explicit facts:
+## Keep permissions in one place
 
-- The Compiled Manifest is the desired state.
-- Committed migrations are the reviewed history.
-- The Schema Fingerprint is the actual database state.
+A Collection describes stored data, such as appointments. Its Fields describe
+values such as the appointment time. A Policy defines who can read or change
+that data. Generated clients, server-side calls, background workers, and live
+updates use the same Policy-aware data operations.
 
-The workflow is compile, plan, review, commit, apply, and verify Drift.
-QUESTPIE does not push an unrecorded schema.
+That matters when you add another way into the app. Exposing an operation as
+an MCP tool does not require a separate permission system. A live Query checks
+authorization again when it recomputes.
 
-[Define data and use the schema lifecycle](/docs/v4/schema-lifecycle)
+You still choose your authentication system and write your Policy rules.
+Passing a tenant ID does not grant access to that tenant's data.
 
-QUESTPIE compiles exact values, structural filters, Relations, and cursor pages.
+[Connect identity and write Policy](/docs/v4/context-and-policy)
 
-[Data and structural Queries](/docs/v4/data-and-queries)
+## Add background work without a second queue
 
-## Context and Policy
+Accept a Job in the same transaction as a business write. The write and the
+intent to run that Job commit together. The QUESTPIE Runtime runs the worker
+and owns its leases, retries, and cancellation.
 
-Every root Execution enters with an explicit ingress Principal. QUESTPIE then
-owns the Principal, Tenant, Authority, and Policy boundary.
+Use a static UTC schedule for recurring work, such as a sweep that finds
+appointments needing reminders. Dynamic due times stay in your application's
+rows.
 
-Each root Execution resolves one immutable Context before application work
-runs. Collection-bound Policy checks current relational evidence and applies
-the same authorization decision to every execution surface.
+Your integration must still make external effects safe to retry. QUESTPIE
+cannot guarantee that an email provider sends a message exactly once.
 
-[Resolve Context and authorize with Policy](/docs/v4/context-and-policy)
+[Run Jobs and Reactions](/docs/v4/durable-reactions), or
+[write a scheduled sweep](/docs/v4/scheduled-jobs).
 
-## Operations
+## Keep control of your frontend
 
-QUESTPIE has six executable Definition kinds: Query, Mutation, Action, Route,
-Reaction, and Job. They import application-specialized factories from
-`#questpie/app`; the compiler binds every handler statically in a matched
-Runtime Build.
+Use the generated TypeScript client with your frontend. For React, the
+optional `questpie/react-query` adapter supplies native TanStack Query options,
+inferred types, and cache keys. TanStack owns the cache and hooks. The adapter
+uses QUESTPIE's existing live transport for supported browser Queries.
 
-A Mutation owns its PostgreSQL transaction and can add durable work to the same
-commit. Query reads and Mutation writes use exact generated contracts and the
-same Policy, error, consistency, and observation engine through direct and
-network calls.
+Your application owns its screens, forms, authentication flow, and optimistic
+presentation. There is no generated admin UI. Whenever credentials or Context
+change, retire the old client scope and its cache, then create a fresh scope.
+This applies even when the user and tenant IDs stay the same.
 
-[Define executable application behavior](/docs/v4/executable-definitions)
+[Build a ticket screen with React Query](/docs/v4/react-query-basic) shows a
+live read and a typed Mutation using the ticket data from the data guide.
+It assumes an existing backend and authenticated session.
+[Add TanStack Start SSR and hydration](/docs/v4/react-query-start) when the
+screen also renders on the server.
 
-[Build Queries and Mutations](/docs/v4/queries-and-mutations)
+## Know what you are choosing
 
-[Call Operations through canonical HTTP and generate OpenAPI](/docs/v4/operation-http-and-openapi)
+QUESTPIE fits a TypeScript app that needs shared data permissions, live screens,
+and background work. Its compiler generates the code that connects those parts;
+it does not replace your domain logic.
 
-[Expose documented Operations as MCP tools](/docs/v4/basic-mcp)
+PostgreSQL is required. Run the long-lived QUESTPIE Runtime on your own
+infrastructure or alongside a compatible managed PostgreSQL service. You own
+hosting, database operations, and your external integrations.
 
-## Realtime
+There is a build step. You review and apply migrations explicitly; starting
+the server does not update the database schema for you. Collection lifecycle
+functions use a restricted TypeScript subset, not arbitrary JavaScript.
+Upgrading an existing installation to beta.2 also requires stopping incompatible
+Runtime instances; it is not a rolling upgrade. Follow the
+[deployment procedure](/docs/v4/runtime-and-studio) before restarting them.
 
-A supported Query becomes a Live Query through `.watch` on the same generated
-method. QUESTPIE observes the reads that each Execution actually reaches,
-reauthorizes every recomputation, and recovers committed invalidations from a
-transactional PostgreSQL Change Ledger. Generated clients receive complete
-results. A client resumes with an opaque Resume Token or starts again with a
-fresh result.
+Beta.2 has fixed Query and realtime limits: for example, one inverse child
+list per Query and 64 active watches per Principal (the caller identity).
+It includes neither Studio nor built-in Files or Search. Offline persistence, live infinite lists, and a
+workflow engine are also outside this beta.
+[Check the full scope before choosing it](/docs/v4/beta2-release).
 
-[Watch Queries in realtime](/docs/v4/realtime)
+## Choose your next step
 
-[Use framework-neutral reactive Query state](/docs/v4/reactive-query-resources)
+For a new backend, start with
+[your application configuration](/docs/v4/definition-composition),
+then [data and migrations](/docs/v4/schema-lifecycle).
+[Queries and Mutations](/docs/v4/queries-and-mutations) covers CRUD, validation,
+and transactions. [Data and structural Queries](/docs/v4/data-and-queries)
+covers relations and pagination.
 
-## Durable work
+The reference uses six executable Definition kinds: Query, Mutation, Action,
+Route, Reaction, and Job.
+[Learn when to use each one](/docs/v4/executable-definitions) and
+[where its imports come from](/docs/v4/semantic-kernels-and-public-surface).
 
-A Mutation accepts typed Reaction intent in its PostgreSQL transaction. A
-worker claims the committed Durable Run with a fenced Lease Token, creates a
-fresh authorized Execution, and retries under a bounded policy. Stable Effect
-Identity makes a provider idempotency contract survive Physical Attempts; an
-unknowable provider outcome remains explicitly ambiguous.
-
-[Run a durable Reaction after commit](/docs/v4/durable-reactions)
-
-[Run multiple instances without optional authority](/docs/v4/multi-instance)
-explains arbitrary routing, SSE reconnect, and rolling compatibility with
-PostgreSQL as the sole durable truth.
-
-## Services
-
-Services own application or Execution lifetime with compiler-checked dependency
-and effect boundaries. The compiler rejects a cycle, an application Service
-that depends on an execution Service, and a transaction-safe Service that
-depends on an external-effect Service.
-
-[Compose Services](/docs/v4/services)
-
-## Public API ownership
-
-Structural builders and restricted grammars come from `questpie`. Executable
-factories come from the current `#questpie/app` or isolated
-`#questpie/package` contract. Clients come from `#questpie/client`. One codec,
-relational planner, durable kernel, and Fetch kernel expose only valid
-capability-specific views.
-
-[Use the QUESTPIE v4 API surface](/docs/v4/semantic-kernels-and-public-surface)
-
-## Runtime and Studio
-
-`questpie build` publishes one immutable application bundle. Reviewed
-migrations apply explicitly before `questpie start`. The standalone Runtime
-verifies the bundle, schema, executable bindings, and compatibility before it
-accepts Operations, watches, or Reaction claims.
-
-Generated clients use immutable Context scopes. Direct, Fetch,
-generated-client, nested, recompute, worker, and Studio calls use the same
-Execution, Policy, Operation, transaction, and error engine. One safe Execution Envelope correlates
-append-only operational events. Studio reads application data through ordinary
-generated Operations and Policy.
-
-[Run and inspect the application](/docs/v4/runtime-and-studio)
-
-[Export Runtime telemetry with OpenTelemetry](/docs/v4/opentelemetry)
+When the app works locally, follow
+[build, migration, and startup](/docs/v4/runtime-and-studio),
+[multi-instance operation](/docs/v4/multi-instance), and
+[OpenTelemetry setup](/docs/v4/opentelemetry).

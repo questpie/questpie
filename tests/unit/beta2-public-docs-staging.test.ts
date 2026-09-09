@@ -7,6 +7,26 @@ async function page(name: string): Promise<string> {
 	return Bun.file(resolve(docsRoot, name)).text();
 }
 
+test("the overview leads readers to application guides and keeps its links local", async () => {
+	const source = await page("index.mdx");
+	for (const target of [
+		"definition-composition",
+		"context-and-policy",
+		"react-query-basic",
+		"react-query-start",
+		"scheduled-jobs",
+		"beta2-release",
+	]) {
+		expect(source).toContain(`(/docs/v4/${target})`);
+	}
+	for (const match of source.matchAll(/\]\(\/docs\/v4\/([a-z0-9-]+)\)/gu)) {
+		expect(await Bun.file(resolve(docsRoot, `${match[1]}.mdx`)).exists()).toBe(
+			true,
+		);
+	}
+	expect(source).not.toContain("Studio reads application data");
+});
+
 test("native React Query tutorials are discoverable and retain preview staging", async () => {
 	const navigation = await Bun.file(resolve(docsRoot, "meta.json")).json();
 	const overview = await page("react-query.mdx");
