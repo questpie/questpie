@@ -4,6 +4,7 @@ import { runFirefoxJourney } from "../../fixtures/team-support-desk/tracer/brows
 
 test("reports the exact Job accepted by the browser Mutation", async () => {
 	const reports: Array<Readonly<Record<string, unknown>>> = [];
+	const commands: string[] = [];
 	const originalDocument = globalThis.document;
 	const originalFetch = globalThis.fetch;
 	Object.defineProperty(globalThis, "document", {
@@ -31,29 +32,30 @@ test("reports the exact Job accepted by the browser Mutation", async () => {
 		await runFirefoxJourney({
 			commentBody: "browser comment",
 			desk: {
-				actions: {
-					"notification.sendTicketSummary": async () => ({
+				queries: { "tickets.detail": async () => ticket },
+			} as never,
+			ui: {
+				addComment: async () => {
+					commands.push("comment");
+					return { runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7181" };
+				},
+				sendSummary: async () => {
+					commands.push("summary");
+					return {
 						effectId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7191",
+						effectKey: "browser:summary:test",
 						providerReceipt: "receiver:1",
 						ticketReference: ticket.reference,
-					}),
+					};
 				},
-				mutations: {
-					"ticket.addComment": async () => ({
-						comment: {},
-						job: {
-							resource: "job:ticket.slaFollowUp",
-							runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7181",
-						},
-					}),
-					"ticket.close": async () => ticket,
-					"ticket.create": async () => {
-						throw Object.freeze({ code: "INVALID_TICKET", status: 422 });
-					},
-					"ticket.reopen": async () => ticket,
+				transition: async (kind) => {
+					commands.push(kind);
 				},
-			} as never,
-			executeTicketOperation: async (_label, operation) => operation(),
+				rejectCreate: async () => {
+					commands.push("rejectCreate");
+					return { code: "INVALID_TICKET", status: 422 };
+				},
+			},
 			loadFilteredQueue: async () => undefined,
 			reference: ticket.reference,
 			role: "agent",
@@ -76,4 +78,11 @@ test("reports the exact Job accepted by the browser Mutation", async () => {
 		jobRunId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7181",
 		phase: "firefox-complete",
 	});
+	expect(commands).toEqual([
+		"comment",
+		"summary",
+		"close",
+		"reopen",
+		"rejectCreate",
+	]);
 });

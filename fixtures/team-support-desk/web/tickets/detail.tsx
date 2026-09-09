@@ -11,13 +11,14 @@ type TicketDetailPanelProps = Readonly<{
 	detailMessage: string;
 	detailTitle: string;
 	labels: LabelPage | null;
+	pendingComment: string | undefined;
 	onAssign: () => void;
 	onComment: (body: string, form: HTMLFormElement) => void;
 	onEdit: () => void;
 	onSummary: () => void;
 	onTransition: () => void;
 	resourceMessage: string;
-	resourceState: "failed" | "pending" | "ready" | "reconnecting" | "reset";
+	resourceState: "failed" | "pending" | "ready";
 	session: SupportSession;
 	ticket: TicketDetail | null;
 }>;
@@ -29,6 +30,7 @@ export function TicketDetailPanel({
 	detailMessage,
 	detailTitle,
 	labels,
+	pendingComment,
 	onAssign,
 	onComment,
 	onEdit,
@@ -221,6 +223,12 @@ export function TicketDetailPanel({
 							</li>
 						))}
 					</ol>
+					{pendingComment === undefined ? null : (
+						<aside data-pending-comment role="status" aria-live="polite">
+							<strong>Sending comment…</strong>
+							<p>{pendingComment}</p>
+						</aside>
+					)}
 					<form className="comment-form" onSubmit={submitComment}>
 						<label htmlFor="comment-body">Add a comment</label>
 						<textarea

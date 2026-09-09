@@ -1,3 +1,6 @@
+import { QueryClient } from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
+
 import { createClient } from "#questpie/client";
 
 export function createSupportDesk(
@@ -7,6 +10,18 @@ export function createSupportDesk(
 }
 
 export type SupportDesk = ReturnType<typeof createSupportDesk>;
+
+export function createSupportDeskOwner(
+	context: Parameters<typeof createSupportDesk>[0],
+) {
+	const desk = createSupportDesk(context);
+	const cache = new QueryClient();
+	return { desk, cache, api: createQueryAdapter(desk, cache) };
+}
+
+export type SupportDeskAdapter = ReturnType<
+	typeof createSupportDeskOwner
+>["api"];
 
 // The generated client does not yet export named operation result aliases.
 // These intentionally awkward application-local aliases are DX evidence, not

@@ -1,106 +1,143 @@
-import { useQueryResource } from "questpie/react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import type { SupportSession } from "../auth/client";
-import type { SupportDesk } from "../questpie";
+import type { SupportDesk, SupportDeskAdapter } from "../questpie";
 import { errorMessage } from "../shared/format";
 import { TicketDetailPanel } from "./detail";
 import { EditTicketDialog } from "./dialogs";
 import { ticketEditInput } from "./edit-input";
 
 type SelectedTicketProps = Readonly<{
+	api: SupportDeskAdapter;
 	desk: SupportDesk;
 	session: SupportSession;
 	ticketId: string;
 }>;
 
 export function SelectedTicket({
+	api,
 	desk,
 	session,
 	ticketId,
 }: SelectedTicketProps) {
-	const detailSnapshot = useQueryResource(
-		desk.queries["tickets.detail"].observe({ id: ticketId }),
+	const detail = useQuery(
+		api.queries["tickets.detail"].options({ id: ticketId }),
 	);
-	const labelsSnapshot = useQueryResource(
-		desk.queries["labels.page"].observe({
+	const labelQuery = useQuery(
+		api.queries["labels.page"].options({
 			after: null,
 			first: 50,
 			ticketId,
 		}),
 	);
-	const [busy, setBusy] = useState(false);
-	const [actionStatus, setActionStatus] = useState("");
-	const [actionKind, setActionKind] = useState<"ok" | "error">("ok");
-	const [editError, setEditError] = useState("");
+	const assign = useMutation(api.mutations["ticket.assign"].options());
+	const comment = useMutation({
+		...api.mutations["ticket.addComment"].options(),
+		onMutate: (input) => ({ body: input.body }),
+	});
+	const edit = useMutation(api.mutations["ticket.edit"].options());
+	const close = useMutation(api.mutations["ticket.close"].options());
+	const reopen = useMutation(api.mutations["ticket.reopen"].options());
+	const [action, setAction] = useState<{
+		pending: boolean;
+		kind: "ok" | "error";
+		message: string;
+		submittedAt: number;
+	} | null>(null);
 	const editDialog = useRef<HTMLDialogElement>(null);
 
-	const snapshots = [detailSnapshot, labelsSnapshot] as const;
-	const failure = snapshots.find((snapshot) => snapshot.kind === "failed");
-	const reconnecting = snapshots.some(
-		(snapshot) =>
-			snapshot.kind !== "failed" && snapshot.connection.kind === "reconnecting",
-	);
-	const reset = snapshots.some(
-		(snapshot) =>
-			snapshot.kind === "ready" && snapshot.delivery.kind === "reset",
-	);
-	const pending = snapshots.some((snapshot) => snapshot.kind === "pending");
+	const queries = [detail, labelQuery];
+	const failure = queries.find((query) => query.isError);
 	const resourceState = failure
 		? "failed"
-		: reconnecting
-			? "reconnecting"
-			: reset
-				? "reset"
-				: pending
-					? "pending"
-					: "ready";
+		: queries.some((query) => query.isPending)
+			? "pending"
+			: "ready";
 	const resourceMessage = failure
-		? `Live ticket unavailable (${failure.failure.code}).`
-		: reconnecting
-			? "Reconnecting while retaining the last authorized ticket view…"
-			: reset
-				? "Ticket view replaced after an authority or deployment reset."
-				: pending
-					? "Loading ticket and activity…"
-					: "Live ticket view is current.";
-	const ticket = detailSnapshot.kind === "ready" ? detailSnapshot.value : null;
-	const labels = labelsSnapshot.kind === "ready" ? labelsSnapshot.value : null;
+		? `Live ticket unavailable (${errorMessage(failure.error)}).`
+		: resourceState === "pending"
+			? "Loading ticket and activity…"
+			: "Live ticket view is current.";
+	const ticket = detail.isSuccess ? detail.data : null;
+	const labels = labelQuery.isSuccess ? labelQuery.data : null;
+	const commands = [
+		{ label: "Assigning ticket", state: assign },
+		{ label: "Adding comment", state: comment },
+		{ label: "Saving changes", state: edit },
+		{ label: "Closing ticket", state: close },
+		{ label: "Reopening ticket", state: reopen },
+	];
+	const latest = commands.reduce((left, right) =>
+		right.state.submittedAt > left.state.submittedAt ? right : left,
+	);
+	const showAction =
+		action !== null && action.submittedAt >= latest.state.submittedAt;
+	const busy =
+		action?.pending === true || commands.some(({ state }) => state.isPending);
+	const actionKind = showAction
+		? action.kind
+		: latest.state.isError
+			? "error"
+			: "ok";
+	const actionStatus = showAction
+		? action.message
+		: latest.state.isPending
+			? `${latest.label}…`
+			: latest.state.isError
+				? `${latest.label}: ${errorMessage(latest.state.error)}.`
+				: latest.state.isSuccess
+					? `${latest.label} complete.`
+					: "";
+	// Pending intent is presentation only. Never merge it into the authorized cache.
+	const pendingComment =
+		ticket && comment.isPending && comment.variables.ticketId === ticket.id
+			? comment.context?.body
+			: undefined;
 
-	async function execute<Output>(
-		label: string,
-		operation: () => Promise<Output>,
-	): Promise<Output> {
-		setBusy(true);
-		setActionKind("ok");
-		setActionStatus(`${label}…`);
+	async function sendSummary() {
+		if (!ticket) return;
+		const submittedAt = Date.now();
+		setAction({
+			pending: true,
+			kind: "ok",
+			message: "Sending summary…",
+			submittedAt,
+		});
 		try {
-			const output = await operation();
-			setActionStatus(`${label} complete.`);
-			return output;
+			const effectKey = `browser:summary:${ticket.reference}:${crypto.randomUUID()}`;
+			await desk.actions["notification.sendTicketSummary"](
+				{ ticketId: ticket.id },
+				{ effectKey, timeoutMilliseconds: 3_000 },
+			);
+			setAction({
+				pending: false,
+				kind: "ok",
+				message: "Sending summary complete.",
+				submittedAt,
+			});
 		} catch (error) {
-			setActionKind("error");
-			setActionStatus(`${label} failed: ${errorMessage(error)}.`);
-			throw error;
-		} finally {
-			setBusy(false);
+			setAction({
+				pending: false,
+				kind: "error",
+				message: `Sending summary failed: ${errorMessage(error)}.`,
+				submittedAt,
+			});
 		}
 	}
 
-	const detailTitle =
-		detailSnapshot.kind === "ready"
-			? detailSnapshot.value === null
-				? "Ticket unavailable"
-				: detailSnapshot.value.summary
-			: detailSnapshot.kind === "failed"
-				? "Ticket unavailable"
-				: "Loading ticket…";
-	const detailMessage =
-		detailSnapshot.kind === "failed"
-			? `The live Query ended with ${detailSnapshot.failure.code}.`
-			: detailSnapshot.kind === "ready"
-				? "The ticket no longer exists or is outside your access."
-				: "Fetching details and activity.";
+	const detailTitle = detail.isSuccess
+		? detail.data === null
+			? "Ticket unavailable"
+			: detail.data.summary
+		: detail.isError
+			? "Ticket unavailable"
+			: "Loading ticket…";
+	const detailMessage = detail.isError
+		? `The live Query ended with ${errorMessage(detail.error)}.`
+		: detail.isSuccess
+			? "The ticket no longer exists or is outside your access."
+			: "Fetching details and activity.";
 
 	return (
 		<>
@@ -111,54 +148,30 @@ export function SelectedTicket({
 				detailMessage={detailMessage}
 				detailTitle={detailTitle}
 				labels={labels}
+				pendingComment={pendingComment}
 				onAssign={() => {
 					if (!ticket) return;
-					void execute("Assigning ticket", () =>
-						desk.mutations["ticket.assign"](
-							{
-								assigneeMembershipId: session.membershipId,
-								ticketId: ticket.id,
-							},
-							{ callId: `browser:assign:${crypto.randomUUID()}` },
-						),
-					).catch(() => undefined);
+					assign.mutate({
+						assigneeMembershipId: session.membershipId,
+						ticketId: ticket.id,
+					});
 				}}
 				onComment={(body, form) => {
 					if (!ticket) return;
-					void execute("Adding comment", () =>
-						desk.mutations["ticket.addComment"](
-							{ body, ticketId: ticket.id },
-							{ callId: `browser:comment:${crypto.randomUUID()}` },
-						),
-					)
-						.then(() => form.reset())
-						.catch(() => undefined);
+					comment.mutate(
+						{ body, ticketId: ticket.id },
+						{ onSuccess: () => form.reset() },
+					);
 				}}
 				onEdit={() => {
-					setEditError("");
+					edit.reset();
 					editDialog.current?.showModal();
 				}}
-				onSummary={() => {
-					if (!ticket) return;
-					const effectKey = `browser:summary:${ticket.reference}:${crypto.randomUUID()}`;
-					void execute("Sending summary", () =>
-						desk.actions["notification.sendTicketSummary"](
-							{ ticketId: ticket.id },
-							{ effectKey, timeoutMilliseconds: 3_000 },
-						),
-					).catch(() => undefined);
-				}}
+				onSummary={() => void sendSummary()}
 				onTransition={() => {
 					if (!ticket) return;
-					const close = ticket.status !== "closed";
-					void execute(close ? "Closing ticket" : "Reopening ticket", () =>
-						desk.mutations[close ? "ticket.close" : "ticket.reopen"](
-							{ ticketId: ticket.id },
-							{
-								callId: `browser:${close ? "close" : "reopen"}:${crypto.randomUUID()}`,
-							},
-						),
-					).catch(() => undefined);
+					const transition = ticket.status === "closed" ? reopen : close;
+					transition.mutate({ ticketId: ticket.id });
 				}}
 				resourceMessage={resourceMessage}
 				resourceState={resourceState}
@@ -168,18 +181,12 @@ export function SelectedTicket({
 			<EditTicketDialog
 				busy={busy}
 				dialogRef={editDialog}
-				error={editError}
+				error={edit.isError ? errorMessage(edit.error) : ""}
 				onSubmit={(data) => {
 					if (!ticket) return;
-					setEditError("");
-					void execute("Saving changes", () =>
-						desk.mutations["ticket.edit"](
-							ticketEditInput(session.role, data, ticket.id),
-							{ callId: `browser:edit:${crypto.randomUUID()}` },
-						),
-					)
-						.then(() => editDialog.current?.close())
-						.catch((error: unknown) => setEditError(errorMessage(error)));
+					edit.mutate(ticketEditInput(session.role, data, ticket.id), {
+						onSuccess: () => editDialog.current?.close(),
+					});
 				}}
 				role={session.role}
 				ticket={ticket}

@@ -59,7 +59,7 @@ External release evidence remains honest:
 ## Team Support Desk reference application
 
 The second application-facing v4 consumer is implemented at
-`fixtures/team-support-desk` through code head `5fdb5adac`. It is a
+`fixtures/team-support-desk`. It is a
 production-like, tenant-aware support desk built only on the public v4
 interface. Organization, Membership, Team, Ticket, Comment, and Label
 Collections are split by domain locality with their Policy and Operation
@@ -104,8 +104,7 @@ The tracer exposed and closed four narrow framework correctness defects:
   already authorized Ticket snapshot for Mutation-owned Job input instead of a
   server-value-only touch update.
 
-The Better Auth extension tracer passes locally on PostgreSQL 17 and Firefox
-with 60 assertions. It includes idempotent auth migration/seed, generated-client
+The original Better Auth extension tracer established idempotent auth migration/seed, generated-client
 browser use with a real Better Auth cookie, auth session survival plus Job
 lease-expiry recovery after a hard host restart, direct generated operations,
 the real HTTP Action receiver, signed webhook replay, delayed Job inspection,
@@ -113,17 +112,17 @@ retry, cancellation persistence, and a customer edit that omits the staff-only
 priority Field. The concrete application friction and
 proposed deeper seams—including the separate bounded auth pool, absent typed
 Service configuration, and runtime-package bundling workaround—is recorded in
-`docs/v4/implementation/team-support-desk/DX-EVIDENCE.md`; no React adapter or
-new public client interface was added.
+`docs/v4/implementation/team-support-desk/DX-EVIDENCE.md`. The subsequent native
+React Query migration is recorded in
+`docs/v4/implementation/native-react-query/NRQ-04-EVIDENCE.md`; that consumer now
+uses a credential-owned QueryClient and generated native Query/Mutation options.
 
-The final `quality:release`, PostgreSQL 17/Firefox tracer, Standards review, and
-Spec review pass. The manual test host is loopback-only on `127.0.0.1:43120` and
-Tailscale Serve adds only
-`https://devbox.tail9c2c07.ts.net:8444/ -> http://127.0.0.1:43120`; existing
-ports 443 and 8443 remain unchanged and Funnel is not enabled. The disposable
-PostgreSQL 17 container listens on loopback port 55432. Remove only the desk
-mapping with `sudo tailscale serve --https=8444 off` when the manual session is
-finished.
+Follow the current verification and manual-preview frontier under Immediate
+continuation. Inspect live port and tailnet ownership before a new manual
+session; historical host addresses are not authority to stop a service. The
+automated Desk runner owns a fresh PostgreSQL container, reserves only receiver
+port 43121 and asks the OS for an app port. It never uses the preserved preview
+database.
 
 ## Runnable regression skeleton
 
@@ -879,8 +878,16 @@ skips and zero failures. Independent review exposed two test gaps: actual
 cross-user SSR isolation and parent-owned timeout cleanup. Both have falsifying
 negative controls and passing repairs; Standards and Spec have no open finding.
 Final Start baseline passes 50 assertions, faults 45, credentials 26, and all
-three readiness scenarios. NRQ-02 and NRQ-03 are complete. Next: NRQ-04 golden UI,
-then NRQ-05 packed/docs/skills migration. No aggregate beta.2 readiness is claimed.
+three readiness scenarios. NRQ-02 and NRQ-03 are complete. NRQ-04's golden UI and
+typed pending-intent consumer now pass the complete PostgreSQL 17/Firefox journey
+(111 assertions), isolated DOM controls (10 tests / 103 assertions), strict types
+and independent review. The pre-review-repair release gate passes 1,219 tests,
+197 gated skips and zero failures; the affected browser/DOM checks pass again
+after the concrete Action-handler and unused-port repairs. See
+[NRQ-04 evidence](docs/v4/implementation/native-react-query/NRQ-04-EVIDENCE.md).
+Next: NRQ-05 real packed native consumers, public tutorials/skills and old-hook
+deletion. The shared public how-to exit is still required; no aggregate beta.2
+readiness is claimed.
 The merge control verifies both acceptance records, skill validation, docs
 typecheck/build, public-package build and 33 affected tests / 154 assertions.
 The initial test attempt lacked built package output in the fresh worktree;
@@ -994,8 +1001,9 @@ The remaining frontier is:
   native tests. Its full-source tracer now uses one ordinary Bun child for both
   original and relocated compiles after an independently reproduced Bun test-host
   dependency-resolution defect. See the [current evidence](docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md).
-  Its frozen repetitions and complete broad gate now pass. Finish NRQ-02–06's lifetime/Start browser, golden UI,
-  packed/docs/skills migration and old-hook deletion. Do not repeat architecture
+  Its frozen repetitions and complete broad gate now pass. Native lifetime,
+  Start and golden UI have production evidence. Finish NRQ-05/06 packed tutorials,
+  docs/skills migration, old-hook deletion and combined gates. Do not repeat architecture
   acceptance or treat this extraction as beta.2 readiness;
 - integrate the focused repairs, bind exact final PostgreSQL/browser and quality
   evidence, and produce two byte-identical package dry-runs;

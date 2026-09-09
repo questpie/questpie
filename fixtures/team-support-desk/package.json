@@ -14,6 +14,7 @@
 		"tracer": "bun tracer/host.ts"
 	},
 	"dependencies": {
+		"@tanstack/react-query": "5.102.8",
 		"better-auth": "1.7.1",
 		"pg": "8.23.0",
 		"questpie": "workspace:*",

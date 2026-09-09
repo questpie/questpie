@@ -1,10 +1,9 @@
 import { type FormEvent, useState } from "react";
 
 import { demoAuthIdentities } from "../../src/auth/demo-identities";
-import { DeskApplication } from "../app";
-import { createSupportDesk } from "../questpie";
 import { errorMessage } from "../shared/format";
 import { authClient, supportSession } from "./client";
+import { DeskSession } from "./desk-session";
 
 async function signIn(email: string, password: string): Promise<void> {
 	const result = await authClient.signIn.email({ email, password });
@@ -138,11 +137,12 @@ export function AuthGate() {
 		);
 
 	return (
-		<DeskApplication
-			desk={createSupportDesk({
-				membershipId: session.membershipId,
-				organizationId: session.organizationId,
-			})}
+		<DeskSession
+			key={JSON.stringify([
+				sessionQuery.data.session.id,
+				session.membershipId,
+				session.organizationId,
+			])}
 			onSignOut={() => authClient.signOut().then(() => undefined)}
 			session={session}
 		/>

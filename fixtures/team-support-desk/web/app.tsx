@@ -1,8 +1,8 @@
-import { useQueryResource } from "questpie/react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import type { SupportSession } from "./auth/client";
-import type { SupportDesk } from "./questpie";
+import type { SupportDesk, SupportDeskAdapter } from "./questpie";
 import { errorMessage } from "./shared/format";
 import { CreateTicketDialog } from "./tickets/dialogs";
 import { TicketQueue } from "./tickets/queue";
@@ -10,12 +10,14 @@ import { SelectedTicket } from "./tickets/selected";
 
 type DeskApplicationProps = Readonly<{
 	desk: SupportDesk;
+	api: SupportDeskAdapter;
 	onSignOut: () => Promise<void>;
 	session: SupportSession;
 }>;
 
 export function DeskApplication({
 	desk,
+	api,
 	onSignOut,
 	session,
 }: DeskApplicationProps) {
@@ -24,50 +26,48 @@ export function DeskApplication({
 	const [statusFilter, setStatusFilter] = useState("");
 	const [teamFilter, setTeamFilter] = useState("");
 	const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-	const [creating, setCreating] = useState(false);
-	const [createError, setCreateError] = useState("");
 	const createDialog = useRef<HTMLDialogElement>(null);
 	const after = cursors[pageIndex] ?? null;
 
-	const queueResource = desk.queries["tickets.queue"].observe({
-		after,
-		first: 8,
-		statuses: statusFilter ? [statusFilter] : null,
-		teamIds: teamFilter ? [teamFilter] : null,
+	const queue = useQuery(
+		api.queries["tickets.queue"].options({
+			after,
+			first: 8,
+			statuses: statusFilter ? [statusFilter] : null,
+			teamIds: teamFilter ? [teamFilter] : null,
+		}),
+	);
+	const teamsQuery = useQuery(
+		api.queries["teams.list"].options({
+			after: null,
+			first: 100,
+			organizationId: session.organizationId,
+		}),
+	);
+	const create = useMutation({
+		...api.mutations["ticket.create"].options(),
+		onSuccess: (created) => {
+			createDialog.current?.close();
+			createDialog.current?.querySelector("form")?.reset();
+			setCursors([null]);
+			setPageIndex(0);
+			setSelectedTicketId(created.id);
+		},
 	});
-	const queueSnapshot = useQueryResource(queueResource);
-	const teamsResource = desk.queries["teams.list"].observe({
-		after: null,
-		first: 100,
-		organizationId: session.organizationId,
-	});
-	const teamsSnapshot = useQueryResource(teamsResource);
-	const page = queueSnapshot.kind === "ready" ? queueSnapshot.value : null;
-	const teams = teamsSnapshot.kind === "ready" ? teamsSnapshot.value.nodes : [];
-	const queueKind =
-		queueSnapshot.kind === "failed"
-			? "failed"
-			: queueSnapshot.connection.kind === "reconnecting"
-				? "reconnecting"
-				: queueSnapshot.kind === "pending"
-					? "pending"
-					: queueSnapshot.delivery.kind === "reset"
-						? "reset"
-						: "ready";
-	const queueMessage =
-		queueSnapshot.kind === "failed"
-			? `Live queue unavailable (${queueSnapshot.failure.code}).`
-			: queueSnapshot.kind === "pending"
-				? queueSnapshot.connection.kind === "reconnecting"
-					? `Reconnecting to the live queue (attempt ${queueSnapshot.connection.attempt})…`
-					: "Loading live queue…"
-				: queueSnapshot.connection.kind === "reconnecting"
-					? `Reconnecting while retaining ${queueSnapshot.value.nodes.length} authorized ticket${queueSnapshot.value.nodes.length === 1 ? "" : "s"}…`
-					: queueSnapshot.delivery.kind === "reset"
-						? `Queue replaced after ${queueSnapshot.delivery.reason.replaceAll("-", " ")}.`
-						: queueSnapshot.value.nodes.length === 0
-							? "No tickets match these filters."
-							: `${queueSnapshot.value.nodes.length} ticket${queueSnapshot.value.nodes.length === 1 ? "" : "s"} on this page`;
+	const page = queue.isSuccess ? queue.data : null;
+	const teams = teamsQuery.isSuccess ? teamsQuery.data.nodes : [];
+	const queueKind = queue.isError
+		? "failed"
+		: queue.isPending
+			? "pending"
+			: "ready";
+	const queueMessage = queue.isError
+		? `Live queue unavailable (${errorMessage(queue.error)}).`
+		: page === null
+			? "Loading live queue…"
+			: page.nodes.length === 0
+				? "No tickets match these filters."
+				: `${page.nodes.length} ticket${page.nodes.length === 1 ? "" : "s"} on this page`;
 	async function searchTicket(reference: string): Promise<void> {
 		const match = await desk.queries["tickets.searchByReference"]({
 			reference,
@@ -131,9 +131,9 @@ export function DeskApplication({
 
 			<main className="workspace">
 				<TicketQueue
-					busy={creating}
+					busy={create.isPending}
 					onCreate={() => {
-						setCreateError("");
+						create.reset();
 						createDialog.current?.showModal();
 					}}
 					onNext={nextPage}
@@ -169,6 +169,7 @@ export function DeskApplication({
 				) : (
 					<SelectedTicket
 						desk={desk}
+						api={api}
 						key={selectedTicketId}
 						session={session}
 						ticketId={selectedTicketId}
@@ -177,31 +178,17 @@ export function DeskApplication({
 			</main>
 
 			<CreateTicketDialog
-				busy={creating}
+				busy={create.isPending}
 				dialogRef={createDialog}
-				error={createError}
+				error={create.isError ? errorMessage(create.error) : ""}
 				onSubmit={(data) => {
-					setCreating(true);
-					setCreateError("");
-					void desk.mutations["ticket.create"](
-						{
-							description: String(data.get("description")),
-							priority: String(data.get("priority")),
-							reference: String(data.get("reference")),
-							summary: String(data.get("summary")),
-							teamId: String(data.get("teamId")),
-						},
-						{ callId: `browser:create:${crypto.randomUUID()}` },
-					)
-						.then((created) => {
-							createDialog.current?.close();
-							createDialog.current?.querySelector("form")?.reset();
-							setCursors([null]);
-							setPageIndex(0);
-							setSelectedTicketId(created.id);
-						})
-						.catch((error: unknown) => setCreateError(errorMessage(error)))
-						.finally(() => setCreating(false));
+					create.mutate({
+						description: String(data.get("description")),
+						priority: String(data.get("priority")),
+						reference: String(data.get("reference")),
+						summary: String(data.get("summary")),
+						teamId: String(data.get("teamId")),
+					});
 				}}
 				teams={teams}
 			/>

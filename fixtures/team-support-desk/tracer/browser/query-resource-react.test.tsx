@@ -7,6 +7,36 @@ import { useQueryResource } from "questpie/react";
 import { StrictMode, act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 
+test("the credential-owned Desk subtree loads its queue and creates through one native owner", async () => {
+	const { testNativeDeskSession } = await import("./native-desk-session");
+	await testNativeDeskSession();
+}, 10_000);
+
+for (const outcome of [
+	"unknown",
+	"known-commit",
+	"rejected",
+	"success",
+] as const) {
+	test(`native pending comment intent never restores removed data after ${outcome}`, async () => {
+		const { testNativeDeskPendingIntent } =
+			await import("./native-desk-detail");
+		await testNativeDeskPendingIntent(outcome);
+	}, 10_000);
+}
+
+test("credential replacement retires pending native create work at equal Context", async () => {
+	const { testNativeDeskCredentialReplacement } =
+		await import("./native-desk-session");
+	await testNativeDeskCredentialReplacement();
+}, 10_000);
+
+test("a rejected pending comment cannot roll back another native control's committed edit", async () => {
+	const { testNativeDeskOverlappingIntent } =
+		await import("./native-desk-detail");
+	await testNativeDeskOverlappingIntent();
+}, 10_000);
+
 type Snapshot =
 	| Readonly<{ kind: "pending" }>
 	| Readonly<{ kind: "ready"; value: Readonly<{ title: string }> }>;
@@ -124,7 +154,7 @@ test("ships one optional-peer React subpath with no second client owner", () => 
 	);
 });
 
-test("Team Support Desk observes ticket comments through one detail resource", () => {
+test("Team Support Desk uses one native result owner for each displayed Query", () => {
 	const browserRoot = resolve(import.meta.dir, "../../web");
 	const sources = [
 		readFileSync(resolve(browserRoot, "app.tsx"), "utf8"),
@@ -133,11 +163,17 @@ test("Team Support Desk observes ticket comments through one detail resource", (
 		readFileSync(resolve(browserRoot, "tickets/selected.tsx"), "utf8"),
 	].join("\n");
 
-	expect(sources).toContain('from "questpie/react"');
-	expect(sources).toContain('["tickets.queue"].observe(');
-	expect(sources).toContain('["tickets.detail"].observe(');
-	expect(sources).toContain('["labels.page"].observe(');
+	expect(sources).toContain('from "@tanstack/react-query"');
+	expect(sources).toContain('from "questpie/react-query"');
+	expect(sources).toContain('["tickets.queue"].options(');
+	expect(sources).toContain('["tickets.detail"].options(');
+	expect(sources).toContain('["labels.page"].options(');
 	expect(sources).not.toMatch(
-		/comments\.page|commentsSnapshot|CommentPage|commentPagePlan|queueRequest|detailRequest|filterSnapshot|pageSnapshot|refreshCurrentQueue|loadQueue|selectTicket|\.watch\(/u,
+		/comments\.page|commentsSnapshot|CommentPage|commentPagePlan|queueRequest|detailRequest|filterSnapshot|pageSnapshot|refreshCurrentQueue|loadQueue|selectTicket|\.watch\(|\.observe\(|useQueryResource/u,
 	);
+	const gate = readFileSync(resolve(browserRoot, "auth/gate.tsx"), "utf8");
+	expect(gate).toContain("key={JSON.stringify([");
+	expect(gate).toContain("sessionQuery.data.session.id");
+	expect(gate).toContain("session.membershipId");
+	expect(gate).toContain("session.organizationId");
 });

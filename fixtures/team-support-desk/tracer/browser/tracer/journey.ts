@@ -1,20 +1,42 @@
 import { demoIds } from "../../../src/demo-ids";
 import type { SupportSession } from "../../../web/auth/client";
-import type { SupportDesk } from "../../../web/questpie";
+import type { SupportDesk, SupportDeskAdapter } from "../../../web/questpie";
 import { reportFixturePhase } from "../fixture-control";
 
-type JourneyTicket = Readonly<{
-	id: string;
-	reference: string;
-	status: string;
-	teamId: string;
-	updatedAt: Date;
-}>;
+type JourneyTicket = Pick<
+	NonNullable<Awaited<ReturnType<SupportDesk["queries"]["tickets.detail"]>>>,
+	"id" | "reference" | "status" | "teamId" | "updatedAt"
+>;
+type NarrowedError<Predicate> = Predicate extends ((
+	error: unknown,
+) => error is infer Failure)
+	? Failure
+	: never;
+type LifecycleRejection = Pick<
+	Extract<
+		NarrowedError<SupportDeskAdapter["mutations"]["ticket.create"]["isError"]>,
+		{ code: "INVALID_TICKET" }
+	>,
+	"code" | "status"
+>;
 
-type ExecuteTicketOperation = <Output>(
-	label: string,
-	operation: () => Promise<Output>,
-) => Promise<Output>;
+export type FirefoxUiCommands = Readonly<{
+	addComment(
+		body: string,
+	): Promise<
+		Pick<
+			Awaited<ReturnType<SupportDesk["mutations"]["ticket.addComment"]>>["job"],
+			"runId"
+		>
+	>;
+	sendSummary(): Promise<
+		Awaited<
+			ReturnType<SupportDesk["actions"]["notification.sendTicketSummary"]>
+		> & { effectKey: string }
+	>;
+	transition(kind: "close" | "reopen"): Promise<void>;
+	rejectCreate(teamId: string): Promise<LifecycleRejection>;
+}>;
 
 type CommentProjection = Readonly<{
 	comments: readonly Readonly<{ body?: string; id: string }>[];
@@ -87,7 +109,7 @@ export function firefoxJourneyFromUrl(
 export async function runFirefoxJourney(input: {
 	commentBody: string;
 	desk: SupportDesk;
-	executeTicketOperation: ExecuteTicketOperation;
+	ui: FirefoxUiCommands;
 	loadFilteredQueue(status: string, teamId: string): Promise<unknown>;
 	reference: string;
 	role: SupportSession["role"];
@@ -102,7 +124,7 @@ export async function runFirefoxJourney(input: {
 		"initial watched ticket",
 	);
 	const initialUpdatedAt = ticket.updatedAt.getTime();
-	let ticketId = ticket.id;
+	const ticketId = ticket.id;
 	const customerProjectionEvidence =
 		input.role === "customer"
 			? firefoxCommentProjectionEvidence({
@@ -112,15 +134,7 @@ export async function runFirefoxJourney(input: {
 					}),
 				})
 			: null;
-	const commentResult = await input.executeTicketOperation(
-		"Adding comment",
-		() =>
-			input.desk.mutations["ticket.addComment"](
-				{ body: input.commentBody, ticketId },
-				{ callId: `browser:comment:${crypto.randomUUID()}` },
-			),
-	);
-	const jobRunId = commentResult.job.runId;
+	const { runId: jobRunId } = await input.ui.addComment(input.commentBody);
 	await waitForRenderedText(
 		".comments",
 		input.commentBody,
@@ -138,41 +152,20 @@ export async function runFirefoxJourney(input: {
 		});
 		return;
 	}
-	const effectKey = `browser:summary:${ticket.reference}:${crypto.randomUUID()}`;
-	await input.executeTicketOperation("Sending summary", async () => {
-		const result = await input.desk.actions["notification.sendTicketSummary"](
-			{ ticketId },
-			{ effectKey, timeoutMilliseconds: 3_000 },
-		);
-		await reportFixturePhase({
-			effectId: result.effectId,
-			effectKey,
-			phase: "summary-sent",
-			receipt: result.providerReceipt,
-			ticketReference: result.ticketReference,
-		});
+	const summary = await input.ui.sendSummary();
+	await reportFixturePhase({
+		effectId: summary.effectId,
+		effectKey: summary.effectKey,
+		phase: "summary-sent",
+		receipt: summary.providerReceipt,
+		ticketReference: summary.ticketReference,
 	});
-	if (ticket.status === "closed")
-		ticket = await input.executeTicketOperation("Reopening ticket", () =>
-			input.desk.mutations["ticket.reopen"](
-				{ ticketId },
-				{ callId: `browser:reopen:${crypto.randomUUID()}` },
-			),
-		);
-	ticketId = ticket.id;
-	ticket = await input.executeTicketOperation("Closing ticket", () =>
-		input.desk.mutations["ticket.close"](
-			{ ticketId },
-			{ callId: `browser:close:${crypto.randomUUID()}` },
-		),
-	);
-	ticketId = ticket.id;
-	ticket = await input.executeTicketOperation("Reopening ticket", () =>
-		input.desk.mutations["ticket.reopen"](
-			{ ticketId },
-			{ callId: `browser:reopen:${crypto.randomUUID()}` },
-		),
-	);
+	if (ticket.status === "closed") await input.ui.transition("reopen");
+	await input.ui.transition("close");
+	await input.ui.transition("reopen");
+	ticket = await input.desk.queries["tickets.detail"]({ id: ticketId });
+	if (ticket === null)
+		throw new Error("Firefox transitioned ticket is unavailable");
 	input.selectFilters("open", ticket.teamId);
 	await input.loadFilteredQueue("open", ticket.teamId);
 	const databaseOwnedUpdateAdvanced =
@@ -180,27 +173,7 @@ export async function runFirefoxJourney(input: {
 		ticket.updatedAt.getTime() > initialUpdatedAt;
 	if (!databaseOwnedUpdateAdvanced)
 		throw new Error("Firefox database-owned update timestamp did not advance");
-	let lifecycleError: Readonly<{ code: string; status: number }>;
-	try {
-		await input.desk.mutations["ticket.create"](
-			{
-				description: "Rejected inside the Firefox lifecycle tracer.",
-				reference: "INVALID-REFERENCE",
-				summary: "Invalid browser lifecycle reference",
-				teamId: ticket.teamId,
-			},
-			{ callId: `browser:invalid-create:${crypto.randomUUID()}` },
-		);
-		throw new Error("Firefox lifecycle validation unexpectedly accepted input");
-	} catch (error) {
-		const candidate = error as Readonly<{ code?: unknown; status?: unknown }>;
-		if (candidate.code !== "INVALID_TICKET" || candidate.status !== 422)
-			throw error;
-		lifecycleError = Object.freeze({
-			code: candidate.code,
-			status: candidate.status,
-		});
-	}
+	const lifecycleError = await input.ui.rejectCreate(ticket.teamId);
 	await reportFixturePhase({
 		authProvider: "better-auth",
 		commentBody: input.commentBody,

@@ -249,8 +249,11 @@ closing combined delivery. These are planned commands, not execution results.
 NRQ-00 through NRQ-03 are complete. [NRQ-01 evidence](NRQ-01-EVIDENCE.md) records
 the repaired test-host defect, five frozen relocation passes and the complete
 release gate. [The NRQ-02/03 review](NRQ-02-03-REVIEW.md) records the next combined
-gate, real PostgreSQL/browser evidence and closed review repairs. NRQ-04 is
-unblocked. NRQ-05 may prepare its installer/packaging controls in parallel but
-cannot close or delete the old React export before golden migration. Do not
-reopen the accepted interface or mark successor tickets complete from synthetic
-HTTP evidence.
+gate, real PostgreSQL/browser evidence and closed review repairs. [NRQ-04
+evidence](NRQ-04-EVIDENCE.md) now records the native golden migration, typed
+pending-intent consumer, PostgreSQL/Firefox run, full gate and review repairs.
+NRQ-05 can replace the old export and package controls now that the golden
+consumer has migrated. Its executed public how-to is a shared NRQ-04/05 exit;
+the linked application recipe does not certify a clean packed tutorial. Do not
+reopen the accepted interface or mark NRQ-05/06 complete from synthetic HTTP
+evidence.
