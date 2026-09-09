@@ -7,6 +7,35 @@ import { eventually } from "../../packages/testkit/src";
 
 const fixture = resolve(import.meta.dir, "../../fixtures/team-support-desk");
 
+/** Keep Bun's browser resolver outside repository test discovery's module state. */
+export async function buildTeamSlaBrowserJavaScript(): Promise<string> {
+	const child = Bun.spawn(
+		[
+			process.execPath,
+			"build",
+			join(fixture, "tracer/browser/main.tsx"),
+			"--target=browser",
+			"--format=esm",
+			"--minify",
+		],
+		{
+			cwd: fixture,
+			stdout: "pipe",
+			stderr: "pipe",
+			timeout: 30_000,
+			killSignal: "SIGKILL",
+		},
+	);
+	const [exit, javascript, diagnostics] = await Promise.all([
+		child.exited,
+		new Response(child.stdout).text(),
+		new Response(child.stderr).text(),
+	]);
+	expect(exit, diagnostics).toBe(0);
+	expect(javascript.length).toBeGreaterThan(0);
+	return javascript;
+}
+
 /** Uses the fixture's real React detail and Better Auth session in Firefox. */
 export async function startTeamSlaBrowser(input: {
 	ticketId: string;
@@ -21,18 +50,10 @@ export async function startTeamSlaBrowser(input: {
 		});
 		expect(result.exitCode, `${name} failed`).toBe(0);
 	}
-	const build = await Bun.build({
-		entrypoints: [join(fixture, "tracer/browser/main.tsx")],
-		target: "browser",
-		format: "esm",
-		minify: true,
-	});
-	expect(build.success).toBe(true);
-	expect(build.outputs).toHaveLength(1);
 	const [html, styles, javascript] = await Promise.all([
 		readFile(join(fixture, "web/index.html"), "utf8"),
 		readFile(join(fixture, "web/styles.css"), "utf8"),
-		build.outputs[0]!.text(),
+		buildTeamSlaBrowserJavaScript(),
 	]);
 	let report: Record<string, unknown> = {};
 	const server = Bun.serve({

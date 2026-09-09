@@ -899,8 +899,12 @@ NRQ-06 has started. Its first full PostgreSQL run exposed an unowned schema
 precondition in the native test after other fixture work. A real leftover-schema/
 missing-ledger control fails before the repair and passes afterward, retaining
 all 39 native assertions. Only the strictly validated disposable fixture setup
-changes; Runtime and migrations are unchanged. Rerun full PostgreSQL and the
-actual workloads from the next clean head. The Proposed release ADR is now
+changes; Runtime and migrations are unchanged. The full rerun passes that native
+consumer and the 111-assertion Desk journey, then exposes the same Bun test-host
+resolver defect in the SLA browser helper. One ordinary Bun CLI build repairs
+that helper; its focused regression and the 32-assertion PostgreSQL/Firefox SLA
+sweep pass. Rerun full PostgreSQL and actual workloads from the next clean head.
+The Proposed release ADR is now
 reconciled with Accepted ADR-0043/0044; the historical aggregate manifest still
 requires replacement after final evidence. See
 [NRQ-06 evidence](docs/v4/implementation/native-react-query/NRQ-06-EVIDENCE.md).

@@ -77,6 +77,32 @@ finding. The same reviewer found no divergence in the Proposed release-scope
 reconciliation. Changed-scope formatting/lint, the preview-staging tests
 (2 / 31), questpie types and `git diff --check` pass.
 
+## SLA browser build repair
+
+The second full attempt, on clean `640694e8d`, passed the repaired native
+consumer in its original suite position, including the nested 39 assertions.
+It also passed the 111-assertion Team Support Desk PostgreSQL/Firefox journey.
+The lane then failed at the static SLA sweep's browser bundle after 408,033 ms;
+no load/soak stage ran. `attempt-MIpSrV` retains the logs and a failed result
+with completed cleanup.
+
+The failing helper could not resolve the existing `web/questpie.ts` and
+`web/main.tsx` imports under repository Bun test discovery. A focused build
+reproduced the same error; the identical browser build in an ordinary Bun child
+succeeded, and an explicit fixture build root did not repair the test-host
+failure. This is test-harness evidence, not a missing product module or a
+Runtime failure.
+
+The helper now invokes one ordinary Bun CLI browser build with the same real
+entrypoint, ESM target and minification. There is no retry or alternate path.
+The build has a 30-second kill deadline inside the regression test's 35-second
+harness limit. The focused bundle regression passes five assertions, and the
+unchanged PostgreSQL/Firefox SLA sweep passes all 32 assertions in 13.16 seconds
+at `attempt-4lSHBe`, with completed owned-resource cleanup. Formatting, lint,
+strict helper types and `git diff --check` pass. An independent non-author review
+reports no finding in the unchanged bundle behavior, deadline or regression
+checks. Full-suite verification remains required after committing this repair.
+
 ## Gates still required
 
 The corrected full PostgreSQL 17 lane, four actual local load/soak scenarios,
