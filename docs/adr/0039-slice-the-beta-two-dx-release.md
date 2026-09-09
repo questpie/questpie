@@ -25,10 +25,14 @@ history. Beta.2 contains only the rows in the candidate scope table at
 Two public packages ship at the exact same version:
 
 - `questpie` owns structural authoring, the compiler, generated application and
-  clients, Runtime kernels, CLI, and the optional `questpie/react` subpath. The
-  subpath projects Query Resource through `useSyncExternalStore` and owns no
-  cache, transport, retry, invalidation, provider, SSR, Suspense, hydration, or
-  fallback behavior;
+  clients, Runtime kernels, CLI, and the optional `questpie/react-query`
+  subpath accepted by ADR-0044. Its generated native options use TanStack's
+  cache and hooks with the existing generated transport. The release includes
+  ordinary/Suspense and compiler-proven forward infinite Queries, conservative
+  non-live invalidation, scoped retirement and native TanStack Start SSR/
+  hydration. Neutral Query Resources remain available independently; they do
+  not sit between the native cache and its watch. The old React hook/subpath
+  is removed without an alias;
 - `questpie-opentelemetry` is an exact peer that projects the Runtime
   observation contract through the official OpenTelemetry SDK and owns no
   application authority or durable truth.
@@ -63,6 +67,20 @@ Collections.
 
 Job remains the single owner of explicit, delayed, and closed checkpointed
 durable work. Beta.2 adds no `Workflow` Resource or `defineWorkflow` factory.
+ADR-0043 supplies static numeric five-field UTC schedules, explicit
+revision-fenced activation, one latest catch-up tick and the minimum
+named-Mutation checkpoint. Dynamic due times stay application-owned rows.
+Activation, schedule programs and retained executable compatibility have
+separate identities. The checkpoint uses the existing Mutation receipt rather
+than a second result ledger. Protocol v9 requires the accepted explicit
+non-rolling cutover; compatible executable rolling behavior does not imply
+mixed-protocol support.
+
+Framework-owned optimistic layers, automatic rollback/rebase, causal
+commit-to-observation guarantees, TanStack DB, live infinite lists and
+offline/persistence remain outside this beta. Pending intent uses the executed
+typed native userland recipe. Action checkpoints, sleep, signals, child Jobs,
+dynamic schedule CRUD and broader workflows remain outside the Job subset.
 Autopilot is a downstream consumer and landing-page subject, not framework
 release implementation or authority.
 
@@ -79,10 +97,14 @@ Beta.2 is release-ready only when:
    passes its authority, nondisclosure, lifecycle, inverse, realtime,
    OpenTelemetry, HTTP, and MCP hostiles on PostgreSQL 17;
 4. `questpie` and `questpie-opentelemetry` use exact `4.0.0-beta.2`
-   release/peer relationships, `questpie` declares React `^19.2.0` as an
-   optional peer, both archives pack twice byte-identically, install together
-   in a relocated clean consumer, and fail closed on missing or mismatched
-   required peers;
+   release/peer relationships. `questpie` declares React `^19.2.0` and
+   TanStack React Query `^5.102.8` as optional peers. Both archives pack twice
+   byte-identically and install together in a clean consumer; the native
+   application is also physically relocated. Core installs, imports and builds
+   without the optional UI packages. Native use executes with real supported
+   peers, rejects missing required dependencies, and classifies unsupported
+   versions against the declared ranges without inventing an import-time
+   version guard. OpenTelemetry retains its exact required core peer;
 5. the public skill validates in its distribution directory, follows no
    repository-internal pointer, uses only released syntax, and its referenced
    examples compile against the packed packages;
@@ -92,7 +114,9 @@ Beta.2 is release-ready only when:
 7. the full registered PostgreSQL 17 and browser lanes, package contract,
    architecture, strict dependency audit, `quality:release`, two consecutive
    byte-identical release dry-runs, and `git diff --check` pass on the exact
-   candidate head;
+   candidate head. The unchanged registered release workloads must execute
+   on the dedicated `questpie-release` runner; manifest validation and local
+   timings are not substitutes;
 8. every disposable PostgreSQL container, browser process, receiver, host,
    listener, port, temporary install, tarball, and generated tracer output is
    removed on success and deliberate failure.
@@ -111,3 +135,12 @@ or deploy.
   keeping Autopilot product claims separate.
 - Files, Search, Studio, split Runtime roles, a polymorphic Relation kernel,
   and a separate Workflow Resource remain outside beta.2.
+
+## Candidate reconciliation
+
+ADR-0043 and ADR-0044 supersede the earlier candidate's blanket schedule and
+React SSR exclusions. This reconciliation changes no Accepted Kernel contract
+and does not accept this ADR. The historical beta.2 manifest still carries the
+pre-extension scope and measurements; it must be replaced with fresh
+tool-bound final evidence before the permitted acceptance invocation. Only a
+committed, verified PASS may precede a separate authority projection.

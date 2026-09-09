@@ -57,18 +57,23 @@ beforeAll(async () => {
 		inspected.stdout.toString().trim() !== `127.0.0.1:${process.env.PGPORT}`
 	)
 		throw new Error("PostgreSQL endpoint does not belong to this tracer");
-	database = new SQL({ max: 4 });
-	const version = await database<
-		{ server_version_num: string }[]
-	>`SHOW server_version_num`;
-	expect(Number(version[0]!.server_version_num)).toBeGreaterThanOrEqual(170000);
-	expect(Number(version[0]!.server_version_num)).toBeLessThan(180000);
 	const url = new URL("postgres://localhost/");
 	url.hostname = process.env.PGHOST!;
 	url.port = process.env.PGPORT!;
 	url.username = process.env.PGUSER!;
 	url.pathname = `/${process.env.PGDATABASE!}`;
 	const connectionString = url.toString();
+	database = new SQL(connectionString, { max: 4 });
+	const version = await database<
+		{ server_version_num: string }[]
+	>`SHOW server_version_num`;
+	expect(Number(version[0]!.server_version_num)).toBeGreaterThanOrEqual(170000);
+	expect(Number(version[0]!.server_version_num)).toBeLessThan(180000);
+	// Other PostgreSQL fixtures may leave Collaboration tables after removing
+	// the shared migration ledger. Own the same reset as the Beta05 fixture.
+	await database.unsafe(
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+	);
 	const migrationRoot = join(import.meta.dir, "questpie/migrations");
 	const names = (await readdir(migrationRoot, { withFileTypes: true }))
 		.filter((entry) => entry.isDirectory())

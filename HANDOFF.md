@@ -895,6 +895,15 @@ the isolated measured dry-run passes in 14.76 seconds under the unchanged limit.
 These are local checks, not tagged stable-runner evidence. Follow
 [NRQ-05 evidence](docs/v4/implementation/native-react-query/NRQ-05-EVIDENCE.md).
 No aggregate beta.2 readiness is claimed.
+NRQ-06 has started. Its first full PostgreSQL run exposed an unowned schema
+precondition in the native test after other fixture work. A real leftover-schema/
+missing-ledger control fails before the repair and passes afterward, retaining
+all 39 native assertions. Only the strictly validated disposable fixture setup
+changes; Runtime and migrations are unchanged. Rerun full PostgreSQL and the
+actual workloads from the next clean head. The Proposed release ADR is now
+reconciled with Accepted ADR-0043/0044; the historical aggregate manifest still
+requires replacement after final evidence. See
+[NRQ-06 evidence](docs/v4/implementation/native-react-query/NRQ-06-EVIDENCE.md).
 The merge control verifies both acceptance records, skill validation, docs
 typecheck/build, public-package build and 33 affected tests / 154 assertions.
 The initial test attempt lacked built package output in the fresh worktree;
