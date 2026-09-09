@@ -1,30 +1,24 @@
 # QUESTPIE v4
 
-This branch is a docs-first clean slate for QUESTPIE v4.
+QUESTPIE is a PostgreSQL-native application compiler and Runtime. One generated
+App Contract connects typed direct calls, HTTP/OpenAPI, MCP and client APIs.
 
-QUESTPIE v4 is being designed as an open, self-hostable, PostgreSQL-native
-application compiler and runtime. It is not an incremental port of the v3
-module, adapter, or Admin architecture.
+This branch contains the implemented **beta.2 candidate**, including native
+React Query and TanStack Start SSR/hydration. Beta.2 is not published;
+[its release inventory](docs/v4/beta2-release-scope.md) remains subject to
+Proposed ADR-0039 acceptance.
 
-No v4 runtime is implemented yet. The specification is the source of truth for
-the implementation that follows.
+## Use and contribute
 
-## Read first
+- [Public v4 documentation](apps/docs/content/docs/v4/index.mdx) describes
+  version availability and the supported API.
+- [Public agent skill](skills/questpie/SKILL.md) teaches the checked package
+  surface.
+- [Team Support Desk](fixtures/team-support-desk/README.md) is the reference
+  application.
+- [Contributing](CONTRIBUTING.md) covers repository scripts and local work.
+- [Handoff](HANDOFF.md) names the current task and release prerequisites.
+- [Internal document map](docs/v4/README.md) routes architecture and evidence.
 
-- [`SPEC.md`](./SPEC.md) defines the product and architecture.
-- [`CONTEXT.md`](./CONTEXT.md) defines the canonical language.
-- [`docs/adr/`](./docs/adr/) contains the current accepted decisions.
-- [`HANDOFF.md`](./HANDOFF.md) explains the next work session.
-- [`docs/v4/research/`](./docs/v4/research/) preserves supporting evidence.
-
-## Documentation workspace
-
-```bash
-bun install
-bun run dev
-bun run check-types
-bun run build
-```
-
-The public documentation app is in `apps/docs`. Its root redirects to the v4
-documentation. There is no product landing page in this branch.
+The public packages are `questpie` (including `questpie/react-query`) and
+`questpie-opentelemetry`. Other repository packages are private.
