@@ -839,10 +839,17 @@ byte-identical release dry-runs pass.
 
 ## Immediate continuation
 
-The active production worktree is
-`/home/drepkovsky/code/questpie-v4-native-react-integration`. It combines the
-accepted React architecture with the accepted schedule/release closure. Follow
-the production plan; do not edit the preserved accepted proof tree.
+The production integration is now fast-forwarded into canonical `feat/v4` at
+`/home/drepkovsky/code/questpie-v4`. The native integration worktree remains the
+source of the checked local artifacts and isolated manual preview; preserve it
+and the accepted proof tree. Continue release coordination on canonical
+`feat/v4`, inspecting worktree state before edits.
+
+The owner chose the [manual beta.2 release route](docs/v4/implementation/beta2-closure/MANUAL-RELEASE.md)
+and deferred CI/CD. Do not provision runners or treat zero registered runners
+as a release blocker. All existing checks and workload budgets remain required;
+actual local results keep their `reference-local` classification. This changes
+neither ADR-0039's Proposed status nor publication authorization.
 The public native factory, compiler-rendered neutral scope capability and optional
 package build are implemented. Declaration budgets, generated artifacts, detached
 types, prototype-test migration and narrow Knip classifications have focused
@@ -920,8 +927,8 @@ checked fixture snapshot. Its current control record is
 `/home/drepkovsky/code/questpie-desk-preview-control.DEFL38/control.json`;
 inspect it for the live endpoint and owned process before cleanup. App, Scalar
 and OpenAPI return HTTP 200. Interactive browser discovery is empty, so manual
-visual inspection is not claimed. Remaining release prerequisites are actual
-dedicated-runner evidence, user inspection, fresh aggregate manifest/review and
+visual inspection is not claimed. Remaining release prerequisites are user
+inspection, fresh aggregate manifest/review and
 the separate post-PASS authority projection. Do not repeat completed local
 gates unless the next change affects them.
 The merge control verifies both acceptance records, skill validation, docs
@@ -1067,8 +1074,8 @@ passes are not claimed as their causal repairs.
 
 Use an owned disk-backed `TMPDIR` for further full checks: the shared `/tmp`
 has a user quota that caused actual artifact-write failures. Do not delete
-unrelated temporary data. Release CI still needs a registered dedicated runner
-and actual workload evidence; the runner API last reported zero runners.
+unrelated temporary data. Future release CI still needs its runner and actual
+workload evidence, but CI/CD is deferred for the owner's manual beta.2 route.
 
 The manually inspectable Team Support Desk uses domain-local `src/`,
 product `web/`, Runtime adapters, immutable migration/Seed history and separate

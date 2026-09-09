@@ -1,5 +1,11 @@
 # Execute the beta.2 release workload gate
 
+CI/CD is deferred by the owner's 2026-09-09
+[manual release decision](MANUAL-RELEASE.md). The document below records the
+retained workflow design, not a current requirement to provision or dispatch
+a runner for beta.2. The selected workloads and budgets still execute through
+the manual release procedure.
+
 The release workflow must execute the existing affected workload matrix before
 its publish step. `quality:release` validates performance manifests; it does not
 execute them. Registering a stable runner alone therefore does not close this

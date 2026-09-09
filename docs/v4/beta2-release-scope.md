@@ -35,6 +35,11 @@ This inventory does not project unfinished behavior into public documentation.
 
 ## Current aggregate evidence
 
+The owner selected a [manual beta.2 release](./implementation/beta2-closure/MANUAL-RELEASE.md)
+and deferred CI/CD. All actual workload and package gates remain required;
+their local execution is recorded without a stable-runner claim. Provisioning
+or dispatching a GitHub runner is not part of this beta's remaining work.
+
 The preserved pre-schedule acceptance manifest excludes Cron and cannot cover
 this extension. ADR-0043 has its committed Opus PASS and credential-free
 verification. Its separate authority projection includes the public schedule

@@ -50,15 +50,20 @@ Public behavior changes update the accepted ADR/workbench and
 `apps/docs/content/docs/v4/` projection. Report vulnerabilities through
 `SECURITY.md`, not a public issue. Pull requests explain the accepted guarantee,
 show the red/green evidence, list commands actually run, and call out every
-deferred edge. Releases use the repository release workflow; never publish a
-package directly from a developer checkout.
+deferred edge. Beta.2 uses the owner-selected
+[manual release procedure](docs/v4/implementation/beta2-closure/MANUAL-RELEASE.md).
+Publish only after explicit authorization from a clean, verified release
+checkout using repository tooling and its artifact manifest; never bypass the
+checks with an ad hoc package publication.
 
 The beta publisher explicitly selects npm's `beta` dist-tag for both archives;
 it never relies on an ambient/default tag. A stable release needs a separate
 channel decision before changing that command. Registry deprecation of v3
 versions remains a separate, explicitly authorized operation.
 
-The release workflow runs the fixed beta.2 workload matrix on the dedicated
+CI/CD is deferred for beta.2. Its existing release workflow remains unchanged
+and is not this beta's required execution route. When automation is resumed,
+the workflow runs the fixed workload matrix on the dedicated
 `questpie-release` runner after quality checks and before publication. Its
 PostgreSQL 17 service is disposable and loopback-only; never substitute a
 shared database. Manual workflow dispatch runs validation without publishing,
@@ -66,8 +71,10 @@ even when the selected ref is a tag. It still needs authorization and the
 protected `npm` environment. Workload logs are retained with the exact commit
 and run attempt. See the
 [release workload gate](docs/v4/implementation/beta2-closure/RELEASE-WORKLOAD-GATE.md)
-for its selected scenarios and remaining runner prerequisites. Local workflow
-tests and performance-manifest validation are not stable-runner evidence.
+for its selected scenarios and deferred runner prerequisites. Manual beta.2
+execution retains all workloads and budgets with `reference-local` evidence.
+Local workflow tests and performance-manifest validation are not stable-runner
+evidence.
 
 If a command is slow, first confirm that it belongs to the selected lane. The
 changed loop targets seconds; PostgreSQL concurrency, managed providers, load,

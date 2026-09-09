@@ -114,9 +114,11 @@ Beta.2 is release-ready only when:
 7. the full registered PostgreSQL 17 and browser lanes, package contract,
    architecture, strict dependency audit, `quality:release`, two consecutive
    byte-identical release dry-runs, and `git diff --check` pass on the exact
-   candidate head. The unchanged registered release workloads must execute
-   on the dedicated `questpie-release` runner; manifest validation and local
-   timings are not substitutes;
+   candidate head. Under the owner's manual beta.2 release decision, the
+   unchanged registered release workloads execute manually on the checked
+   candidate and retain `reference-local` evidence. CI/CD and runner
+   provisioning are deferred; manifest validation alone is not execution,
+   and local timings are not represented as stable-runner measurements;
 8. every disposable PostgreSQL container, browser process, receiver, host,
    listener, port, temporary install, tarball, and generated tracer output is
    removed on success and deliberate failure.
@@ -137,6 +139,12 @@ or deploy.
   and a separate Workflow Resource remain outside beta.2.
 
 ## Candidate reconciliation
+
+The owner-selected [manual release procedure](../v4/implementation/beta2-closure/MANUAL-RELEASE.md)
+supersedes this candidate's earlier dedicated-runner requirement for beta.2
+only. It preserves every workload and budget, formal acceptance, separate
+authority projection and explicit publication authorization. No CI workflow
+or general performance guarantee changes with this candidate reconciliation.
 
 ADR-0043 and ADR-0044 supersede the earlier candidate's blanket schedule and
 React SSR exclusions. This reconciliation changes no Accepted Kernel contract

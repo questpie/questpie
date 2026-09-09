@@ -217,8 +217,10 @@ and independent Standards and Spec review against the accepted ADR.
 Reconcile all other ratified beta.2 lanes and ADR-0039 scope before claiming
 release readiness. Run `quality:full`, `quality:release`, the full PostgreSQL 17
 lane, affected browser tracers, type/declaration checks and required real workload
-load/soak on the final integrated head. Stable-runner requirements are actual
-executions, not manifest validation or relabelled local timings.
+load/soak on the final integrated head. The owner-selected
+[manual beta.2 route](../beta2-closure/MANUAL-RELEASE.md) retains actual workload
+execution and its existing budgets as `reference-local` evidence; CI/CD is
+deferred. Do not relabel local timings as stable-runner measurements.
 
 Produce exact final versions/artifact manifests. Run two separately forced
 package-build plus release dry-run sequences on that head, using
@@ -230,7 +232,8 @@ Only then submit the fresh aggregate ADR-0039 candidate through its authorized
 manifest-bound review, commit/verify the record and project its authority.
 Present the local manual preview to the owner. Tag, push, publish, deployment
 and registry changes still require explicit authority; this ticket does not
-grant it. Keep outstanding external stable-runner/manual gates visible.
+grant it. Keep manual inspection and publication authorization visible;
+runner provisioning is not a blocker for this owner's manual beta.2 route.
 
 ## Working gates
 

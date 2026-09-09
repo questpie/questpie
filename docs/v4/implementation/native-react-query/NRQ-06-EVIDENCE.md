@@ -151,10 +151,11 @@ Interactive browser discovery returned no available browser. No fresh manual
 visual inspection is claimed; the automated Firefox checks above are separate
 evidence. User inspection and final manifest binding remain required.
 
-Actual unchanged-budget execution on the dedicated `questpie-release` runner
-remains an external release prerequisite; the repository's runner inventory
-reported zero registered runners. The owner was asked for the prepared machine,
-not credentials. Registration alone would not supply workload evidence.
+The repository's runner inventory reported zero registered runners. The owner
+subsequently chose the [manual beta.2 release route](../beta2-closure/MANUAL-RELEASE.md)
+and deferred CI/CD. Dedicated-runner execution is therefore no longer a
+prerequisite for this beta. The results above retain their actual local
+classification; no stable-runner measurement is inferred or manufactured.
 
 Only after all prerequisites pass may the existing ticket-specific manifest
 invoke its one permitted acceptance review. A committed, verified PASS precedes
