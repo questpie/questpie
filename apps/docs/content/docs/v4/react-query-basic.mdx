@@ -1,0 +1,347 @@
+---
+title: Build a ticket screen with React Query
+description: Read a live ticket, submit a typed Mutation, and retire its cache when credentials change.
+kind: guide
+---
+
+Build a support-ticket screen for the Barbershop with native TanStack Query.
+The generated client supplies Operation inputs, decoded results and error
+types. Your component owns the form and the pending message, not a second copy
+of the server result.
+
+Version availability: This page documents the beta.2 preview. Beta.2 is not
+published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
+released package contract.
+
+## Start with the ticket Query
+
+This recipe adds a client-rendered screen to an existing, running backend.
+It does not create an Auth service, a database or a browser dev server. Before
+mounting the screen, [build, migrate and start](./runtime-and-studio#build-migrate-and-start)
+the application, establish a valid authenticated session, and create a ticket
+that the session can read. An empty database displays “Ticket unavailable.”
+Use your application's reviewed data setup; the appointment Seed in the schema
+guide does not create support tickets.
+
+Use the complete files in [Select one bounded inverse child
+list](./data-and-queries#select-one-bounded-inverse-child-list):
+`src/context.ts`, `src/data/tickets.ts`, `src/data/comments.ts`,
+`src/data/policies.ts` and `src/queries/ticket-detail.ts`. Keep your
+[`questpie.json` Application Root](./definition-composition#configure-one-application-root).
+The Query is `tickets.detailPage`; it returns one selected ticket with its
+visible comments. You do not need the earlier page's `web/client.ts` helper.
+
+This example's read Policy admits every authenticated Principal. Its Context
+accepts a tenant ID, but the Collections have no tenant Field or tenant row
+filter. Use it to learn the integration, not as a tenant-isolation template.
+Keep your application's credential resolver and
+[membership-aware Policy](./context-and-policy) at the server boundary.
+
+Install the browser dependencies beside `questpie`:
+
+```sh
+bun add questpie@4.0.0-beta.2 react@^19.2.0 react-dom@^19.2.0 @tanstack/react-query@^5.102.8
+bun add --dev @types/react @types/react-dom
+```
+
+`questpie/react-query` is a subpath of `questpie`, not a separate package.
+Applications that do not use it do not need React or TanStack Query.
+
+Keep browser components in `web/`, outside the backend's `source.root: "src"`.
+The TypeScript project still checks both directories. Use this configuration
+with the generated import mappings from
+[the Application Root](./definition-composition#configure-one-application-root):
+
+```json title="tsconfig.json"
+{
+	"compilerOptions": {
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"target": "ES2024",
+		"jsx": "react-jsx",
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"exactOptionalPropertyTypes": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"types": ["bun"],
+		"paths": {
+			"#questpie/app": ["./.questpie/generated/app.ts"],
+			"#questpie/client": ["./.questpie/generated/client.ts"],
+			"#questpie/source/*": ["./src/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "web/**/*.ts", "web/**/*.tsx"]
+}
+```
+
+Your browser bundler must support React JSX and resolve `#questpie/client` to
+the generated client file. Serve that bundle from your existing browser host,
+with `/_questpie/*` reaching the same backend origin. The code below uses
+same-origin session cookies and does not configure a cross-origin proxy or Auth.
+
+## Add one named Mutation
+
+Replace `src/data/policies.ts` with this version. It preserves both read
+Policies and allows an authenticated caller to change a ticket's summary.
+The Field rule does not allow changing its ID.
+
+```ts title="src/data/policies.ts"
+import { definePolicy, expr, policy } from "questpie";
+import { comments } from "./comments";
+import { tickets } from "./tickets";
+
+export const ticketPolicy = definePolicy(tickets, {
+	name: "tickets.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: () => expr.always(),
+	},
+	update: {
+		admit: policy.authenticated(),
+		rows: () => expr.always(),
+		candidate: () => expr.always(),
+	},
+	fields: {
+		update: () => ({ summary: expr.always() }),
+	},
+});
+
+export const commentPolicy = definePolicy(comments, {
+	name: "comments.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: () => expr.always(),
+	},
+});
+```
+
+The Mutation derives its required ID and summary codecs from the Collection.
+`createInput()` describes required Field input here; the handler still calls
+the Collection's update kernel. It does not create a ticket or expose CRUD.
+
+```ts title="src/mutations/rename-ticket.ts"
+import { codec, operation, policy } from "questpie";
+import { defineMutation } from "#questpie/app";
+import { tickets } from "../data/tickets";
+
+export const renameTicket = defineMutation({
+	name: "tickets.rename",
+	network: true,
+	input: tickets.createInput().pick({ id: true, summary: true }),
+	output: codec.object({}),
+	policy: policy.authenticated(),
+	errors: {
+		ticketUnavailable: operation.error({
+			code: "TICKET_UNAVAILABLE",
+			status: 404,
+		}),
+	},
+	handler: async ({ input, ctx, errors }) => {
+		const ticket = await ctx.data.tickets.update({
+			key: { id: input.id },
+			patch: { summary: input.summary },
+		});
+		if (ticket === null) throw errors.ticketUnavailable();
+		return {};
+	},
+});
+```
+
+Generate the contracts after adding the Mutation:
+
+```sh
+bunx questpie build
+```
+
+Keep the generated `#questpie/app`, `#questpie/client` and `#questpie/source/*`
+aliases in your TypeScript and browser build configuration. The browser imports
+the client contract, not the server app contract.
+
+## Own the credential lifetime outside the component
+
+This browser-only host creates one QueryClient and adapter for the mounted
+credential lifetime. The Context parameter's type comes from the generated
+client. Context is routing input; it does not create a Principal or grant access.
+
+```tsx title="web/support-screen.tsx"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { createQueryAdapter } from "questpie/react-query";
+import { createClient } from "#questpie/client";
+
+import { TicketScreen } from "./ticket-screen";
+
+function createSupportOwner(
+	context: Parameters<ReturnType<typeof createClient>["withContext"]>[0],
+) {
+	const scope = createClient({ baseUrl: window.location.origin }).withContext(
+		context,
+	);
+	const cache = new QueryClient();
+	return { cache, api: createQueryAdapter(scope, cache) };
+}
+
+export type SupportAdapter = ReturnType<typeof createSupportOwner>["api"];
+
+export function mountSupportTicket(
+	element: HTMLElement,
+	context: Parameters<typeof createSupportOwner>[0],
+	ticketId: string,
+) {
+	const owner = createSupportOwner(context);
+	const root = createRoot(element);
+	root.render(
+		<StrictMode>
+			<QueryClientProvider client={owner.cache}>
+				<TicketScreen api={owner.api} ticketId={ticketId} />
+			</QueryClientProvider>
+		</StrictMode>,
+	);
+	let closing: Promise<void> | undefined;
+	return () => {
+		closing ??= (async () => {
+			root.unmount();
+			try {
+				await owner.api.dispose();
+			} finally {
+				owner.cache.clear();
+			}
+		})();
+		return closing;
+	};
+}
+```
+
+Call `mountSupportTicket(element, { tenantId }, ticketId)` after your Auth host
+has established the current session. Retain the returned cleanup function.
+On logout or credential replacement, call and await it before mounting the
+next session. Do this even when the user and tenant IDs are unchanged. Never
+use a token as a React key, Context field or cache key.
+
+Repeated cleanup calls return the same Promise, including a rejected one.
+Await it inside your Auth host's `try`/`catch`. If disposal fails, the subtree
+stays unmounted and `finally` still clears its cache. Show a fixed message such
+as “Could not finish closing this session. Reload before signing in again.”
+Do not mount a replacement on that error path or display the exception's
+payload. A rejected cleanup is not permission to reuse the old adapter.
+
+The owner is created outside React rendering, so StrictMode does not create
+an abandoned adapter. Disposal stops Query work and watches and fences retained
+options. It cannot undo a Mutation already dispatched to the server.
+This host creates no server-rendered Query cache and hydrates no initial data,
+so it has no initial-document `ready` Promise to pass. Do not copy that omission
+into a Start hydration host.
+
+## Read, submit and narrow errors
+
+Use the generated options with native hooks. There is no authored cache key,
+endpoint, input interface or response interface.
+
+```tsx title="web/ticket-screen.tsx"
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type { SupportAdapter } from "./support-screen";
+
+export function TicketScreen({
+	api,
+	ticketId,
+}: {
+	api: SupportAdapter;
+	ticketId: string;
+}) {
+	const detail = useQuery(
+		api.queries["tickets.detailPage"].options({
+			ids: [ticketId],
+			first: 1,
+			after: null,
+		}),
+	);
+	const operation = api.mutations["tickets.rename"];
+	const rename = useMutation({
+		...operation.options(),
+		onMutate: (input) => ({ requestedSummary: input.summary }),
+	});
+	if (detail.isError) return <p role="alert">Ticket unavailable.</p>;
+	if (detail.isPending) return <p role="status">Loading ticket…</p>;
+	const ticket = detail.data.nodes[0];
+	if (!ticket) return <p>Ticket unavailable.</p>;
+	const pendingSummary =
+		rename.isPending && rename.variables.id === ticket.id
+			? rename.context?.requestedSummary
+			: undefined;
+	const failure = rename.isError
+		? operation.isError(rename.error)
+			? "This ticket is no longer available."
+			: "The rename could not be confirmed. Check the current ticket before trying again."
+		: null;
+
+	return (
+		<article>
+			<h1>{ticket.summary}</h1>
+			<ul>
+				{ticket.comments.map((comment) => (
+					<li key={comment.id}>
+						{comment.body} — {comment.createdAt.toLocaleString()}
+					</li>
+				))}
+			</ul>
+			<form
+				onSubmit={(event) => {
+					event.preventDefault();
+					const summary = new FormData(event.currentTarget).get("summary");
+					if (typeof summary !== "string") return;
+					rename.mutate({ id: ticket.id, summary });
+				}}
+			>
+				<label>
+					Summary
+					<input
+						name="summary"
+						defaultValue={ticket.summary}
+						required
+						disabled={rename.isPending}
+					/>
+				</label>
+				<button disabled={rename.isPending} type="submit">
+					Rename ticket
+				</button>
+			</form>
+			{pendingSummary !== undefined && (
+				<p role="status">Saving “{pendingSummary}”…</p>
+			)}
+			{failure && <p role="alert">{failure}</p>}
+		</article>
+	);
+}
+```
+
+`detail.data` infers the selected comment array and its decoded `Date` values.
+`onMutate` infers the Mutation input and its returned context.
+`rename.isError` is the hook's boolean state; `operation.isError(rename.error)`
+is the generated declared-error guard. This Mutation declares only
+`TICKET_UNAVAILABLE`. Transport failures and adapter retirement do not pass
+that guard.
+
+The heading and comments stay server-owned. The separate “Saving…” message
+shows only what the caller submitted. It disappears when the Mutation settles
+or the successful base result is no longer available. It never inserts data
+into the Query cache or restores a whole-cache snapshot after failure.
+
+This watchable `tickets.detailPage` refreshes through its watch: each delivery
+replaces the complete authorized result. It does not make a second one-shot
+refetch after a local commit. Conservative commit invalidation refetches active
+non-live, infinite and server-mode families; you do not maintain
+Mutation-to-Query maps. Completion does not mean the new live snapshot has
+arrived, so the pending message can disappear before the heading changes.
+Unknown outcomes do not trigger an automatic Mutation retry.
+
+A terminal watch failure fences that Query's old options. The “Ticket
+unavailable” screen does not silently retry them. Your host must run the cleanup
+above and mount a fresh scope after it has resolved the session or access
+problem. Equal Context values do not make the failed scope reusable.
+
+For the cache, retirement and commit rules behind this screen, read
+[Native React Query integration](./react-query). Keep this browser host out of
+server rendering; Start needs a fresh owner for each request and a native
+hydration handoff. Continue with [Render the ticket screen with TanStack Start](./react-query-start).

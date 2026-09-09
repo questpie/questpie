@@ -159,10 +159,11 @@ function full(): void {
 		"test",
 		"--timeout=15000",
 		"--path-ignore-patterns=**/collection-lifecycle-boundary/operation-transaction/check.test.ts",
-		"--path-ignore-patterns=**/query-resource-react.test.tsx",
+		"--path-ignore-patterns=**/native-react-query.test.tsx",
+		"--path-ignore-patterns=**/tests/performance/beta12-release.test.ts",
 	]);
 	run(
-		["bun", "test", "tracer/browser/query-resource-react.test.tsx"],
+		["bun", "test", "tracer/browser/native-react-query.test.tsx"],
 		resolve("fixtures/team-support-desk"),
 	);
 	run(["bun", "run", "knip:report"]);
@@ -228,9 +229,26 @@ const args = Bun.argv.slice(3);
 if (lane === "changed") changed(args);
 else if (lane === "full") full();
 else if (lane === "release") {
+	run([process.env.FIREFOX_BIN ?? "/usr/bin/firefox", "--version"]);
 	full();
 	run(["bun", "run", "knip:strict"]);
 	run(["bun", "run", "package:check"]);
+	runWithEnvironment(
+		["bun", "test", "tests/unit/beta12-release-contract.test.ts"],
+		{ QUESTPIE_RELEASE_DRY_RUN_CONTRACT: "1" },
+	);
+	runWithEnvironment(
+		["bun", "test", "tests/integration/native-react-query-packed.test.ts"],
+		{ QUESTPIE_NATIVE_PACKED_BROWSER: "1" },
+	);
+	runWithEnvironment(
+		["bun", "test", "tests/integration/native-query-docs-packed.test.ts"],
+		{ QUESTPIE_NATIVE_DOCS_BROWSER: "1" },
+	);
+	runWithEnvironment(
+		["bun", "test", "tests/integration/native-query-start-docs.test.ts"],
+		{ QUESTPIE_NATIVE_START_DOCS_BROWSER: "1" },
+	);
 	runWithEnvironment(
 		[
 			"bun",

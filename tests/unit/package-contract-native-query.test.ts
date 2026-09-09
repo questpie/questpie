@@ -2,6 +2,14 @@ import { expect, test } from "bun:test";
 
 import { validateNativeQueryPackage } from "../../scripts/package-contract-native-query";
 
+test("the production package removes the retired React hook without an alias", async () => {
+	const root = `${import.meta.dir}/../../packages/questpie`;
+	const installed = await Bun.file(`${root}/package.json`).json();
+	expect(Object.hasOwn(installed.exports, "./react")).toBe(false);
+	expect(Object.hasOwn(installed.exports, "./react-query")).toBe(true);
+	expect(await Bun.file(`${root}/src/react.ts`).exists()).toBe(false);
+});
+
 function manifest() {
 	return {
 		exports: {

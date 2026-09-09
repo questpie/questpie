@@ -206,12 +206,12 @@ auth tables and test role. The source-mode journey builds the OTel package, so
 run it separately from package builds.
 
 The focused native component tests remain in
-[the browser test entry](tracer/browser/query-resource-react.test.tsx), alongside
+[the browser test entry](tracer/browser/native-react-query.test.tsx), alongside
 the old-hook controls until their package export is removed. Run them from this
 fixture directory:
 
 ```sh
-bun test tracer/browser/query-resource-react.test.tsx
+bun test tracer/browser/native-react-query.test.tsx
 ```
 
 For authorized tailnet review, keep the host on loopback. Inspect listening

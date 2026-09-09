@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import {
-	cpSync,
 	existsSync,
 	mkdtempSync,
 	mkdirSync,
@@ -13,6 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
+import { verifyPackedNativeQuery } from "./release-native-query";
+
 type PackageJson = Readonly<{
 	name?: string;
 	version?: string;
@@ -23,6 +24,7 @@ type PackageJson = Readonly<{
 		Record<string, Readonly<{ optional?: boolean }>>
 	>;
 	dependencies?: Readonly<Record<string, string>>;
+	devDependencies?: Readonly<Record<string, string>>;
 }>;
 
 const releaseProfiles = [
@@ -49,8 +51,7 @@ type ArtifactManifest = Readonly<{
 }>;
 
 function fail(message: string): never {
-	console.error(`release: ${message}`);
-	process.exit(1);
+	throw new Error(`release: ${message}`);
 }
 
 function value(flag: string): string | undefined {
@@ -58,15 +59,20 @@ function value(flag: string): string | undefined {
 	return index === -1 ? undefined : Bun.argv[index + 1];
 }
 
-function run(command: string[], cwd?: string): string {
-	const result = Bun.spawnSync(command, {
+async function run(command: string[], cwd?: string): Promise<string> {
+	const result = Bun.spawn(command, {
 		cwd,
 		stdout: "pipe",
 		stderr: "pipe",
+		timeout: 90_000,
 	});
-	if (result.exitCode !== 0)
-		fail(`${command.join(" ")} failed: ${result.stderr.toString().trim()}`);
-	return result.stdout.toString();
+	const [exit, stdout, stderr] = await Promise.all([
+		result.exited,
+		new Response(result.stdout).text(),
+		new Response(result.stderr).text(),
+	]);
+	if (exit !== 0) fail(`${command.join(" ")} failed: ${stderr.trim()}`);
+	return stdout;
 }
 
 function sha256(path: string): string {
@@ -155,14 +161,14 @@ if (releaseVersions.size !== 1)
 	fail("public package versions must advance as one release");
 const releaseVersion = packages[0]!.json.version as string;
 
-function extractPackage(
+async function extractPackage(
 	consumer: string,
 	name: ReleasePackageName,
 	tarball: string,
-): void {
+): Promise<void> {
 	const installed = join(consumer, "node_modules", ...name.split("/"));
 	mkdirSync(installed, { recursive: true });
-	run(["tar", "-xzf", tarball, "--strip-components=1", "-C", installed]);
+	await run(["tar", "-xzf", tarball, "--strip-components=1", "-C", installed]);
 }
 
 function verifyNegativeImports(
@@ -199,24 +205,6 @@ function linkPackageDependencies(
 		mkdirSync(dirname(target), { recursive: true });
 		symlinkSync(source, target, "dir");
 	}
-}
-
-function installReactTestPeer(consumer: string): void {
-	const reactRoot = join(consumer, "node_modules", "react");
-	mkdirSync(reactRoot, { recursive: true });
-	writeFileSync(
-		join(reactRoot, "package.json"),
-		JSON.stringify({
-			name: "react",
-			version: "19.2.8",
-			type: "module",
-			exports: "./index.js",
-		}),
-	);
-	writeFileSync(
-		join(reactRoot, "index.js"),
-		"export const useSyncExternalStore = (_subscribe, getSnapshot) => getSnapshot();\n",
-	);
 }
 
 if (dryRun) {
@@ -258,7 +246,7 @@ if (dryRun) {
 			const retry = join(temporary, profile.kind, "retry");
 			mkdirSync(first, { recursive: true });
 			mkdirSync(retry, { recursive: true });
-			run(
+			await run(
 				[
 					"bun",
 					"pm",
@@ -270,7 +258,7 @@ if (dryRun) {
 				],
 				packageRoot,
 			);
-			run(
+			await run(
 				[
 					"bun",
 					"pm",
@@ -311,7 +299,7 @@ if (dryRun) {
 		for (const artifact of packedArtifacts) {
 			const { json, profile, root: packageRoot } = artifact.package;
 			const consumer = join(temporary, `consumer-${profile.kind}`);
-			extractPackage(consumer, profile.name, artifact.firstTarball);
+			await extractPackage(consumer, profile.name, artifact.firstTarball);
 			writeFileSync(
 				join(consumer, "package.json"),
 				JSON.stringify({
@@ -336,15 +324,15 @@ if (dryRun) {
 					!Bun.semver.satisfies("19.2.8", peers.react) ||
 					Bun.semver.satisfies("18.3.1", peers.react)
 				)
-					fail("questpie/react: optional peer or mismatch boundary drifted");
-				run(["bun", "-e", 'await import("questpie")'], consumer);
-				const missingReact = Bun.spawnSync(
-					["bun", "-e", 'await import("questpie/react")'],
-					{ cwd: consumer, stdout: "pipe", stderr: "pipe" },
+					fail(
+						"questpie/react-query: optional peer or mismatch boundary drifted",
+					);
+				await run(["bun", "-e", 'await import("questpie")'], consumer);
+				await verifyPackedNativeQuery(
+					artifact.firstTarball,
+					join(temporary, "consumer-native"),
+					"browser",
 				);
-				if (missingReact.exitCode === 0)
-					fail("questpie/react: import succeeded without React");
-				installReactTestPeer(consumer);
 			}
 			if (profile.kind === "opentelemetry") {
 				const missingCore = Bun.spawnSync(
@@ -360,7 +348,7 @@ if (dryRun) {
 					fail(
 						"questpie: core package must precede OpenTelemetry verification",
 					);
-				extractPackage(consumer, "questpie", core.firstTarball);
+				await extractPackage(consumer, "questpie", core.firstTarball);
 				const installed = JSON.parse(
 					readFileSync(
 						join(consumer, "node_modules/questpie-opentelemetry/package.json"),
@@ -372,13 +360,13 @@ if (dryRun) {
 				linkPackageDependencies(consumer, packageRoot, installed.dependencies);
 			}
 
-			run(
+			await run(
 				[
 					"bun",
 					"-e",
 					profile.kind === "opentelemetry"
 						? 'const value = await import("questpie-opentelemetry"); if (typeof value.createOpenTelemetry !== "function") process.exit(1)'
-						: 'await import("questpie"); const value = await import("questpie/react"); if (typeof value.useQueryResource !== "function") process.exit(1)',
+						: 'await import("questpie"); const value = await import("questpie/react-query"); if (typeof value.createQueryAdapter !== "function") process.exit(1)',
 				],
 				consumer,
 			);
@@ -388,62 +376,16 @@ if (dryRun) {
 					`${profile.name}/runtime`,
 					"@questpie/runtime",
 					"@questpie/react",
+					"questpie/react",
 					"@questpie/opentelemetry",
 					"questpie/opentelemetry",
 				],
 				profile.name,
 			);
 
-			if (profile.kind === "core") {
-				const packedApplication = join(temporary, "packed-application");
-				cpSync(resolve("fixtures/archive"), packedApplication, {
-					recursive: true,
-				});
-				rmSync(join(packedApplication, "node_modules"), {
-					force: true,
-					recursive: true,
-				});
-				rmSync(join(packedApplication, ".questpie/generated"), {
-					force: true,
-					recursive: true,
-				});
-				rmSync(join(packedApplication, "bun.lock"), { force: true });
-				const applicationPackagePath = join(packedApplication, "package.json");
-				const applicationPackage = JSON.parse(
-					readFileSync(applicationPackagePath, "utf8"),
-				) as Record<string, unknown>;
-				applicationPackage.dependencies = {
-					questpie: `file:${artifact.firstTarball}`,
-				};
-				writeFileSync(
-					applicationPackagePath,
-					JSON.stringify(applicationPackage),
-				);
-				const tsconfigPath = join(packedApplication, "tsconfig.json");
-				const tsconfig = JSON.parse(readFileSync(tsconfigPath, "utf8")) as {
-					compilerOptions: { paths?: Record<string, string[]> };
-				};
-				delete tsconfig.compilerOptions.paths?.questpie;
-				writeFileSync(tsconfigPath, JSON.stringify(tsconfig));
-				run(["bun", "install", "--ignore-scripts"], packedApplication);
-				run(
-					[join(packedApplication, "node_modules/.bin/questpie"), "build"],
-					packedApplication,
-				);
-				if (
-					!existsSync(
-						join(
-							packedApplication,
-							".questpie/generated/internal/application.js",
-						),
-					)
-				)
-					fail(`${profile.name}: packed CLI emitted no Runtime application`);
-			}
-
 			const markers =
 				profile.kind === "core"
-					? "retry-stable isolated-import negative-imports optional-react peer-mismatch packed-build"
+					? "retry-stable isolated-import negative-imports native-react-query peer-boundary packed-build"
 					: "retry-stable isolated-import negative-imports exact-peers peer-mismatch";
 			console.log(
 				`release dry-run: ${profile.name}@${json.version} ${basename(artifact.firstTarball)} sha256=${artifact.actual} ${markers}`,
@@ -452,42 +394,60 @@ if (dryRun) {
 
 		const combinedConsumer = join(temporary, "consumer-combined");
 		mkdirSync(combinedConsumer, { recursive: true });
+		const workspace = JSON.parse(
+			readFileSync(resolve("package.json"), "utf8"),
+		) as PackageJson;
+		const nativePeers = Object.fromEntries(
+			["react", "react-dom", "@tanstack/react-query"].map((name) => {
+				const version = workspace.devDependencies?.[name];
+				if (!version)
+					fail(`combined native consumer has no tested ${name} pin`);
+				return [name, version];
+			}),
+		);
 		writeFileSync(
 			join(combinedConsumer, "package.json"),
 			JSON.stringify({
 				name: "questpie-combined-release-consumer",
 				private: true,
 				type: "module",
+				dependencies: {
+					...nativePeers,
+					...Object.fromEntries(
+						packedArtifacts.map((artifact) => [
+							artifact.package.profile.name,
+							`file:${artifact.firstTarball}`,
+						]),
+					),
+				},
 			}),
 		);
-		for (const artifact of packedArtifacts)
-			extractPackage(
-				combinedConsumer,
-				artifact.package.profile.name,
-				artifact.firstTarball,
-			);
-		installReactTestPeer(combinedConsumer);
-		const telemetryArtifact = packedArtifacts.find(
-			(candidate) => candidate.package.profile.kind === "opentelemetry",
-		);
-		if (!telemetryArtifact)
-			fail("questpie-opentelemetry: combined release artifact is missing");
-		linkPackageDependencies(
+		await run(
+			[
+				"bun",
+				"install",
+				"--ignore-scripts",
+				"--cache-dir",
+				join(combinedConsumer, ".bun-cache"),
+			],
 			combinedConsumer,
-			telemetryArtifact.package.root,
-			telemetryArtifact.package.json.dependencies,
 		);
-		run(
+		await run(
 			[
 				"bun",
 				"-e",
-				'await import("questpie"); await import("questpie/react"); await import("questpie-opentelemetry")',
+				'await import("questpie"); const { createQueryAdapter } = await import("questpie/react-query"); const { QueryClient } = await import("@tanstack/react-query"); const React = await import("react"); const { renderToString } = await import("react-dom/server"); await import("questpie-opentelemetry"); if (typeof createQueryAdapter !== "function" || renderToString(React.createElement("p", null, "native")) !== "<p>native</p>") process.exit(1); new QueryClient().clear();',
 			],
 			combinedConsumer,
 		);
 		verifyNegativeImports(
 			combinedConsumer,
-			["@questpie/react", "@questpie/opentelemetry", "questpie/opentelemetry"],
+			[
+				"@questpie/react",
+				"questpie/react",
+				"@questpie/opentelemetry",
+				"questpie/opentelemetry",
+			],
 			"questpie",
 		);
 		console.log("release dry-run: exact-two-package combined-import");

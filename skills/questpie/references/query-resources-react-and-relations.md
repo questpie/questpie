@@ -42,8 +42,10 @@ consumers.
 
 ## Use native React Query
 
-Read [native React Query](https://questpie.com/docs/v4/react-query) for the
-adapter's exact usage and lifetime contract. Confirm the installed package
+Read [the native screen guide](https://questpie.com/docs/v4/react-query-basic)
+before building a React consumer; use its generated options and credential-owned
+mount/cleanup pattern. Read [native React Query](https://questpie.com/docs/v4/react-query)
+for the adapter's exact lifetime and invalidation contract. Confirm the installed package
 exposes `questpie/react-query` and its generated scope supports the adapter
 before applying that guidance. This reference does not establish production
 availability in an installed package.
@@ -74,7 +76,7 @@ a saved whole cache after a Mutation error.
 For SSR, create a request-local QueryClient and use finite calls. TanStack Start's
 official Router Query integration owns serialization and hydration; the
 adapter's `dehydrate()` returns only its Query Identity Bootstrap. Follow the
-guide's first-document readiness and retirement rules before enabling fresh
+[Start guide](https://questpie.com/docs/v4/react-query-start)'s first-document readiness and retirement rules before enabling fresh
 browser execution. Framework optimistic layers, TanStack DB and causal
 commit-to-observation guarantees are outside this interface.
 

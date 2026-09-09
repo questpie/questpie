@@ -1,9 +1,0 @@
-{
-	"extends": "./tsconfig.json",
-	"include": [
-		"prepare-generated.ts",
-		"generation.test.ts",
-		"measure-generation.ts",
-		"pagination-source.test.ts"
-	]
-}

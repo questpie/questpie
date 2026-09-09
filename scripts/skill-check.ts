@@ -24,7 +24,10 @@ const ALLOWED_IMPORTS = new Set([
 	"#questpie/app",
 	"#questpie/client",
 	"questpie",
-	"questpie/react",
+	"questpie/react-query",
+	"@tanstack/react-query",
+	"react",
+	"react-dom/client",
 	"questpie-opentelemetry",
 ]);
 

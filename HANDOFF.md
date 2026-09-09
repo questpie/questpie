@@ -885,9 +885,16 @@ and independent review. The pre-review-repair release gate passes 1,219 tests,
 197 gated skips and zero failures; the affected browser/DOM checks pass again
 after the concrete Action-handler and unused-port repairs. See
 [NRQ-04 evidence](docs/v4/implementation/native-react-query/NRQ-04-EVIDENCE.md).
-Next: NRQ-05 real packed native consumers, public tutorials/skills and old-hook
-deletion. The shared public how-to exit is still required; no aggregate beta.2
-readiness is claimed.
+NRQ-05 is complete: real installed/relocated native consumers, basic and Start
+public tutorials, public-skill routing and old-hook deletion. The exact tutorials
+pass types and browser execution. The combined release gate passes 1,227 ordinary
+tests, 198 gated skips and zero failures, plus native browser, OTel and CLI gates.
+Review repairs close pre-bootstrap retirement, cancellation and process cleanup.
+The combined install uses an owned cache after a reproduced shared-cache stall;
+the isolated measured dry-run passes in 14.76 seconds under the unchanged limit.
+These are local checks, not tagged stable-runner evidence. Follow
+[NRQ-05 evidence](docs/v4/implementation/native-react-query/NRQ-05-EVIDENCE.md).
+No aggregate beta.2 readiness is claimed.
 The merge control verifies both acceptance records, skill validation, docs
 typecheck/build, public-package build and 33 affected tests / 154 assertions.
 The initial test attempt lacked built package output in the fresh worktree;
@@ -902,9 +909,11 @@ offline/persistence remain outside this cut. The authoritative continuation map
 for this work is
 `docs/v4/research/react-tanstack-integration-2026-09-08/DECISION-MAP.md`.
 ADR-0044 has a committed, verified manifest-bound Opus PASS. Its authority
-projection is separate from the review record. The new optional production
-export is under test. The old React hook remains only until golden-consumer
-migration, then is deleted; no compatibility adapter is added.
+projection is separate from the review record. The optional production
+`questpie/react-query` export has generated, PostgreSQL, golden, Start and
+packed-consumer evidence. The migrated golden consumer no longer needs the old
+React hook; its export, implementation and hook-only tests are deleted without
+a compatibility adapter.
 
 The owner-confirmed `BETA2-SCOPE-DECISION.md` in that research directory defers
 framework-owned optimistic layers, automatic rollback/rebase and a no-flicker
@@ -1002,8 +1011,9 @@ The remaining frontier is:
   original and relocated compiles after an independently reproduced Bun test-host
   dependency-resolution defect. See the [current evidence](docs/v4/implementation/native-react-query/NRQ-01-EVIDENCE.md).
   Its frozen repetitions and complete broad gate now pass. Native lifetime,
-  Start and golden UI have production evidence. Finish NRQ-05/06 packed tutorials,
-  docs/skills migration, old-hook deletion and combined gates. Do not repeat architecture
+  Start and golden UI have production evidence. NRQ-05's packed tutorials,
+  docs/skills migration, old-hook deletion and independent review are complete;
+  continue with NRQ-06 aggregate checks. Do not repeat architecture
   acceptance or treat this extraction as beta.2 readiness;
 - integrate the focused repairs, bind exact final PostgreSQL/browser and quality
   evidence, and produce two byte-identical package dry-runs;
@@ -1066,10 +1076,10 @@ explicit authority.
 5. ADR-0035 Query Resource and the original `questpie/react` were closed, and the executable
    prototype is deleted. Do not retain a compatibility Resource, callback
    Context scope, global cache, fallback poller, or second realtime kernel.
-   ADR-0042 now places that adapter at `questpie/react` and the official
-   observation adapter at `questpie-opentelemetry`. ADR-0044 now supersedes the
-   React recommendation with native `questpie/react-query`; migrate its golden
-   consumer then delete the old hook/export, preserving neutral `.observe`.
+   ADR-0042 establishes the two-package boundary and the official
+   observation adapter at `questpie-opentelemetry`. ADR-0044 supersedes the
+   React recommendation with native `questpie/react-query`; its golden consumer
+   is migrated and the old hook/export is deleted, preserving neutral `.observe`.
    Beta.2 has exactly two npm packages and no scoped-name compatibility path.
 6. ADR-0036 canonical Operation HTTP and OpenAPI are closed. The canonical
    document declares every applicable carrier. Team Support Desk's Scalar

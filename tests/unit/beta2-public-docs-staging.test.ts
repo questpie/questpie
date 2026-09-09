@@ -7,6 +7,18 @@ async function page(name: string): Promise<string> {
 	return Bun.file(resolve(docsRoot, name)).text();
 }
 
+test("native React Query tutorials are discoverable and retain preview staging", async () => {
+	const navigation = await Bun.file(resolve(docsRoot, "meta.json")).json();
+	const overview = await page("react-query.mdx");
+	for (const name of ["react-query-basic", "react-query-start"]) {
+		expect(navigation.pages).toContain(name);
+		expect(overview).toContain(`./${name}`);
+		const source = (await page(`${name}.mdx`)).replace(/\s+/gu, " ");
+		expect(source).toContain("beta.2 preview");
+		expect(source).toContain("Beta.2 is not published.");
+	}
+});
+
 test("public beta.2 guides state version availability and expose the exact preview inventory", async () => {
 	const [index, openTelemetry, reactiveQueries, inventory, navigation] =
 		await Promise.all([

@@ -7,9 +7,9 @@ private implementation by product domain, not by generic technical layer.
 
 - Keep `questpie` as the sole application authoring/Runtime package and its
   explicit public barrel, including the accepted optional `questpie/react-query`
-  subpath. ADR-0044's production extraction remains separate from acceptance:
-  migrate React consumers before deleting `questpie/react` and its hook; retain
-  the framework-neutral `.observe` and Query Resource implementation.
+  subpath. React consumers use generated native options; retain the
+  framework-neutral `.observe` and Query Resource implementation for non-React
+  consumers. The retired React hook has no forwarding export.
   Compiler, Runtime, and testkit packages remain private implementation
   modules.
 - Keep the generated scope capability framework-neutral and internal. The native

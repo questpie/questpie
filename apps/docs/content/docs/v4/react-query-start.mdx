@@ -1,0 +1,434 @@
+---
+title: Render the ticket screen with TanStack Start
+description: Give each SSR request its own cache, hydrate through TanStack, and start browser execution after the document handoff.
+kind: guide
+---
+
+Render the Barbershop ticket Query on the server with the Query Adapter, then let its browser watch
+take over after hydration. Keep the backend files from
+[Build a ticket screen with React Query](./react-query-basic); replace that
+page's browser-only mount with this Start host.
+
+Version availability: This page documents the beta.2 preview. Beta.2 is not
+published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
+released package contract.
+
+The example's Policy admits authenticated callers but does not isolate tenant
+rows. A tenant ID in a URL or Context is routing input, not authorization.
+Keep your server's credential resolver and membership-aware Policy in place.
+The host below assumes that the browser origin serves the generated QUESTPIE
+endpoints as well as the Start application.
+Configure your reverse proxy to send `/_questpie/*` to that backend. Without
+this same-origin routing, SSR can succeed while browser execution fails.
+Changing the browser `baseUrl` to another origin is not a fix: ordinary fetch
+does not send same-origin session cookies there. Repair the proxy routing and
+load a fresh authenticated document.
+
+## Keep the server Definitions separate
+
+Keep `src/` for the existing QUESTPIE Definitions. Put the Start application
+under `web-start/` so the two file conventions do not scan each other's code.
+Keep the generated `#questpie/client`, `#questpie/app` and `#questpie/source/*`
+aliases from the basic guide.
+
+Add these compatible Start dependencies to that project:
+
+```sh
+bun add @tanstack/react-start@1.168.32 @tanstack/react-router@1.170.18 @tanstack/react-router-ssr-query@1.167.2
+bun add --dev vite@8.1.5 @vitejs/plugin-react@6.0.4
+```
+
+```ts title="vite.config.ts"
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+	plugins: [tanstackStart({ srcDirectory: "web-start" }), react()],
+	resolve: {
+		dedupe: [
+			"react",
+			"react-dom",
+			"@tanstack/react-query",
+			"@tanstack/query-core",
+		],
+	},
+});
+```
+
+## Create one owner per server request or browser document
+
+Configure `QUESTPIE_API_ORIGIN` on the Start server with your trusted QUESTPIE
+backend origin. It is deployment configuration, not a secret. Do not derive
+that destination from an incoming Host header, request URL or Query parameter:
+this server forwards the current request's cookie to it.
+
+The browser uses its own origin and the browser's normal cookie handling.
+Neither the cookie nor the server origin is placed in the hydration payload.
+
+```ts title="web-start/data/questpie.ts"
+import { QueryClient } from "@tanstack/react-query";
+import { createIsomorphicFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { createQueryAdapter } from "questpie/react-query";
+import { createClient } from "#questpie/client";
+
+const backendOrigin = createIsomorphicFn()
+	.server(() => {
+		const configured = process.env.QUESTPIE_API_ORIGIN;
+		if (!configured) throw new Error("QUESTPIE_API_ORIGIN is required");
+		return new URL(configured).origin;
+	})
+	.client(() => window.location.origin);
+const requestUrl = createIsomorphicFn()
+	.server(() => getRequest().url)
+	.client(() => window.location.href);
+const requestCookie = createIsomorphicFn()
+	.server(() => getRequest().headers.get("cookie"))
+	.client(() => null);
+
+function firstDocumentReady(setup: Promise<void>) {
+	const loaded =
+		document.readyState === "complete"
+			? Promise.resolve()
+			: new Promise<void>((resolve) => {
+					window.addEventListener("load", () => resolve(), { once: true });
+				});
+	return Promise.all([setup, loaded]).then(
+		() => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+	);
+}
+
+export function createOwner(server: boolean) {
+	const url = new URL(requestUrl());
+	const tenantId = url.searchParams.get("tenantId");
+	const ticketId = url.searchParams.get("ticketId");
+	if (!tenantId || !ticketId)
+		throw new Error("tenantId and ticketId are required");
+	const origin = backendOrigin();
+	const cookie = requestCookie();
+	const client = createClient({
+		baseUrl: origin,
+		fetch: Object.assign(
+			async (input: RequestInfo | URL, init?: RequestInit) => {
+				const request = new Request(input, init);
+				if (!server || !cookie) return fetch(request);
+				if (new URL(request.url).origin !== origin) {
+					throw new Error("Unexpected credential destination");
+				}
+				const headers = new Headers(request.headers);
+				headers.set("cookie", cookie);
+				return fetch(new Request(request, { headers, redirect: "error" }));
+			},
+			{ preconnect: fetch.preconnect },
+		),
+	});
+	const scope = client.withContext({ tenantId });
+	const cache = new QueryClient();
+	const setup = Promise.withResolvers<void>();
+	const ready = server ? Promise.resolve() : firstDocumentReady(setup.promise);
+	let adapter = server
+		? createQueryAdapter(scope, cache, { ssr: true })
+		: undefined;
+	let retired = false;
+	let closing: Promise<void> | undefined;
+	function requireActive() {
+		if (retired) throw new Error("Support workspace retired");
+	}
+	return {
+		cache,
+		ticketId,
+		get api() {
+			requireActive();
+			if (!adapter) throw new Error("Hydration identity is not installed");
+			return adapter;
+		},
+		dehydrate() {
+			requireActive();
+			if (!adapter) throw new Error("Hydration identity is not installed");
+			return adapter.dehydrate();
+		},
+		hydrate(
+			identity: ReturnType<ReturnType<typeof createQueryAdapter>["dehydrate"]>,
+		) {
+			requireActive();
+			adapter = createQueryAdapter(scope, cache, { hydrate: identity, ready });
+		},
+		hydrationSetupComplete() {
+			setup.resolve();
+		},
+		dispose() {
+			retired = true;
+			closing ??= (async () => {
+				try {
+					await adapter?.dispose();
+				} finally {
+					cache.clear();
+				}
+			})();
+			return closing;
+		},
+	};
+}
+```
+
+Do not move this QueryClient to module scope. Every server request needs a
+fresh scope and cache, including two requests with equal tenant input.
+`ssr: true` makes server reads one-shot calls; SSR does not open a continuing watch.
+
+The one browser `ready` Promise waits for native hydration setup, document
+load and queued hydration work. Hydrated data can render while fresh ordinary,
+infinite and live execution waits. A slow image can therefore delay fresh
+reads. Do not add a timeout that releases the barrier early. Document load
+does not prove that every script or streamed chunk succeeded.
+
+## Let TanStack own hydration and the provider
+
+The adapter transfers only its Query Identity Bootstrap. TanStack's official
+Router Query integration transfers the Query cache, including pending Queries
+and decoded Dates, and installs the QueryClient provider. Do not serialize the
+cache again or wrap this router in a second provider.
+
+```tsx title="web-start/router.tsx"
+import { createRouter } from "@tanstack/react-router";
+import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
+import { createOwner } from "./data/questpie";
+import { routeTree } from "./routeTree.gen";
+
+export function getRouter() {
+	const owner = createOwner(import.meta.env.SSR);
+	const router = createRouter({
+		routeTree,
+		context: { owner },
+		dehydrate: () => ({ questpie: owner.dehydrate() }),
+		hydrate: (state) => owner.hydrate(state.questpie),
+	});
+	setupRouterSsrQueryIntegration({ router, queryClient: owner.cache });
+	const hydrate = router.options.hydrate!;
+	router.options.hydrate = async (state) => {
+		await hydrate(state);
+		owner.hydrationSetupComplete();
+	};
+	return router;
+}
+
+declare module "@tanstack/react-router" {
+	interface Register {
+		router: ReturnType<typeof getRouter>;
+	}
+}
+```
+
+`routeTree.gen.ts` is generated by Start. The hydrate wrapper calls the native
+integration first; it resolves the same setup Promise used by the adapter.
+The Query Identity Bootstrap reproduces scoped keys. It is client-visible metadata,
+not an authentication token.
+Do not log or persist it as an authentication token.
+
+```tsx title="web-start/routes/__root.tsx"
+import {
+	HeadContent,
+	Outlet,
+	Scripts,
+	createRootRouteWithContext,
+} from "@tanstack/react-router";
+import type { createOwner } from "../data/questpie";
+
+export const Route = createRootRouteWithContext<{
+	owner: ReturnType<typeof createOwner>;
+}>()({
+	head: () => ({
+		meta: [
+			{ charSet: "utf-8" },
+			{ name: "viewport", content: "width=device-width, initial-scale=1" },
+			{ title: "Barbershop support" },
+		],
+	}),
+	component: () => (
+		<html lang="en">
+			<head>
+				<HeadContent />
+			</head>
+			<body>
+				<Outlet />
+				<Scripts />
+			</body>
+		</html>
+	),
+});
+```
+
+Use the normal [Start client entry](https://tanstack.com/start/latest/docs/framework/react/guide/client-entry-point).
+Creating the owner in `getRouter`, outside component rendering, avoids creating
+abandoned adapters during StrictMode rendering.
+
+```tsx title="web-start/client.tsx"
+import { StartClient } from "@tanstack/react-start/client";
+import { StrictMode, startTransition } from "react";
+import { hydrateRoot } from "react-dom/client";
+
+startTransition(() => {
+	hydrateRoot(
+		document,
+		<StrictMode>
+			<StartClient />
+		</StrictMode>,
+	);
+});
+```
+
+## Read the generated Query with Suspense
+
+The loader and component use the same generated options. The loader fills the
+request-local cache before rendering; the component consumes that data through
+the native provider.
+
+```tsx title="web-start/routes/index.tsx"
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/")({
+	loader: ({ context: { owner } }) =>
+		owner.cache.ensureQueryData(
+			owner.api.queries["tickets.detailPage"].options({
+				ids: [owner.ticketId],
+				first: 1,
+				after: null,
+			}),
+		),
+	component: TicketPage,
+});
+
+function TicketPage() {
+	const { owner } = Route.useRouteContext();
+	const { data } = useSuspenseQuery(
+		owner.api.queries["tickets.detailPage"].options({
+			ids: [owner.ticketId],
+			first: 1,
+			after: null,
+		}),
+	);
+	const ticket = data.nodes[0];
+	if (!ticket) return <p>Ticket unavailable.</p>;
+	return (
+		<article>
+			<h1>{ticket.summary}</h1>
+			<ul>
+				{ticket.comments.map((comment) => (
+					<li key={comment.id}>
+						{comment.body}{" "}
+						<time dateTime={comment.createdAt.toISOString()}>
+							{comment.createdAt.toISOString()}
+						</time>
+					</li>
+				))}
+			</ul>
+		</article>
+	);
+}
+```
+
+Open `/?tenantId=<tenant UUID>&ticketId=<ticket UUID>` after authentication.
+The initial heading comes from SSR. Comment timestamps stay decoded Dates
+after hydration; rendering ISO text avoids server/browser timezone differences.
+After readiness, the generated watch replaces this complete authorized result.
+
+## Use forward-cursor pagination with native infinite queries
+
+This alternate route uses the same Query's compiler-proven root pagination.
+It does not paginate the nested comment list. Because this particular Query
+selects at most one ticket, its Next button normally stays disabled; a broader
+authored root Query can use the same integration without handwritten cursors.
+
+```tsx title="web-start/routes/pages.tsx"
+import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/pages")({
+	loader: ({ context: { owner } }) =>
+		owner.cache.ensureInfiniteQueryData(
+			owner.api.queries["tickets.detailPage"].infiniteOptions({
+				ids: [owner.ticketId],
+				first: 1,
+			}),
+		),
+	component: TicketPages,
+});
+
+function TicketPages() {
+	const { owner } = Route.useRouteContext();
+	const query = useSuspenseInfiniteQuery(
+		owner.api.queries["tickets.detailPage"].infiniteOptions({
+			ids: [owner.ticketId],
+			first: 1,
+		}),
+	);
+	return (
+		<main>
+			{query.data.pages
+				.flatMap((page) => page.nodes)
+				.map((ticket) => (
+					<h1 key={ticket.id}>{ticket.summary}</h1>
+				))}
+			<button
+				disabled={!query.hasNextPage || query.isFetchingNextPage}
+				onClick={() => {
+					void query.fetchNextPage().catch(() => undefined);
+				}}
+			>
+				Next
+			</button>
+			{query.isFetchNextPageError && (
+				<p role="alert">The next page could not be loaded.</p>
+			)}
+		</main>
+	);
+}
+```
+
+Open `/pages` with the same URL parameters in a new document. Infinite pages
+use one-shot calls on both server and browser; they are not a live union of
+pages. Keep generated continuation and retry defaults intact.
+
+## Build and retire the host
+
+Use Start's Vite application builder, then include `web-start/**/*.ts`,
+`web-start/**/*.tsx`, `vite.config.ts` and `build-start.ts` in your strict TypeScript check.
+Retain `bun` from the basic guide's types and add `vite/client` for `import.meta.env`.
+This example uses Bun's fetch types, including its `preconnect` property.
+Run the TypeScript check after the Start build generates `routeTree.gen.ts`.
+
+```ts title="build-start.ts"
+import { createBuilder } from "vite";
+
+const builder = await createBuilder();
+await builder.buildApp();
+```
+
+```sh
+bunx questpie build
+bun build-start.ts
+```
+
+This host binds one tenant and credential lifetime to its document. Do not
+change tenant Context through client navigation while retaining this owner.
+Before logout or credential replacement, your Auth host must stop displaying the old
+application, await `owner.dispose()`, and then establish a fresh owner
+for the replacement session. A full-document navigation after that cleanup is
+the simplest boundary for this example. Do this even when tenant and user IDs
+are unchanged. Do not dispose the server owner while its response still has
+pending streamed Queries; the request host owns completion or cancellation.
+
+Disposal fences retained options and stops Query work. It cannot roll back an
+already-dispatched Mutation, erase copies held by application code or cancel
+callbacks already running. If hydration fails, surface the failure and recover
+with a new authenticated document. `QUERY_BOOTSTRAP_MISMATCH` means the
+browser scope does not match the server's Query Identity Bootstrap.
+Do not replay the old Query Identity Bootstrap manually or
+release readiness on a timer. Persistence restore and bfcache recovery are not
+automatic recovery guarantees.
+
+The basic page's typed Mutation and pending-intent recipe works with this
+owner's `api`. Retire its form with the rest of this document's application. See the
+[native integration contract](./react-query) for commit, retirement and
+invalidation behavior.

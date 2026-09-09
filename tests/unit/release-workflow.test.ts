@@ -4,6 +4,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
+	readdirSync,
 	rmSync,
 	symlinkSync,
 	writeFileSync,
@@ -49,6 +50,181 @@ const workflow = Bun.YAML.parse(
 		"utf8",
 	),
 ) as ReleaseWorkflow;
+
+test("release quality explicitly selects all three native browser proofs", () => {
+	const quality = readFileSync(
+		join(repositoryRoot, "scripts/quality.ts"),
+		"utf8",
+	);
+	expect(quality).toContain('QUESTPIE_NATIVE_PACKED_BROWSER: "1"');
+	expect(quality).toContain('QUESTPIE_NATIVE_DOCS_BROWSER: "1"');
+	expect(quality).toContain('QUESTPIE_NATIVE_START_DOCS_BROWSER: "1"');
+	expect(quality).toContain(
+		"tests/integration/native-react-query-packed.test.ts",
+	);
+	expect(quality).toContain(
+		"tests/integration/native-query-docs-packed.test.ts",
+	);
+	expect(quality).toContain(
+		"tests/integration/native-query-start-docs.test.ts",
+	);
+});
+
+test("ordinary release-contract discovery does not dispatch the browser dry-run without opt-in", () => {
+	const temporary = mkdtempSync(
+		join(tmpdir(), "questpie-release-lane-control-"),
+	);
+	try {
+		writeFileSync(
+			join(temporary, "package.json"),
+			JSON.stringify({
+				private: true,
+				scripts: { release: "bun release-control.ts" },
+			}),
+		);
+		writeFileSync(
+			join(temporary, "release-control.ts"),
+			'console.error("HEAVY_RELEASE_DISPATCHED"); process.exit(87);',
+		);
+		const command = [
+			process.execPath,
+			"test",
+			join(repositoryRoot, "tests/unit/beta12-release-contract.test.ts"),
+			"--test-name-pattern",
+			"dry-run packs",
+		];
+		const ordinary = Bun.spawnSync(command, {
+			cwd: temporary,
+			env: {
+				...process.env,
+				QUESTPIE_RELEASE_DRY_RUN_CONTRACT: "",
+			},
+			stdout: "pipe",
+			stderr: "pipe",
+			timeout: 5_000,
+		});
+		expect(ordinary.exitCode, ordinary.stderr.toString()).toBe(0);
+		expect(
+			ordinary.stdout.toString() + ordinary.stderr.toString(),
+		).not.toContain("HEAVY_RELEASE_DISPATCHED");
+		const release = Bun.spawnSync(command, {
+			cwd: temporary,
+			env: {
+				...process.env,
+				QUESTPIE_RELEASE_DRY_RUN_CONTRACT: "1",
+			},
+			stdout: "pipe",
+			stderr: "pipe",
+			timeout: 5_000,
+		});
+		expect(release.exitCode).not.toBe(0);
+		expect(release.stdout.toString() + release.stderr.toString()).toContain(
+			"HEAVY_RELEASE_DISPATCHED",
+		);
+		const quality = readFileSync(
+			join(repositoryRoot, "scripts/quality.ts"),
+			"utf8",
+		);
+		expect(quality).toContain('QUESTPIE_RELEASE_DRY_RUN_CONTRACT: "1"');
+		expect(quality).toContain('"tests/unit/beta12-release-contract.test.ts"');
+	} finally {
+		rmSync(temporary, { recursive: true, force: true });
+	}
+});
+
+test("ordinary quality excludes only the named manual release benchmark while its workload remains registered", () => {
+	const quality = readFileSync(
+		join(repositoryRoot, "scripts/quality.ts"),
+		"utf8",
+	);
+	const flag =
+		"--path-ignore-patterns=**/tests/performance/beta12-release.test.ts";
+	expect(quality).toContain(flag);
+	const temporary = mkdtempSync(
+		join(tmpdir(), "questpie-release-benchmark-discovery-"),
+	);
+	try {
+		mkdirSync(join(temporary, "tests/performance"), { recursive: true });
+		writeFileSync(
+			join(temporary, "tests/performance/beta12-release.test.ts"),
+			'throw new Error("MANUAL_RELEASE_BENCHMARK_DISCOVERED");',
+		);
+		writeFileSync(
+			join(temporary, "ordinary.test.ts"),
+			'import { expect, test } from "bun:test"; test("ordinary control", () => expect(true).toBe(true));',
+		);
+		const discovery = Bun.spawnSync([process.execPath, "test", flag], {
+			cwd: temporary,
+			stdout: "pipe",
+			stderr: "pipe",
+			timeout: 5_000,
+		});
+		expect(discovery.exitCode, discovery.stderr.toString()).toBe(0);
+		expect(
+			discovery.stdout.toString() + discovery.stderr.toString(),
+		).not.toContain("MANUAL_RELEASE_BENCHMARK_DISCOVERED");
+		const manifest = JSON.parse(
+			readFileSync(
+				join(repositoryRoot, "quality/performance/beta12-release-gate.json"),
+				"utf8",
+			),
+		);
+		expect(manifest.schedule).toBe("manual");
+		expect(manifest.command).toEqual([
+			"bun",
+			"test",
+			"tests/performance/beta12-release.test.ts",
+		]);
+		expect(manifest.metrics.packedReleaseDryRunMs.budget).toBe(15_000);
+		expect(
+			readFileSync(
+				join(repositoryRoot, "tests/performance/beta12-release.test.ts"),
+				"utf8",
+			),
+		).toContain("toBeLessThanOrEqual(15_000)");
+	} finally {
+		rmSync(temporary, { recursive: true, force: true });
+	}
+});
+
+test("a rejected dry-run manifest still removes its owned package scratch directory", () => {
+	const root = mkdtempSync(join(tmpdir(), "questpie-release-cleanup-"));
+	try {
+		const manifest = JSON.parse(
+			readFileSync(
+				join(repositoryRoot, "quality/release/package-artifacts.json"),
+				"utf8",
+			),
+		);
+		manifest.packages[0].sha256 = "0".repeat(64);
+		const path = join(root, "invalid-manifest.json");
+		writeFileSync(path, JSON.stringify(manifest));
+		const result = Bun.spawnSync(
+			[
+				process.execPath,
+				join(repositoryRoot, "scripts/release.ts"),
+				"--dry-run",
+				"--artifact-manifest",
+				path,
+			],
+			{
+				cwd: repositoryRoot,
+				env: { ...process.env, TMPDIR: root },
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
+		expect(result.exitCode).not.toBe(0);
+		expect(result.stderr.toString()).toContain("artifact checksum mismatch");
+		expect(
+			readdirSync(root, { withFileTypes: true }).filter((entry) =>
+				entry.isDirectory(),
+			),
+		).toEqual([]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+}, 30_000);
 
 test("both beta archives publish only to the explicit beta dist-tag", () => {
 	const root = mkdtempSync(join(tmpdir(), "questpie-release-tag-"));

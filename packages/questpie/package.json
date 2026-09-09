@@ -13,10 +13,6 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
-		"./react": {
-			"types": "./dist/react.d.ts",
-			"import": "./dist/react.js"
-		},
 		"./react-query": {
 			"types": "./dist/react-query/index.d.ts",
 			"import": "./dist/react-query/index.js"

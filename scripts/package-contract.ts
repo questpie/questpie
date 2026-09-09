@@ -115,8 +115,8 @@ for (const { path, json } of publicPackages) {
 		json.name === "questpie" &&
 		(!inspection.includes("dist/internal/observability.d.ts") ||
 			!inspection.includes("dist/internal/observability.js") ||
-			!inspection.includes("dist/react.d.ts") ||
-			!inspection.includes("dist/react.js"))
+			!inspection.includes("dist/react-query/index.d.ts") ||
+			!inspection.includes("dist/react-query/index.js"))
 	)
 		fail(`${label}: tarball omits a required public subpath`);
 	if (
@@ -126,8 +126,6 @@ for (const { path, json } of publicPackages) {
 				".",
 				"./internal/client-projection",
 				"./internal/observability",
-				// Existing consumers retain the old hook until NRQ-04/05 migration.
-				"./react",
 				"./react-query",
 			])
 	)
@@ -144,7 +142,7 @@ for (const { path, json } of publicPackages) {
 		(json.peerDependencies?.react !== "^19.2.0" ||
 			json.peerDependenciesMeta?.react?.optional !== true)
 	)
-		fail(`${label}: React must be the optional ^19.2.0 peer for ./react`);
+		fail(`${label}: React must be the optional ^19.2.0 peer for ./react-query`);
 	if (
 		json.name === "questpie" &&
 		Object.keys(json.dependencies ?? {}).some(

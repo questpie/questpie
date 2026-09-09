@@ -9,6 +9,9 @@ native TanStack Query. You do not repeat DTOs, cache-key maps, endpoints or
 pagination rules. TanStack owns the cache and React hooks; QUESTPIE supplies
 the generated transport, identity and scope lifetime.
 
+To build a complete screen, follow [Build a ticket screen with React Query](./react-query-basic).
+For SSR and hydration, follow [Render the ticket screen with TanStack Start](./react-query-start).
+
 Version availability: This page documents the beta.2 preview. Beta.2 is not
 published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
 released package contract.
@@ -101,13 +104,15 @@ adapter. It reproduces scoped keys; it is not Query data, authorization or an
 authentication token. Do not log or persist it as an authentication token.
 Keys do not expose raw Context or Query input.
 
-Your browser host must supply `ready`, the initial-document readiness Promise,
+When hydrating server-rendered data, your browser host must supply `ready`, the initial-document readiness Promise,
 before fresh ordinary, infinite or live execution. Both `hydrate` and `ready`
 belong to the factory's third `options` argument. Readiness covers native hydration
 setup, document load and queued hydration work. Hydrated results can render
 while execution waits. This ordering also waits for unrelated assets; document
 load does not prove that every script or streamed chunk succeeded. There is no
 timeout bypass or second deserializer.
+
+A browser-only mount with no server hydration does not need this barrier.
 
 Retiring a scope during initial streaming also rejects late native hydration under
 its old keys. A cache hit cannot bypass retirement. This protection lasts

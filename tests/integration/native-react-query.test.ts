@@ -184,6 +184,32 @@ test("full-source native options preserve generated transport, codecs and inferr
 			types.stdout.toString() + types.stderr.toString(),
 		).toBe(0);
 		const diagnostics = types.stdout.toString();
+		await writeFile(
+			join(temporary, "aggregate-errors.ts"),
+			aggregateErrorsSource,
+		);
+		await writeFile(
+			join(temporary, "tsconfig.aggregate-errors.json"),
+			JSON.stringify({
+				extends: "./tsconfig.json",
+				files: ["aggregate-errors.ts"],
+			}),
+		);
+		const aggregateTypes = Bun.spawnSync(
+			[
+				"bun",
+				join(repositoryRoot, "node_modules/typescript/bin/tsc"),
+				"-p",
+				join(temporary, "tsconfig.aggregate-errors.json"),
+				"--pretty",
+				"false",
+			],
+			{ cwd: temporary, stdout: "pipe", stderr: "pipe" },
+		);
+		expect(
+			aggregateTypes.exitCode,
+			aggregateTypes.stdout.toString() + aggregateTypes.stderr.toString(),
+		).toBe(0);
 		const measurements = Object.fromEntries(
 			["Types", "Instantiations"].map((label) => {
 				const match = diagnostics.match(
@@ -375,5 +401,39 @@ export function useTypes(scope: ReturnType<ReturnType<typeof createClient>["with
   adapter.queries["tickets.queue"].options({ after: null, first: "one", statuses: null, teamIds: null });
   // @ts-expect-error arbitrary errors cannot be treated as declared domain errors
   failure.payload;
+}
+`;
+
+const aggregateErrorsSource = `
+import { QueryClient, useMutation, useQueries, useSuspenseQueries } from "@tanstack/react-query";
+import { createQueryAdapter } from "questpie/react-query";
+import { createClient } from "./generated/client";
+
+// Application-owned native configuration, isolated from the default-host project.
+declare module "@tanstack/react-query" {
+  interface Register { defaultError: unknown; }
+}
+
+export function useAggregateTypes(scope: ReturnType<ReturnType<typeof createClient>["withContext"]>, cache: QueryClient) {
+  const adapter = createQueryAdapter(scope, cache);
+  const options = adapter.queries["tickets.queue"].options({ after: null, first: 1, statuses: null, teamIds: null });
+  const queries = useQueries({ queries: [options] });
+  const suspended = useSuspenseQueries({ queries: [options] });
+  queries[0]?.data?.nodes[0]?.updatedAt.toISOString();
+  suspended[0]?.data.nodes[0]?.updatedAt.toISOString();
+  // @ts-expect-error aggregate native errors require narrowing
+  queries[0]?.error?.message;
+  // @ts-expect-error aggregate Suspense errors require narrowing
+  suspended[0]?.error?.message;
+  // @ts-expect-error arbitrary aggregate failures are not declared domain errors
+  queries[0]?.error?.payload;
+  // @ts-expect-error arbitrary aggregate Suspense failures are not declared domain errors
+  suspended[0]?.error?.payload;
+  const mutation = adapter.mutations["ticket.create"];
+  const outcome = useMutation(mutation.options());
+  if (mutation.isError(outcome.error)) {
+    const code: "INVALID_TICKET" | "TICKET_UNAVAILABLE" = outcome.error.code;
+    void code;
+  }
 }
 `;

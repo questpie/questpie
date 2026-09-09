@@ -11,6 +11,8 @@
 		"realtime",
 		"reactive-query-resources",
 		"react-query",
+		"react-query-basic",
+		"react-query-start",
 		"durable-reactions",
 		"scheduled-jobs",
 		"multi-instance",

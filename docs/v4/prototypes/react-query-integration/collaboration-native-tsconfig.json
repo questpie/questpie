@@ -1,4 +1,0 @@
-{
-	"extends": "./tsconfig.json",
-	"include": ["collaboration-native-run.ts", "collaboration-native.test.ts"]
-}

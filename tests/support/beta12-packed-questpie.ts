@@ -42,7 +42,6 @@ export async function installQuestpieForTracer(
 			type: "module",
 			exports: {
 				".": "./index.ts",
-				"./react": "./react.ts",
 				"./react-query": "./react-query/index.ts",
 				"./internal/observability": "./internal/observability.ts",
 				"./internal/client-projection": "./internal/client-projection.ts",
@@ -52,11 +51,6 @@ export async function installQuestpieForTracer(
 	await symlink(
 		resolve(repositoryRoot, "packages/questpie/src/index.ts"),
 		join(packageRoot, "index.ts"),
-		"file",
-	);
-	await symlink(
-		resolve(repositoryRoot, "packages/questpie/src/react.ts"),
-		join(packageRoot, "react.ts"),
 		"file",
 	);
 	await symlink(

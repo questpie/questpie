@@ -25,6 +25,32 @@ test("the public QUESTPIE skill is portable and closed", () => {
 	expect(() => validatePublicQuestpieSkill(publicSkill)).not.toThrow();
 });
 
+test("the public skill admits native React Query imports and rejects the retired hook", async () => {
+	for (const specifier of [
+		"questpie/react-query",
+		"@tanstack/react-query",
+		"react",
+		"react-dom/client",
+		"questpie/react",
+	]) {
+		await withSkillCopy("native-import", async (root) => {
+			const reference = join(
+				root,
+				"references/query-resources-react-and-relations.md",
+			);
+			await writeFile(
+				reference,
+				`${await Bun.file(reference).text()}\n\`\`\`ts\nimport "${specifier}";\n\`\`\`\n`,
+			);
+			if (specifier === "questpie/react")
+				expect(() => validatePublicQuestpieSkill(root)).toThrow(
+					"imports unsupported package questpie/react",
+				);
+			else expect(() => validatePublicQuestpieSkill(root)).not.toThrow();
+		});
+	}
+});
+
 test("the public skill rejects repository-internal and escaping references", async () => {
 	await withSkillCopy("pointers", async (root) => {
 		const entry = join(root, "SKILL.md");
