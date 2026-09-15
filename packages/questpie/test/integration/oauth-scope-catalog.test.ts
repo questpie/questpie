@@ -131,14 +131,14 @@ describe("MO11 OAuth scope catalog", () => {
 			plugins: [
 				oauthProvider({
 					scopes: ["openid"],
-					validAudiences: ["http://localhost:3000/api/mcp"],
+					resources: ["http://localhost:3000/api/mcp"],
 				}),
 			],
 		});
 		const provider = enriched.plugins?.find(
 			(plugin) => (plugin as { id?: string }).id === "oauth-provider",
 		) as {
-			options: { scopes: string[]; validAudiences: string[] };
+			options: { scopes: string[]; resources: string[] };
 		};
 
 		expect(provider.options.scopes).toEqual(
@@ -149,9 +149,10 @@ describe("MO11 OAuth scope catalog", () => {
 				"globals:siteSettings:write",
 			]),
 		);
-		expect(provider.options.validAudiences).toContain(
+		expect(provider.options.resources).toEqual([
+			"http://localhost:3000/api/mcp",
 			"https://runtime.example.test",
-		);
+		]);
 	}, 30_000);
 
 	test("is a no-op when no oauth-provider is configured", async () => {

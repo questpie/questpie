@@ -6,8 +6,11 @@
 import _coll_jwks from "../collections/jwks";
 import _coll_oauthAccessToken from "../collections/oauth-access-token";
 import _coll_oauthClient from "../collections/oauth-client";
+import _coll_oauthClientAssertion from "../collections/oauth-client-assertion";
+import _coll_oauthClientResource from "../collections/oauth-client-resource";
 import _coll_oauthConsent from "../collections/oauth-consent";
 import _coll_oauthRefreshToken from "../collections/oauth-refresh-token";
+import _coll_oauthResource from "../collections/oauth-resource";
 
 // ── Singles ────────────────────────────────────────────────
 import _authConfig from "../config/auth";
@@ -20,8 +23,11 @@ export type OauthCollections = {
 	jwks: typeof _coll_jwks;
 	oauthAccessToken: typeof _coll_oauthAccessToken;
 	oauthClient: typeof _coll_oauthClient;
+	oauthClientAssertion: typeof _coll_oauthClientAssertion;
+	oauthClientResource: typeof _coll_oauthClientResource;
 	oauthConsent: typeof _coll_oauthConsent;
 	oauthRefreshToken: typeof _coll_oauthRefreshToken;
+	oauthResource: typeof _coll_oauthResource;
 };
 
 export type OauthChannels = Record<never, never>;
@@ -62,8 +68,11 @@ const _module: OauthModule = {
 		jwks: _coll_jwks,
 		oauthAccessToken: _coll_oauthAccessToken,
 		oauthClient: _coll_oauthClient,
+		oauthClientAssertion: _coll_oauthClientAssertion,
+		oauthClientResource: _coll_oauthClientResource,
 		oauthConsent: _coll_oauthConsent,
 		oauthRefreshToken: _coll_oauthRefreshToken,
+		oauthResource: _coll_oauthResource,
 	} as OauthCollections,
 	channels: {},
 	globals: {},

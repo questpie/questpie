@@ -17,9 +17,14 @@ export default collection("oauthAccessToken")
 		userId: f.text(255),
 		referenceId: f.text(255),
 		refreshId: f.text(255),
+		authorizationCodeId: f.text(255),
 		expiresAt: f.datetime(),
 		createdAt: f.datetime(),
+		revoked: f.datetime(),
 		scopes: f.json().required(),
+		resources: f.json(),
+		requestedUserInfoClaims: f.json(),
+		confirmation: f.json(),
 	}))
 	.access({
 		fields: {

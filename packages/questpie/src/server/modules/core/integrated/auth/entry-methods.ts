@@ -312,15 +312,12 @@ function withVerifiedGoogleEmail(
 		...options,
 		getUserInfo: async (tokens) => {
 			const result = await provider.getUserInfo(tokens);
-			const providerId: unknown = result?.user.id;
 			if (
 				!result ||
-				result.user.emailVerified !== true ||
-				(typeof providerId !== "string" && typeof providerId !== "number") ||
-				(typeof providerId === "number" && !Number.isFinite(providerId)) ||
-				String(providerId).trim().length === 0 ||
-				typeof result.user.email !== "string" ||
-				result.user.email.trim().length === 0
+				!hasVerifiedEmail(result.user) ||
+				!isStableSubject(
+					await provider.accountSubject({ tokens, profile: result.data }),
+				)
 			) {
 				return null;
 			}
@@ -330,13 +327,33 @@ function withVerifiedGoogleEmail(
 				user: {
 					...result.user,
 					...mapped,
-					id: String(providerId).trim(),
 					email: result.user.email.trim(),
 					emailVerified: true,
 				},
 			};
 		},
 	};
+}
+
+/**
+ * The provider account's identity. Better Auth 1.7 reads it from `accountSubject`
+ * on the raw profile rather than from the mapped user, so an empty or non-finite
+ * subject is refused here before an account key could be built from it.
+ */
+function isStableSubject(subject: unknown): boolean {
+	if (typeof subject === "number") return Number.isFinite(subject);
+	return typeof subject === "string" && subject.trim().length > 0;
+}
+
+function hasVerifiedEmail(user: {
+	email?: string | null;
+	emailVerified: boolean;
+}): user is { email: string; emailVerified: true } {
+	return (
+		user.emailVerified === true &&
+		typeof user.email === "string" &&
+		user.email.trim().length > 0
+	);
 }
 
 function withVerifiedGithubEmail(
@@ -348,15 +365,12 @@ function withVerifiedGithubEmail(
 		...options,
 		getUserInfo: async (tokens) => {
 			const result = await provider.getUserInfo(tokens);
-			const providerId: unknown = result?.user.id;
 			if (
 				!result ||
-				result.user.emailVerified !== true ||
-				(typeof providerId !== "string" && typeof providerId !== "number") ||
-				(typeof providerId === "number" && !Number.isFinite(providerId)) ||
-				String(providerId).trim().length === 0 ||
-				typeof result.user.email !== "string" ||
-				result.user.email.trim().length === 0
+				!hasVerifiedEmail(result.user) ||
+				!isStableSubject(
+					await provider.accountSubject({ tokens, profile: result.data }),
+				)
 			) {
 				return null;
 			}
@@ -366,7 +380,6 @@ function withVerifiedGithubEmail(
 				user: {
 					...result.user,
 					...mapped,
-					id: String(providerId).trim(),
 					email: result.user.email.trim(),
 					emailVerified: true,
 				},

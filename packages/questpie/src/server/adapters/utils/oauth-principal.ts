@@ -10,14 +10,14 @@
  *
  * Design (per the locked MO1 decisions + spec §3/§4 Phase 1):
  * - **Stateless verification.** The token is verified locally against the auth
- *   server's JWKS via `verifyAccessToken` (no DB round-trip on the hot path).
+ *   server's JWKS via `verifyBearerToken` (no DB round-trip on the hot path).
  *   `oauthProviderResourceClient(app.auth)` derives the `issuer` and `jwksUrl`
  *   straight from the running auth instance (its `baseURL` / `jwt()` plugin
  *   options), so they always match however tokens were issued — no re-derivation
  *   drift. We only supply the `audience`.
  * - **Audience binding (RFC 8707).** `audience` is the MCP endpoint URL
  *   (`<app.url>/api/mcp`), the same value MO2 sets as
- *   `oauthProvider.validAudiences`. `verifyAccessToken` rejects a token whose
+ *   `oauthProvider.resources`. `verifyBearerToken` rejects a token whose
  *   `aud` does not match, so a token minted for another resource cannot be
  *   replayed here.
  * - **RBAC still applies.** The returned principal is `kind: "oauth"`, from
@@ -80,7 +80,7 @@ function getBearerToken(request: Request): string | undefined {
  * whose first segment decodes to a JSON object with an `alg`. We deliberately do
  * NOT trust anything in the header for authorization — this is only a routing
  * hint to decide whether to attempt cryptographic verification. The actual
- * security decision is made by `verifyAccessToken` (signature + `aud`/`iss`/
+ * security decision is made by `verifyBearerToken` (signature + `aud`/`iss`/
  * `exp`). An `alg: "none"` header would still pass this shape check, but such a
  * token can never pass verification (see the module docblock).
  */
@@ -105,7 +105,7 @@ function looksLikeJwt(token: string): boolean {
 /**
  * The MCP endpoint URL an OAuth access token must be bound to (`aud`). Derived
  * from the app URL + the `/api/mcp` route path — identical to the derivation MO2
- * uses for `oauthProvider.validAudiences` in the starter auth config, so an
+ * uses for `oauthProvider.resources` in the starter auth config, so an
  * issued token's `aud` matches by construction.
  */
 export function mcpAudienceForApp(app: {
@@ -117,7 +117,7 @@ export function mcpAudienceForApp(app: {
 /**
  * The `iss` an OAuth 2.1 access token issued by this app's Better Auth provider
  * carries, derived from the running auth instance so it matches the token by
- * construction, and passed to `verifyAccessToken` explicitly.
+ * construction, and passed to `verifyBearerToken` explicitly.
  *
  * The provider mints the token `iss` as `jwt().options.jwt.issuer ?? ctx.baseURL`,
  * where `ctx.baseURL` is `options.baseURL` **with the auth basePath appended**
@@ -217,7 +217,7 @@ async function oauthJwksUrlForAuth(auth: {
  * by default, and that is what the QUESTPIE starter issues. Pinning verification
  * to this exact set is defense-in-depth against algorithm substitution: a token
  * presenting any other `alg` (a symmetric `HS*`, `none`, or a different
- * asymmetric family) is rejected by `verifyAccessToken` before its signature is
+ * asymmetric family) is rejected by `verifyBearerToken` before its signature is
  * even checked — independent of what keys the JWKS happens to expose.
  */
 const EXPECTED_TOKEN_ALGORITHMS = ["EdDSA"];
@@ -280,7 +280,7 @@ export async function resolveOAuthPrincipal<
 		// exp and throws on any failure.
 		const issuer = await oauthIssuerForAuth(app.auth);
 		const jwksUrl = await oauthJwksUrlForAuth(app.auth);
-		payload = (await resourceClient.getActions().verifyAccessToken(token, {
+		payload = (await resourceClient.getActions().verifyBearerToken(token, {
 			...(jwksUrl ? { jwksUrl } : {}),
 			verifyOptions: {
 				audience,
@@ -303,7 +303,7 @@ export async function resolveOAuthPrincipal<
 	if (!user) return null;
 
 	const scopes = parseScopes(payload.scope);
-	// `verifyAccessToken` copies `azp` → `client_id`; prefer the normalized field.
+	// `verifyBearerToken` copies `azp` → `client_id`; prefer the normalized field.
 	const clientId =
 		typeof payload.client_id === "string"
 			? payload.client_id

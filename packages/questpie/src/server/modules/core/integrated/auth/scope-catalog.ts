@@ -91,6 +91,25 @@ export function buildScopeCatalog(app: ScopeCatalogApp): OAuthScopeCatalog {
 	return { scopes, scopesSupported };
 }
 
+/** Adds `identifier` as a resource unless the provider already declares it (string or object form). */
+function withResource(
+	resources: OAuthOptions<string[]>["resources"],
+	identifier: string | undefined,
+): NonNullable<OAuthOptions<string[]>["resources"]> {
+	const declared = [...(resources ?? [])];
+	if (
+		identifier &&
+		!declared.some(
+			(resource) =>
+				(typeof resource === "string" ? resource : resource.identifier) ===
+				identifier,
+		)
+	) {
+		declared.push(identifier);
+	}
+	return declared;
+}
+
 /**
  * Merge the derived scope catalog into the app's `oauthProvider()` plugin.
  *
@@ -126,10 +145,7 @@ export function applyOAuthScopeCatalog(
 		return oauthProvider({
 			...options,
 			scopes: unique([...(options.scopes ?? []), ...catalog.scopes]),
-			validAudiences: unique([
-				...(options.validAudiences ?? []),
-				...(crdtAudience ? [crdtAudience] : []),
-			]),
+			resources: withResource(options.resources, crdtAudience),
 			advertisedMetadata: {
 				...options.advertisedMetadata,
 				scopes_supported: unique([

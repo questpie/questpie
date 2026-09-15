@@ -26,7 +26,7 @@
  * derives from. Because the DCR endpoint and `/oauth2/authorize` validate
  * requested scopes against that catalog, a real DCR client on the *shipped*
  * starter can now obtain the granular scopes it needs. The `oauthProvider`
- * override below sets ONLY `validAudiences` (bound to this run's ephemeral port —
+ * override below sets ONLY `resources` (bound to this run's ephemeral port —
  * an audience concern, orthogonal to scopes); the scope catalog comes from the
  * framework.
  *
@@ -170,7 +170,8 @@ async function obtainAccessToken(
 			}),
 		}),
 	);
-	if (regRes.status !== 200) {
+	// RFC 7591 §3.2.1: a successful registration answers 201 Created.
+	if (regRes.status !== 201) {
 		throw new Error(`DCR failed: ${regRes.status} ${await regRes.text()}`);
 	}
 	const clientId = (await regRes.json()).client_id as string;
@@ -284,8 +285,12 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 				}),
 			);
 
-			expect(response.status).toBe(200);
-			expect((await response.json()).client_id).toBeString();
+			expect(response.status).toBe(201);
+			const registered = await response.json();
+			expect(registered.client_id).toBeString();
+			// A localhost-only redirect with no type is a native app (RFC 8252),
+			// which is what lets local MCP clients register under Better Auth 1.7.
+			expect(registered.application_type).toBe("native");
 		} finally {
 			await setup.cleanup();
 		}
@@ -326,7 +331,7 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 						requireEmailVerification: false,
 					},
 					// Override the starter's oauthProvider (deduped by id "oauth-provider",
-					// override wins) ONLY to bind `validAudiences` to this run's ephemeral
+					// override wins) ONLY to bind `resources` to this run's ephemeral
 					// port — the starter derives the audience from env at module load, which
 					// won't match. No `scopes` here: MO11's `applyOAuthScopeCatalog` derives
 					// the granular catalog from the registered collections at auth build.
@@ -339,7 +344,8 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 							consentPage: "/admin/oauth/consent",
 							allowDynamicClientRegistration: true,
 							allowUnauthenticatedClientRegistration: true,
-							validAudiences: [MCP_AUD],
+							resources: [MCP_AUD],
+							enforcePerClientResources: false,
 							accessTokenExpiresIn: 3600,
 						}),
 					],

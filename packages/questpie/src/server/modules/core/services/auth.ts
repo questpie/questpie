@@ -1,6 +1,8 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
+import { surfaceRecognisedPostgresErrors } from "#questpie/server/modules/core/integrated/auth/adapter-postgres-errors.js";
+import { createOAuthNativeLoopbackRegistrationPlugin } from "#questpie/server/modules/core/integrated/auth/oauth-native-registration.js";
 import { applyOAuthScopeCatalog } from "#questpie/server/modules/core/integrated/auth/scope-catalog.js";
 import {
 	createAuthTransactionalDatabase,
@@ -25,7 +27,7 @@ export default service({
 	create: ({ app }) => {
 		const authOptions = applyOAuthScopeCatalog(app, app.config.auth ?? {});
 		const jobs = app.config.queue?.jobs ?? {};
-		return betterAuth({
+		const auth = betterAuth({
 			baseURL: app.config.app.url,
 			secret: app.config.secret,
 			...authOptions,
@@ -37,12 +39,25 @@ export default service({
 					getQueue: () => app.queue,
 				}),
 				...(authOptions.plugins ?? []),
+				...(authOptions.plugins?.some(
+					(plugin) => plugin?.id === "oauth-provider",
+				)
+					? [createOAuthNativeLoopbackRegistrationPlugin()]
+					: []),
 			],
-			database: drizzleAdapter(createAuthTransactionalDatabase(app.db), {
-				provider: "pg",
-				schema: app.getSchema(),
-				transaction: true,
-			}),
+			database: surfaceRecognisedPostgresErrors(
+				drizzleAdapter(createAuthTransactionalDatabase(app.db), {
+					provider: "pg",
+					schema: app.getSchema(),
+					transaction: true,
+				}),
+			),
 		});
+		// Better Auth 1.7 plugins query the database while the context initialises
+		// (oauth-provider seeds `oauthResource`). A CLI command that closes the
+		// connection before that finishes must not crash the process on an
+		// unhandled rejection; anything awaiting the context still receives it.
+		auth.$context.catch(() => {});
+		return auth;
 	},
 });
