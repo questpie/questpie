@@ -40,8 +40,8 @@
 		"pg-boss": "^12.5.4",
 		"pusher-js": "^8.5.0",
 		"questpie": "latest",
-		"react": "^19.0.0",
-		"react-dom": "^19.0.0",
+		"react": "~19.2.8",
+		"react-dom": "~19.2.8",
 		"zod": "^4.2.1"
 	},
 	"devDependencies": {
