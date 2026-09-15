@@ -16,15 +16,23 @@ export default collection("oauthRefreshToken")
 		sessionId: f.text(255),
 		userId: f.text(255).required(),
 		referenceId: f.text(255),
+		authorizationCodeId: f.text(255),
 		expiresAt: f.datetime(),
 		createdAt: f.datetime(),
 		revoked: f.datetime(),
+		rotatedAt: f.datetime(),
+		rotationReplayResponse: f.textarea(),
+		rotationReplayExpiresAt: f.datetime(),
 		authTime: f.datetime(),
 		scopes: f.json().required(),
+		resources: f.json(),
+		requestedUserInfoClaims: f.json(),
+		confirmation: f.json(),
 	}))
 	.access({
 		fields: {
 			token: { read: false, create: false, update: false },
+			rotationReplayResponse: { read: false, create: false, update: false },
 		},
 	})
 	.title(({ f }) => f.clientId);

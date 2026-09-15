@@ -74,8 +74,8 @@
 		"zod": "^4.2.1"
 	},
 	"devDependencies": {
-		"@better-auth/oauth-provider": "^1.6.23",
-		"better-auth": "^1.6.23",
+		"@better-auth/oauth-provider": "^1.7.4",
+		"better-auth": "^1.7.4",
 		"bun-types": "latest",
 		"tsdown": "^0.18.3"
 	},

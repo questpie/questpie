@@ -14,6 +14,8 @@ export default collection("oauthConsent")
 		userId: f.text(255),
 		referenceId: f.text(255),
 		scopes: f.json().required(),
+		resources: f.json(),
+		requestedUserInfoClaims: f.json(),
 		createdAt: f.datetime(),
 		updatedAt: f.datetime(),
 	}))

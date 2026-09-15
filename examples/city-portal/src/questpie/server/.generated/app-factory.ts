@@ -32,6 +32,7 @@ import _mig_20260804T091856_uploadMultipleColumn from "../migrations/20260804T09
 import _mig_20260805T165224_realtimeDrainCursorIndex from "../migrations/20260805T165224_realtime-drain-cursor-index";
 import _mig_20260805T180807_realtimeSettlementRetention from "../migrations/20260805T180807_realtime-settlement-retention";
 import _mig_20260806T151904_removeRealtimeHead from "../migrations/20260806T151904_remove-realtime-head";
+import _mig_20260915T042701_realtimeIdempotency1 from "../migrations/20260915T042701_realtime-idempotency-1";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
@@ -74,7 +75,7 @@ const _appDefinition = ({
 	globals: {
 		site_settings: _glob_site_settings,
 	},
-	migrations: [_mig_20260725T184252_realtimeV3Umbrella, _mig_20260726T163039_queueTransactionalDispatch, _mig_20260730T182023_optimisticConcurrencyRevisions, _mig_20260731T000040_realtimeIdempotency1, _mig_20260731T084648_realtimeIdempotency1, _mig_20260804T091856_uploadMultipleColumn, _mig_20260805T165224_realtimeDrainCursorIndex, _mig_20260805T180807_realtimeSettlementRetention, _mig_20260806T151904_removeRealtimeHead],
+	migrations: [_mig_20260725T184252_realtimeV3Umbrella, _mig_20260726T163039_queueTransactionalDispatch, _mig_20260730T182023_optimisticConcurrencyRevisions, _mig_20260731T000040_realtimeIdempotency1, _mig_20260731T084648_realtimeIdempotency1, _mig_20260804T091856_uploadMultipleColumn, _mig_20260805T165224_realtimeDrainCursorIndex, _mig_20260805T180807_realtimeSettlementRetention, _mig_20260806T151904_removeRealtimeHead, _mig_20260915T042701_realtimeIdempotency1],
 	blocks: {
 		[_bloc_accordion.state.name]: _bloc_accordion,
 		[_bloc_announcementBanner.state.name]: _bloc_announcementBanner,

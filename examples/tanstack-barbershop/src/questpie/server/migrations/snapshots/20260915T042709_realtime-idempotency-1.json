@@ -1,0 +1,1028 @@
+{
+  "operations": [
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthClientAssertion",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthClientAssertion",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthClientResource",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthClientResource",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.table__COLON__public__DOT__oauthResource",
+      "value": {
+        "isRlsEnabled": false,
+        "name": "oauthResource",
+        "entityType": "tables",
+        "schema": "public"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__alg",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "alg",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__jwks__DOT__crv",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "crv",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "jwks"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__authorizationCodeId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "authorizationCodeId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__revoked",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "revoked",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__resources",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resources",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__requestedUserInfoClaims",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "requestedUserInfoClaims",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthAccessToken__DOT__confirmation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "confirmation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthAccessToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__clientDiscoveryId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientDiscoveryId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__clientCredentialsScopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientCredentialsScopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__backchannelLogoutUri",
+      "value": {
+        "type": "varchar(2048)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "backchannelLogoutUri",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__backchannelLogoutSessionRequired",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "backchannelLogoutSessionRequired",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__applicationType",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "applicationType",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__jwks",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "jwks",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__jwksUri",
+      "value": {
+        "type": "varchar(2048)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "jwksUri",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClient__DOT__dpopBoundAccessTokens",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "dpopBoundAccessTokens",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClient"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClientAssertion__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClientAssertion"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClientAssertion__DOT__expiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "expiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClientAssertion"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClientResource__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClientResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClientResource__DOT__clientId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "clientId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClientResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClientResource__DOT__resourceId",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resourceId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClientResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClientResource__DOT__metadata",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClientResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthClientResource__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthClientResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__resources",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resources",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthConsent__DOT__requestedUserInfoClaims",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "requestedUserInfoClaims",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthConsent"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__authorizationCodeId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "authorizationCodeId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__rotatedAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "rotatedAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__rotationReplayResponse",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "rotationReplayResponse",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__rotationReplayExpiresAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "rotationReplayExpiresAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__resources",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "resources",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__requestedUserInfoClaims",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "requestedUserInfoClaims",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthRefreshToken__DOT__confirmation",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "confirmation",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthRefreshToken"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__id",
+      "value": {
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "name": "id",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__identifier",
+      "value": {
+        "type": "varchar(500)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "identifier",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__name",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "name",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__accessTokenTtl",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "accessTokenTtl",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__refreshTokenTtl",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "refreshTokenTtl",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__signingAlgorithm",
+      "value": {
+        "type": "varchar(50)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "signingAlgorithm",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__signingKeyId",
+      "value": {
+        "type": "varchar(255)",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "signingKeyId",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__allowedScopes",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "allowedScopes",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__customClaims",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "customClaims",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__dpopBoundAccessTokensRequired",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "dpopBoundAccessTokensRequired",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__disabled",
+      "value": {
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "name": "disabled",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__createdAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "createdAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__updatedAt",
+      "value": {
+        "type": "timestamp(3) with time zone",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "updatedAt",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__policyVersion",
+      "value": {
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": "1",
+        "generated": null,
+        "identity": null,
+        "name": "policyVersion",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.column__COLON__public__DOT__oauthResource__DOT__metadata",
+      "value": {
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "name": "metadata",
+        "entityType": "columns",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__oauthClientResource__DOT__oauthClientResource_clientId_resourceId_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "clientId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "resourceId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "oauthClientResource_clientId_resourceId_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "oauthClientResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.index__COLON__public__DOT__oauthResource__DOT__oauthResource_identifier_index",
+      "value": {
+        "nameExplicit": false,
+        "columns": [
+          {
+            "value": "identifier",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": true,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "name": "oauthResource_identifier_index",
+        "entityType": "indexes",
+        "schema": "public",
+        "table": "oauthResource"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthClientAssertion__DOT__oauthClientAssertion_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthClientAssertion_pkey",
+        "schema": "public",
+        "table": "oauthClientAssertion",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthClientResource__DOT__oauthClientResource_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthClientResource_pkey",
+        "schema": "public",
+        "table": "oauthClientResource",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    },
+    {
+      "type": "set",
+      "path": "ddl.pk__COLON__public__DOT__oauthResource__DOT__oauthResource_pkey",
+      "value": {
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "name": "oauthResource_pkey",
+        "schema": "public",
+        "table": "oauthResource",
+        "entityType": "pks"
+      },
+      "timestamp": "2026-09-15T04:27:10.976Z",
+      "migrationId": "realtimeIdempotency120260915T042709"
+    }
+  ],
+  "metadata": {
+    "migrationId": "realtimeIdempotency120260915T042709",
+    "timestamp": "2026-09-15T04:27:12.154Z",
+    "prevId": "00000000-0000-0000-0000-000000000000"
+  }
+}

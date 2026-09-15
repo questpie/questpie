@@ -166,8 +166,8 @@
 		"dev": "bun run --watch src/index.ts"
 	},
 	"dependencies": {
-		"@better-auth/oauth-provider": "^1.6.23",
-		"better-auth": "^1.6.23",
+		"@better-auth/oauth-provider": "^1.7.4",
+		"better-auth": "^1.7.4",
 		"commander": "^14.0.2",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"files-sdk": "^1.6.0",
@@ -189,7 +189,7 @@
 		"bullmq": "^5.0.0",
 		"bun-types": "latest",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
-		"nodemailer": "^9.0.0",
+		"nodemailer": "^9.1.1",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.5.4",
 		"pusher": "^5.3.4",

@@ -10,6 +10,8 @@ export default collection("jwks")
 	.fields(({ f }) => ({
 		publicKey: f.textarea().required(),
 		privateKey: f.textarea().required(),
+		alg: f.text(50),
+		crv: f.text(50),
 		createdAt: f.datetime().required(),
 		expiresAt: f.datetime(),
 	}))

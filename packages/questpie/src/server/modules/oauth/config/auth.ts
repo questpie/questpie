@@ -33,8 +33,8 @@ import { authConfig } from "#questpie/server/config/factories.js";
  * URL (RFC 8707 resource indicator), per the MO1 decision. Derived from the same
  * app-URL env chain the framework resolves `app.url` from
  * (`QUESTPIE_APP_URL` → `APP_URL` → `http://localhost:3000`) + the `/api/mcp`
- * route path. `oauthProvider.validAudiences` and `verifyAccessToken` both check
- * `aud` against this so a token cannot be replayed against other endpoints.
+ * route path. `oauthProvider.resources` registers it and `verifyBearerToken`
+ * checks `aud` against it, so a token cannot be replayed against other endpoints.
  *
  * TODO(mo4/mo9): finalize `aud` from the resolved MCP route URL once the root
  * discovery endpoints exist, instead of re-deriving it from env here.
@@ -87,7 +87,14 @@ export default authConfig({
 			// enforces PKCE for every DCR-registered (public) client — a client
 			// registering with `require_pkce: false` is rejected. MCP clients
 			// self-register via DCR, so PKCE is always required for them.
-			validAudiences: [mcpAudience],
+			// RFC 8707: a token may only target a registered, enabled resource
+			// (Better Auth 1.7, GHSA-p2fr-6hmx-4528). This seeds the MCP endpoint's
+			// `oauthResource` row. Per-client resource links stay off: every client
+			// could already target every audience, and a client registered before
+			// the upgrade has no link row, so enforcing them would lock out MCP
+			// clients that are already connected.
+			resources: [mcpAudience],
+			enforcePerClientResources: false,
 			accessTokenExpiresIn: 3600, // 1 hour (seconds).
 		}),
 	],

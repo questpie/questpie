@@ -434,7 +434,9 @@ describe("configureAuthEntryMethods", () => {
 		expect(database.account).toHaveLength(1);
 	});
 
-	it("normalizes the built-in GitHub numeric profile id", async () => {
+	// Better Auth 1.7 keys the account on `accountSubject` over the raw profile, so
+	// the numeric GitHub id stays in `data` and never rides on the mapped user.
+	it("accepts the built-in GitHub numeric profile id as the account subject", async () => {
 		const configured = configureAuthEntryMethods({
 			credentials: { enabled: false },
 			socialProviders: {
@@ -470,7 +472,10 @@ describe("configureAuthEntryMethods", () => {
 		};
 		try {
 			const result = await provider.getUserInfo({ accessToken: "token" });
-			expect(result?.user.id).toBe("123456789");
+			expect((result?.data as { id?: unknown } | undefined)?.id).toBe(
+				123456789,
+			);
+			expect(result?.user).not.toHaveProperty("id");
 			expect(result?.user.emailVerified).toBe(true);
 		} finally {
 			globalThis.fetch = originalFetch;

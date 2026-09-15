@@ -39,6 +39,7 @@ import _mig_20260804T091856_uploadMultipleColumn from "../migrations/20260804T09
 import _mig_20260805T165224_realtimeDrainCursorIndex from "../migrations/20260805T165224_realtime-drain-cursor-index";
 import _mig_20260805T180807_realtimeSettlementRetention from "../migrations/20260805T180807_realtime-settlement-retention";
 import _mig_20260806T151904_removeRealtimeHead from "../migrations/20260806T151904_remove-realtime-head";
+import _mig_20260915T042701_realtimeIdempotency1 from "../migrations/20260915T042701_realtime-idempotency-1";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";
