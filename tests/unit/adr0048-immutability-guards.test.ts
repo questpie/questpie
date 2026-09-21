@@ -489,4 +489,118 @@ export const messageOperations = defineCollectionOperations(messages, {
 			await rm(temporary, { recursive: true, force: true });
 		}
 	});
+
+	test("refuses a Policy update operation on an append-only Collection even without an explicit Operation Set (the auto-generated Collection Mutation Kernel)", async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-kernel-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/append-only-kernel-fixture.ts"),
+				`import { constraint, defineCollection, definePolicy, field, policy } from "questpie";
+
+export const evidenceEntries = defineCollection({
+	name: "evidenceEntries",
+	appendOnly: true,
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		label: field.text({ nullable: false }),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+
+export const evidenceEntriesPolicy = definePolicy(evidenceEntries, {
+	name: "evidenceEntries.default",
+	create: {
+		admit: policy.authenticated(),
+		candidate: ({ candidate }) => candidate.id.equal(candidate.id),
+	},
+	update: {
+		admit: policy.authenticated(),
+		rows: ({ current }) => current.id.equal(current.id),
+		candidate: ({ candidate, current }) => candidate.id.equal(current.id),
+	},
+	fields: {
+		create: ({ candidate }) => ({
+			id: candidate.id.equal(candidate.id),
+			label: candidate.label.equal(candidate.label),
+		}),
+		update: ({ current }) => ({
+			id: current.id.equal(current.id),
+			label: current.label.equal(current.label),
+		}),
+	},
+});
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-COMPOSE-013",
+				diagnosticClass: "structuralTypeError",
+				message: expect.stringContaining(
+					"collection:evidenceEntries cannot declare a Policy update operation: it is append-only",
+				),
+			});
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+
+	test("a create-only Policy on an append-only Collection compiles and generates no update kernel", async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-kernel-create-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/append-only-kernel-create-fixture.ts"),
+				`import { constraint, defineCollection, definePolicy, field, policy } from "questpie";
+
+export const evidenceEntries = defineCollection({
+	name: "evidenceEntries",
+	appendOnly: true,
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		label: field.text({ nullable: false }),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+
+export const evidenceEntriesPolicy = definePolicy(evidenceEntries, {
+	name: "evidenceEntries.default",
+	create: {
+		admit: policy.authenticated(),
+		candidate: ({ candidate }) => candidate.id.equal(candidate.id),
+	},
+	fields: {
+		create: ({ candidate }) => ({
+			id: candidate.id.equal(candidate.id),
+			label: candidate.label.equal(candidate.label),
+		}),
+	},
+});
+`,
+			);
+			const compilation = await compileApplication({
+				applicationRoot: temporary,
+			});
+			const operationPrograms = JSON.parse(
+				compilation.generatedFiles["collection-operation-programs.json"] ??
+					"null",
+			) as { operations: Array<{ identity: string }> };
+			const kernelIdentities = operationPrograms.operations
+				.map((entry) => entry.identity)
+				.filter((identity) => identity.includes("evidenceEntries"));
+			expect(kernelIdentities).toContain(
+				"mutation:__collectionKernel.evidenceEntries.create",
+			);
+			expect(
+				kernelIdentities.some((identity) => identity.includes(".update")),
+			).toBe(false);
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
 });

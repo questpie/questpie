@@ -1,4 +1,5 @@
 import { canonicalBytes, compareAscii } from "../canonical";
+import { CompilerDiagnosticError } from "../diagnostic";
 import {
 	normalizeBoundPolicy,
 	selectDefaultPolicy,
@@ -184,11 +185,16 @@ export function projectCollectionMutationKernels(
 				collection.identity as `collection:${string}`,
 				policies,
 			);
-			return (["create", "update"] as const).flatMap((member) =>
-				policy.operations[member]
-					? [kernelProgram(collection, policy, member)]
-					: [],
-			);
+			return (["create", "update"] as const).flatMap((member) => {
+				if (!policy.operations[member]) return [];
+				if (member === "update" && collection.contract.appendOnly === true)
+					throw new CompilerDiagnosticError(
+						"QP-COMPOSE-013",
+						"structuralTypeError",
+						`${collection.identity} cannot declare a Policy update operation: it is append-only (ADR-0048) and never accepts UPDATE`,
+					);
+				return [kernelProgram(collection, policy, member)];
+			});
 		})
 		.toSorted((left, right) => compareAscii(left.identity, right.identity));
 	return Object.freeze({
