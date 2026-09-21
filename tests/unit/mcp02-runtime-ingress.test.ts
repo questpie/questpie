@@ -276,6 +276,412 @@ test("closes malformed envelopes and unsupported methods without disclosure", as
 	});
 });
 
+test("tools/call armed via requireCredential authenticates before execution and returns a real 401 with the app challenge and no-store", async () => {
+	let executions = 0;
+	let authenticateCalls = 0;
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [
+			{
+				identity: "query:tickets.list",
+				kind: "query",
+				tool: { name: "query.tickets.list" },
+			},
+		],
+		requireCredential: true,
+		authenticate: async () => {
+			authenticateCalls += 1;
+			return {
+				kind: "unauthenticated",
+				wwwAuthenticate:
+					'Bearer resource_metadata="https://support.example/.well-known/oauth-protected-resource"',
+			};
+		},
+		execute: async () => {
+			executions += 1;
+			throw new Error("unauthenticated calls must not execute");
+		},
+	});
+	const response = await ingress.fetch(
+		request(
+			"tools/call",
+			{
+				_meta: requestMeta,
+				name: "query.tickets.list",
+				arguments: { context: {}, input: {} },
+			},
+			"query.tickets.list",
+		),
+	);
+	expect(response?.status).toBe(401);
+	expect(response?.headers.get("content-type")).toBe(
+		"application/json; charset=utf-8",
+	);
+	expect(response?.headers.get("www-authenticate")).toBe(
+		'Bearer resource_metadata="https://support.example/.well-known/oauth-protected-resource"',
+	);
+	expect(response?.headers.get("cache-control")).toBe("private, no-store");
+	expect(await response?.json()).toEqual({
+		jsonrpc: "2.0",
+		id: "discover-1",
+		error: { code: -32001, message: "Unauthorized" },
+	});
+	expect(authenticateCalls).toBe(1);
+	expect(executions).toBe(0);
+});
+
+test("tools/call does not call authenticate at all when requireCredential is not armed, even though authenticate is wired", async () => {
+	let authenticateCalls = 0;
+	let executions = 0;
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [
+			{
+				identity: "query:tickets.list",
+				kind: "query",
+				tool: { name: "query.tickets.list" },
+			},
+		],
+		authenticate: async () => {
+			authenticateCalls += 1;
+			return { kind: "unauthenticated" };
+		},
+		execute: async () => {
+			executions += 1;
+			return {
+				structuredContent: { callId: "c1", result: [] },
+				isError: false,
+			};
+		},
+	});
+	const response = await ingress.fetch(
+		request(
+			"tools/call",
+			{
+				_meta: requestMeta,
+				name: "query.tickets.list",
+				arguments: { context: {}, input: {} },
+			},
+			"query.tickets.list",
+		),
+	);
+	expect(response?.status).toBe(200);
+	expect(authenticateCalls).toBe(0);
+	expect(executions).toBe(1);
+});
+
+test("tools/call 401 omits www-authenticate when the app declares no challenge", async () => {
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [
+			{
+				identity: "query:tickets.list",
+				kind: "query",
+				tool: { name: "query.tickets.list" },
+			},
+		],
+		requireCredential: true,
+		authenticate: async () => ({ kind: "unauthenticated" }),
+		execute: async () => {
+			throw new Error("unauthenticated calls must not execute");
+		},
+	});
+	const response = await ingress.fetch(
+		request(
+			"tools/call",
+			{
+				_meta: requestMeta,
+				name: "query.tickets.list",
+				arguments: { context: {}, input: {} },
+			},
+			"query.tickets.list",
+		),
+	);
+	expect(response?.status).toBe(401);
+	expect(response?.headers.has("www-authenticate")).toBe(false);
+});
+
+test("a deferred authentication outcome falls through to today's execute-owned path unchanged", async () => {
+	let executions = 0;
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [
+			{
+				identity: "query:tickets.list",
+				kind: "query",
+				tool: { name: "query.tickets.list" },
+			},
+		],
+		requireCredential: true,
+		authenticate: async () => ({ kind: "deferred" }),
+		execute: async () => {
+			executions += 1;
+			return {
+				structuredContent: { callId: "call-1", result: [] },
+				isError: false,
+			};
+		},
+	});
+	const response = await ingress.fetch(
+		request(
+			"tools/call",
+			{
+				_meta: requestMeta,
+				name: "query.tickets.list",
+				arguments: { context: {}, input: {} },
+			},
+			"query.tickets.list",
+		),
+	);
+	expect(response?.status).toBe(200);
+	expect(response?.headers.get("content-type")).toBe("text/event-stream");
+	expect(executions).toBe(1);
+});
+
+test("F3: an 'unavailable' authentication outcome is a real 503 on tools/call, never a fall-through to public success", async () => {
+	let executions = 0;
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [
+			{
+				identity: "query:tickets.list",
+				kind: "query",
+				tool: { name: "query.tickets.list" },
+			},
+		],
+		requireCredential: true,
+		authenticate: async () => ({ kind: "unavailable" }),
+		execute: async () => {
+			executions += 1;
+			throw new Error("must not execute during a provider outage");
+		},
+	});
+	const response = await ingress.fetch(
+		request(
+			"tools/call",
+			{
+				_meta: requestMeta,
+				name: "query.tickets.list",
+				arguments: { context: {}, input: {} },
+			},
+			"query.tickets.list",
+		),
+	);
+	expect(response?.status).toBe(503);
+	expect(response?.headers.get("cache-control")).toBe("private, no-store");
+	expect(await response?.json()).toEqual({
+		jsonrpc: "2.0",
+		id: "discover-1",
+		error: { code: -32002, message: "Service Unavailable" },
+	});
+	expect(executions).toBe(0);
+});
+
+test("F3: a 'deadline' authentication outcome is a real 408 on tools/call", async () => {
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [
+			{
+				identity: "query:tickets.list",
+				kind: "query",
+				tool: { name: "query.tickets.list" },
+			},
+		],
+		requireCredential: true,
+		authenticate: async () => ({ kind: "deadline" }),
+		execute: async () => {
+			throw new Error("must not execute");
+		},
+	});
+	const response = await ingress.fetch(
+		request(
+			"tools/call",
+			{
+				_meta: requestMeta,
+				name: "query.tickets.list",
+				arguments: { context: {}, input: {} },
+			},
+			"query.tickets.list",
+		),
+	);
+	expect(response?.status).toBe(408);
+	expect(await response?.json()).toEqual({
+		jsonrpc: "2.0",
+		id: "discover-1",
+		error: { code: -32003, message: "Request Timeout" },
+	});
+});
+
+test("F5: an authenticated preflight's resolved Principal is passed to execute so the credential is resolved exactly once", async () => {
+	const user = { kind: "user", id: "u-1" };
+	let receivedPrincipal: unknown;
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [
+			{
+				identity: "query:tickets.list",
+				kind: "query",
+				tool: { name: "query.tickets.list" },
+			},
+		],
+		requireCredential: true,
+		authenticate: async () => ({
+			kind: "authenticated",
+			principal: user as never,
+		}),
+		execute: async ({ principal }) => {
+			receivedPrincipal = principal;
+			return {
+				structuredContent: { callId: "c1", result: [] },
+				isError: false,
+			};
+		},
+	});
+	await ingress.fetch(
+		request(
+			"tools/call",
+			{
+				_meta: requestMeta,
+				name: "query.tickets.list",
+				arguments: { context: {}, input: {} },
+			},
+			"query.tickets.list",
+		),
+	);
+	expect(receivedPrincipal).toBe(user);
+});
+
+test("tools/list and server/discover stay public without protectCatalog even when authenticate is wired", async () => {
+	const binding = {
+		identity: "query:tickets.list",
+		kind: "query" as const,
+		tool: { name: "query.tickets.list" },
+	};
+	let authenticateCalls = 0;
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [binding],
+		authenticate: async () => {
+			authenticateCalls += 1;
+			return { kind: "unauthenticated" };
+		},
+		execute: async () => {
+			throw new Error("listing must not execute an Operation");
+		},
+	});
+	const list = await ingress.fetch(
+		request("tools/list", { _meta: requestMeta }),
+	);
+	expect(list?.status).toBe(200);
+	const discover = await ingress.fetch(
+		request("server/discover", { _meta: requestMeta }),
+	);
+	expect(discover?.status).toBe(200);
+	expect(authenticateCalls).toBe(0);
+});
+
+test("protectCatalog gates tools/list and server/discover behind the same 401 challenge, still without evaluating Policy", async () => {
+	const binding = {
+		identity: "query:tickets.list",
+		kind: "query" as const,
+		tool: { name: "query.tickets.list" },
+	};
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [binding],
+		protectCatalog: true,
+		authenticate: async () => ({
+			kind: "unauthenticated",
+			wwwAuthenticate: "Bearer",
+		}),
+		execute: async () => {
+			throw new Error("must not execute");
+		},
+	});
+	const list = await ingress.fetch(
+		request("tools/list", { _meta: requestMeta }),
+	);
+	expect(list?.status).toBe(401);
+	expect(list?.headers.get("www-authenticate")).toBe("Bearer");
+	const discover = await ingress.fetch(
+		request("server/discover", { _meta: requestMeta }),
+	);
+	expect(discover?.status).toBe(401);
+	expect(discover?.headers.get("www-authenticate")).toBe("Bearer");
+});
+
+test("protectCatalog serves the catalogue once authenticated, unchanged from the public shape", async () => {
+	const binding = {
+		identity: "query:tickets.list",
+		kind: "query" as const,
+		tool: { name: "query.tickets.list" },
+	};
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [binding],
+		protectCatalog: true,
+		authenticate: async () => ({ kind: "authenticated" }),
+		execute: async () => {
+			throw new Error("listing must not execute an Operation");
+		},
+	});
+	const response = await ingress.fetch(
+		request("tools/list", { _meta: requestMeta }),
+	);
+	expect(response?.status).toBe(200);
+	expect(await response?.json()).toMatchObject({
+		result: { tools: [binding.tool] },
+	});
+});
+
+test("protocol-version mismatch is rejected before authentication runs, so it never discloses catalogue membership", async () => {
+	let authenticateCalls = 0;
+	const ingress = createMcpIngress({
+		serverInfo: { name: "support", version: "4.0.0-beta.2" },
+		maximumRequestBytes: 1_048_576,
+		tools: [],
+		protectCatalog: true,
+		authenticate: async () => {
+			authenticateCalls += 1;
+			return { kind: "unauthenticated" };
+		},
+		execute: async () => {
+			throw new Error("must not execute");
+		},
+	});
+	const stale = new Request("https://support.example/_questpie/mcp", {
+		method: "POST",
+		headers: {
+			accept: "application/json, text/event-stream",
+			"content-type": "application/json",
+			"mcp-protocol-version": "2020-01-01",
+			"mcp-method": "tools/list",
+		},
+		body: JSON.stringify({
+			jsonrpc: "2.0",
+			id: "stale-1",
+			method: "tools/list",
+			params: { _meta: requestMeta },
+		}),
+	});
+	const response = await ingress.fetch(stale);
+	expect(response?.status).toBe(400);
+	expect(await response?.json()).toMatchObject({
+		error: { code: -32022 },
+	});
+	expect(authenticateCalls).toBe(0);
+});
+
 test("cancels the one Execution when the response stream closes and never retries", async () => {
 	let executions = 0;
 	let resolveAbort!: () => void;

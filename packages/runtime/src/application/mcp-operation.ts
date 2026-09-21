@@ -109,6 +109,15 @@ export function createMcpOperationAdapter<ContextInput, View>(
 		kind: McpToolBinding["kind"];
 		request: Request;
 		signal: AbortSignal;
+		/**
+		 * Already-resolved Principal from the ingress's own credential
+		 * preflight (armed via `requireCredential`). When present, this
+		 * function trusts it and skips its own `resolvePrincipal` call
+		 * entirely, so the credential is resolved exactly once per request.
+		 * When absent (preflight not armed, or no ingress preflight at all),
+		 * behavior is unchanged: resolve here, as always.
+		 */
+		principal?: Principal;
 	}>,
 ) => Promise<McpExecutionResult> {
 	const contracts = new Map(
@@ -143,9 +152,11 @@ export function createMcpOperationAdapter<ContextInput, View>(
 					throw new OperationFailure("PROTOCOL_UNSUPPORTED");
 			}
 			try {
-				caller = await awaitExecutionPhase(invocation.signal, () =>
-					input.resolvePrincipal(invocation.request, invocation.signal),
-				);
+				caller =
+					invocation.principal ??
+					(await awaitExecutionPhase(invocation.signal, () =>
+						input.resolvePrincipal(invocation.request, invocation.signal),
+					));
 			} catch (error) {
 				const code = classifyOperationCredentialFailure(
 					error,

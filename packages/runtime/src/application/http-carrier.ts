@@ -112,15 +112,53 @@ export function createHttpExecutionControl(
 	});
 }
 
+/**
+ * Visible-ASCII-only, matching what `Headers`/`Response` already accept as a
+ * header value minus control characters (so CR/LF injection is rejected
+ * before it ever reaches `new Response`, not caught by its constructor).
+ */
+const SAFE_HEADER_VALUE = /^[\x20-\x7E]+$/u;
+
+/**
+ * Calls an application-supplied `challenge` function with the fail-closed
+ * discipline the framework owes every caller: a thrown exception, a
+ * non-string return, an empty string, or a value containing control
+ * characters (CR/LF header injection, NUL, etc.) all degrade to "no header"
+ * — never to a thrown error that could escape as an unobserved `500`, and
+ * never to the exception's message leaking into a response. The `401`/`503`
+ * status this decorates is decided independently (see `resolveHttpPrincipal`
+ * and the MCP ingress's `authenticate` gate); this function only ever
+ * removes the header, it never changes whether the caller is denied.
+ */
+export function safeCredentialChallenge(
+	challenge: ((request: Request) => string | undefined) | undefined,
+	request: Request,
+): string | undefined {
+	if (!challenge) return undefined;
+	let value: string | undefined;
+	try {
+		value = challenge(request);
+	} catch {
+		return undefined;
+	}
+	return typeof value === "string" && SAFE_HEADER_VALUE.test(value)
+		? value
+		: undefined;
+}
+
 export function httpJsonResponse(
 	body: unknown,
 	status: number,
 	cacheControl?: string,
+	wwwAuthenticate?: string,
 ): Response {
 	return new Response(JSON.stringify(body), {
 		status,
 		headers: {
 			...(cacheControl === undefined ? {} : { "cache-control": cacheControl }),
+			...(wwwAuthenticate === undefined
+				? {}
+				: { "www-authenticate": wwwAuthenticate }),
 			"content-type": HTTP_JSON_MEDIA_TYPE,
 		},
 	});
@@ -132,6 +170,7 @@ export function httpFailure(
 		cacheControl?: string;
 		callId?: string;
 		retryable?: boolean;
+		wwwAuthenticate?: string;
 	}> = {},
 ): Response {
 	const contract = canonicalOperationFailure(code);
@@ -145,6 +184,7 @@ export function httpFailure(
 		},
 		contract.status,
 		options.cacheControl,
+		options.wwwAuthenticate,
 	);
 }
 
@@ -158,6 +198,7 @@ export async function resolveHttpPrincipal(
 		signal: AbortSignal;
 		callId: string;
 		cacheControl?: string;
+		credentialChallenge?(request: Request): string | undefined;
 		resolvePrincipal(
 			request: Request,
 			signal: AbortSignal,
@@ -170,11 +211,21 @@ export async function resolveHttpPrincipal(
 			input.resolvePrincipal(input.request, input.signal),
 		);
 	} catch (error) {
+		const code =
+			classifyOperationCredentialFailure(error, input.signal) ?? "INTERNAL";
 		return {
-			response: httpFailure(
-				classifyOperationCredentialFailure(error, input.signal) ?? "INTERNAL",
-				{ callId: input.callId, cacheControl: input.cacheControl },
-			),
+			response: httpFailure(code, {
+				callId: input.callId,
+				cacheControl: input.cacheControl,
+				...(code === "UNAUTHENTICATED"
+					? {
+							wwwAuthenticate: safeCredentialChallenge(
+								input.credentialChallenge,
+								input.request,
+							),
+						}
+					: {}),
+			}),
 		};
 	}
 	if (input.signal.aborted)
@@ -189,6 +240,10 @@ export async function resolveHttpPrincipal(
 			response: httpFailure("UNAUTHENTICATED", {
 				callId: input.callId,
 				cacheControl: input.cacheControl,
+				wwwAuthenticate: safeCredentialChallenge(
+					input.credentialChallenge,
+					input.request,
+				),
 			}),
 		};
 	return { caller };

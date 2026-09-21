@@ -39,6 +39,7 @@ import type {
 import { createCanonicalPostHttp } from "./http-post";
 import { createCanonicalQueryApplicationHttp } from "./http-query";
 import { createMcpIngress, decodeMcpProjection } from "./mcp";
+import { createMcpCredentialPreflight } from "./mcp-authenticate";
 import { createMcpOperationAdapter } from "./mcp-operation";
 import {
 	applicationObservationFailure,
@@ -486,6 +487,7 @@ export async function createRuntimeApplication<
 		prepare: operationEngine.prepare,
 		resolvePrincipal: (request, signal) =>
 			input.program.resolvePrincipal(request, signal),
+		credentialChallenge: input.program.credentialChallenge,
 		executeRoot,
 		now: deadlineNow,
 	});
@@ -591,6 +593,18 @@ export async function createRuntimeApplication<
 						operation: value.operation!,
 					}),
 	});
+	// Credential preflight for the MCP ingress. `createMcpIngress` only calls
+	// it for a method the app armed (`requireCredential` for `tools/call`,
+	// `mcpCatalogRequiresCredential`/`protectCatalog` for `tools/list`/
+	// `server/discover`); an unconfigured app arms neither, so this is never
+	// invoked and behavior is unchanged from ADR-0038's shipped shape. See
+	// `mcp-authenticate.ts` for the fail-closed classification (anonymous,
+	// provider-unavailable, deadline) and docs/v4/implementation/mcp-credential-challenge.md.
+	const mcpAuthenticate = createMcpCredentialPreflight({
+		resolvePrincipal: (request, signal) =>
+			input.program.resolvePrincipal(request, signal),
+		credentialChallenge: input.program.credentialChallenge,
+	});
 	const mcp = mcpProjection
 		? createMcpIngress({
 				serverInfo: {
@@ -599,6 +613,9 @@ export async function createRuntimeApplication<
 				},
 				maximumRequestBytes: artifacts.httpContract.limits.requestBytes,
 				tools: mcpProjection.tools,
+				authenticate: mcpAuthenticate,
+				protectCatalog: input.program.mcpCatalogRequiresCredential,
+				requireCredential: input.program.mcpCallsRequireCredential,
 				execute: mcpOperation,
 			})
 		: null;
@@ -616,6 +633,7 @@ export async function createRuntimeApplication<
 		prepare: operationEngine.prepare,
 		resolvePrincipal: async (request, signal) =>
 			input.program.resolvePrincipal(request, signal),
+		credentialChallenge: input.program.credentialChallenge,
 		executeMutation: executePreparedNetworkOperation,
 		executeAction: executeNetworkAction,
 		now: deadlineNow,

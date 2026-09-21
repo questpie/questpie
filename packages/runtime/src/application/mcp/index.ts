@@ -1,3 +1,5 @@
+import type { Principal } from "questpie";
+
 import { readBoundedRequestBody } from "../../operation";
 import { parseJsonWithoutDuplicateKeys } from "../strict-json";
 import {
@@ -27,6 +29,69 @@ function protocolError(
 		status,
 	);
 }
+
+/** Shared `no-store` discipline with the canonical HTTP failure shape. */
+const NO_STORE = "private, no-store";
+
+function gateFailure(
+	id: string | number | undefined,
+	status: number,
+	code: number,
+	message: string,
+	wwwAuthenticate?: string,
+): Response {
+	return new Response(
+		JSON.stringify({
+			jsonrpc: "2.0",
+			...(id === undefined ? {} : { id }),
+			error: { code, message },
+		}),
+		{
+			status,
+			headers: {
+				"content-type": "application/json; charset=utf-8",
+				"cache-control": NO_STORE,
+				...(wwwAuthenticate === undefined
+					? {}
+					: { "www-authenticate": wwwAuthenticate }),
+			},
+		},
+	);
+}
+
+/**
+ * A real HTTP `401` on an armed gate. `wwwAuthenticate` is app-supplied
+ * decoration only — the framework forwards it verbatim, never constructs or
+ * interprets it (see `safeCredentialChallenge` for the one validation it
+ * does apply: header-value safety, not meaning).
+ */
+function unauthorized(
+	id: string | number | undefined,
+	wwwAuthenticate: string | undefined,
+): Response {
+	return gateFailure(id, 401, -32001, "Unauthorized", wwwAuthenticate);
+}
+
+/** The credential provider itself failed (e.g. an outage). Never fail open. */
+function credentialProviderUnavailable(
+	id: string | number | undefined,
+): Response {
+	return gateFailure(id, 503, -32002, "Service Unavailable");
+}
+
+/** The credential resolution phase missed its deadline. Never fail open. */
+function credentialResolutionTimedOut(
+	id: string | number | undefined,
+): Response {
+	return gateFailure(id, 408, -32003, "Request Timeout");
+}
+
+export type McpAuthenticationOutcome =
+	| Readonly<{ kind: "authenticated"; principal?: Principal }>
+	| Readonly<{ kind: "unauthenticated"; wwwAuthenticate?: string }>
+	| Readonly<{ kind: "unavailable" }>
+	| Readonly<{ kind: "deadline" }>
+	| Readonly<{ kind: "deferred" }>;
 
 function json(value: unknown, status = 200): Response {
 	return new Response(JSON.stringify(value), {
@@ -115,6 +180,24 @@ export function createMcpIngress(
 		serverInfo: Readonly<{ name: string; version: string }>;
 		maximumRequestBytes: number;
 		tools: readonly McpToolBinding[];
+		/**
+		 * Credential preflight. Called only for an armed method
+		 * (`requireCredential` for `tools/call`, `protectCatalog` for the
+		 * catalogue) — arming is a fixed boolean, never a per-Request return
+		 * value. Unarmed: unchanged from ADR-0038. Armed:
+		 * `"unauthenticated"`/`"unavailable"`/`"deadline"` short-circuit to a
+		 * fail-closed status; `"deferred"` falls through unchanged;
+		 * `"authenticated"` may carry the resolved Principal to avoid
+		 * resolving it twice.
+		 */
+		authenticate?(
+			request: Request,
+			signal: AbortSignal,
+		): Promise<McpAuthenticationOutcome>;
+		/** Arm the gate on `tools/list`/`server/discover`. */
+		protectCatalog?: boolean;
+		/** Arm the gate on `tools/call`, including for an anonymous caller. */
+		requireCredential?: boolean;
 		execute(
 			value: Readonly<{
 				arguments: unknown;
@@ -122,6 +205,7 @@ export function createMcpIngress(
 				kind: McpToolBinding["kind"];
 				request: Request;
 				signal: AbortSignal;
+				principal?: Principal;
 			}>,
 		): Promise<McpExecutionResult>;
 	}>,
@@ -195,6 +279,31 @@ export function createMcpIngress(
 			) {
 				return protocolError(id, -32020, "Request metadata mismatch", 400);
 			}
+			// Authentication runs after transport/protocol validation (which
+			// discloses nothing app-specific and is identical for every caller)
+			// and before any method-specific dispatch, so an unauthenticated or
+			// invalid caller never learns the catalogue contents or whether a
+			// named tool exists. It only runs for a method the caller armed.
+			let resolvedPrincipal: Principal | undefined;
+			if (
+				input.authenticate &&
+				((method === "tools/call" && input.requireCredential) ||
+					((method === "tools/list" || method === "server/discover") &&
+						input.protectCatalog))
+			) {
+				const authentication = await input.authenticate(
+					request,
+					request.signal,
+				);
+				if (authentication.kind === "unauthenticated")
+					return unauthorized(id, authentication.wwwAuthenticate);
+				if (authentication.kind === "unavailable")
+					return credentialProviderUnavailable(id);
+				if (authentication.kind === "deadline")
+					return credentialResolutionTimedOut(id);
+				if (authentication.kind === "authenticated")
+					resolvedPrincipal = authentication.principal;
+			}
 			const serverMetadata = {
 				"io.modelcontextprotocol/serverInfo": input.serverInfo,
 			};
@@ -244,6 +353,9 @@ export function createMcpIngress(
 						arguments: params.arguments,
 						request,
 						signal,
+						...(resolvedPrincipal === undefined
+							? {}
+							: { principal: resolvedPrincipal }),
 					});
 					const text = canonicalJson(outcome.structuredContent);
 					return {

@@ -133,6 +133,7 @@ postgresTest(
 			for (const tracer of [
 				"tests/integration/postgres/beta08-reaction-worker.test.ts",
 				"tests/integration/postgres/beta11-archive.test.ts",
+				"tests/integration/postgres/public-testing-surface-consumer.test.ts",
 			]) {
 				const result = Bun.spawnSync(["bun", "test", tracer], {
 					cwd: repositoryRoot,

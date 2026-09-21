@@ -53,6 +53,8 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 
 - [Slice the beta.2 DX release](./0039-slice-the-beta-two-dx-release.md)
 - [Freeze local OpenAPI projection explanation](./0041-freeze-local-openapi-projection-explanation.md)
+- [Freeze public testing surface](./0045-freeze-public-testing-surface.md)
+- [MCP and canonical HTTP credential challenge](./0046-mcp-and-canonical-http-credential-challenge.md)
 
 ## Open decisions
 

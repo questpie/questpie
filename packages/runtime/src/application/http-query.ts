@@ -194,6 +194,7 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 			request: Request,
 			signal: AbortSignal,
 		): Principal | null | PromiseLike<Principal | null>;
+		credentialChallenge?(request: Request): string | undefined;
 		execute(
 			value: Readonly<{
 				principal: Principal;
@@ -247,6 +248,7 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 					callId,
 					cacheControl: QUERY_CACHE_CONTROL,
 					resolvePrincipal: input.resolvePrincipal,
+					credentialChallenge: input.credentialChallenge,
 				});
 				if (principalResolution.response) return principalResolution.response;
 				const caller = principalResolution.caller;
@@ -367,6 +369,7 @@ export function createCanonicalQueryApplicationHttp<ContextInput, View>(
 			request: Request,
 			signal: AbortSignal,
 		): Principal | null | PromiseLike<Principal | null>;
+		credentialChallenge?(request: Request): string | undefined;
 		executeRoot: CanonicalQueryRootExecutor<ContextInput, View>;
 		now(): number;
 	}>,
@@ -381,6 +384,7 @@ export function createCanonicalQueryApplicationHttp<ContextInput, View>(
 		prepare: input.prepare,
 		resolvePrincipal: (request, signal) =>
 			input.resolvePrincipal(request, signal),
+		credentialChallenge: input.credentialChallenge,
 		execute: ({
 			principal: caller,
 			context,

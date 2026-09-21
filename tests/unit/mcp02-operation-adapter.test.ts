@@ -76,6 +76,7 @@ function invoke(
 	execute: ReturnType<typeof adapter>,
 	kind: "mutation" | "action",
 	args: Readonly<Record<string, unknown>>,
+	principalOverride?: typeof user,
 ) {
 	return execute({
 		arguments: args,
@@ -84,6 +85,9 @@ function invoke(
 		kind,
 		request,
 		signal: new AbortController().signal,
+		...(principalOverride === undefined
+			? {}
+			: { principal: principalOverride }),
 	});
 }
 
@@ -278,4 +282,52 @@ test("MCP adapter keeps pre- and post-handler resource limits disjoint", async (
 			isError: true,
 		});
 	}
+});
+
+test("F5: a pre-resolved principal from the ingress preflight is used directly, never re-resolved", async () => {
+	const preResolved = principal.user({
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61aF",
+	});
+	let resolveCalls = 0;
+	const calls: unknown[] = [];
+	const result = await invoke(
+		adapter({
+			resolvePrincipal: async () => {
+				resolveCalls += 1;
+				return user;
+			},
+			execute: async (value) => {
+				calls.push(value.principal);
+				return { ok: true };
+			},
+		}),
+		"mutation",
+		{ callId: "mutation-call", context: http02Context, input: { value: "ok" } },
+		preResolved,
+	);
+	expect(result).toEqual({
+		structuredContent: { callId: "mutation-call", result: { ok: true } },
+		isError: false,
+	});
+	expect(resolveCalls).toBe(0);
+	expect(calls).toEqual([preResolved]);
+});
+
+test("F5: without a pre-resolved principal, resolvePrincipal still runs exactly as before (backward compatible)", async () => {
+	let resolveCalls = 0;
+	await invoke(
+		adapter({
+			resolvePrincipal: async () => {
+				resolveCalls += 1;
+				return user;
+			},
+		}),
+		"mutation",
+		{
+			callId: "mutation-call-2",
+			context: http02Context,
+			input: { value: "ok" },
+		},
+	);
+	expect(resolveCalls).toBe(1);
 });
