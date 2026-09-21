@@ -205,7 +205,9 @@ function linkPackageDependencies(
 			...dependency.split("/"),
 		);
 		if (!existsSync(source))
-			fail(`${owner}: dependency is unavailable for isolated import: ${dependency}`);
+			fail(
+				`${owner}: dependency is unavailable for isolated import: ${dependency}`,
+			);
 		const target = join(consumer, "node_modules", ...dependency.split("/"));
 		mkdirSync(dirname(target), { recursive: true });
 		symlinkSync(source, target, "dir");

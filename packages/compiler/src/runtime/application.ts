@@ -13,6 +13,7 @@ import {
 	renderDirectJobAcceptance,
 	renderDirectJobOperations,
 } from "./application-jobs";
+import { renderApplicationCredentialChallenge } from "./application-mcp-credential";
 import { renderDatabaseQueryProject } from "./application-query";
 import { expectedQueryTemplates } from "./application-query-artifacts";
 import { renderStaticScheduleOwner } from "./application-schedules";
@@ -572,23 +573,7 @@ export async function createApplication(input) {
 				: "return principal.anonymous();"
 		}
 	};
-	const resolveApplicationChallenge = (request) => {
-			${
-				credentialResolverDefinition
-					? `return typeof ${credentialResolverDefinition}.challenge === "function" ? ${credentialResolverDefinition}.challenge(request) : undefined;`
-					: "return undefined;"
-			}
-		};
-	const mcpCatalogRequiresCredential = ${
-		credentialResolverDefinition
-			? `Boolean(${credentialResolverDefinition}.protectCatalog)`
-			: "false"
-	};
-	const mcpCallsRequireCredential = ${
-		credentialResolverDefinition
-			? `Boolean(${credentialResolverDefinition}.requireCredential)`
-			: "false"
-	};
+	${renderApplicationCredentialChallenge(credentialResolverDefinition)}
 	try {
 		liveQueryCoordinator = ${
 			input.realtime

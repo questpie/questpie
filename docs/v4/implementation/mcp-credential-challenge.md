@@ -31,16 +31,16 @@ framework.
 
 ## Security review findings and their fixes
 
-| # | Sev | Finding | Fix |
-|---|-----|---------|-----|
-| F1 | Critical | Anonymous Principal treated as authenticated; the common "no `Authorization` header" shape defeated the gate entirely. | `createMcpCredentialPreflight` now treats `caller.kind === "anonymous"` as `"unauthenticated"` once armed. |
-| F2 | High | Arming depended on `challenge(request)`'s per-request return value, not a fixed flag; `protectCatalog` without `challenge` protected nothing, and a request-derived challenge returning `undefined` silently disarmed the gate. | Arming is now two independent, definition-time booleans (`protectCatalog`, `requireCredential`); `challenge` is purely decorative and never gates anything. |
-| F3 | High | `RuntimeCredentialUnavailable` (provider outage) fell through to the public/unauthenticated path — fail-open. | New `"unavailable"` outcome maps to a real `503`; `"deadline"` (aborted resolution) maps to `408`. Neither is ever deferred when armed. |
-| F4 | Medium | `challenge` value never validated; a throwing function or CR/LF-bearing value could escape as an unobserved `500` or header injection. | `safeCredentialChallenge` (`http-carrier.ts`) wraps every call: thrown exceptions, non-strings, empty strings, and control characters all degrade to "no header", never a thrown error, never a leaked message, never a change in the already-decided status. Shared by canonical HTTP and MCP. |
-| F5 | Medium | `tools/call` resolved the credential twice when armed (ingress preflight + `mcp-operation.ts`'s own resolution) — a TOCTOU risk for one-time tokens/rate counters. | The preflight's resolved Principal is threaded through `createMcpIngress`'s `execute` call and `createMcpOperationAdapter`'s invocation (`principal?` field, additive, backward compatible); `mcp-operation.ts` skips its own resolution when a Principal is already provided. Not armed → unchanged, single resolution as before. |
-| F6 | Medium | (i) The compiled contract never captured `challenge`/`protectCatalog`/`requireCredential`, so the options could be silently dropped anywhere in discovery/codegen with no failing test. (ii) No test crossed the compiler → manifest → runtime boundary at all — a dropped option between `defineCredentialResolver` and the runtime could not be caught by unit tests against the extracted preflight by construction. | (i) `compositionContract("credentialResolver", ...)` now returns `hasChallenge`/`protectCatalog`/`requireCredential`, tested directly. (ii) **Closed in the follow-up pass**: `tests/integration/postgres/mcp-credential-gate.test.ts` compiles two real variants of the Team Support Desk fixture with the real CLI (`bun cli.js build`), boots each with the real runtime (`createApp`), and drives `/_questpie/mcp` over the real `fetch` handler — see below. |
-| F7 | Low | MCP `401` lacked `cache-control: private, no-store`; raw-Route `401`s never got the challenge header. | Added `cache-control: private, no-store` to every MCP gate response (`gateFailure` helper). Route `401`s are explicitly left alone — Routes already own their raw `Response` (ADR-0015); documented in ADR-0046 §F7 rather than adding a second, competing header-injection path. |
-| F8 | Low | Comment blocks restated the ADR instead of documenting the code. | Trimmed the `createMcpIngress`/`unauthorized` doc comments to the mechanism, not a copy of the ADR prose. |
+| #   | Sev      | Finding                                                                                                                                                                                                                                                                                                                                                                                                                 | Fix                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | Critical | Anonymous Principal treated as authenticated; the common "no `Authorization` header" shape defeated the gate entirely.                                                                                                                                                                                                                                                                                                  | `createMcpCredentialPreflight` now treats `caller.kind === "anonymous"` as `"unauthenticated"` once armed.                                                                                                                                                                                                                                                                                                                                                        |
+| F2  | High     | Arming depended on `challenge(request)`'s per-request return value, not a fixed flag; `protectCatalog` without `challenge` protected nothing, and a request-derived challenge returning `undefined` silently disarmed the gate.                                                                                                                                                                                         | Arming is now two independent, definition-time booleans (`protectCatalog`, `requireCredential`); `challenge` is purely decorative and never gates anything.                                                                                                                                                                                                                                                                                                       |
+| F3  | High     | `RuntimeCredentialUnavailable` (provider outage) fell through to the public/unauthenticated path — fail-open.                                                                                                                                                                                                                                                                                                           | New `"unavailable"` outcome maps to a real `503`; `"deadline"` (aborted resolution) maps to `408`. Neither is ever deferred when armed.                                                                                                                                                                                                                                                                                                                           |
+| F4  | Medium   | `challenge` value never validated; a throwing function or CR/LF-bearing value could escape as an unobserved `500` or header injection.                                                                                                                                                                                                                                                                                  | `safeCredentialChallenge` (`http-carrier.ts`) wraps every call: thrown exceptions, non-strings, empty strings, and control characters all degrade to "no header", never a thrown error, never a leaked message, never a change in the already-decided status. Shared by canonical HTTP and MCP.                                                                                                                                                                   |
+| F5  | Medium   | `tools/call` resolved the credential twice when armed (ingress preflight + `mcp-operation.ts`'s own resolution) — a TOCTOU risk for one-time tokens/rate counters.                                                                                                                                                                                                                                                      | The preflight's resolved Principal is threaded through `createMcpIngress`'s `execute` call and `createMcpOperationAdapter`'s invocation (`principal?` field, additive, backward compatible); `mcp-operation.ts` skips its own resolution when a Principal is already provided. Not armed → unchanged, single resolution as before.                                                                                                                                |
+| F6  | Medium   | (i) The compiled contract never captured `challenge`/`protectCatalog`/`requireCredential`, so the options could be silently dropped anywhere in discovery/codegen with no failing test. (ii) No test crossed the compiler → manifest → runtime boundary at all — a dropped option between `defineCredentialResolver` and the runtime could not be caught by unit tests against the extracted preflight by construction. | (i) `compositionContract("credentialResolver", ...)` now returns `hasChallenge`/`protectCatalog`/`requireCredential`, tested directly. (ii) **Closed in the follow-up pass**: `tests/integration/postgres/mcp-credential-gate.test.ts` compiles two real variants of the Team Support Desk fixture with the real CLI (`bun cli.js build`), boots each with the real runtime (`createApp`), and drives `/_questpie/mcp` over the real `fetch` handler — see below. |
+| F7  | Low      | MCP `401` lacked `cache-control: private, no-store`; raw-Route `401`s never got the challenge header.                                                                                                                                                                                                                                                                                                                   | Added `cache-control: private, no-store` to every MCP gate response (`gateFailure` helper). Route `401`s are explicitly left alone — Routes already own their raw `Response` (ADR-0015); documented in ADR-0046 §F7 rather than adding a second, competing header-injection path.                                                                                                                                                                                 |
+| F8  | Low      | Comment blocks restated the ADR instead of documenting the code.                                                                                                                                                                                                                                                                                                                                                        | Trimmed the `createMcpIngress`/`unauthorized` doc comments to the mechanism, not a copy of the ADR prose.                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Seam (exact app-facing API, corrected)
 
@@ -51,7 +51,8 @@ defineCredentialResolver({
 	resolve: async ({ request, service }) => {
 		/* unchanged */
 	},
-	challenge: 'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
+	challenge:
+		'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
 	protectCatalog: true, // arms tools/list + server/discover
 	requireCredential: true, // arms tools/call, including rejecting anonymous
 });
@@ -194,16 +195,16 @@ with `TMPDIR=/home/drepkovsky/.cache/v4-mcp-auth-tmp`, foreground only.
 - Full `bun test tests/unit`, split into the same 8 foreground chunks as the
   second pass, re-run and summed correctly this time:
 
-  | chunk | files | pass | skip | fail |
-  |---|---|---|---|---|
-  | 1 | 25 | 209 | 0 | 0 |
-  | 2 | 26 | 134 | 0 | 0 |
-  | 3 | 23 | 106 | 0 | 0 |
-  | 4 | 25 | 105 | 1 | 0 |
-  | 5 | 25 | 134 | 0 | 0 |
-  | 6 | 25 | 90 | 0 | 0 |
-  | 7 | 20 | 113 | 0 | 0 |
-  | 8 | 24 | 113 | 0 | 0 |
+  | chunk     | files   | pass     | skip  | fail  |
+  | --------- | ------- | -------- | ----- | ----- |
+  | 1         | 25      | 209      | 0     | 0     |
+  | 2         | 26      | 134      | 0     | 0     |
+  | 3         | 23      | 106      | 0     | 0     |
+  | 4         | 25      | 105      | 1     | 0     |
+  | 5         | 25      | 134      | 0     | 0     |
+  | 6         | 25      | 90       | 0     | 0     |
+  | 7         | 20      | 113      | 0     | 0     |
+  | 8         | 24      | 113      | 0     | 0     |
   | **total** | **193** | **1004** | **1** | **0** |
 
   193 files matches `ls tests/unit/*.test.ts | wc -l` exactly (`tests/unit`
@@ -216,9 +217,10 @@ with `TMPDIR=/home/drepkovsky/.cache/v4-mcp-auth-tmp`, foreground only.
   (`mcp-authenticate.test.ts`, `credential-resolver-composition-contract.test.ts`)
   and roughly two dozen new assertions added across the second pass account
   for the increase.
+
 - `quality:full`/`quality:release`: **not run**, same reasoning as the prior
   two passes (release checksum already red for an unrelated reason; out of
-  scope per the brief to only confirm nothing *else* newly fails).
+  scope per the brief to only confirm nothing _else_ newly fails).
 
 ## Unverified / follow-up
 

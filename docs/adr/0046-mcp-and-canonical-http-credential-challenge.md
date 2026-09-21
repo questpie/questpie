@@ -35,8 +35,8 @@ silently change the basic default" — any change must be opt-in.
 ## Revision (same day): a security review found the first cut fail-open
 
 The first committed version of this ADR gated the `401` short-circuit on
-whether the app's `challenge(request)` function *returned a defined string
-for this exact Request*. A cross-model security review (`FIX-THEN-MERGE`,
+whether the app's `challenge(request)` function _returned a defined string
+for this exact Request_. A cross-model security review (`FIX-THEN-MERGE`,
 commit history same day) found this was fail-open in the common case:
 
 - **F1 (critical):** an anonymous Principal (the normal shape of "no
@@ -45,7 +45,7 @@ commit history same day) found this was fail-open in the common case:
   public operations — i.e. most apps — got a protected catalogue that
   protected nothing and a `tools/call` gate that never fired for the single
   most common unauthenticated request shape.
-- **F2 (high):** arming depended on the *return value* of `challenge`, not on
+- **F2 (high):** arming depended on the _return value_ of `challenge`, not on
   a fixed, definition-time fact. `protectCatalog: true` without `challenge`
   configured armed nothing; a request-derived `challenge` function that
   returned `undefined` for a given Request (Host/query-influenced, i.e.
@@ -75,7 +75,8 @@ defineCredentialResolver({
 	// non-string/empty/control-character return, or no configuration at all
 	// all degrade to "no header", never to a thrown exception or a change in
 	// status. See safeCredentialChallenge (F4).
-	challenge: 'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
+	challenge:
+		'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
 	// Arms tools/list and server/discover: anonymous/malformed/no credential
 	// -> 401; provider outage -> 503. Default false: today's public catalogue.
 	protectCatalog: true,
