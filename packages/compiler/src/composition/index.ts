@@ -154,6 +154,14 @@ export function compositionContract(
 			name: string(value.name, "Credential resolver name"),
 			service: serviceIdentity(service),
 			executableSlots: ["resolve"],
+			// Not the function/value itself (unhashable, request-dependent) —
+			// only whether the app opted these gates in at all, so dropping the
+			// option anywhere in the compiler/codegen pipeline changes this
+			// digested contract and is caught by a structural-contract
+			// comparison rather than silently compiling away.
+			hasChallenge: typeof value.challenge === "function",
+			protectCatalog: Boolean(value.protectCatalog),
+			requireCredential: Boolean(value.requireCredential),
 		};
 	}
 	if (kind === "route") {

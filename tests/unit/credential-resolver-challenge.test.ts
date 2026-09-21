@@ -43,7 +43,7 @@ test("a function challenge is preserved and may vary per Request, including retu
 	).toBeUndefined();
 });
 
-test("omitting challenge and protectCatalog keeps both absent, preserving today's default", () => {
+test("omitting challenge, protectCatalog, and requireCredential keeps all three absent, preserving today's default", () => {
 	const resolver = defineCredentialResolver({
 		name: "default",
 		service,
@@ -51,6 +51,7 @@ test("omitting challenge and protectCatalog keeps both absent, preserving today'
 	});
 	expect(resolver.challenge).toBeUndefined();
 	expect(resolver.protectCatalog).toBeUndefined();
+	expect(resolver.requireCredential).toBeUndefined();
 });
 
 test("protectCatalog is preserved verbatim as an explicit opt-in, never inferred", () => {
@@ -61,4 +62,16 @@ test("protectCatalog is preserved verbatim as an explicit opt-in, never inferred
 		protectCatalog: true,
 	});
 	expect(resolver.protectCatalog).toBe(true);
+});
+
+test("requireCredential is preserved verbatim as an explicit opt-in, independent of challenge or protectCatalog", () => {
+	const resolver = defineCredentialResolver({
+		name: "callsRequireCredential",
+		service,
+		resolve: async () => ({ kind: "anonymous" }),
+		requireCredential: true,
+	});
+	expect(resolver.requireCredential).toBe(true);
+	expect(resolver.challenge).toBeUndefined();
+	expect(resolver.protectCatalog).toBeUndefined();
 });

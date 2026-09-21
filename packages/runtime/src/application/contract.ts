@@ -67,10 +67,20 @@ export interface RuntimeApplicationProgram<
 	readonly credentialChallenge?: (request: Request) => string | undefined;
 	/**
 	 * Opt-in only. When `true`, MCP `tools/list` and `server/discover` also
-	 * require a valid credential (401 + `credentialChallenge`) instead of
-	 * ADR-0038's public/unauthenticated default catalogue.
+	 * require a valid, non-anonymous credential (401 + `credentialChallenge`)
+	 * instead of ADR-0038's public/unauthenticated default catalogue.
 	 */
 	readonly mcpCatalogRequiresCredential?: boolean;
+	/**
+	 * Opt-in only. When `true`, MCP `tools/call` requires a valid,
+	 * non-anonymous credential (401 + `credentialChallenge` on failure, 503
+	 * on a credential-provider outage) instead of ADR-0038's default of
+	 * deferring entirely to each Operation's own admission/Policy. `false`/
+	 * absent preserves today's behavior exactly, including an anonymous
+	 * caller successfully invoking a public `network: true` Operation over
+	 * MCP the same way it can over canonical HTTP.
+	 */
+	readonly mcpCallsRequireCredential?: boolean;
 	readonly verifyReadiness?: (
 		artifacts: RuntimeArtifactsV1,
 	) => MaybePromise<void>;

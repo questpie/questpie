@@ -4,24 +4,43 @@ Board item: "v4 rewrite 04: OAuth protection of the v4 MCP endpoint".
 Branch: `work/autopilot-rewrite-additions`. Decision: `docs/adr/0046-mcp-and-canonical-http-credential-challenge.md`
 (Proposed — not Accepted; this record does not claim ratification).
 
+This record covers two passes: the original implementation (commit
+`e4e198ed4`), and a security-review-driven fix pass (this commit) that
+corrected three fail-open bugs (F1/F2/F3) found in the first pass. ADR-0046
+was rewritten in place to describe the corrected design directly; its
+"Revision" section documents what was wrong and why.
+
 ## Scope delivered
 
-Exactly the three owner-ratified additions, nothing more:
-
-1. `POST /_questpie/mcp` `tools/call` can return a real HTTP `401` carrying an
-   app-supplied `WWW-Authenticate` header on a missing/invalid credential,
-   instead of always the framework-fixed `200`/SSE JSON-RPC error frame.
-2. The same header seam on canonical HTTP `401`s (Query/Mutation/Action).
-3. `tools/list` and `server/discover` can be made to require a valid
-   credential via an explicit opt-in (`protectCatalog: true`); default stays
-   public/unauthenticated (ADR-0038's shipped default), no per-Principal
+1. `POST /_questpie/mcp` `tools/call` can return a real HTTP `401`/`503`/`408`
+   on a missing/invalid credential, a credential-provider outage, or a missed
+   deadline, carrying an app-supplied `WWW-Authenticate` header, instead of
+   always the framework-fixed `200`/SSE JSON-RPC error frame.
+2. The same `WWW-Authenticate` header on canonical HTTP `401`s.
+3. `tools/list`/`server/discover` can require a valid credential via
+   `protectCatalog: true`; `tools/call` can require one (rejecting anonymous
+   too) via `requireCredential: true`. Both default `false` — ADR-0038's
+   shipped default is unchanged unless an app opts in. No per-Principal
    filtering.
 
 Out of scope, untouched: per-operation MCP opt-out, curated descriptions,
 tool-name aliases, scopes/Policy changes, MCP sessions, any OAuth logic in the
 framework.
 
-## Seam (exact app-facing API)
+## Security review findings and their fixes
+
+| # | Sev | Finding | Fix |
+|---|-----|---------|-----|
+| F1 | Critical | Anonymous Principal treated as authenticated; the common "no `Authorization` header" shape defeated the gate entirely. | `createMcpCredentialPreflight` now treats `caller.kind === "anonymous"` as `"unauthenticated"` once armed. |
+| F2 | High | Arming depended on `challenge(request)`'s per-request return value, not a fixed flag; `protectCatalog` without `challenge` protected nothing, and a request-derived challenge returning `undefined` silently disarmed the gate. | Arming is now two independent, definition-time booleans (`protectCatalog`, `requireCredential`); `challenge` is purely decorative and never gates anything. |
+| F3 | High | `RuntimeCredentialUnavailable` (provider outage) fell through to the public/unauthenticated path — fail-open. | New `"unavailable"` outcome maps to a real `503`; `"deadline"` (aborted resolution) maps to `408`. Neither is ever deferred when armed. |
+| F4 | Medium | `challenge` value never validated; a throwing function or CR/LF-bearing value could escape as an unobserved `500` or header injection. | `safeCredentialChallenge` (`http-carrier.ts`) wraps every call: thrown exceptions, non-strings, empty strings, and control characters all degrade to "no header", never a thrown error, never a leaked message, never a change in the already-decided status. Shared by canonical HTTP and MCP. |
+| F5 | Medium | `tools/call` resolved the credential twice when armed (ingress preflight + `mcp-operation.ts`'s own resolution) — a TOCTOU risk for one-time tokens/rate counters. | The preflight's resolved Principal is threaded through `createMcpIngress`'s `execute` call and `createMcpOperationAdapter`'s invocation (`principal?` field, additive, backward compatible); `mcp-operation.ts` skips its own resolution when a Principal is already provided. Not armed → unchanged, single resolution as before. |
+| F6 | Medium | (i) The compiled contract never captured `challenge`/`protectCatalog`/`requireCredential`, so the options could be silently dropped anywhere in discovery/codegen with no failing test. (ii) No test exercised `mcpAuthenticate`/the compiled wiring at all. | (i) `compositionContract("credentialResolver", ...)` now returns `hasChallenge`/`protectCatalog`/`requireCredential`, tested directly (`credential-resolver-composition-contract.test.ts`). (ii) The preflight was extracted to its own testable module (`mcp-authenticate.ts`) with 12 direct unit tests; `createMcpIngress`'s gating/status/header/principal-passthrough is exercised directly. **Not fully closed**: no fixture compiled with the flags turned on was exercised end-to-end — see "Open follow-up". |
+| F7 | Low | MCP `401` lacked `cache-control: private, no-store`; raw-Route `401`s never got the challenge header. | Added `cache-control: private, no-store` to every MCP gate response (`gateFailure` helper). Route `401`s are explicitly left alone — Routes already own their raw `Response` (ADR-0015); documented in ADR-0046 §F7 rather than adding a second, competing header-injection path. |
+| F8 | Low | Comment blocks restated the ADR instead of documenting the code. | Trimmed the `createMcpIngress`/`unauthorized` doc comments to the mechanism, not a copy of the ADR prose. |
+
+## Seam (exact app-facing API, corrected)
 
 ```ts
 defineCredentialResolver({
@@ -31,175 +50,107 @@ defineCredentialResolver({
 		/* unchanged */
 	},
 	challenge: 'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
-	// or per-Request: challenge: (request) => string | undefined
-	protectCatalog: true, // optional; default false, tools/list & server/discover stay public
+	protectCatalog: true, // arms tools/list + server/discover
+	requireCredential: true, // arms tools/call, including rejecting anonymous
 });
 ```
 
-The framework never inspects `challenge`'s value; it only forwards whatever
-string the function returns (or `undefined`, which means "no header, and for
-MCP: no behavior change at all for this Request") as a `WWW-Authenticate`
-header at the point a missing/invalid credential is about to be reported.
+`challenge` never arms anything by itself. See ADR-0046 for the full
+decision record, including why `requireCredential` is a blunt "no anonymous
+calls at all" instrument rather than per-operation.
 
-## Decisions
+## Files changed (this pass, on top of `e4e198ed4`)
 
-- **`tools/call` 401 is gated on `challenge` presence, not merely on having a
-  credential resolver.** An application with `resolvePrincipal` wired but no
-  `challenge` declared sees zero behavior change — the ingress preflight
-  classifies that as `"deferred"` and falls through to
-  `mcpOperation`'s existing 200/SSE-wrapped `UNAUTHENTICATED` frame. This was
-  a mid-implementation correction: an earlier draft made the real-401 path
-  unconditional whenever a credential resolver existed, which would have
-  silently broken ADR-0038's frozen shape for every existing application.
-  Gating on `challenge` presence makes the opt-in explicit and per-request.
-- **`tools/list`/`server/discover` default to public** (`protectCatalog`
-  absent/`false`). ADR-0038 explicitly says a future selective-catalogue
-  decision "cannot silently change the basic default"; this ADR is Proposed,
-  not a superseding Accepted ADR, so it cannot flip that default. Apps that
-  want MCP-client-driven OAuth discovery from the first `tools/list` probe
-  opt in explicitly.
-- **Canonical HTTP gets no gating** — its `401` status was already correct
-  before this change; only the header is new and purely additive.
-- **Ordering**: protocol-version/envelope/metadata checks precede the new
-  authentication preflight, which precedes all method dispatch (including the
-  `tools/call` "Unknown tool" lookup), so an unauthenticated caller never
-  learns catalogue membership. Documented and tested
-  (`tests/unit/mcp02-runtime-ingress.test.ts`, "protocol-version mismatch is
-  rejected before authentication runs...").
-- **Accepted trade-off**: when an app opts in, `tools/call` resolves the
-  credential twice on the authenticated/erroring path (once in the ingress
-  preflight, once inside the existing, unmodified
-  `createMcpOperationAdapter`). This kept `mcp-operation.ts`'s contract and
-  its test file (`mcp02-operation-adapter.test.ts`) completely untouched.
-  Noted as a follow-up in ADR-0046, not fixed here.
-
-## Files changed
-
-- `packages/questpie/src/credential-resolver.ts` — `challenge`, `protectCatalog`
-  on `CredentialResolverDefinition`/`defineCredentialResolver`; string
-  challenge normalized to a function.
-- `packages/questpie/src/index.ts` — export `CredentialChallenge` type.
+- `packages/questpie/src/credential-resolver.ts` — `requireCredential` field.
+- `packages/compiler/src/composition/index.ts` — `hasChallenge`,
+  `protectCatalog`, `requireCredential` in the credential-resolver
+  composition contract (F6i).
 - `packages/compiler/src/runtime/application.ts` — generates
-  `resolveApplicationChallenge` and `mcpCatalogRequiresCredential`, wired into
-  `program`.
-- `packages/runtime/src/application/contract.ts` — `credentialChallenge`,
-  `mcpCatalogRequiresCredential` on `RuntimeApplicationProgram`.
-- `packages/runtime/src/application/http-carrier.ts` — `wwwAuthenticate`
-  threaded through `httpJsonResponse`/`httpFailure`/`resolveHttpPrincipal`.
-- `packages/runtime/src/application/http-post.ts`,
-  `packages/runtime/src/application/http-query.ts` — `credentialChallenge`
-  input threaded to `resolveHttpPrincipal`.
-- `packages/runtime/src/application/mcp/index.ts` — `unauthorized()` real-401
-  response, `McpAuthenticationOutcome`, `authenticate`/`protectCatalog` on
-  `createMcpIngress`, preflight inserted after protocol/metadata validation
-  and before method dispatch.
-- `packages/runtime/src/application/index.ts` — builds `mcpAuthenticate`
-  (gated on `credentialChallenge` returning a value), wires it and
-  `mcpCatalogRequiresCredential` into `createMcpIngress`; threads
-  `credentialChallenge` into canonical Query/Post wiring.
-- Tests: `tests/unit/mcp02-runtime-ingress.test.ts` (+7 cases),
-  `tests/unit/http02-canonical-query-runtime.test.ts` (+3),
-  `tests/unit/http02-canonical-post-runtime.test.ts` (+2),
-  `tests/unit/credential-resolver-challenge.test.ts` (new, 4 cases).
-- Docs: `docs/adr/0046-mcp-and-canonical-http-credential-challenge.md` (new,
-  Proposed), `docs/adr/README.md` (index entry), this file.
+  `mcpCallsRequireCredential` alongside the existing `mcpCatalogRequiresCredential`.
+- `packages/runtime/src/application/contract.ts` — `mcpCallsRequireCredential`
+  on `RuntimeApplicationProgram`.
+- `packages/runtime/src/application/http-carrier.ts` — `safeCredentialChallenge`
+  (F4), used by `resolveHttpPrincipal`.
+- `packages/runtime/src/application/mcp-authenticate.ts` — **new**:
+  `createMcpCredentialPreflight`, the extracted, directly-testable preflight
+  (F1/F3/F4/F6ii).
+- `packages/runtime/src/application/mcp-operation.ts` — `principal?` on the
+  invocation, skips `resolvePrincipal` when provided (F5).
+- `packages/runtime/src/application/mcp/index.ts` — `requireCredential` input,
+  `"unavailable"`/`"deadline"` outcomes → `503`/`408`, `cache-control` on
+  every gate response (F7), `principal` passthrough to `execute`, trimmed
+  comments (F8).
+- `packages/runtime/src/application/index.ts` — uses
+  `createMcpCredentialPreflight` instead of an inline closure; wires
+  `requireCredential`.
+- Tests: `tests/unit/mcp-authenticate.test.ts` (new, 12 cases — F1/F2/F3/F4
+  directly against the extracted preflight), `tests/unit/mcp02-runtime-ingress.test.ts`
+  (+9 cases: armed/unarmed routing, 503/408 mapping, cache-control, principal
+  passthrough), `tests/unit/mcp02-operation-adapter.test.ts` (+2: principal
+  passthrough skips resolution / still resolves without one — F5),
+  `tests/unit/http02-canonical-query-runtime.test.ts` (+2: throwing/CRLF
+  challenge — F4), `tests/unit/credential-resolver-challenge.test.ts` (+1:
+  `requireCredential` normalization), `tests/unit/credential-resolver-composition-contract.test.ts`
+  (new, 3 cases — F6i).
+- Docs: `docs/adr/0046-mcp-and-canonical-http-credential-challenge.md`
+  (rewritten in place with a "Revision" section), this file.
 
-No fixture (Team Support Desk / Collaboration) source was modified — their
-credential resolvers do not declare `challenge`, so this feature is exercised
-there only as a no-op (proven by the unchanged regression-suite results
-below), not as a new positive assertion. Adding an opt-in fixture scenario
-(e.g., a dedicated `challenge`/`protectCatalog` case in Team Support Desk or
-a small synthetic compiled app) is a reasonable follow-up; it was not done
-here to avoid touching the shared 1000+ line regression fixtures' assertions
-under this proof budget. The unit-level `createMcpIngress`/`resolveHttpPrincipal`
-tests are "the level the repo uses for the MCP projection"
-(`tests/unit/mcp02-runtime-ingress.test.ts` already exists at exactly that
-level for ADR-0038) and exercise every new branch directly.
+## Open follow-up (F6(ii), not completed)
 
-## Commands run and results
+No fixture (Team Support Desk / Collaboration, or a new synthetic one) was
+compiled with `protectCatalog`/`requireCredential` actually turned on and
+exercised through a live compile → migrate → HTTP call cycle. The mechanism
+is proven at the unit level (`createMcpCredentialPreflight` directly,
+`createMcpIngress`'s gating directly, `createMcpOperationAdapter`'s
+passthrough directly — these are the exact functions the compiled wiring
+calls, not stand-ins for them), and both PostgreSQL regression suites confirm
+a real compiled app with neither flag set is unaffected. Closing this
+requires either a new minimal Postgres-backed fixture or an additional
+compiled variant of an existing one; not done here given the proof budget.
+
+## Commands run and results (this pass)
 
 All commands run from
 `/home/drepkovsky/code/questpie-v4-worktrees/autopilot-rewrite-additions`
-with `TMPDIR=/home/drepkovsky/.cache/v4-mcp-auth-tmp`.
+with `TMPDIR=/home/drepkovsky/.cache/v4-mcp-auth-tmp`, foreground only (no
+background jobs left running).
 
-- `bun install --frozen-lockfile` — OK (1065 installs, no changes).
-- `bun run check:changed -- --typecheck @questpie/runtime` (oxfmt + oxlint +
-  `tsc --noEmit` + `git diff --check` on every touched file) — PASS.
+- `bun run check:changed -- --typecheck @questpie/runtime` — PASS (oxfmt +
+  oxlint + `tsc --noEmit` + `git diff --check`; one intermediate type error
+  in `mcp-authenticate.ts`'s `resolvePrincipal` parameter type found and
+  fixed — `Promise<Principal|null>` narrowed too tightly versus the
+  program's `MaybePromise<Principal|null>`).
 - `bun run check:changed -- --typecheck @questpie/compiler` — PASS.
 - `bun run check:changed -- --typecheck questpie` — PASS.
 - `bun run package:check` — PASS ("2 publishable package(s) valid").
-- `bun test tests/unit/mcp01-compiler-catalogue.test.ts
-  tests/unit/mcp02-operation-adapter.test.ts
-  tests/unit/mcp02-runtime-ingress.test.ts
-  tests/unit/mcp03-package-operation.test.ts
-  tests/unit/http02-canonical-post-runtime.test.ts
-  tests/unit/http02-canonical-post-client.test.ts
-  tests/unit/http02-canonical-query-runtime.test.ts
-  tests/unit/http02-failure-catalog.test.ts
-  tests/unit/http02-old-wire-deletion.test.ts
-  tests/unit/http03-operation-projection.test.ts
-  tests/unit/credential-resolver-challenge.test.ts
-  tests/unit/beta05-runtime-application.test.ts
-  tests/unit/compiler-application-bundle.test.ts
-  tests/unit/compiler-application-source.test.ts` — 83 pass, 0 fail, 552
-  assertions.
+- `bun test` across every touched/added unit test file (mcp01–mcp03,
+  `mcp-authenticate.test.ts`, `http02-*`, `credential-resolver-*`,
+  `beta05-runtime-application.test.ts`, `beta03-service-composition.test.ts`,
+  `compiler-application-*`) — **109 pass, 0 fail, 598 assertions**.
 - `bun test tests/integration/route-auth-runtime.test.ts` — 11 pass, 0 fail.
-- PostgreSQL regressions, own disposable container
-  (`docker run -d --rm --name v4-mcp-auth-pg -e POSTGRES_PASSWORD=pw
-  -e POSTGRES_INITDB_ARGS=--locale=C.UTF-8 -p 127.0.0.1:55621:5432 postgres:17`,
-  `PGHOST=127.0.0.1 PGPORT=55621 PGUSER=postgres PGPASSWORD=pw
-  PGDATABASE=postgres`, `FIREFOX_BIN=/usr/bin/firefox`):
-  - `bun test tests/integration/postgres/collaboration-walking-skeleton.test.ts`
-    — run alone: **1 pass, 398 assertions** (three separate runs: one before
-    my changes at all as a baseline, two after — all three passed). One
-    additional run of this file *together* with `team-support-desk.test.ts`
-    in the same `bun test` invocation produced two different timing-based
-    failures (`eventually(...)` polling timeouts / off-by-one publication
-    counts under `bun test` process contention with two Postgres-backed
-    fixtures compiling and running concurrently) that did **not** reproduce
-    when the file was run alone immediately after. This matches the
-    documented flakiness class for parallel PostgreSQL-backed suites in this
-    repo; it is not attributed to this change since the isolated run passes
-    deterministically both before and after the change (three consecutive
-    passes with identical assertion counts).
-  - `bun test tests/integration/postgres/team-support-desk.test.ts` — run
-    alone, twice: **1 pass, 111 assertions**, both times.
-  - Container removed after each session (`docker stop v4-mcp-auth-pg`).
-- Full `bun test tests/unit` (all unit tests, no PostgreSQL): 981 pass, 1
-  skip, 0 fail, 18 snapshots, 5045 `expect()` calls across 982 tests / 191
-  files (278.88s). Confirmed complete after this record's first draft; the
-  skip is pre-existing (not investigated, but the run is 0 fail either way).
-- `quality:full` / `quality:release` (the full repository quality gate,
-  including the release dry-run/conformance checksum): **not run**. The task
-  brief states the release dry-run/conformance checksum
-  (`quality/release/package-artifacts.json`) is already red on this branch
-  because of the unrelated prior `questpie/testing` commit's public-surface
-  change, and asks only to confirm nothing *else* in those gates newly fails
-  because of this change. Given the scope of this change (five runtime files
-  plus one compiler codegen file, none touching the testkit surface that
-  commit changed) and the passing `check:changed --typecheck` + `package:check`
-  + full targeted unit-test run above, there is no source-level reason to
-  expect a new failure there, but this was not directly verified — treat
-  `quality:full`/`quality:release` as **not run, unverified**.
-- `bun run architecture:check`: **not run** — no module topology change (no
-  new files besides one new test file and one new doc-only ADR); judged
-  unnecessary but not directly verified.
-- `git diff --check` — ran as part of every `check:changed` invocation above;
-  clean each time.
+- PostgreSQL regressions, own disposable container (same recipe as the first
+  pass), each run **alone**:
+  - `collaboration-walking-skeleton.test.ts` — 1 pass, 398 assertions.
+  - `team-support-desk.test.ts` (`FIREFOX_BIN=/usr/bin/firefox`) — 1 pass,
+    111 assertions.
+  - Container removed after (`docker stop v4-mcp-auth-pg`).
+- Full `bun test tests/unit`, split into 8 foreground chunks (~25 files each,
+  under the 120s tool timeout, no background run this time): all 8 chunks
+  green — totals across chunks: 904 pass + 1 pre-existing skip (unrelated;
+  same skip observed in the full-suite run from the first pass), 0 fail,
+  4886 `expect()` calls, 18 snapshots.
+- `quality:full`/`quality:release`: **not run**, same reasoning as the first
+  pass (release checksum already red for an unrelated reason; out of scope
+  per the brief to only confirm nothing *else* newly fails, which the above
+  gates support but do not directly verify).
+- `git diff --check` — clean on every `check:changed` invocation.
 
-## Unverified / follow-up
+## Unverified / follow-up (carried forward)
 
-- `quality:full` and `quality:release` (see above) were not run this
-  session.
-- No end-to-end fixture-level positive test exercises `challenge`/
-  `protectCatalog` actually turned on through a full compile (only the
-  unit-level `createMcpIngress`/`resolveHttpPrincipal` tests, and the
-  regression suites proving the *off* state is unchanged). A small synthetic
-  compiled-app test, or a dedicated opt-in fixture, would close this gap.
-- The documented duplicate-`resolvePrincipal`-call trade-off (see ADR-0046
-  Consequences) is a known, accepted cost, not a defect, but is unmeasured
-  (no latency benchmark was run).
-- Public docs pages (if any exist for MCP/credential-resolver authoring)
-  were not updated; this ADR is Proposed, not Accepted, so the repo's
-  documentation-hygiene flow does not require it yet. Flagged as a follow-up
-  once/if ADR-0046 is accepted.
+- F6(ii): no fixture-level positive test with the flags turned on (see
+  above).
+- `quality:full`/`quality:release` not run.
+- The `resolvePrincipal` duplication is now eliminated on the armed path
+  (F5), so the previously-noted performance trade-off no longer applies;
+  removed from this list.
+- Public docs pages were not updated; ADR-0046 remains Proposed.

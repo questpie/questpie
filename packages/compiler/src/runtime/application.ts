@@ -584,6 +584,11 @@ export async function createApplication(input) {
 			? `Boolean(${credentialResolverDefinition}.protectCatalog)`
 			: "false"
 	};
+	const mcpCallsRequireCredential = ${
+		credentialResolverDefinition
+			? `Boolean(${credentialResolverDefinition}.requireCredential)`
+			: "false"
+	};
 	try {
 		liveQueryCoordinator = ${
 			input.realtime
@@ -615,6 +620,7 @@ export async function createApplication(input) {
 			resolvePrincipal: resolveApplicationPrincipal,
 			credentialChallenge: resolveApplicationChallenge,
 			mcpCatalogRequiresCredential,
+			mcpCallsRequireCredential,
 			liveQueryCoordinator,
 			${input.realtime ? "createRealtime: realtimeModule.createRuntimeRealtime," : ""}
 			verifyReadiness: (artifacts) => {

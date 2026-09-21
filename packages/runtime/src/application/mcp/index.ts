@@ -1,3 +1,5 @@
+import type { Principal } from "questpie";
+
 import { readBoundedRequestBody } from "../../operation";
 import { parseJsonWithoutDuplicateKeys } from "../strict-json";
 import {
@@ -28,29 +30,27 @@ function protocolError(
 	);
 }
 
-/**
- * A real HTTP `401` for a missing/invalid credential, carrying whatever
- * `WWW-Authenticate` value the application's credential resolver declared
- * (or none, preserving today's headerless shape). This is the one place a
- * `tools/call`, `tools/list`, or `server/discover` credential failure exits
- * as a genuine `401` instead of the framework-fixed `200`/SSE JSON-RPC error
- * frame — the framework only forwards the app-supplied header value; it does
- * not construct, validate, or otherwise understand it.
- */
-function unauthorized(
+/** Shared `no-store` discipline with the canonical HTTP failure shape. */
+const NO_STORE = "private, no-store";
+
+function gateFailure(
 	id: string | number | undefined,
-	wwwAuthenticate: string | undefined,
+	status: number,
+	code: number,
+	message: string,
+	wwwAuthenticate?: string,
 ): Response {
 	return new Response(
 		JSON.stringify({
 			jsonrpc: "2.0",
 			...(id === undefined ? {} : { id }),
-			error: { code: -32001, message: "Unauthorized" },
+			error: { code, message },
 		}),
 		{
-			status: 401,
+			status,
 			headers: {
 				"content-type": "application/json; charset=utf-8",
+				"cache-control": NO_STORE,
 				...(wwwAuthenticate === undefined
 					? {}
 					: { "www-authenticate": wwwAuthenticate }),
@@ -59,9 +59,38 @@ function unauthorized(
 	);
 }
 
+/**
+ * A real HTTP `401` on an armed gate. `wwwAuthenticate` is app-supplied
+ * decoration only — the framework forwards it verbatim, never constructs or
+ * interprets it (see `safeCredentialChallenge` for the one validation it
+ * does apply: header-value safety, not meaning).
+ */
+function unauthorized(
+	id: string | number | undefined,
+	wwwAuthenticate: string | undefined,
+): Response {
+	return gateFailure(id, 401, -32001, "Unauthorized", wwwAuthenticate);
+}
+
+/** The credential provider itself failed (e.g. an outage). Never fail open. */
+function credentialProviderUnavailable(
+	id: string | number | undefined,
+): Response {
+	return gateFailure(id, 503, -32002, "Service Unavailable");
+}
+
+/** The credential resolution phase missed its deadline. Never fail open. */
+function credentialResolutionTimedOut(
+	id: string | number | undefined,
+): Response {
+	return gateFailure(id, 408, -32003, "Request Timeout");
+}
+
 export type McpAuthenticationOutcome =
-	| Readonly<{ kind: "authenticated" }>
+	| Readonly<{ kind: "authenticated"; principal?: Principal }>
 	| Readonly<{ kind: "unauthenticated"; wwwAuthenticate?: string }>
+	| Readonly<{ kind: "unavailable" }>
+	| Readonly<{ kind: "deadline" }>
 	| Readonly<{ kind: "deferred" }>;
 
 function json(value: unknown, status = 200): Response {
@@ -152,22 +181,23 @@ export function createMcpIngress(
 		maximumRequestBytes: number;
 		tools: readonly McpToolBinding[];
 		/**
-		 * Optional credential preflight. When absent, every method keeps
-		 * ADR-0038's shipped behavior exactly (`tools/call` still resolves its
-		 * own credential deep inside `execute`, wrapped as a `200`/SSE
-		 * JSON-RPC error on failure; `tools/list`/`server/discover` stay
-		 * public). When present, it always gates `tools/call`, and gates
-		 * `tools/list`/`server/discover` only when `protectCatalog` is `true`.
-		 * A `"deferred"` outcome (a non-credential failure, e.g. the provider
-		 * being unavailable, or no opt-in) falls through to today's path
-		 * unchanged; only `"unauthenticated"` short-circuits to a real `401`.
+		 * Credential preflight. Called only for an armed method
+		 * (`requireCredential` for `tools/call`, `protectCatalog` for the
+		 * catalogue) — arming is a fixed boolean, never a per-Request return
+		 * value. Unarmed: unchanged from ADR-0038. Armed:
+		 * `"unauthenticated"`/`"unavailable"`/`"deadline"` short-circuit to a
+		 * fail-closed status; `"deferred"` falls through unchanged;
+		 * `"authenticated"` may carry the resolved Principal to avoid
+		 * resolving it twice.
 		 */
 		authenticate?(
 			request: Request,
 			signal: AbortSignal,
 		): Promise<McpAuthenticationOutcome>;
-		/** Gate `tools/list`/`server/discover` behind `authenticate` too. */
+		/** Arm the gate on `tools/list`/`server/discover`. */
 		protectCatalog?: boolean;
+		/** Arm the gate on `tools/call`, including for an anonymous caller. */
+		requireCredential?: boolean;
 		execute(
 			value: Readonly<{
 				arguments: unknown;
@@ -175,6 +205,7 @@ export function createMcpIngress(
 				kind: McpToolBinding["kind"];
 				request: Request;
 				signal: AbortSignal;
+				principal?: Principal;
 			}>,
 		): Promise<McpExecutionResult>;
 	}>,
@@ -252,10 +283,13 @@ export function createMcpIngress(
 			// discloses nothing app-specific and is identical for every caller)
 			// and before any method-specific dispatch, so an unauthenticated or
 			// invalid caller never learns the catalogue contents or whether a
-			// named tool exists.
+			// named tool exists. It only runs for a method the caller armed.
+			let resolvedPrincipal: Principal | undefined;
 			if (
 				input.authenticate &&
-				(method === "tools/call" || input.protectCatalog)
+				((method === "tools/call" && input.requireCredential) ||
+					((method === "tools/list" || method === "server/discover") &&
+						input.protectCatalog))
 			) {
 				const authentication = await input.authenticate(
 					request,
@@ -263,6 +297,12 @@ export function createMcpIngress(
 				);
 				if (authentication.kind === "unauthenticated")
 					return unauthorized(id, authentication.wwwAuthenticate);
+				if (authentication.kind === "unavailable")
+					return credentialProviderUnavailable(id);
+				if (authentication.kind === "deadline")
+					return credentialResolutionTimedOut(id);
+				if (authentication.kind === "authenticated")
+					resolvedPrincipal = authentication.principal;
 			}
 			const serverMetadata = {
 				"io.modelcontextprotocol/serverInfo": input.serverInfo,
@@ -313,6 +353,9 @@ export function createMcpIngress(
 						arguments: params.arguments,
 						request,
 						signal,
+						...(resolvedPrincipal === undefined
+							? {}
+							: { principal: resolvedPrincipal }),
 					});
 					const text = canonicalJson(outcome.structuredContent);
 					return {

@@ -6,11 +6,7 @@ import {
 	type QuestpieObservability,
 } from "questpie";
 
-import {
-	awaitExecutionPhase,
-	createApplicationRuntime,
-	runtimeMonotonicNow,
-} from "../execution";
+import { createApplicationRuntime, runtimeMonotonicNow } from "../execution";
 import type { LiveQueryObservation } from "../live-query";
 import type { MutationInvoker } from "../mutation";
 import {
@@ -42,11 +38,8 @@ import type {
 } from "./contract";
 import { createCanonicalPostHttp } from "./http-post";
 import { createCanonicalQueryApplicationHttp } from "./http-query";
-import {
-	createMcpIngress,
-	decodeMcpProjection,
-	type McpAuthenticationOutcome,
-} from "./mcp";
+import { createMcpIngress, decodeMcpProjection } from "./mcp";
+import { createMcpCredentialPreflight } from "./mcp-authenticate";
 import { createMcpOperationAdapter } from "./mcp-operation";
 import {
 	applicationObservationFailure,
@@ -60,7 +53,6 @@ import {
 	observeApplicationUnmatchedFetch,
 	runApplicationOperation,
 } from "./observation";
-import { classifyOperationCredentialFailure } from "./operation-carrier";
 import {
 	isOperationAbort,
 	normalizeExecutedOperationError,
@@ -601,41 +593,18 @@ export async function createRuntimeApplication<
 						operation: value.operation!,
 					}),
 	});
-	// Preflight credential check for the MCP ingress. Backward compatibility
-	// hinges on `credentialChallenge`: the framework only ever short-circuits
-	// to a real 401 when the app's `defineCredentialResolver({ challenge })`
-	// actually produces a value for this exact Request. No challenge
-	// configured at all, or the per-request function returning `undefined`
-	// for this Request, both defer to `mcpOperation`'s own resolution and
-	// today's 200/SSE-wrapped `UNAUTHENTICATED` frame, unchanged byte-for-byte
-	// from ADR-0038's shipped shape. This duplicates one resolvePrincipal call
-	// on the authenticated/erroring path in exchange for committing the
-	// correct HTTP status before the SSE stream starts; see
-	// docs/v4/implementation/mcp-credential-challenge.md.
-	const mcpAuthenticate = async (
-		request: Request,
-		signal: AbortSignal,
-	): Promise<McpAuthenticationOutcome> => {
-		const unauthenticated = (): McpAuthenticationOutcome => {
-			const wwwAuthenticate = input.program.credentialChallenge?.(request);
-			return wwwAuthenticate === undefined
-				? { kind: "deferred" }
-				: { kind: "unauthenticated", wwwAuthenticate };
-		};
-		let caller: Principal | null;
-		try {
-			caller = await awaitExecutionPhase(signal, () =>
-				input.program.resolvePrincipal(request, signal),
-			);
-		} catch (error) {
-			const code = classifyOperationCredentialFailure(error, signal);
-			return code === "UNAUTHENTICATED"
-				? unauthenticated()
-				: { kind: "deferred" };
-		}
-		if (!caller || !principal.is(caller)) return unauthenticated();
-		return { kind: "authenticated" };
-	};
+	// Credential preflight for the MCP ingress. `createMcpIngress` only calls
+	// it for a method the app armed (`requireCredential` for `tools/call`,
+	// `mcpCatalogRequiresCredential`/`protectCatalog` for `tools/list`/
+	// `server/discover`); an unconfigured app arms neither, so this is never
+	// invoked and behavior is unchanged from ADR-0038's shipped shape. See
+	// `mcp-authenticate.ts` for the fail-closed classification (anonymous,
+	// provider-unavailable, deadline) and docs/v4/implementation/mcp-credential-challenge.md.
+	const mcpAuthenticate = createMcpCredentialPreflight({
+		resolvePrincipal: (request, signal) =>
+			input.program.resolvePrincipal(request, signal),
+		credentialChallenge: input.program.credentialChallenge,
+	});
 	const mcp = mcpProjection
 		? createMcpIngress({
 				serverInfo: {
@@ -646,6 +615,7 @@ export async function createRuntimeApplication<
 				tools: mcpProjection.tools,
 				authenticate: mcpAuthenticate,
 				protectCatalog: input.program.mcpCatalogRequiresCredential,
+				requireCredential: input.program.mcpCallsRequireCredential,
 				execute: mcpOperation,
 			})
 		: null;

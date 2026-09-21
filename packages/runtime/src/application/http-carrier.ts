@@ -112,6 +112,40 @@ export function createHttpExecutionControl(
 	});
 }
 
+/**
+ * Visible-ASCII-only, matching what `Headers`/`Response` already accept as a
+ * header value minus control characters (so CR/LF injection is rejected
+ * before it ever reaches `new Response`, not caught by its constructor).
+ */
+const SAFE_HEADER_VALUE = /^[\x20-\x7E]+$/u;
+
+/**
+ * Calls an application-supplied `challenge` function with the fail-closed
+ * discipline the framework owes every caller: a thrown exception, a
+ * non-string return, an empty string, or a value containing control
+ * characters (CR/LF header injection, NUL, etc.) all degrade to "no header"
+ * — never to a thrown error that could escape as an unobserved `500`, and
+ * never to the exception's message leaking into a response. The `401`/`503`
+ * status this decorates is decided independently (see `resolveHttpPrincipal`
+ * and the MCP ingress's `authenticate` gate); this function only ever
+ * removes the header, it never changes whether the caller is denied.
+ */
+export function safeCredentialChallenge(
+	challenge: ((request: Request) => string | undefined) | undefined,
+	request: Request,
+): string | undefined {
+	if (!challenge) return undefined;
+	let value: string | undefined;
+	try {
+		value = challenge(request);
+	} catch {
+		return undefined;
+	}
+	return typeof value === "string" && SAFE_HEADER_VALUE.test(value)
+		? value
+		: undefined;
+}
+
 export function httpJsonResponse(
 	body: unknown,
 	status: number,
@@ -184,7 +218,12 @@ export async function resolveHttpPrincipal(
 				callId: input.callId,
 				cacheControl: input.cacheControl,
 				...(code === "UNAUTHENTICATED"
-					? { wwwAuthenticate: input.credentialChallenge?.(input.request) }
+					? {
+							wwwAuthenticate: safeCredentialChallenge(
+								input.credentialChallenge,
+								input.request,
+							),
+						}
 					: {}),
 			}),
 		};
@@ -201,7 +240,10 @@ export async function resolveHttpPrincipal(
 			response: httpFailure("UNAUTHENTICATED", {
 				callId: input.callId,
 				cacheControl: input.cacheControl,
-				wwwAuthenticate: input.credentialChallenge?.(input.request),
+				wwwAuthenticate: safeCredentialChallenge(
+					input.credentialChallenge,
+					input.request,
+				),
 			}),
 		};
 	return { caller };
