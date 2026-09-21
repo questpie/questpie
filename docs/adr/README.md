@@ -52,6 +52,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 ## Proposed
 
 - [Slice the beta.2 DX release](./0039-slice-the-beta-two-dx-release.md)
+- [Collection `delete` kernel operation](./0047-collection-delete-kernel-operation.md)
 - [Freeze local OpenAPI projection explanation](./0041-freeze-local-openapi-projection-explanation.md)
 
 ## Open decisions
