@@ -19,6 +19,7 @@ import { join, resolve } from "node:path";
 import { SQL } from "bun";
 
 import { compileApplication } from "@questpie/compiler";
+
 import { APPEND_ONLY_SQLSTATE } from "../../../packages/compiler/src/schema/postgres/append-only";
 import { installQuestpieForTracer } from "../../support/beta12-packed-questpie";
 
@@ -129,12 +130,7 @@ postgresTest(
 			runCli(temporary, ["migration", "apply"]);
 
 			const planned = JSON.parse(
-				runCli(temporary, [
-					"migration",
-					"plan",
-					"--name",
-					"add-evidence-log",
-				]),
+				runCli(temporary, ["migration", "plan", "--name", "add-evidence-log"]),
 			);
 			expect(planned.status).toBe("planned");
 			const created = JSON.parse(

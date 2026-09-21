@@ -239,9 +239,7 @@ postgresTest(
 					return application!.fetch(new Request(request, { headers }));
 				},
 			}) as Readonly<{
-				withContext(
-					context: Readonly<{ companyId: string }>,
-				): Readonly<{
+				withContext(context: Readonly<{ companyId: string }>): Readonly<{
 					queries: Readonly<{ "watchableRecords.detail": DetailQuery }>;
 				}>;
 			}>;

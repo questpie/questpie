@@ -83,7 +83,7 @@ authorized-or-absent DELETE instead of UPDATE):
   (already fully typed in `packages/compiler/src/relational/types.ts` and
   compiled by `discovery.ts` — never wired to execution before this task)
   is evaluated fresh inside the same statement as the `DELETE ...
-  RETURNING`, so a Policy-denied row and a missing row are
+RETURNING`, so a Policy-denied row and a missing row are
   indistinguishable by construction ("authorized-or-absent"), matching
   `update`.
 - **Relations/FK**: no new cascade declaration surface. `relation.toOne`
@@ -151,16 +151,16 @@ any of this task's commits; not caused by this work.
 Unit tests (`tests/unit`, 192 files, 8 foreground chunks of ~24 files
 each, `--timeout 60000`):
 
-| chunk | pass | skip | fail |
-|---|---|---|---|
-| 1 (25 files) | 207 | 0 | 0 |
-| 2 (25 files) | 110 | 0 | 0 |
-| 3 (23 files) | 120 | 0 | 0 |
-| 4 (26 files) | 103 | 1 | 0 |
-| 5 (25 files) | 112 | 0 | 0 |
-| 6 (24 files) | 87 | 0 | 0 |
-| 7 (20 files) | 111 | 0 | 0 |
-| 8 (24 files) | 105 | 0 | 0 |
+| chunk                 | pass    | skip  | fail  |
+| --------------------- | ------- | ----- | ----- |
+| 1 (25 files)          | 207     | 0     | 0     |
+| 2 (25 files)          | 110     | 0     | 0     |
+| 3 (23 files)          | 120     | 0     | 0     |
+| 4 (26 files)          | 103     | 1     | 0     |
+| 5 (25 files)          | 112     | 0     | 0     |
+| 6 (24 files)          | 87      | 0     | 0     |
+| 7 (20 files)          | 111     | 0     | 0     |
+| 8 (24 files)          | 105     | 0     | 0     |
 | **total (192 files)** | **955** | **1** | **0** |
 
 New unit test: `tests/unit/adr0047-collection-delete-kernel.test.ts` — 1
@@ -237,9 +237,9 @@ build that made the fix look like a no-op — see below):
   lifecycle program), `packages/compiler/src/mutation/generated-contract.ts`
   (the issue-mapping visibility gate now covers delete), and a new
   `currentValidation` plan step (`packages/compiler/src/mutation/
-  postgres-delete.ts`, `packages/runtime/src/mutation/
-  postgres-delete-program.ts`, `packages/runtime/src/mutation/
-  collection-delete.ts`) that interprets `validate` against
+postgres-delete.ts`, `packages/runtime/src/mutation/
+postgres-delete-program.ts`, `packages/runtime/src/mutation/
+collection-delete.ts`) that interprets `validate` against
   `{ candidate: null, current, now }` — the same "one side absent" shape
   create's own validate already uses. Tests:
   `tests/unit/adr0047-f1f2-delete-lifecycle-gate.test.ts`,

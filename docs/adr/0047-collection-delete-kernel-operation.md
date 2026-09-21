@@ -38,7 +38,7 @@ Operation Set delete's existing PostgreSQL statement builder, mirroring how
 `kernel.ts` already adapts `create`/`update` from the Operation Set.
 
 **Verified discovery that changes the scope of this decision.** The
-Operation Set `delete` member has compiler-side *type* and *codec*
+Operation Set `delete` member has compiler-side _type_ and _codec_
 scaffolding, but no executable statement path exists anywhere in the
 codebase:
 
@@ -97,7 +97,7 @@ Only `validate` applies for v1. `validate` receives the locked current row
 perform) and no candidate — there is nothing to normalize, so `normalize`
 does not apply. `check` and `afterWrite` are explicitly deferred (not
 "invented new phases", simply not wired yet): `check`'s role in
-`create`/`update` is bounded reads against a *candidate* that does not exist
+`create`/`update` is bounded reads against a _candidate_ that does not exist
 for delete, and `afterWrite` would receive a written row that, for a delete,
 does not exist post-commit. A future ADR may add `afterWrite` for
 delete-triggered cascading kernel writes once the base path ships; it is out
@@ -136,7 +136,7 @@ grants `delete` on that Collection, and (2) the Mutation's `issueMappings`
 cover every reachable Collection issue delete can raise (today: the FK
 issue). This task also surfaced that the existing "member does not exist on
 ctx.data.<collection>" diagnostic (when a capability/mapping gate hides a
-member) does not explain *why* the member is hidden — it reads as an
+member) does not explain _why_ the member is hidden — it reads as an
 ordinary TypeScript "property does not exist" error. This ADR asks the
 implementer to attach a dedicated diagnostic (grant-missing vs.
 mapping-missing) analogous to `QP-COMPOSE-027`'s `missingIssueMapping`
@@ -149,7 +149,7 @@ phase lands the type-visibility gate.
    (`kernelProgram(collection, policy, "delete")`, `keyFields` = primary key,
    no caller/trusted value fields, `outputCardinality: "optionalOne"`).
    `operation-write-resource.ts` was left unchanged: it materializes the
-   *Operation Set's* network-exposed create/update Mutations, a separate,
+   _Operation Set's_ network-exposed create/update Mutations, a separate,
    still-unbuilt feature this ADR does not extend to delete (see
    Deferred decisions).
 2. **Runtime execution** — `packages/compiler/src/mutation/postgres-delete.ts`
@@ -213,9 +213,9 @@ phase lands the type-visibility gate.
   only gates the `currentValidation` read and the final `DELETE`.
 - **F5 — delete then create with the same key resets write-once Fields
   and creation provenance.** `packages/compiler/src/schema/postgres/
-  internal-protocol-v3.ts`'s database-owned-value trigger pattern
+internal-protocol-v3.ts`'s database-owned-value trigger pattern
   (`IF TG_OP = 'INSERT' THEN NEW.created_at := transaction_timestamp()
-  ELSE NEW.created_at := OLD.created_at END IF`) only carries a
+ELSE NEW.created_at := OLD.created_at END IF`) only carries a
   create-time value forward across an `UPDATE`; a fresh `INSERT` after a
   `DELETE` has no `OLD` row, so `created_at` and any other
   `immutable`/server-owned creation-time Field gets a brand new value —
@@ -228,7 +228,7 @@ phase lands the type-visibility gate.
   that opt in — that is the mechanism for Collections needing this
   guarantee, not a delete-side workaround. Concretely, after the two
   branches were integrated (2026-09-22): `defineCollection({ appendOnly:
-  true })` makes `projectCollectionMutationKernels`
+true })` makes `projectCollectionMutationKernels`
   (`packages/compiler/src/mutation/kernel.ts`) refuse to emit this ADR's
   `delete` kernel for that Collection at compose time — a Policy declaring
   a `delete` operation on an append-only Collection is the same
@@ -266,5 +266,6 @@ Live Query subscription convergence is proven end to end
 concurrency is proven at N=50 randomized trials per race with
 `pg_stat_activity`-observed interleaving and reported win distributions
 (`tests/integration/postgres/adr0047-concurrent-delete.test.ts`).
+
 - Bulk/filtered delete (`deleteMany`) — this ADR is key-addressed single-row
   only, matching `update`.
