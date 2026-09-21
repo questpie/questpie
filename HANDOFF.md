@@ -52,6 +52,31 @@ other three `questpie` declarations are unchanged. `bun run scripts/release.ts
 --dry-run` passes end to end. Nothing was pushed, tagged, or published; no
 npm registry write ran.
 
+## Integration branch — 2026-09-22
+
+The same branch and worktree then merged two more feature lines, one at a
+time: `work/collection-delete-kernel` (`ctx.data.<collection>.delete({ key
+})` for named Mutations, **ADR-0047, Proposed**) and
+`work/collection-db-immutability` (`defineCollection({ appendOnly: true })`,
+`field.*({ immutable: "database" })`, compiler-owned `ENABLE ALWAYS` guard
+triggers, **ADR-0048, Proposed**). See
+[the delivery record](docs/v4/implementation/integration-2026-09-22.md) for
+the two merge-conflict resolutions (`docs/adr/README.md` and
+`packages/compiler/src/mutation/kernel.ts`), the cross-feature rule built
+for this merge (an append-only Collection now yields no `delete` kernel
+either, not just no `update` kernel — `QP-COMPOSE-013` at compose time, plus
+a Postgres proof that a direct SQL `DELETE` is refused with `QP001`), the
+updated release-artifact manifest entries, and every gate command and
+result.
+
+Both public packages were rebuilt and packed twice independently again;
+only `questpie`'s archive sha256 and root `.` declaration sha256 changed
+(the delete kernel and database-immutability public surface); every other
+entry, and all of `questpie-opentelemetry`, is byte-identical to the prior
+manifest. `bun run scripts/release.ts --dry-run` passes end to end. Nothing
+was pushed, tagged, or published; no npm registry write ran. ADR-0045
+through ADR-0048 are all Proposed, not Accepted.
+
 ## Manual release continuation (after this work)
 
 The owner chose a [manual beta.2 release](docs/v4/implementation/beta2-closure/MANUAL-RELEASE.md).
