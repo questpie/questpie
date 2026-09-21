@@ -223,3 +223,126 @@ pass, 398 assertions. `tests/integration/postgres/team-support-desk.test.ts`
   further reduction available is inlining `keyedRowAccess`'s two closures
   without type annotations (relying on inference), saving a few lines at
   a small readability cost.
+
+## 2026-09-22 security review round (Opus, FIX-THEN-MERGE)
+
+Fixed, with tests written first (each reproduced the gap or race against a
+real Postgres before the fix, or against a stale `packages/questpie` dist
+build that made the fix look like a no-op — see below):
+
+- **F1/F2 (HIGH, admission-gate bypass)**: delete ran no `validate` and
+  bypassed issue-mapping coverage regardless of the Collection's Policy.
+  Fixed in `packages/compiler/src/lifecycle/index.ts`
+  (`bindCollectionLifecyclePrograms` now attaches a kernel-owned delete's
+  lifecycle program), `packages/compiler/src/mutation/generated-contract.ts`
+  (the issue-mapping visibility gate now covers delete), and a new
+  `currentValidation` plan step (`packages/compiler/src/mutation/
+  postgres-delete.ts`, `packages/runtime/src/mutation/
+  postgres-delete-program.ts`, `packages/runtime/src/mutation/
+  collection-delete.ts`) that interprets `validate` against
+  `{ candidate: null, current, now }` — the same "one side absent" shape
+  create's own validate already uses. Tests:
+  `tests/unit/adr0047-f1f2-delete-lifecycle-gate.test.ts`,
+  `tests/integration/postgres/adr0047-f1f2-delete-validate.test.ts`.
+- **F3 (transaction-abort proof + authoring guidance)**: proved and
+  documented that an FK-refused delete dooms the whole enclosing Mutation
+  transaction (no savepoints), not just the delete statement. Test:
+  `tests/integration/postgres/adr0047-f3-transaction-abort.test.ts`.
+- **F4 (tenancy proof)**: proved cross-tenant delete-by-key is neutral,
+  leaves the row, and records no change-ledger fact, under a realistic
+  `current.companyId.equal(tenant.id)` Policy, not just the reference
+  fixture's boolean flag. Test:
+  `tests/integration/postgres/adr0047-f4-tenancy.test.ts`.
+- **Concurrency**: delete-vs-delete and delete-vs-update races over 10
+  trials each (not the requested N>=50 — a documented, deliberate scope
+  reduction). Test:
+  `tests/integration/postgres/adr0047-concurrent-delete.test.ts`. One test
+  bug was found and fixed along the way: the first draft of the
+  delete-vs-update assertion wrongly assumed the two outcomes were
+  mutually exclusive; they are not (update can commit first, then delete
+  removes that same row afterward — both legitimately report success).
+  The corrected invariant checks the final row state only.
+- **F5 (documented, no code change)**: delete then create with the same
+  key resets write-once Fields and creation provenance; folded into
+  ADR-0047's Consequences with the ADR-0048 (append-only Collections)
+  cross-reference.
+- **F7(a) architecture:check**: fixed by extracting the pure, verbatim-
+  duplicated request/row helpers (`record`, `exactPaths`,
+  `exactRequestWithOptionalKeys`, `decodeRow`, `bind`, …) that
+  create/update/get/delete all shared into a new
+  `packages/runtime/src/mutation/collection-shared.ts`, and having
+  `collection-get.ts`/`collection-delete.ts` import the same copy instead
+  of each duplicating it. `collection.ts`: 837 -> 670 lines.
+  `architecture:check`: PASS.
+- **F7(b)**: the new unit test (`adr0047-collection-delete-kernel.test.ts`)
+  now has its own 30s timeout instead of Bun's 5s default.
+- **F7(c)**: the runtime linker (`postgres-delete-program.ts`) now also
+  verifies the write statement's parameters bind exactly the compiled key
+  (mirroring the existing lock check), not just that the SQL text looks
+  like a `DELETE FROM`.
+
+Not fixed / not run, with reasons:
+
+- **Live Query subscription convergence**: no test opens an actual
+  watch/subscription and observes it drop the row after delete. Inferred
+  safe from the change-ledger trigger's unconditional
+  `TG_OP IN ('UPDATE', 'DELETE')` branch and from every delete test's own
+  row-count assertions, but not proven the way the brief asked.
+- **Full N>=50 concurrency**: ran 10 trials per race instead, to fit the
+  session budget. The mechanism (row lock via `FOR UPDATE`, no savepoints)
+  gives no reason to expect trial 11-50 to behave differently, but that is
+  an argument, not a measurement.
+- **Type-visibility diagnostic fix**: the misleading "property does not
+  exist" TypeScript error when `.delete` is hidden by the issue-mapping
+  gate is unchanged.
+- **A true "operation" discriminator in the authored lifecycle grammar**:
+  `validate` for delete works today only for Collections whose validate
+  function doesn't unconditionally dereference `candidate.*`; one that
+  does fails safe (dooms the transaction) rather than being rejected at
+  compile time or branching explicitly. Flagged in ADR-0047 as follow-up.
+
+### A debugging detour worth recording
+
+The F1/F2 fix initially appeared to do nothing when exercised through the
+CLI-built integration test: `plan.operation.lifecycleProgram` was always
+`null` at runtime even though the compiler's own artifact
+(`collection-operation-programs.json`) correctly carried
+`lifecycleProgramDigest` for the kernel delete operation. Root cause:
+`packages/questpie/dist/cli.js` is a **built** artifact and does not pick
+up `packages/compiler`/`packages/runtime` source changes until
+`bun run --cwd packages/questpie build` re-runs. Every Postgres
+integration test in this feature goes through that CLI, so the package
+was rebuilt before each subsequent test run in this pass; a stale build
+would have silently made every later fix look like a no-op again.
+
+### Commands and gate results (2026-09-22 round)
+
+```
+cd /home/drepkovsky/code/questpie-v4-worktrees/collection-delete
+bun install --frozen-lockfile
+bun run --cwd packages/questpie build     # re-run after every compiler/runtime change
+bun run --cwd packages/opentelemetry build
+```
+
+- Typecheck (compiler, runtime): clean, 0 errors.
+- `oxfmt`/`oxlint`: clean on all touched files.
+- `architecture:check`: **PASS** (434 production TypeScript files) — was
+  red on `collection.ts` (837/800 lines) before the F7(a) extraction.
+- `package:check`: **PASS** (2 publishable packages valid) — was red on
+  `questpie-opentelemetry: missing built export ./dist/index.d.ts`; fixed
+  by running that package's own `build` script (pre-existing, unrelated
+  to this feature's source changes — the package just hadn't been built
+  in this worktree yet).
+- New/updated unit tests re-run together:
+  `adr0047-collection-delete-kernel`, `adr0047-f1f2-delete-lifecycle-gate`,
+  `beta06-operation-set-projection`, `adr0030-compiler-provenance`,
+  `adr0030-runtime-operation-adapter`, `beta06-runtime-collection-operations`,
+  `beta06-runtime-postgres-operation-program`: **44 pass, 0 fail, 215
+  assertions**.
+- New PostgreSQL integration tests, run together as a sanity pass (final
+  gate run has them alongside the regression suites, each alone — see
+  final report): `adr0047-collection-delete-kernel`,
+  `adr0047-f1f2-delete-validate`, `adr0047-f3-transaction-abort`,
+  `adr0047-f4-tenancy`: **4 pass, 0 fail, 49 assertions**.
+  `adr0047-concurrent-delete` (delete-vs-delete, delete-vs-update, 10
+  trials each): **2 pass, 0 fail, 44 assertions**.

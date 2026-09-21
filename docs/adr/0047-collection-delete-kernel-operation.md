@@ -8,11 +8,15 @@
   delete because no delete path existed)
 - Implementation: built on this branch per the Decision below, except the
   FK/constraint-issue-mapping item explicitly deferred as an Accepted-ADR
-  conflict (see "Consequences"). See
+  conflict (see "Consequences"). A 2026-09-22 Opus security review (F1-F7)
+  found and this branch fixed a real admission-gate bypass (F1/F2: delete
+  ran no `validate` and bypassed issue-mapping coverage regardless of
+  Policy) and added proof for transaction-abort (F3), tenancy (F4), and
+  concurrency at reduced scale (10 trials, not the requested N>=50). See
   `docs/v4/implementation/collection-delete-kernel.md` for the shared-vs-new
-  code split, every gate result, and what remains unverified (concurrent
-  delete-vs-update race, Live Query subscription convergence). Left
-  Proposed, not flipped to Accepted, by instruction.
+  code split, every gate result, and what remains unverified (Live Query
+  subscription convergence, full N>=50 concurrency, the type-visibility
+  diagnostic fix). Left Proposed, not flipped to Accepted, by instruction.
 
 ## Context
 
@@ -225,14 +229,28 @@ phase lands the type-visibility gate.
 
 ## Deferred decisions
 
-- `afterWrite` for delete (cascading side-effect kernel writes).
+- `afterWrite`/`check` for delete (cascading side-effect kernel writes;
+  `validate` is the only phase interpreted for delete — see F1/F2 above).
+- A true "operation" discriminator in the authored lifecycle grammar, so a
+  shared `validate` can branch explicitly on create/update/delete instead
+  of relying on authors writing `current`-only checks and an
+  unconditional `candidate.*` read failing safe (dooming the transaction)
+  rather than being rejected at compile time.
 - Generated Operation Set `delete`/`list` execution (unblocked by this
   ADR's runtime-execution artifacts but not required by it).
 - Typed `ConstraintViolation` issue mapping (would need its own ADR
   extending ADR-0030/0031's Deferred item for all three write members, not
   a delete-only carve-out).
 - CAS/`expected` on delete.
-- Concurrent delete-vs-update race proof; Live Query subscription
-  convergence proof.
+- Live Query subscription convergence proof (a real watch dropping the
+  row after delete) — inferred from the change-ledger trigger's
+  unconditional `TG_OP IN ('UPDATE', 'DELETE')` branch and from the row
+  being gone from the base table after every delete test, not proven by
+  an actual watch/subscription test; out of budget this pass.
+- Concurrency proof at the requested scale: delete-vs-delete and
+  delete-vs-update are proven over 10 randomized trials each
+  (`tests/integration/postgres/adr0047-concurrent-delete.test.ts`), not
+  the requested N >= 50 — a real, intentional scope reduction to fit the
+  session budget, not a skipped item.
 - Bulk/filtered delete (`deleteMany`) — this ADR is key-addressed single-row
   only, matching `update`.
