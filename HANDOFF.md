@@ -32,6 +32,26 @@ or release evidence. Preserve that evidence and bind a fresh candidate before
 resuming release acceptance. Auth remains an application integration; Files,
 Search, Studio, and built-in health endpoints are not supplied by this work.
 
+## Integration branch — 2026-09-21
+
+`work/v4-integration-20260921` (worktree `questpie-v4-worktrees/integration`)
+merges the docs/onboarding-CLI line above with `work/autopilot-rewrite-additions`:
+the public `questpie/testing` DB-backed test harness (**ADR-0045, Proposed**)
+and the MCP/canonical-HTTP credential challenge gate — `challenge`,
+`protectCatalog`, `requireCredential` on `defineCredentialResolver`
+(**ADR-0046, Proposed**). See
+[the delivery record](docs/v4/implementation/integration-2026-09-21.md) for
+the merge-conflict resolutions, the exact release-artifact manifest entries
+that changed and why, and every gate command and result.
+
+Both public packages were rebuilt and packed twice independently after the
+merge; the pairs were byte-identical. Only the `questpie` archive sha256 and
+two declaration hashes (root `.` and the new `./testing` subpath) changed in
+`quality/release/package-artifacts.json`; `questpie-opentelemetry` and the
+other three `questpie` declarations are unchanged. `bun run scripts/release.ts
+--dry-run` passes end to end. Nothing was pushed, tagged, or published; no
+npm registry write ran.
+
 ## Manual release continuation (after this work)
 
 The owner chose a [manual beta.2 release](docs/v4/implementation/beta2-closure/MANUAL-RELEASE.md).
