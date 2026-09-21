@@ -1,0 +1,608 @@
+# ADR-0048: Compiler-owned database-level Collection and Field immutability
+
+- Status: Proposed (implemented; not marked Accepted — owner sign-off items
+  remain, see below)
+- Date: 2026-09-21
+- Owners: compiler, schema lifecycle
+- Ticket: Autopilot port kill criterion — see
+  `autopilot-worktrees/v4-r1/docs/architecture/v4-r1-stage-a-evidence-2026-09-21.md`
+  section 3.
+
+## Context
+
+A real application (Autopilot) has 69 migrations that add PostgreSQL triggers
+and constraints to protect rows against writers that bypass the generated
+kernel entirely: direct `psql`, another service's credentials, a buggy
+one-off script. Two shapes recur: append-only audit/evidence tables (no
+`UPDATE`, no `DELETE`, ever) and write-once columns on otherwise mutable rows.
+
+Today the schema model in `packages/compiler/src/schema` has no trigger _step_
+at all except the two the compiler already owns for its own reasons: the
+Change Ledger capture trigger (ADR-0012, `change-capture.ts`) and the
+database-owned `onUpdate: "now"` timestamp trigger (`database-owned-update.ts`).
+A trigger added out of band — by hand, by a raw migration, by a DBA — makes
+every later `migration apply` fail with `QP-SCHEMA-027 targetDrift` during
+planning and `QP-SCHEMA-028 invalidObject` at Runtime startup, because the
+catalog reader (`catalog-reader.ts`) enumerates all non-internal triggers on
+managed tables and compares them against the expected fingerprint. There is no
+declarative way to make that object legitimate.
+
+Separately, `field.*({ immutable: true })` (`field-contract.ts` line ~348)
+already exists but is a **kernel-only** promise: the generated Mutation input
+type omits the field after create, and nothing else. `packages/compiler` never
+reads `field.immutable` when planning schema objects. A writer that reaches
+the table directly — the exact class of writer this ADR is about — can update
+that column freely.
+
+This blocks Autopilot's port: it cannot express 69 existing guarantees, so
+every one of them would have to become either (a) unenforced at the database
+level, a real regression, or (b) a hand-authored trigger the compiler cannot
+see, which permanently breaks `migration apply`/startup drift detection for
+that table.
+
+## Two existing precedents for compiler-owned triggers
+
+`packages/compiler/src/schema/postgres/` already carries two different trigger
+mechanisms, and they differ in exactly the way that matters for this decision:
+
+1. **`change-capture.ts`** (ADR-0012): one pair of trigger functions,
+   `questpie_internal.capture_reactive_row` / `capture_reactive_truncate`,
+   defined _once_ as part of the versioned internal protocol
+   (`internal-protocol-v3.ts`, carried forward to v9). Every reactive
+   Collection's trigger is a thin `CREATE TRIGGER ... EXECUTE FUNCTION
+questpie_internal.capture_reactive_row(args...)` referencing that shared,
+   `SECURITY DEFINER`, owner-locked function. Adding a _new_ shared function
+   name to `questpie_internal` means adding it to the internal protocol
+   catalog and checksum, which is exactly the kind of change ADR-0006/ADR-0043
+   gate behind an explicit, non-rolling protocol version cutover (the
+   `internal-protocol-vN` sequence, currently v9).
+
+2. **`database-owned-update.ts`**: one function _per protected field_,
+   generated into the **application's own PostgreSQL schema**
+   (`schema.application.postgresSchema`), `SECURITY INVOKER`, `REVOKE ALL ...
+FROM PUBLIC`, verified by a catalog query scoped to that schema. It is
+   fingerprinted with the same `canonicalBytes`/`digest` idiom as every other
+   schema object and never touches `questpie_internal` or the internal
+   protocol version at all.
+
+Database-level immutability is data-plane, per-application policy — the same
+shape as the `onUpdate: "now"` trigger, not the same shape as cross-application
+Change Ledger capture (which genuinely is shared framework machinery that
+every reactive Collection in every application must agree on bit-for-bit).
+
+**Decision: follow the `database-owned-update.ts` shape.** Both new object
+kinds — the append-only guard and the write-once field guard — are generated,
+per-collection/per-field, `SECURITY INVOKER` PL/pgSQL functions and triggers
+owned by the application's own PostgreSQL schema, not by `questpie_internal`.
+
+### Protocol version impact — no bump required, but flagged for owner sign-off
+
+Because neither new trigger function is added to `questpie_internal` or to
+`internalProtocolV9Catalog`/`internalProtocolV9Sql`
+(`internal-protocol-v9.ts`), **this slice does not require an
+internal-protocol-v9 → v10 cutover.** The objects are ordinary managed schema
+objects, planned, diffed, rendered, and fingerprinted exactly like columns,
+indexes, and the existing database-owned-update trigger — all of which already
+coexist with internal-protocol-v9 without being part of it.
+
+This is still flagged here as a STOP/owner-decision point per the working
+agreement, because the alternative (shared `questpie_internal` functions,
+option B below) was seriously considered:
+
+- **Option A (chosen): per-object functions in the application schema.**
+  Pros: no protocol bump, reuses a proven, already-shipped pattern
+  (`database-owned-update.ts`), smaller blast radius, each function's body is
+  trivial and fully determined by its parameters so duplication cost is low
+  (a few lines of PL/pgSQL per guarded table/field, not a shared library).
+  Cons: N functions instead of 1 shared one; a body-text change to the guard
+  logic must be re-rendered into every existing function by a migration
+  instead of a single internal-protocol upgrade.
+- **Option B (rejected for this slice): shared `questpie_internal` functions**
+  like Change Ledger capture. Pros: one function body to maintain forever,
+  consistent with the "framework machinery" precedent. Cons: forces an
+  internal-protocol-v9 → v10 non-rolling cutover (ADR-0006/ADR-0043) for a
+  feature that is fundamentally per-application policy, not shared
+  cross-application infrastructure; raises the stakes of this slice from "new
+  schema object kind" to "coordinated protocol cutover," which is exactly the
+  kind of decision this task was told to stop and escalate rather than make
+  unilaterally.
+
+If a future slice needs the shared-function shape (e.g. because guard bodies
+need to evolve independently of application migrations), that is a separate,
+explicitly-scoped ADR that proposes internal-protocol-v10.
+
+## Decision
+
+### 1. Declaration API
+
+- **Collection-level, append-only:** `collection.<name>({ ..., appendOnly:
+true })`. Chosen over `immutable: true` at the Collection level because
+  CONTEXT.md already uses "immutable" for value-level (Context, Execution,
+  wire envelope) semantics, and because the guarantee is specifically "no
+  `UPDATE`, no `DELETE`" — `appendOnly` names the mechanism precisely and
+  matches the existing "append-only Runtime Envelope" vocabulary in
+  CONTEXT.md/SPEC.md. `INSERT` remains unrestricted at the database level
+  (Policy/Authority still gate it through the kernel); `TRUNCATE` is refused
+  by the same guard (see below).
+- **Field-level, write-once:** `field.*({ ..., immutable: "database" })`,
+  **opt-in**, not automatic for the existing `immutable: true`.
+  - Automatic enforcement was rejected: `field.*({ immutable: true })` is
+    already used across existing applications purely for the kernel-level
+    promise ("this Mutation input never re-offers the field"), most commonly
+    on fields that legitimately need a compiler-planned or operator backfill
+    later (renamed fields, corrected default, migrated foreign key). Making
+    every one of those fields database-immutable retroactively would turn an
+    ordinary future `alterField`/backfill migration into a hard failure for
+    every existing application on upgrade, with no way to opt out short of
+    editing every Field declaration — a correctness regression injected by a
+    compiler upgrade, which the schema lifecycle contract (ADR-0002) does not
+    allow silently.
+  - `immutable: "database"` is a strict superset of `immutable: true`
+    (kernel-level omission is required whenever database-level enforcement is
+    requested — offering `update` on a column the database will refuse is a
+    compiler diagnostic, not a runtime surprise); `field.*({ immutable: true
+})` keeps its current, unchanged, kernel-only meaning.
+
+### 2. Planned schema objects
+
+New module `packages/compiler/src/schema/postgres/append-only.ts` (modeled
+directly on `database-owned-update.ts`):
+
+- **Append-only Collection guard**: one `BEFORE UPDATE OR DELETE` row trigger
+  plus one `BEFORE TRUNCATE` statement trigger per append-only Collection,
+  each calling a generated `SECURITY INVOKER` PL/pgSQL function in the
+  application's own schema that unconditionally `RAISE EXCEPTION`s with a
+  fixed SQLSTATE and a message naming the Collection identity. `REVOKE ALL ...
+FROM PUBLIC` on the function (matches `database-owned-update.ts`).
+- **Write-once Field guard**: one `BEFORE UPDATE` row trigger **per
+  `immutable: "database"` Field**, not one shared trigger per Collection
+  (an earlier draft of this ADR described the shared-per-Collection shape;
+  it was never built — the shipped implementation is per-Field, matching
+  `database-owned-update.ts`'s own per-Field pattern exactly, so a
+  Collection with three write-once Fields gets three independent
+  functions and triggers). Each function checks `IS DISTINCT FROM` for its
+  one guarded column and raises naming that Field and its Collection.
+- **Mechanism choice — row/statement `BEFORE` triggers, not rules or bare
+  `REVOKE`:**
+  - `REVOKE` alone does not stop the table owner or a superuser, and the
+    generated kernel connects as the application's own role, which typically
+    _is_ the table owner in the current bootstrap (`bootstrap.ts`) — revoking
+    `UPDATE`/`DELETE` from that role would also stop the kernel's own
+    legitimate paths on other Collections sharing the role, and does nothing
+    against a superuser `psql` session, which is the primary threat named in
+    the evidence doc. Rejected as insufficient on its own; still applied
+    additionally is out of scope for this slice (see open question below).
+  - `RULE`s rewrite the query at parse time and interact badly with
+    `RETURNING`, are officially discouraged since PG 10+ in favor of
+    triggers, and would fire _before_ row visibility the same way a `BEFORE`
+    trigger does but with much worse composability with the existing
+    trigger-based Change Ledger capture — rejected.
+  - **`BEFORE` row/statement triggers** are the only mechanism that (a) fire
+    for every writer regardless of role, (b) compose with `RETURNING`,
+    `MERGE`, `ON CONFLICT DO UPDATE` the same way `database-owned-update.ts`'s
+    existing `BEFORE UPDATE` trigger already does, and (c) can be ordered
+    deterministically against the `AFTER` Change Ledger capture trigger.
+    **Correction (this pass, per adversarial review):** an earlier draft of
+    this ADR claimed the only bypass of a `BEFORE` trigger was a superuser
+    setting `session_replication_role = replica`. That was wrong on two
+    counts: (1) it requires no superuser — on PostgreSQL 15+ a role can be
+    granted `SET ON PARAMETER session_replication_role` without superuser,
+    and (2) it is not a rare escalation but the **default** posture of every
+    logical-replication apply worker, which always runs with
+    `session_replication_role = replica` so it does not re-fire triggers the
+    origin already fired. A trigger created with PostgreSQL's default firing
+    status (`'O'`, origin-only) is therefore skipped by every subscriber in
+    a logical-replication topology and by any session with that GUC set —
+    not just by a trusted superuser deployment boundary. **Fix shipped in
+    this pass:** every guard trigger is created `ENABLE ALWAYS`
+    (`ALTER TABLE ... ENABLE ALWAYS TRIGGER ...`, `pg_trigger.tgenabled =
+'A'`), the one firing status that fires regardless of
+    `session_replication_role`, and the expected catalog pins
+    `triggerEnabled: "A"` so a guard silently downgraded to `'O'`/`'D'`/`'R'`
+    out of band is `QP-SCHEMA-028` drift. Actual superuser bypass
+    (`ALTER TABLE ... DISABLE TRIGGER ALL`, direct catalog surgery, or
+    dropping the trigger outright) remains a trusted deployment boundary and
+    a conformance failure, not a protected application path — consistent
+    with ADR-0012's own framing — but the replication-role bypass this
+    correction closes required no superuser or deployment-boundary trust at
+    all, which is why it was a real bug, not an accepted risk.
+  - `TRUNCATE`: covered by a `BEFORE STATEMENT` trigger on the append-only
+    guard, refusing before the Change Ledger's own `AFTER TRUNCATE` capture
+    trigger runs (see firing order below) — so an append-only table's
+    `TRUNCATE` never reaches Change Ledger capture at all, and is refused,
+    matching "no DELETE at the database level" (`TRUNCATE` is unqualified
+    delete-all).
+
+- **What actually shipped (this section corrected against the implementation
+  after adversarial review; an earlier draft described intent that was never
+  built).** Trigger/function names, as rendered by
+  `packages/compiler/src/schema/postgres/append-only.ts` via
+  `uniquelyShortenedPostgresName` (the same helper every other generated
+  name in this codebase uses, collision-checked against the whole schema):
+  `<table>_questpie_append_only_<hash>` (row guard) and
+  `<table>_questpie_append_only_truncate_<hash>` (statement guard) sharing
+  one function `qp_append_only_<table>_<hash>`, per append-only Collection;
+  `<table>_<column>_questpie_write_once_<hash>` with its own function
+  `qp_write_once_<table>_<column>_<hash>`, **per write-once Field** (not
+  per-Collection — a Collection with three write-once Fields gets three
+  independent triggers and functions, one per Field, matching
+  `database-owned-update.ts`'s existing per-Field pattern exactly). No
+  `qp00_` (or any other) ordering-token prefix was ever implemented; the
+  guard names carry no special ordering marker.
+- **Firing order vs. ADR-0012 Change Ledger capture (same table):**
+  PostgreSQL fires all `BEFORE` triggers on a statement before any `AFTER`
+  trigger, unconditionally — this ordering is by trigger _timing_
+  (`BEFORE` vs `AFTER`), not by name, and does not depend on any naming
+  convention. The guard is `BEFORE`; Change Ledger capture (ADR-0012) is
+  `AFTER`. So an `UPDATE`/`DELETE`/`TRUNCATE` on an append-only table is
+  always refused before Change Ledger capture ever sees it, regardless of
+  what either trigger is named — proven against a real database by this
+  pass's integration test (a refused write leaves the Change Ledger's row
+  count unchanged). A Live Query watching the Collection is unaffected: it
+  only observes committed facts, and a refused write commits nothing.
+- **Firing order between the two guard kinds, when a Collection is both
+  `appendOnly` and has a write-once Field (found by adversarial review):**
+  both guards are `BEFORE ROW` triggers on the same table and event
+  (`UPDATE`), so PostgreSQL orders them by name, and the two naming schemes
+  above are not designed to sort any particular way against each other —
+  observed in this pass's integration test, `<table>_<column>_questpie_
+write_once_*` sorts before `<table>_questpie_append_only_*` whenever the
+  column name starts with a letter earlier than `q`. **This is harmless as
+  shipped**, because item 4's compose-time refusal above already forbids
+  the one combination where firing order would matter for correctness
+  (`immutable: "database"` + `onUpdate: "now"` on the same Field): when
+  both guards can legally coexist on a table, either one refusing an
+  `UPDATE` is a correct refusal — there is no scenario in this shipped
+  slice where one guard firing before the other changes the _outcome_
+  (refused vs. accepted), only which SQLSTATE/message the caller sees. Not
+  treated as a bug; documented, not fixed with an ordering token.
+- **Name collisions:** guard function/trigger names are derived from
+  `uniquelyShortenedPostgresName` the same way every other generated name is,
+  guaranteeing no collision with capture (`_questpie_capture_*`),
+  database-owned-update (`_questpie_on_update` / `qp_on_update_*`), or
+  user-chosen Field/Collection names.
+- **Schema Fingerprint and drift (corrected):** the new catalog
+  (`PostgresImmutabilityGuardsV1`, one type covering both
+  `appendOnlyCollections` and `writeOnceFields` — not two separate exported
+  catalog types) is **not** wired into `expected-fingerprint.ts`, which
+  only ever covers columns/constraints/indexes (confirmed by reading it:
+  it has no trigger-shaped comparable at all). It is wired the same way
+  `change-capture.ts`/`database-owned-update.ts` already are: into
+  `fingerprint.ts`'s `verifyManagedCatalogObjects` (a direct catalog query
+  run alongside, not through, the columns/constraints/indexes comparable)
+  and into `managedObjectIdentities` (the allow-list that keeps the
+  generic catalog reader's unsupported-object scan from flagging the
+  guard's own trigger/function as an unmanaged object it doesn't
+  recognize), plus the parallel path in `database-readiness.ts` for
+  startup. Both `QP-SCHEMA-028 changedObject` (out-of-band `DROP TRIGGER`,
+  or any catalog difference from the expected row) and `QP-SCHEMA-027
+targetDrift` (an out-of-band object occupying a guard's reserved name
+  before it's installed) are proven against a real database by this pass's
+  integration tests — the reviewer's note asking this record be reconciled
+  is addressed by this correction: the wiring point named in the original
+  draft (`expected-fingerprint.ts`) was wrong; the actual wiring
+  (`fingerprint.ts` + `managedObjectIdentities` + `database-readiness.ts`)
+  is real, tested, and unchanged by this correction — only the ADR's
+  description of _where_ was wrong, not the shipped behavior.
+
+### 3. Lifecycle of the declaration
+
+- **Adding `appendOnly: true` / `immutable: "database"` to an existing
+  Collection/Field:** classified `safe` (existing `migration-classification.ts`
+  vocabulary, as implemented in `migration-diff.ts`'s `immutabilityGuardSteps`
+  and the equivalent block in `createSteps`) unconditionally — the guard is a
+  `CREATE FUNCTION`/`CREATE TRIGGER` pair, instantaneous DDL that only takes a
+  brief `ACCESS EXCLUSIVE`/`SHARE ROW EXCLUSIVE` lock, never rewrites the
+  table, and never touches existing rows (a guard only rejects _future_
+  writes). No `--accept-destructive` required to add, and none of the
+  existing rows are scanned, validated, or at risk — unlike adding a `NOT
+NULL` column, there is no data already in the table that could violate the
+  new guarantee retroactively.
+- **Removing `appendOnly` / `immutable: "database"`:** classified
+  **destructive**, requiring `migration create --accept-destructive` (the
+  existing machinery, per `migration-classification.ts`'s existing pattern of
+  treating "relaxes a guarantee" as destructive, e.g. widening a constraint).
+  Rationale: dropping the guard silently is indistinguishable, from the next
+  developer's perspective, from "we never had this guarantee" — the same
+  asymmetry-of-harm argument that already makes column drops and nullable
+  relaxation destructive.
+- **Rename (Collection or Field), corrected against what shipped:** the
+  guard trigger/function names are derived from the _physical_ table/column
+  name via `uniquelyShortenedPostgresName`, exactly like every other
+  generated object name in this codebase (see `database-owned-update.ts`).
+  A rename plans as an unconditional drop-old-guard + add-new-guard pair —
+  the same generic add/drop shape `immutabilityGuardSteps` uses for any
+  guard change, resolved to the renamed identity via the plan's `renames`
+  mapping (`mapIdentityBackward`/`mapIdentityForward`), the same mechanism
+  `databaseOwnedUpdateSteps` already uses for renaming an `onUpdate` Field.
+  **Correction:** an earlier draft of this ADR claimed this rename plans
+  as "never an add+remove of the declaration itself." That is contradicted
+  by the actual classification logic: the drop half of the pair is
+  unconditionally `destructive` (matching every other guard drop), so
+  renaming a guarded Collection/Field **does** require
+  `--accept-destructive`, even though nothing is actually being removed —
+  a pure rename genuinely costs the same acknowledgment as a real removal.
+  This is not a regression introduced by this ADR (the identical behavior
+  already exists for renaming an `onUpdate: "now"` Field via
+  `databaseOwnedUpdateSteps`); it is flagged here because it is
+  counter-intuitive and worth an operator knowing about, not because it is
+  wrong. **What is true, and proven against a real database by this pass's
+  integration test:** the guard stays installed and refusing after a
+  rename applies, and the migration's `up.sql` never has a window where
+  the renamed table is unguarded (every `DROP TRIGGER` for a guard is
+  followed, within the same migration file/transaction, by the matching
+  `CREATE TRIGGER` under the new name) — the guarantee is continuous across
+  the rename, which was the actual point of the original claim.
+- **Kernel capability suppression (compile-time, not runtime): implemented.**
+  `packages/compiler/src/mutation/operation-set.ts`'s
+  `projectCollectionOperationSets` rejects an `update` or `delete` member on
+  an append-only Collection's Operation Set with the existing
+  `QP-COMPOSE-013 structuralTypeError` diagnostic (the same code this file
+  already uses for every other statically-caught capability-shape violation,
+  e.g. exposing a database-owned or kernel-immutable Field as caller input)
+  — no new diagnostic code was needed. This turns "the framework's own
+  writer would hit the trigger" into a build-time error instead of a runtime
+  `RAISE EXCEPTION`: `compileApplication` throws before any SQL is generated
+  for that Mutation. Field-level write-once exclusion from the `update`
+  caller-input and trusted-value lanes required no new logic at all, because
+  `immutable: "database"` already sets the field contract's `immutable: true`
+  (a strict superset), and the existing `contract.immutable === true` checks
+  in the same file already exclude it.
+- **Compiler-planned bypass for migrations: NOT supported in this slice
+  (v1).** Supervisor decision, reversing this ADR's earlier draft position.
+  An append-only Collection cannot be backfilled by a migration at all while
+  `appendOnly: true` is set: there is no step type that disables a guard,
+  audited or otherwise. A migration that needs to backfill such a table must
+  either (a) apply while the declaration is temporarily removed (a
+  destructive-class change requiring `--accept-destructive`, per the
+  "Removing" bullet above) and re-added afterward as a second, separately
+  acknowledged migration, or (b) be written before the Collection ever
+  becomes append-only. This is deliberately conservative: an audited
+  disable/enable escape hatch is exactly the kind of narrow exception that
+  is easy to state and easy to misuse later (a migration author under
+  deadline pressure "just" backfilling one extra column while the guard is
+  down); a future slice may reconsider this with its own explicit ADR if a
+  real product need proves the two-migration workaround insufficient.
+- **Seeds against an append-only Collection.** Found by adversarial review:
+  `seed.upsert(...)` compiles to `INSERT ... ON CONFLICT (...) DO UPDATE
+SET ...`; `DO UPDATE` fires the row `BEFORE UPDATE` guard even when every
+  written value is identical to what is already there, so a second,
+  different Seed that idempotently re-asserts a row a prior Seed already
+  created (a normal, common Seed pattern — Seeds are immutable once
+  committed under their identity, so "re-seeding" the same logical baseline
+  from a newer Seed is how it is expressed) would die with a raw `QP001`.
+  **Decision: keep `seed.upsert`, change how the append-only case executes
+  it**, rather than add a compose-time diagnostic that would forbid Seeds
+  from targeting append-only Collections outright (rejected: it is exactly
+  Seeds, as the framework's own legitimate writer, that need to populate an
+  audit/evidence table with baseline rows — refusing them at compose time
+  would make the declaration and Seeds mutually exclusive for no reason).
+  For an append-only Collection's `upsert` step,
+  `packages/compiler/src/seed/postgres/apply.ts` now issues `INSERT ... ON
+CONFLICT (...) DO NOTHING` (never fires the row guard) and, only when that
+  returns no row (a real conflict), a follow-up `SELECT` comparing the
+  existing row's columns to what the step would have written. An exact
+  match is silently treated as success (this is what "idempotent" means for
+  Seeds). A mismatch is `QP-SEED-015 seedAppendOnlyConflict`, a normal Seed
+  diagnostic naming the step and the mismatched column(s) — not a raw
+  PostgreSQL trigger error. An explicit `seed.update(...)` step (not
+  `upsert`) against an append-only Collection is refused the same way,
+  before issuing any SQL, since there is no idempotent reading of "update
+  this specific existing row" against a guarantee that forbids updating any
+  row. **Known limitation, not hardened further in this pass:** the
+  mismatch comparison uses `!==` on decoded PostgreSQL values as returned by
+  `bun:sql`; it can under- or over-report a mismatch for types where
+  PostgreSQL round-trips a different in-memory representation than what was
+  written (e.g. `numeric` scale — `1.0` and `1.00` are `=` in SQL and in
+  this comparison, matching Postgres semantics, whereas a Field whose
+  decoded value normalizes differently, e.g. a `jsonb` key-order change,
+  could false-positive a mismatch). No application in this repository's
+  fixtures exercises `immutable`/`appendOnly` Fields of those scalar kinds
+  yet; revisit if one does.
+- **Self-bricking and undefined combinations are compose-time diagnostics,
+  found by adversarial review:**
+  - `immutable: "database"` and `onUpdate: "now"` on the **same** Field is
+    refused (`QP-SCHEMA-001`): the two are directly contradictory (one says
+    "the database sets this on every UPDATE," the other says "this can never
+    change"), and if it were allowed the `onUpdate` trigger would set
+    `NEW.col` on every UPDATE, which the write-once guard would then always
+    see as changed, refusing every UPDATE to the row forever — not just
+    writes to that column.
+  - `appendOnly: true` on a Collection that also has any `onUpdate: "now"`
+    Field is refused (`QP-SCHEMA-001`): not a correctness bug (the
+    `onUpdate` trigger simply can never fire, since the append-only guard
+    already refuses every UPDATE), but a silently-inert declaration that
+    would mislead a reader into thinking the column is maintained.
+  - A `relation.toOne(...)` with `onDelete: "cascade"` or `onDelete:
+"setNull"` **owned by** (declared on) an append-only Collection is
+    refused (`QP-SCHEMA-001`), naming both Collections: a cascaded
+    `DELETE`/`UPDATE` from the referenced parent would hit the child's own
+    append-only guard, refusing the _parent's_ delete too — discoverable
+    only in production without this check. A relation owned by an
+    append-only Collection must use `onDelete: "restrict"` (PostgreSQL's own
+    `ON DELETE RESTRICT`, which refuses the parent delete with its standard
+    foreign-key SQLSTATE `23503` before ever touching the child row, proven
+    against a real database by this pass's Postgres integration test).
+    `onDelete` on a relation owned by an _ordinary_ (non-append-only)
+    Collection is unaffected.
+- **Write-once semantics with `NULL`, decided and pinned, found by
+  adversarial review:** the write-once guard's `NEW IS DISTINCT FROM OLD`
+  treats `NULL` as an ordinary, fixed value once a row is inserted —
+  `IS DISTINCT FROM` correctly reports `NULL -> value` as a change (unlike
+  `=`, which is unknown/false for any comparison involving `NULL`), so it is
+  refused exactly like `value -> value`. That means a nullable
+  `immutable: "database"` Field that is inserted `NULL` can never be
+  populated afterward. **Decision: keep the semantics strict** (the value,
+  including `NULL`, is fixed forever at `INSERT` — this is what
+  "write-once" means, and a Field that needs a later one-time fill-in from
+  `NULL` to a real value is a different, unimplemented feature, not this
+  one) **and refuse the combination at compose time** rather than merely
+  document it: `immutable: "database"` on a `nullable: true` Field is
+  `QP-SCHEMA-001`. Rejected: documenting it loudly but allowing it — a
+  compose-time refusal is strictly better here because there is no
+  legitimate use of a nullable write-once Field under the strict semantics
+  (if the value is allowed to be absent at insert and filled in later, it
+  is not actually write-once). `field.*({ immutable: true })` (kernel-only,
+  no database enforcement) is unaffected and still allowed on nullable
+  Fields. Separately noted for the record: PostgreSQL's `numeric` type
+  makes `1.0` and `1.00` equal under both `=` and `IS DISTINCT FROM` (scale
+  does not participate in equality), so a `numeric` write-once Field
+  written as `1.0` and later re-submitted as `1.00` from a Seed or a retry
+  is correctly treated as unchanged, not a violation.
+
+### 4. Error identity
+
+- Both guard functions `RAISE EXCEPTION` with a fixed, reserved SQLSTATE:
+  `QP001` for the append-only guard, `QP002` for the write-once guard
+  (`packages/compiler/src/schema/postgres/append-only.ts`,
+  `APPEND_ONLY_SQLSTATE`/`WRITE_ONCE_FIELD_SQLSTATE`). **Verified, per
+  supervisor instruction:** PostgreSQL's SQLSTATE scheme (documented in its
+  manual's Appendix A, "PostgreSQL Error Codes") gives every condition a
+  5-character code whose first two characters are its "class". A class is
+  standard-defined only when its first character is a digit `0`-`4` or a
+  letter `A`-`H`; classes whose first character is a digit `5`-`9` or a
+  letter `I`-`Z` are reserved for implementation- and application-defined
+  conditions and will never be assigned a standard meaning. `Q` (the first
+  character of both `QP001` and `QP002`) falls in the `I`-`Z` range, so
+  neither code can collide with any current or future PostgreSQL-defined
+  condition. A repository-wide `grep` for `RAISE EXCEPTION`/`USING ERRCODE`
+  across `packages/compiler/src/schema/postgres/*.ts` (`internal-protocol-v3*.ts`,
+  `internal-protocol-v4-sql.ts`, `internal-protocol-v3-realtime.ts`) found no
+  other custom SQLSTATE anywhere in this codebase — every other raised
+  exception uses plpgsql's default `P0001`, so `QP001`/`QP002` also do not
+  collide with an existing compiler-owned condition. Collision against a
+  third-party PostgreSQL _extension_ the deployment happens to install
+  remains unverified (no such extension was in the test database) and is
+  carried forward as a residual, lower-probability risk, not blocking.
+  A message that embeds the Collection identity (and, for write-once, the
+  Field identity) is included:
+  `Collection <identity> is append-only; UPDATE and DELETE are refused at the
+database level` / `Field <identity> on Collection <identity> is
+database-immutable; it cannot change after insert`.
+- Because the generated kernel never emits `update`/`delete` for an
+  append-only Collection (compile-time refusal above), the kernel can only
+  ever hit the write-once field guard, and only via a legitimate `update`
+  Mutation that does not touch the guarded column — which never fires the
+  trigger. The only way the framework's own kernel hits either guard is a
+  bug in the compiler's capability suppression; the Runtime's PostgreSQL
+  error mapping layer should still map the fixed SQLSTATE to a typed issue
+  (not surface a raw driver error) as defense in depth, consistent with
+  "maps to a typed issue rather than a raw PostgreSQL error" — this is a
+  small, mechanical addition to the existing PostgreSQL error → typed issue
+  mapping and does not require new protocol.
+
+## Rolling deploy / rollback hazard (non-rolling adoption, per adversarial review)
+
+Adopting this feature is **not a rolling change**, the same way ADR-0043
+describes its own cutover. Once a `migration apply` installs a Collection's
+`appendOnly`/`immutable: "database"` guard objects, any **older** compiler
+or Runtime instance still pointed at that database — a slow rolling
+deploy's not-yet-upgraded pods, or a rollback — sees the guard's trigger
+and function as unmanaged objects it does not recognize (they are not in
+its own build's `managedObjectIdentities`) and refuses to start
+(`QP-SCHEMA-028`, the same drift protection this ADR exists to provide,
+now firing against the deploying application's own future self). This is
+the correct, safe failure mode (an old instance staying down is better
+than an old instance silently accepting writes a newer instance would have
+refused), but it means:
+
+- **Adoption order:** ship the compiler/Runtime version that knows about
+  `appendOnly`/`immutable: "database"` to every instance _before_ any
+  instance runs `migration apply` for a migration that adds the
+  declaration. A rolling deploy that applies the migration from a pod
+  running the new build while old-build pods are still serving traffic
+  against the same database will make those old pods refuse to start (or
+  crash-loop on next connection-time schema verification, depending on
+  where a given call site checks the fingerprint).
+- **Rollback procedure:** rolling back the _application code_ (the compiler
+  version, or an application that no longer declares `appendOnly`) after
+  the guard is already installed does not remove the guard — schema state
+  and application code roll back independently, as with every other
+  compiler-owned object in this codebase. To roll back cleanly: (1) commit
+  a new migration removing the declaration (destructive, requires
+  `--accept-destructive`, per the "Removing" lifecycle rule above), (2)
+  `migration apply` it while every instance still understands
+  `appendOnly`/`immutable: "database"` (so no instance sees the interim
+  state as drift), (3) only then roll back the application code that no
+  longer references the declaration. Rolling back application code first,
+  while the guard objects are still installed, reproduces the same
+  old-instance-refuses-to-start hazard as forward adoption.
+
+No code changes were made for this item — it is a documentation and
+operational-procedure gap, not a defect in the mechanism itself, and the
+existing `QP-SCHEMA-028` drift protection already does the right (safe)
+thing without needing new code; what was missing was writing down the
+adoption/rollback order for an operator to follow.
+
+## Consequences
+
+- Applications can express append-only tables and write-once columns as
+  declarative schema, and the compiler owns and fingerprints the resulting
+  triggers, keeping `migration apply`/startup drift detection truthful for
+  them — closing the Autopilot port's blocking gap.
+- No `internal-protocol-v9` → `v10` cutover in this slice. If shared-function
+  consolidation is wanted later, it is a new ADR.
+- `field.*({ immutable: true })` keeps its exact current meaning; no existing
+  application's generated migrations change on upgrade. Only applications
+  that newly opt into `immutable: "database"` pay the classification cost.
+- Removing either declaration is a destructive-class migration change,
+  requiring explicit `--accept-destructive` acknowledgment.
+- The generated kernel can never itself trigger either guard under normal
+  operation (compile-time `update`/`delete` capability suppression for
+  append-only Collections; write-once Fields already excluded from the
+  update lane via the existing `immutable` contract). There is no
+  compiler-planned bypass for migrations in this slice: an append-only
+  Collection cannot be backfilled while the declaration is set; the
+  declaration must be temporarily removed (destructive, acknowledged) and
+  re-added afterward.
+- Implemented and proven against a real PostgreSQL 17 database (see
+  `docs/v4/implementation/collection-db-immutability.md`): direct
+  `psql`-equivalent `UPDATE`/`DELETE`/`TRUNCATE` refused with the reserved
+  SQLSTATE; `migration apply` idempotent; out-of-band `DROP TRIGGER`
+  detected as `QP-SCHEMA-028` drift; the fixed `bunx questpie migration plan`
+  recovery hint (item 3 below) shipped in this slice.
+
+## Open items for owner sign-off
+
+1. ~~Custom SQLSTATE codes need a collision check against any PostgreSQL
+   extension~~ — **resolved for this repository's own code**: `QP001`/`QP002`
+   verified against PostgreSQL's Appendix A class-reservation rule and
+   against every other `RAISE EXCEPTION`/`USING ERRCODE` in this codebase
+   (see "Error identity" above). Collision against a third-party extension
+   installed by a specific deployment remains unverified and is a residual,
+   low-probability risk for the owner to accept or reject.
+2. Whether to _additionally_ `REVOKE UPDATE, DELETE ON <table> FROM
+<application_role>` as defense in depth once the kernel is compile-time
+   incapable of emitting those statements anyway — **decided for this
+   slice: no.** Supervisor instruction: not implemented; left as optional
+   future defense in depth. It would still be valuable against a
+   compromised/misused application credential, but changes the privilege
+   model for shared roles (the generated kernel typically connects as the
+   table owner) and needs its own review, separate from this slice.
+3. ~~The dangling `QP-SCHEMA-027` recovery hint~~ — **fixed in this slice**:
+   `packages/compiler/src/schema/postgres/apply.ts`'s drift recovery now
+   reads `bunx questpie migration plan --name <slug>` (the command that
+   actually surfaces drift, via `inspectSchemaFingerprint` when a
+   `DATABASE_URL`/connection string is available), replacing the
+   nonexistent `bunx questpie schema drift`.
+4. **New in this slice**: whether the two-migration workaround for
+   backfilling an append-only table (remove declaration → backfill →
+   re-add declaration) is acceptable product ergonomics, or whether a
+   future ADR should add the narrower audited-bypass step type this ADR's
+   first draft proposed and the supervisor then declined for v1.
+
+## Rejected alternatives
+
+- Automatic database enforcement for every existing `immutable: true` field
+  (rejected: silent migration-breaking regression for existing applications).
+- Shared `questpie_internal` guard functions, i.e. folding this into the
+  internal protocol (rejected for this slice: forces an unscoped
+  internal-protocol-v9→v10 cutover for what is per-application policy, not
+  shared framework infrastructure).
+- `REVOKE`-only enforcement (rejected: does not stop the table owner or a
+  superuser, the named threat).
+- PostgreSQL `RULE`s (rejected: discouraged since PG 10, poor `RETURNING`
+  composability).
+- A general, unscoped guard-disable escape hatch outside compiler-planned
+  migrations (rejected: reintroduces exactly the "out-of-band trigger
+  tampering" class this ADR closes).

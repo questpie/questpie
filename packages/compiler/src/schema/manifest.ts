@@ -236,12 +236,37 @@ export function projectManifest(
 				nullable: contract.nullable,
 				default: contract.default,
 				...(contract.onUpdate === "now" ? { onUpdate: "now" } : {}),
+				...(contract.databaseImmutable === true
+					? { databaseImmutable: true }
+					: {}),
 				collation:
 					record(contract.type, "field type").kind === "text"
 						? "questpie.binary"
 						: null,
 			};
 		});
+		for (const field of projectedFields) {
+			if (
+				(field as { onUpdate?: string }).onUpdate === "now" &&
+				(field as { databaseImmutable?: boolean }).databaseImmutable === true
+			)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-001",
+					"invalidDefinition",
+					`${field.identity} cannot combine onUpdate: "now" with immutable: "database": the database-owned update trigger would set the column on every UPDATE, and the write-once guard would then refuse every UPDATE on the row forever`,
+				);
+		}
+		if (resource.value.appendOnly === true) {
+			const onUpdateField = projectedFields.find(
+				(field) => (field as { onUpdate?: string }).onUpdate === "now",
+			);
+			if (onUpdateField)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-001",
+					"invalidDefinition",
+					`${resource.identity} cannot combine appendOnly with a database-owned onUpdate Field (${onUpdateField.identity}): the Collection never accepts UPDATE, so the onUpdate trigger can never fire`,
+				);
+		}
 		const constraints = [
 			...resolvedCollectionEntries(resource, "constraints").map(
 				({ key, contract: value }) => {
@@ -337,6 +362,15 @@ export function projectManifest(
 			.filter(([, value]) => value.kind === "toOne")
 			.map(([key, value]) => {
 				const identity = `${resource.identity}/relation:${key}`;
+				if (
+					resource.value.appendOnly === true &&
+					(value.onDelete === "cascade" || value.onDelete === "setNull")
+				)
+					throw new CompilerDiagnosticError(
+						"QP-SCHEMA-001",
+						"invalidDefinition",
+						`${identity} cannot use onDelete: "${value.onDelete}": ${resource.identity} is append-only, so a cascaded DELETE/UPDATE from ${String(value.target)} would hit the append-only guard and refuse the parent's delete too. Use onDelete: "restrict" for a relation owned by an append-only Collection.`,
+					);
 				return {
 					kind: "toOne",
 					identity,
@@ -364,6 +398,7 @@ export function projectManifest(
 			constraints,
 			indexes,
 			relations,
+			...(resource.value.appendOnly === true ? { appendOnly: true } : {}),
 		};
 	});
 	const collectionMap = new Map(

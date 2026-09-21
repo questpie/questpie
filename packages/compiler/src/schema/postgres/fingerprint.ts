@@ -5,6 +5,7 @@ import { CompilerDiagnosticError } from "../../diagnostic";
 import { createPostgresCommandConnection } from "../../postgres-session";
 import type { SchemaProjectionV1 } from "../contracts";
 import type { SchemaFingerprintV1 } from "../postgres-types";
+import { verifyPostgresImmutabilityGuards } from "./append-only";
 import { readCatalogComparableInOwnedTransaction } from "./catalog-reader";
 import type { CatalogFingerprintScope } from "./catalog-reader";
 import { verifyPostgresChangeCapture } from "./change-capture";
@@ -97,6 +98,8 @@ async function verifyManagedCatalogObjects(
 		await verifyPostgresChangeCapture(sql, schema.changeCapture);
 	if (schema.databaseOwnedUpdates)
 		await verifyPostgresDatabaseOwnedUpdates(sql, schema.databaseOwnedUpdates);
+	if (schema.immutabilityGuards)
+		await verifyPostgresImmutabilityGuards(sql, schema.immutabilityGuards);
 }
 
 function managedObjectIdentities(
@@ -108,6 +111,17 @@ function managedObjectIdentities(
 			(trigger) => `${postgresSchema}.${trigger.table}.${trigger.name}`,
 		) ?? []),
 		...(schema.databaseOwnedUpdates?.fields.flatMap((field) => [
+			`${postgresSchema}.${field.table}.${field.triggerName}`,
+			`function:${postgresSchema}.${field.functionName}()`,
+		]) ?? []),
+		...(schema.immutabilityGuards?.appendOnlyCollections.flatMap(
+			(collection) => [
+				`${postgresSchema}.${collection.table}.${collection.rowGuardTrigger}`,
+				`${postgresSchema}.${collection.table}.${collection.truncateGuardTrigger}`,
+				`function:${postgresSchema}.${collection.functionName}()`,
+			],
+		) ?? []),
+		...(schema.immutabilityGuards?.writeOnceFields.flatMap((field) => [
 			`${postgresSchema}.${field.table}.${field.triggerName}`,
 			`function:${postgresSchema}.${field.functionName}()`,
 		]) ?? []),

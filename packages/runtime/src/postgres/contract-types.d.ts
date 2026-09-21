@@ -122,7 +122,8 @@ export type PostgresFailureCode =
 	| "constraint"
 	| "invalidResult"
 	| "sessionNotAffine"
-	| "commitOutcomeUnknown";
+	| "commitOutcomeUnknown"
+	| "immutabilityGuardViolation";
 
 export type PostgresErrorPhase =
 	| "connect"

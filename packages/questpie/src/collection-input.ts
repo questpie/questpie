@@ -49,7 +49,7 @@ export type FieldOperationValue<Node> =
 		infer Nullable,
 		FieldDefinition["default"],
 		infer Scalar,
-		boolean,
+		boolean | "database",
 		boolean,
 		infer Options
 	>
@@ -184,7 +184,7 @@ type UpdateNodeCodec<Node, Depth extends readonly unknown[]> =
 			? never
 			: Server extends true
 				? never
-				: Immutable extends true
+				: Immutable extends true | "database"
 					? never
 					: Optional<FieldCodec<Node>>
 		: Node extends InlineShapeDefinition<infer Fields>

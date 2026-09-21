@@ -372,6 +372,7 @@ function ownerCollectionContract(
 		name: string(value.name, "collection.name"),
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
+		appendOnly: value.appendOnly === true,
 		fields: flattenFieldContracts(value.fields).map(({ contract }) => contract),
 		issues: Object.fromEntries(
 			entries(value.issues ?? {}).map(([key, issue]) => {

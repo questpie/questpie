@@ -10,6 +10,12 @@ import {
 	renderPostgresType,
 } from "./postgres-ddl";
 import {
+	renderAddAppendOnlyGuard,
+	renderAddWriteOnceGuard,
+	renderDropAppendOnlyGuard,
+	renderDropWriteOnceGuard,
+} from "./postgres/append-only";
+import {
 	renderAddDatabaseOwnedUpdate,
 	renderDropDatabaseOwnedUpdate,
 } from "./postgres/database-owned-update";
@@ -123,6 +129,54 @@ function renderStep(
 			);
 		return renderDropDatabaseOwnedUpdate(
 			base.databaseOwnedUpdates,
+			stepValue.targetIdentity,
+		);
+	}
+	if (stepValue.kind === "addAppendOnlyGuard") {
+		if (!target.immutabilityGuards)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"target immutability guard projection is missing",
+			);
+		return renderAddAppendOnlyGuard(
+			target.immutabilityGuards,
+			stepValue.targetIdentity,
+		);
+	}
+	if (stepValue.kind === "dropAppendOnlyGuard") {
+		if (!base.immutabilityGuards)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"base immutability guard projection is missing",
+			);
+		return renderDropAppendOnlyGuard(
+			base.immutabilityGuards,
+			stepValue.targetIdentity,
+		);
+	}
+	if (stepValue.kind === "addWriteOnceGuard") {
+		if (!target.immutabilityGuards)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"target immutability guard projection is missing",
+			);
+		return renderAddWriteOnceGuard(
+			target.immutabilityGuards,
+			stepValue.targetIdentity,
+		);
+	}
+	if (stepValue.kind === "dropWriteOnceGuard") {
+		if (!base.immutabilityGuards)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"base immutability guard projection is missing",
+			);
+		return renderDropWriteOnceGuard(
+			base.immutabilityGuards,
 			stepValue.targetIdentity,
 		);
 	}

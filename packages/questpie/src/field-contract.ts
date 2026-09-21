@@ -6,7 +6,7 @@ export interface DataFieldDescriptor<
 	Value,
 	Nullable extends boolean,
 	HasDefault extends boolean,
-	Immutable extends boolean = false,
+	Immutable extends boolean | "database" = false,
 	Server extends boolean = false,
 	DatabaseOwned extends boolean = false,
 > {
@@ -43,7 +43,7 @@ export interface FieldDefinition<
 	Nullable extends boolean = boolean,
 	Default extends FieldDefault | null = FieldDefault | null,
 	Scalar extends FieldScalar = FieldScalar,
-	Immutable extends boolean = boolean,
+	Immutable extends boolean | "database" = boolean | "database",
 	Server extends boolean = boolean,
 	Options extends Readonly<Record<string, unknown>> = Readonly<
 		Record<string, unknown>

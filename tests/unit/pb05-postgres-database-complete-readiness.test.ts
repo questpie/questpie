@@ -184,6 +184,7 @@ const rowsByStatement: Readonly<
 		row.ownerMatches,
 		row.publicExecute,
 	]),
+	"readiness.immutability-guards": [],
 });
 
 function readinessInput(database: PostgresTransactionRunner) {
@@ -318,6 +319,7 @@ test("compiler database readiness owns one complete fixed snapshot", async () =>
 		"readiness.catalog.unsupported",
 		"readiness.change-capture",
 		"readiness.database-owned-updates",
+		"readiness.immutability-guards",
 	]);
 	for (const [index, statement] of prerequisiteObserved.statements.entries())
 		expect(observed.statements[index]).toBe(statement);
@@ -335,6 +337,7 @@ test("compiler database readiness owns one complete fixed snapshot", async () =>
 		[postgresSchema],
 		[postgresSchema, ["messages"], triggerCatalog.map(({ name }) => name)],
 		[postgresSchema, [databaseOwnedUpdateField.triggerName]],
+		[postgresSchema, []],
 	]);
 });
 

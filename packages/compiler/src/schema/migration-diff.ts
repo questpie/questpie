@@ -38,6 +38,8 @@ function hasPhysicalChangeCapture(schema: SchemaProjectionV1): boolean {
 const kindRank: readonly MigrationStepKindV1[] = [
 	"createApplicationSchema",
 	"dropDatabaseOwnedUpdate",
+	"dropAppendOnlyGuard",
+	"dropWriteOnceGuard",
 	"renameCollection",
 	"createCollection",
 	"renameField",
@@ -50,6 +52,8 @@ const kindRank: readonly MigrationStepKindV1[] = [
 	"addRelation",
 	"addIndex",
 	"addDatabaseOwnedUpdate",
+	"addAppendOnlyGuard",
+	"addWriteOnceGuard",
 	"dropChangeCapture",
 	"addChangeCapture",
 	"dropIndex",
@@ -120,6 +124,140 @@ function databaseOwnedUpdateSteps(
 		steps.push(
 			step({
 				kind: "dropDatabaseOwnedUpdate",
+				targetIdentity: baseIdentity,
+				containerIdentity: baseIdentity.split("/field:")[0] ?? baseIdentity,
+				lock: "shareRowExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "destructive",
+			}),
+		);
+	}
+	return steps;
+}
+
+function immutabilityGuardSteps(
+	base: SchemaProjectionV1,
+	target: SchemaProjectionV1,
+	renames: MigrationPlanV1["renames"],
+): MigrationStepV1[] {
+	const baseCollections = new Set(
+		base.collections.map((collection) => String(collection.identity)),
+	);
+	const steps: MigrationStepV1[] = [];
+	const baseAppendOnly = new Map(
+		(base.immutabilityGuards?.appendOnlyCollections ?? []).map((guard) => [
+			guard.identity,
+			guard,
+		]),
+	);
+	const targetAppendOnly = new Map(
+		(target.immutabilityGuards?.appendOnlyCollections ?? []).map((guard) => [
+			guard.identity,
+			guard,
+		]),
+	);
+	for (const [targetIdentity, targetGuard] of targetAppendOnly) {
+		const baseIdentity = mapIdentityBackward(targetIdentity, renames);
+		if (!baseCollections.has(baseIdentity)) continue;
+		const baseGuard = baseAppendOnly.get(baseIdentity);
+		if (baseGuard && canonicalBytes(baseGuard) === canonicalBytes(targetGuard))
+			continue;
+		if (baseGuard)
+			steps.push(
+				step({
+					kind: "dropAppendOnlyGuard",
+					targetIdentity: baseIdentity,
+					containerIdentity: baseIdentity,
+					lock: "accessExclusive",
+					scansData: false,
+					rewritesTable: false,
+					reversibleWithoutData: true,
+					classification: "destructive",
+				}),
+			);
+		steps.push(
+			step({
+				kind: "addAppendOnlyGuard",
+				targetIdentity,
+				containerIdentity: targetIdentity,
+				lock: "accessExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
+	}
+	for (const [baseIdentity] of baseAppendOnly) {
+		const targetIdentity = mapIdentityForward(baseIdentity, renames);
+		if (targetAppendOnly.has(targetIdentity)) continue;
+		steps.push(
+			step({
+				kind: "dropAppendOnlyGuard",
+				targetIdentity: baseIdentity,
+				containerIdentity: baseIdentity,
+				lock: "accessExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "destructive",
+			}),
+		);
+	}
+	const baseWriteOnce = new Map(
+		(base.immutabilityGuards?.writeOnceFields ?? []).map((guard) => [
+			guard.identity,
+			guard,
+		]),
+	);
+	const targetWriteOnce = new Map(
+		(target.immutabilityGuards?.writeOnceFields ?? []).map((guard) => [
+			guard.identity,
+			guard,
+		]),
+	);
+	for (const [targetIdentity, targetGuard] of targetWriteOnce) {
+		const baseIdentity = mapIdentityBackward(targetIdentity, renames);
+		const baseCollectionIdentity =
+			baseIdentity.split("/field:")[0] ?? baseIdentity;
+		if (!baseCollections.has(baseCollectionIdentity)) continue;
+		const baseGuard = baseWriteOnce.get(baseIdentity);
+		if (baseGuard && canonicalBytes(baseGuard) === canonicalBytes(targetGuard))
+			continue;
+		if (baseGuard)
+			steps.push(
+				step({
+					kind: "dropWriteOnceGuard",
+					targetIdentity: baseIdentity,
+					containerIdentity: baseIdentity.split("/field:")[0] ?? baseIdentity,
+					lock: "shareRowExclusive",
+					scansData: false,
+					rewritesTable: false,
+					reversibleWithoutData: true,
+					classification: "destructive",
+				}),
+			);
+		steps.push(
+			step({
+				kind: "addWriteOnceGuard",
+				targetIdentity,
+				containerIdentity: targetIdentity.split("/field:")[0] ?? targetIdentity,
+				lock: "shareRowExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
+	}
+	for (const [baseIdentity] of baseWriteOnce) {
+		const targetIdentity = mapIdentityForward(baseIdentity, renames);
+		if (targetWriteOnce.has(targetIdentity)) continue;
+		steps.push(
+			step({
+				kind: "dropWriteOnceGuard",
 				targetIdentity: baseIdentity,
 				containerIdentity: baseIdentity.split("/field:")[0] ?? baseIdentity,
 				lock: "shareRowExclusive",
@@ -292,6 +430,39 @@ export function createSteps(
 			}),
 		);
 	}
+	for (const collection of target.immutabilityGuards?.appendOnlyCollections ??
+		[]) {
+		if (!targetCollectionIdentities.has(collection.identity)) continue;
+		steps.push(
+			step({
+				kind: "addAppendOnlyGuard",
+				targetIdentity: collection.identity,
+				containerIdentity: collection.identity,
+				lock: "accessExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
+	}
+	for (const field of target.immutabilityGuards?.writeOnceFields ?? []) {
+		const collectionIdentity =
+			field.identity.split("/field:")[0] ?? field.identity;
+		if (!targetCollectionIdentities.has(collectionIdentity)) continue;
+		steps.push(
+			step({
+				kind: "addWriteOnceGuard",
+				targetIdentity: field.identity,
+				containerIdentity: collectionIdentity,
+				lock: "shareRowExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
+	}
 	return sortSteps(steps);
 }
 
@@ -408,6 +579,7 @@ export function destructiveDeltaSteps(
 	);
 	const steps: MigrationStepV1[] = [];
 	steps.push(...databaseOwnedUpdateSteps(base, target, renames));
+	steps.push(...immutabilityGuardSteps(base, target, renames));
 	const baseHasChangeCapture = hasPhysicalChangeCapture(base);
 	const targetHasChangeCapture = hasPhysicalChangeCapture(target);
 	const changeCaptureChanged =

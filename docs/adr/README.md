@@ -56,6 +56,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 - [Freeze local OpenAPI projection explanation](./0041-freeze-local-openapi-projection-explanation.md)
 - [Freeze public testing surface](./0045-freeze-public-testing-surface.md)
 - [MCP and canonical HTTP credential challenge](./0046-mcp-and-canonical-http-credential-challenge.md)
+- [Compiler-owned database-level Collection and Field immutability](./0048-collection-database-immutability.md)
 
 ## Open decisions
 

@@ -142,7 +142,7 @@ function schemaDiagnostic(
 			? [
 					{
 						description: "Inspect and repair the live Schema Fingerprint",
-						command: "bunx questpie schema drift",
+						command: "bunx questpie migration plan --name <slug>",
 					},
 				]
 			: [

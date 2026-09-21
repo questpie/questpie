@@ -323,8 +323,14 @@ export function projectCollectionOperationSets(
 		const keyFields = (primary.fields as readonly unknown[]).map((field) =>
 			path(field, `${target} primary key`),
 		);
+		const appendOnly = collection.contract.appendOnly === true;
 		const children = memberOrder.flatMap((member) => {
 			if (!members.has(member)) return [];
+			if (appendOnly && (member === "update" || member === "delete"))
+				invalid(
+					`${target}.${member} is not offered: Collection ${target} is append-only (ADR-0048) and never accepts UPDATE or DELETE`,
+					{ operation: `${name}.${member}`, target },
+				);
 			const memberContract = members.get(member)!;
 			const kind = member === "list" || member === "get" ? "query" : "mutation";
 			const mode = kind === "query" ? "readSnapshot" : "writeTransaction";
