@@ -6,6 +6,13 @@
 - Ticket: named-Mutation `ctx.data.<collection>.delete(...)` gap (Autopilot R1
   reference app; `taskRelation.removeBlocks` had to be modelled as a soft
   delete because no delete path existed)
+- Implementation: built on this branch per the Decision below, except the
+  FK/constraint-issue-mapping item explicitly deferred as an Accepted-ADR
+  conflict (see "Consequences"). See
+  `docs/v4/implementation/collection-delete-kernel.md` for the shared-vs-new
+  code split, every gate result, and what remains unverified (concurrent
+  delete-vs-update race, Live Query subscription convergence). Left
+  Proposed, not flipped to Accepted, by instruction.
 
 ## Context
 
@@ -130,47 +137,61 @@ mapping-missing) analogous to `QP-COMPOSE-027`'s `missingIssueMapping`
 rather than leaving the misleading default; sized as a follow-on to whichever
 phase lands the type-visibility gate.
 
-## Proposed phasing
+## Phasing (built on this branch)
 
-1. **Compiler metadata** — `kernel.ts` gains a `delete` member
+1. **Compiler metadata** — `kernel.ts` gained a `delete` member
    (`kernelProgram(collection, policy, "delete")`, `keyFields` = primary key,
-   no caller/trusted value fields, `outputCardinality: "optionalOne"`);
-   `operation-write-resource.ts` widens its create/update filter to also
-   materialize `delete` (its codec branch already exists at line 145).
-2. **Runtime execution** — new `postgres-delete-program.ts` (compiler) +
-   `deletePlan` (runtime linker, `postgres-program.ts`), wired into
-   `collection.ts` member dispatch and `adapter-execution.ts`, with the
-   FK-violation issue mapping and CAS/`expected` predicate.
-3. **Proof** — unit tests mirroring `tests/unit/adr0030-compiler-provenance.test.ts`
-   / `beta06-runtime-postgres-operation-program.test.ts` /
-   `beta06-runtime-collection-operations.test.ts`; a PostgreSQL integration
-   test (Collaboration fixture) for: success, Policy-denied neutrality,
-   not-found, FK-refused, concurrent delete+update race, Live Query
-   convergence, MCP/HTTP projection unchanged.
-4. **Type-visibility diagnostic fix.**
-
-Phase 1 has no runtime effect (nothing consumes a `delete` kernel program
-yet) and is safe to land alone; phases 2–4 are one connected unit of work
-and should not be split further, per ADR-0031's trusted-execution-parity
-requirement (no partial delete path that "looks" wired but isn't gated by
-Policy/lifecycle/issue-mapping the same way create/update are).
+   no caller/trusted value fields, `outputCardinality: "optionalOne"`).
+   `operation-write-resource.ts` was left unchanged: it materializes the
+   *Operation Set's* network-exposed create/update Mutations, a separate,
+   still-unbuilt feature this ADR does not extend to delete (see
+   Deferred decisions).
+2. **Runtime execution** — `packages/compiler/src/mutation/postgres-delete.ts`
+   (SQL plan builder) + `packages/runtime/src/mutation/postgres-delete-program.ts`
+   (digest-verified linker) + `packages/runtime/src/mutation/collection-delete.ts`
+   (executor), wired into `collection.ts` member dispatch. No FK-violation
+   issue mapping and no CAS/`expected` predicate were added — see
+   Consequences for why.
+3. **Proof** — `tests/unit/adr0047-collection-delete-kernel.test.ts` and
+   `tests/integration/postgres/adr0047-collection-delete-kernel.test.ts`
+   cover success, Policy-denied neutrality, not-found, and FK-refused.
+   Concurrent delete+update race and Live Query subscription convergence
+   were not covered by a dedicated test (see the implementation doc).
+4. **Type-visibility diagnostic fix** — not done; the misleading
+   "property does not exist" diagnostic is unchanged (documented as a
+   known follow-up in the implementation doc, not silently dropped).
 
 ## Consequences
 
-- Until phase 2 ships, `ctx.data.<collection>.delete` does not exist; the
-  Autopilot R1 gap (`taskRelation.removeBlocks` soft-delete workaround)
-  remains necessary.
-- No Accepted ADR is contradicted; ADR-0030's Deferred list already named
-  this gap. This ADR narrows "the complete get/list/create/update/delete
-  replacement" to just the `delete` member for named Mutations, leaving
-  generated Operation Set `delete`/`list` execution itself out of scope
-  (they were never wired either, and nothing in the R1 report asked for
-  them).
+- `ctx.data.<collection>.delete` now exists wherever a Collection's
+  default Policy declares `operations.delete`; the Autopilot R1 gap
+  (`taskRelation.removeBlocks` soft-delete workaround) can be revisited.
+- No Accepted ADR is contradicted by the parts that shipped. ADR-0030's
+  Deferred list already named this gap. This ADR narrows "the complete
+  get/list/create/update/delete replacement" to just the `delete` member
+  for named Mutations, leaving generated Operation Set `delete`/`list`
+  execution itself out of scope (they were never wired either, and
+  nothing in the R1 report asked for them).
+- One part of the original brief was **not** implemented because it would
+  have contradicted an Accepted ADR: mapping a `23503` foreign-key
+  violation to a typed, declared Collection issue. ADR-0031 states
+  "PostgreSQL constraints are not Collection issues," and ADR-0030 lists a
+  typed `ConstraintViolation` under its own Deferred decisions — inventing
+  one for delete only, without the same treatment for create/update's
+  existing (equally unmapped) constraint violations, would have been an
+  inconsistent, un-ratified special case. A `23503` on delete surfaces as
+  the same sanitized failure any other constraint violation already does.
 
 ## Deferred decisions
 
 - `afterWrite` for delete (cascading side-effect kernel writes).
-- Generated Operation Set `delete`/`list` execution (unblocked by this ADR's
-  phase 2 artifacts but not required by it).
+- Generated Operation Set `delete`/`list` execution (unblocked by this
+  ADR's runtime-execution artifacts but not required by it).
+- Typed `ConstraintViolation` issue mapping (would need its own ADR
+  extending ADR-0030/0031's Deferred item for all three write members, not
+  a delete-only carve-out).
+- CAS/`expected` on delete.
+- Concurrent delete-vs-update race proof; Live Query subscription
+  convergence proof.
 - Bulk/filtered delete (`deleteMany`) — this ADR is key-addressed single-row
   only, matching `update`.
