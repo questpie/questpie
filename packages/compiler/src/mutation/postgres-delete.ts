@@ -119,6 +119,47 @@ export function lowerPostgresDeleteOperationPlan(
 	});
 	const currentCte = `${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${[...keyPredicates, currentCheck.sql].join(" AND ")} LIMIT 1)`;
 	const deletedCte = `${quote("qp_deleted")} AS (DELETE FROM ${collection.table} AS ${quote("qp_target")} USING ${quote("qp_current")} WHERE ${targetPredicates.join(" AND ")} RETURNING ${quote("qp_target")}.*)`;
+	// Only built when the Collection has an authored lifecycle program: a
+	// fresh, separate row-scope read (own Parameters, own Policy check) that
+	// hands the runtime the full locked current row to interpret `validate`
+	// against, mirroring get's key+Policy read idiom rather than update's
+	// candidate construction, since delete has no candidate.
+	const currentValidation = operation.lifecycleProgramDigest
+		? (() => {
+				const validationChecks = lowerPostgresMutationPolicyChecks({
+					schema,
+					checks: [
+						{ expression: del.current, aliases: { current: "qp_current" } },
+					],
+				});
+				const validationCheck = validationChecks.checks[0]!;
+				const validationParameters = policyParameters(
+					validationChecks.parameters,
+				);
+				const validationKeyPredicates = operation.keyFields.map((keyPath) => {
+					const field = fieldByPath(collection, keyPath);
+					return `${quote("qp_current")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(validationParameters, "key", field)}`;
+				});
+				const validationResult = result(
+					collection,
+					collection.fields.map(({ path: fieldPath }) => fieldPath),
+				);
+				const validationSelected = validationResult.map((item) => {
+					const field = fieldByPath(collection, item.path);
+					const value =
+						field.codec.kind === "timestamp"
+							? `pg_catalog.date_trunc('milliseconds', ${quote("qp_current")}.${quote(field.column)})`
+							: `${quote("qp_current")}.${quote(field.column)}`;
+					return `${value} AS ${quote(item.column)}`;
+				});
+				return Object.freeze({
+					freshAfterRowLockWait: true as const,
+					sql: `SELECT ${validationSelected.join(", ")} FROM ${collection.table} AS ${quote("qp_current")} WHERE ${[...validationKeyPredicates, validationCheck.sql].join(" AND ")} LIMIT 1`,
+					parameters: validationParameters.values(),
+					result: validationResult,
+				});
+			})()
+		: undefined;
 	return Object.freeze({
 		identity: operation.identity,
 		target: operation.target,
@@ -137,6 +178,7 @@ export function lowerPostgresDeleteOperationPlan(
 			parameters: lockParameters.values(),
 			outcome: "internalLockedOrAbsent" as const,
 		}),
+		...(currentValidation ? { currentValidation } : {}),
 		currentPolicy: Object.freeze({
 			freshAfterRowLockWait: true,
 			mutableEvidenceCollections: currentCheck.mutableEvidenceCollections,

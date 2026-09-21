@@ -204,10 +204,13 @@ export interface PostgresUpdateOperationPlanV1 {
 
 /**
  * Delete addresses one row by key and writes no Field values, so it has no
- * candidate/normalizer/server-value/trusted-value lane and no authored
- * lifecycle wiring in this slice (ADR-0047): the row-scope Policy `current`
- * check is the only gate, evaluated fresh in the same statement as the
- * `DELETE ... RETURNING` write, after the row is locked.
+ * candidate/normalizer/server-value/trusted-value lane. When the Collection
+ * has an authored lifecycle program, `currentValidation` selects the full
+ * locked current row (fresh, after the lock) so the runtime can interpret
+ * only the `validate` phase against `{ candidate: null, current, now }` — no
+ * `check`/`afterWrite` wiring in this slice (ADR-0047). The row-scope Policy
+ * `current` check gates both `currentValidation` and the final
+ * `DELETE ... RETURNING` write, evaluated fresh in each statement.
  */
 export interface PostgresDeleteOperationPlanV1 {
 	readonly identity: CollectionOperationProgramV1["identity"];
@@ -223,6 +226,12 @@ export interface PostgresDeleteOperationPlanV1 {
 		"outputFieldAuthority",
 	];
 	readonly lock: PostgresGetOperationPlanV1["lock"];
+	readonly currentValidation?: Readonly<{
+		freshAfterRowLockWait: true;
+		sql: string;
+		parameters: readonly PostgresOperationParameterV1[];
+		result: readonly PostgresOperationResultV1[];
+	}>;
 	readonly currentPolicy: PostgresCreateOperationPlanV1["candidatePolicy"];
 	readonly outputAuthority: PostgresCreateOperationPlanV1["outputAuthority"];
 	readonly write: PostgresCreateOperationPlanV1["write"];

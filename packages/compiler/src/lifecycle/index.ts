@@ -533,8 +533,17 @@ export function bindCollectionLifecyclePrograms(
 		operations: Object.freeze(
 			operations.operations.map((operation) => {
 				const lifecycleProgramDigest = digests.get(operation.target);
+				// A kernel-owned delete gets the same per-Collection lifecycle
+				// program create/update already carry (ADR-0047): the runtime
+				// only ever interprets its "validate" phase for delete, with no
+				// candidate (see runtime/src/mutation/collection-lifecycle-check.ts).
+				// An Operation Set's own (never-executable) "delete" member is not
+				// a kernel operation and is left unbound.
 				return lifecycleProgramDigest &&
-					(operation.member === "create" || operation.member === "update")
+					(operation.member === "create" ||
+						operation.member === "update" ||
+						(operation.member === "delete" &&
+							operation.identity.startsWith("mutation:__collectionKernel.")))
 					? Object.freeze({ ...operation, lifecycleProgramDigest })
 					: operation;
 			}),

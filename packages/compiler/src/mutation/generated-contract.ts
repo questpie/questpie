@@ -229,7 +229,9 @@ export function renderGeneratedMutationData(
 	for (const program of contract.operations) {
 		if (
 			mutationName !== undefined &&
-			(program.member === "create" || program.member === "update") &&
+			(program.member === "create" ||
+				program.member === "update" ||
+				program.member === "delete") &&
 			issueBearingTargets.has(program.target) &&
 			!admittedTargets.has(program.target)
 		)

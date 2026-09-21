@@ -245,6 +245,13 @@ export type LinkedPostgresDeleteOperationPlanV1 = Readonly<{
 		"outputFieldAuthority",
 	];
 	lock: LinkedPostgresGetOperationPlanV1["lock"];
+	currentValidation?: Readonly<{
+		freshAfterRowLockWait: true;
+		sql: string;
+		parameters: readonly PostgresParameterV1[];
+		result: readonly PostgresResultV1[];
+		statement: PostgresCollectionStatement;
+	}>;
 	currentPolicy: LinkedPostgresCreateOperationPlanV1["candidatePolicy"];
 	outputAuthority: OutputAuthorityV1;
 	write: LinkedPostgresCreateOperationPlanV1["write"];

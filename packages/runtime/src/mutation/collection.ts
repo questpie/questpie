@@ -284,6 +284,28 @@ export function createCollectionMutationData(
 		decode: (row: Row, result: readonly Result[]) =>
 			decodeRow(row, result, input.resultValuesDecoded),
 		consumeRows,
+		// F1/F2: delete interprets only `validate`, with no candidate — the
+		// authored callback sees `{ candidate: null, current, now }`, the same
+		// "one side absent" shape create's own validate already uses (`current:
+		// null` there). Throwing dooms the transaction; nothing is deleted.
+		validateCurrent: async (
+			plan: LinkedPostgresDeleteOperationPlanV1,
+			current: Row,
+		) => {
+			const lifecycle = plan.operation.lifecycleProgram;
+			if (!lifecycle) return;
+			await lifecycleRuntime.captureCollectionLifecycleFailure(
+				lifecycleDoom,
+				() =>
+					lifecycleRuntime.executeCollectionLifecyclePhase(
+						lifecycle,
+						"validate",
+						{ candidate: null, current, now: input.operationTime },
+						{},
+						executionBudget,
+					),
+			);
+		},
 	};
 	const executeGet = createCollectionGetExecutor(keyedRowAccess);
 	const executeDelete = createCollectionDeleteExecutor(keyedRowAccess);
