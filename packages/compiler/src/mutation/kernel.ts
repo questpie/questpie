@@ -114,30 +114,42 @@ function writeLimits() {
 function kernelProgram(
 	collection: NormalizedResource,
 	policy: PolicyProgramV1,
-	member: "create" | "update",
+	member: "create" | "update" | "delete",
 ): CollectionOperationProgramV1 {
 	const facts = collectionFieldFacts(collection);
+	// Delete addresses one row by key and writes no Field values: it has
+	// neither a caller-input nor a trusted-value lane, mirroring "no
+	// candidate" from ADR-0047. `policy.fields.callerInput` is only ever
+	// keyed by "create"/"update", so it is never indexed for "delete".
 	const callerAuthority = new Set(
-		(policy.fields?.callerInput[member] ?? []).map(({ path }) =>
-			canonicalBytes(path),
-		),
+		member === "delete"
+			? []
+			: (policy.fields?.callerInput[member] ?? []).map(({ path }) =>
+					canonicalBytes(path),
+				),
 	);
-	const callerInputFields = facts
-		.filter(
-			({ path, contract }) =>
-				contract.server !== true &&
-				contract.onUpdate !== "now" &&
-				(member === "create" || contract.immutable !== true) &&
-				callerAuthority.has(canonicalBytes(path)),
-		)
-		.map(({ path }) => path);
-	const trustedValueFields = facts
-		.filter(
-			({ contract }) =>
-				contract.onUpdate !== "now" &&
-				(member === "create" || contract.immutable !== true),
-		)
-		.map(({ path }) => path);
+	const callerInputFields =
+		member === "delete"
+			? []
+			: facts
+					.filter(
+						({ path, contract }) =>
+							contract.server !== true &&
+							contract.onUpdate !== "now" &&
+							(member === "create" || contract.immutable !== true) &&
+							callerAuthority.has(canonicalBytes(path)),
+					)
+					.map(({ path }) => path);
+	const trustedValueFields =
+		member === "delete"
+			? []
+			: facts
+					.filter(
+						({ contract }) =>
+							contract.onUpdate !== "now" &&
+							(member === "create" || contract.immutable !== true),
+					)
+					.map(({ path }) => path);
 	return Object.freeze({
 		identity:
 			`mutation:__collectionKernel.${collection.name}.${member}` as const,
@@ -184,7 +196,7 @@ export function projectCollectionMutationKernels(
 				collection.identity as `collection:${string}`,
 				policies,
 			);
-			return (["create", "update"] as const).flatMap((member) =>
+			return (["create", "update", "delete"] as const).flatMap((member) =>
 				policy.operations[member]
 					? [kernelProgram(collection, policy, member)]
 					: [],
@@ -202,10 +214,30 @@ export function projectCollectionKernelExecutionPrograms(
 	kernels: CollectionOperationProgramsV1,
 	operationSetPrograms: CollectionOperationProgramsV1,
 ): CollectionOperationProgramsV1 {
+	// "delete" is kernel-owned only where the Collection's default Policy
+	// declares operations.delete (mirroring create/update). An authored
+	// Operation Set `delete` member never executed anything on its own (no
+	// PostgreSQL statement builder existed for it); it still passes through
+	// unchanged here when there is no Policy-declared delete, so existing
+	// Collections that only declared an Operation Set `delete` (a
+	// type-visible but non-executable member, unchanged by this task) are
+	// not affected. Only the identity clash case — a Collection with both a
+	// Policy-declared delete and an authored Operation Set `delete` member —
+	// drops the Operation Set entry, since the kernel is then the sole
+	// PostgreSQL-executable owner and the generated contract allows exactly
+	// one owner per (target, member).
+	const kernelOwnedTargets = new Set(
+		kernels.operations
+			.filter(({ member }) => member === "delete")
+			.map(({ target }) => target),
+	);
 	const operations = [
 		...kernels.operations,
 		...operationSetPrograms.operations.filter(
-			({ member }) => member !== "create" && member !== "update",
+			({ member, target }) =>
+				member !== "create" &&
+				member !== "update" &&
+				!(member === "delete" && kernelOwnedTargets.has(target)),
 		),
 	].toSorted((left, right) => compareAscii(left.identity, right.identity));
 	return Object.freeze({

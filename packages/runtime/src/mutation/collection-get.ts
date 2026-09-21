@@ -1,32 +1,8 @@
 import type { PostgresParameter } from "../postgres/contract";
-import {
-	mutationLeafPaths as inputPaths,
-	mutationPathKey as pathKey,
-} from "./field-path";
+import { exactPaths, record, type Row } from "./collection-shared";
+import { mutationLeafPaths as inputPaths } from "./field-path";
 import type { LinkedPostgresGetOperationPlanV1 } from "./postgres-program";
 import type { PostgresResultV1 } from "./postgres-program-types";
-
-type Row = Readonly<Record<string, unknown>>;
-
-function record(value: unknown, label: string): Row {
-	if (!value || typeof value !== "object" || Array.isArray(value))
-		throw new TypeError(`${label} must be an object`);
-	return value as Row;
-}
-
-function exactPaths(
-	actual: readonly (readonly string[])[],
-	expected: readonly (readonly string[])[],
-	label: string,
-) {
-	const actualKeys = actual.map(pathKey).sort();
-	const expectedKeys = expected.map(pathKey).sort();
-	if (
-		actualKeys.length !== expectedKeys.length ||
-		expectedKeys.some((key, index) => key !== actualKeys[index])
-	)
-		throw new TypeError(`${label} must have exactly the compiled Fields`);
-}
 
 export function createCollectionGetExecutor(
 	input: Readonly<{

@@ -13,6 +13,7 @@ import type {
 	PostgresUpdateOperationPlanV1,
 } from "./postgres-contract";
 import { lowerPostgresCreateOperationPlan } from "./postgres-create";
+import { lowerPostgresDeleteOperationPlan } from "./postgres-delete";
 import {
 	candidateValueParameter,
 	executionParameter,
@@ -585,9 +586,19 @@ export function lowerPostgresCollectionOperationPlans(
 		"questpie.collection-operation-programs",
 		"operations",
 	) as readonly CollectionOperationProgramV1[];
+	// An Operation Set may still declare a "delete" member with no backing
+	// Policy delete rule (type-visible but never executable, unchanged
+	// pre-existing behavior). Only a kernel-owned delete — identifiable by
+	// its `__collectionKernel` identity, produced solely when the default
+	// Policy declares `operations.delete` — has a PostgreSQL plan.
+	const isKernelDeleteOperation = (operation: CollectionOperationProgramV1) =>
+		operation.member === "delete" &&
+		operation.identity.startsWith("mutation:__collectionKernel.");
 	const plans = operations
-		.filter((operation) =>
-			["get", "create", "update"].includes(operation.member),
+		.filter(
+			(operation) =>
+				["get", "create", "update"].includes(operation.member) ||
+				isKernelDeleteOperation(operation),
 		)
 		.map((operation) => {
 			const collection = postgresMutationCollection(
@@ -601,6 +612,13 @@ export function lowerPostgresCollectionOperationPlans(
 				);
 			if (operation.member === "get")
 				return getPlan(operation, collection, policy, input.schemaProjection);
+			if (operation.member === "delete")
+				return lowerPostgresDeleteOperationPlan(
+					operation,
+					collection,
+					policy,
+					input.schemaProjection,
+				);
 			const normalizer = linkedProgram(
 				input.normalizerPrograms,
 				"questpie.field-normalizer-programs",

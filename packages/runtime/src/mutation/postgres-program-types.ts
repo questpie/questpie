@@ -231,8 +231,37 @@ export type LinkedPostgresUpdateOperationPlanV1 = Readonly<{
 	operation: LinkedCollectionOperationProgramV1;
 }>;
 
+export type LinkedPostgresDeleteOperationPlanV1 = Readonly<{
+	identity: string;
+	target: string;
+	member: "delete";
+	policy: string;
+	outputCardinality: "optionalOne";
+	lifecycle: readonly [
+		"keyedRowLock",
+		"freshCurrentPolicy",
+		"postgresConstraints",
+		"selection",
+		"outputFieldAuthority",
+	];
+	lock: LinkedPostgresGetOperationPlanV1["lock"];
+	currentValidation?: Readonly<{
+		freshAfterRowLockWait: true;
+		sql: string;
+		parameters: readonly PostgresParameterV1[];
+		result: readonly PostgresResultV1[];
+		statement: PostgresCollectionStatement;
+	}>;
+	currentPolicy: LinkedPostgresCreateOperationPlanV1["candidatePolicy"];
+	outputAuthority: OutputAuthorityV1;
+	write: LinkedPostgresCreateOperationPlanV1["write"];
+	limits: Readonly<{ rows: 100; durationMilliseconds: 5_000 }>;
+	operation: LinkedCollectionOperationProgramV1;
+}>;
+
 export type LinkedPostgresCollectionOperationPlanV1 =
 	| LinkedPostgresCreateOperationPlanV1
+	| LinkedPostgresDeleteOperationPlanV1
 	| LinkedPostgresGetOperationPlanV1
 	| LinkedPostgresUpdateOperationPlanV1;
 
