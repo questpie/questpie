@@ -116,11 +116,15 @@ export function httpJsonResponse(
 	body: unknown,
 	status: number,
 	cacheControl?: string,
+	wwwAuthenticate?: string,
 ): Response {
 	return new Response(JSON.stringify(body), {
 		status,
 		headers: {
 			...(cacheControl === undefined ? {} : { "cache-control": cacheControl }),
+			...(wwwAuthenticate === undefined
+				? {}
+				: { "www-authenticate": wwwAuthenticate }),
 			"content-type": HTTP_JSON_MEDIA_TYPE,
 		},
 	});
@@ -132,6 +136,7 @@ export function httpFailure(
 		cacheControl?: string;
 		callId?: string;
 		retryable?: boolean;
+		wwwAuthenticate?: string;
 	}> = {},
 ): Response {
 	const contract = canonicalOperationFailure(code);
@@ -145,6 +150,7 @@ export function httpFailure(
 		},
 		contract.status,
 		options.cacheControl,
+		options.wwwAuthenticate,
 	);
 }
 
@@ -158,6 +164,7 @@ export async function resolveHttpPrincipal(
 		signal: AbortSignal;
 		callId: string;
 		cacheControl?: string;
+		credentialChallenge?(request: Request): string | undefined;
 		resolvePrincipal(
 			request: Request,
 			signal: AbortSignal,
@@ -170,11 +177,16 @@ export async function resolveHttpPrincipal(
 			input.resolvePrincipal(input.request, input.signal),
 		);
 	} catch (error) {
+		const code =
+			classifyOperationCredentialFailure(error, input.signal) ?? "INTERNAL";
 		return {
-			response: httpFailure(
-				classifyOperationCredentialFailure(error, input.signal) ?? "INTERNAL",
-				{ callId: input.callId, cacheControl: input.cacheControl },
-			),
+			response: httpFailure(code, {
+				callId: input.callId,
+				cacheControl: input.cacheControl,
+				...(code === "UNAUTHENTICATED"
+					? { wwwAuthenticate: input.credentialChallenge?.(input.request) }
+					: {}),
+			}),
 		};
 	}
 	if (input.signal.aborted)
@@ -189,6 +201,7 @@ export async function resolveHttpPrincipal(
 			response: httpFailure("UNAUTHENTICATED", {
 				callId: input.callId,
 				cacheControl: input.cacheControl,
+				wwwAuthenticate: input.credentialChallenge?.(input.request),
 			}),
 		};
 	return { caller };

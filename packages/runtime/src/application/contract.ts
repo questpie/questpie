@@ -57,6 +57,20 @@ export interface RuntimeApplicationProgram<
 		request: Request,
 		signal?: AbortSignal,
 	) => MaybePromise<Principal | null>;
+	/**
+	 * App-supplied `WWW-Authenticate` challenge for a missing/invalid
+	 * credential. Framework-neutral: it forwards whatever the application's
+	 * `defineCredentialResolver({ challenge })` returns, unmodified, as a
+	 * response header. Absent/returning `undefined` keeps today's behavior
+	 * (no header) on every network surface.
+	 */
+	readonly credentialChallenge?: (request: Request) => string | undefined;
+	/**
+	 * Opt-in only. When `true`, MCP `tools/list` and `server/discover` also
+	 * require a valid credential (401 + `credentialChallenge`) instead of
+	 * ADR-0038's public/unauthenticated default catalogue.
+	 */
+	readonly mcpCatalogRequiresCredential?: boolean;
 	readonly verifyReadiness?: (
 		artifacts: RuntimeArtifactsV1,
 	) => MaybePromise<void>;

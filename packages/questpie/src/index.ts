@@ -58,6 +58,7 @@ export type {
 export type { QuestpieObservability } from "./observability";
 export { defineCredentialResolver } from "./credential-resolver";
 export type {
+	CredentialChallenge,
 	CredentialResolution,
 	CredentialResolverDefinition,
 } from "./credential-resolver";

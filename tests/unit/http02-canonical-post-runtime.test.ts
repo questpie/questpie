@@ -586,3 +586,38 @@ test("canonical POST decodes after credentials and preserves kind identities", a
 		),
 	).toBeNull();
 });
+
+test("canonical POST 401 carries the app-supplied WWW-Authenticate challenge on a missing/invalid credential", async () => {
+	const response = await canonicalPostTransport({
+		resolvePrincipal: async () => {
+			throw new RuntimeCredentialMalformed();
+		},
+		credentialChallenge: () => 'Bearer realm="support"',
+	}).fetch(
+		post("/_questpie/mutation/messages.publish", {
+			"Idempotency-Key": "challenge-mutation",
+		}),
+	);
+	expect(response?.status).toBe(401);
+	expect(response?.headers.get("www-authenticate")).toBe(
+		'Bearer realm="support"',
+	);
+	expect(await response?.json()).toEqual({
+		callId: "challenge-mutation",
+		error: { code: "UNAUTHENTICATED", retryable: false },
+	});
+});
+
+test("canonical POST 401 omits WWW-Authenticate when the app declares no challenge, unchanged from today", async () => {
+	const response = await canonicalPostTransport({
+		resolvePrincipal: async () => {
+			throw new RuntimeCredentialMalformed();
+		},
+	}).fetch(
+		post("/_questpie/mutation/messages.publish", {
+			"Idempotency-Key": "no-challenge-mutation",
+		}),
+	);
+	expect(response?.status).toBe(401);
+	expect(response?.headers.has("www-authenticate")).toBe(false);
+});

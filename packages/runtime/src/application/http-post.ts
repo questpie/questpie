@@ -62,6 +62,7 @@ export function createCanonicalPostHttp<ContextInput, View>(
 			request: Request,
 			signal: AbortSignal,
 		): Promise<Principal | null>;
+		credentialChallenge?(request: Request): string | undefined;
 		executeMutation(
 			value: Readonly<{
 				principal: Principal;
@@ -152,6 +153,7 @@ export function createCanonicalPostHttp<ContextInput, View>(
 					signal: execution.signal,
 					callId,
 					resolvePrincipal: input.resolvePrincipal,
+					credentialChallenge: input.credentialChallenge,
 				});
 				if (principalResolution.response) return principalResolution.response;
 				const caller = principalResolution.caller;

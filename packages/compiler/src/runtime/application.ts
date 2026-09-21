@@ -572,6 +572,18 @@ export async function createApplication(input) {
 				: "return principal.anonymous();"
 		}
 	};
+	const resolveApplicationChallenge = (request) => {
+			${
+				credentialResolverDefinition
+					? `return typeof ${credentialResolverDefinition}.challenge === "function" ? ${credentialResolverDefinition}.challenge(request) : undefined;`
+					: "return undefined;"
+			}
+		};
+	const mcpCatalogRequiresCredential = ${
+		credentialResolverDefinition
+			? `Boolean(${credentialResolverDefinition}.protectCatalog)`
+			: "false"
+	};
 	try {
 		liveQueryCoordinator = ${
 			input.realtime
@@ -601,6 +613,8 @@ export async function createApplication(input) {
 			context: ${contextDefinition},
 			bootstrap: bootstrapFactory,
 			resolvePrincipal: resolveApplicationPrincipal,
+			credentialChallenge: resolveApplicationChallenge,
+			mcpCatalogRequiresCredential,
 			liveQueryCoordinator,
 			${input.realtime ? "createRealtime: realtimeModule.createRuntimeRealtime," : ""}
 			verifyReadiness: (artifacts) => {

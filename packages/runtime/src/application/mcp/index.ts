@@ -28,6 +28,42 @@ function protocolError(
 	);
 }
 
+/**
+ * A real HTTP `401` for a missing/invalid credential, carrying whatever
+ * `WWW-Authenticate` value the application's credential resolver declared
+ * (or none, preserving today's headerless shape). This is the one place a
+ * `tools/call`, `tools/list`, or `server/discover` credential failure exits
+ * as a genuine `401` instead of the framework-fixed `200`/SSE JSON-RPC error
+ * frame — the framework only forwards the app-supplied header value; it does
+ * not construct, validate, or otherwise understand it.
+ */
+function unauthorized(
+	id: string | number | undefined,
+	wwwAuthenticate: string | undefined,
+): Response {
+	return new Response(
+		JSON.stringify({
+			jsonrpc: "2.0",
+			...(id === undefined ? {} : { id }),
+			error: { code: -32001, message: "Unauthorized" },
+		}),
+		{
+			status: 401,
+			headers: {
+				"content-type": "application/json; charset=utf-8",
+				...(wwwAuthenticate === undefined
+					? {}
+					: { "www-authenticate": wwwAuthenticate }),
+			},
+		},
+	);
+}
+
+export type McpAuthenticationOutcome =
+	| Readonly<{ kind: "authenticated" }>
+	| Readonly<{ kind: "unauthenticated"; wwwAuthenticate?: string }>
+	| Readonly<{ kind: "deferred" }>;
+
 function json(value: unknown, status = 200): Response {
 	return new Response(JSON.stringify(value), {
 		status,
@@ -115,6 +151,23 @@ export function createMcpIngress(
 		serverInfo: Readonly<{ name: string; version: string }>;
 		maximumRequestBytes: number;
 		tools: readonly McpToolBinding[];
+		/**
+		 * Optional credential preflight. When absent, every method keeps
+		 * ADR-0038's shipped behavior exactly (`tools/call` still resolves its
+		 * own credential deep inside `execute`, wrapped as a `200`/SSE
+		 * JSON-RPC error on failure; `tools/list`/`server/discover` stay
+		 * public). When present, it always gates `tools/call`, and gates
+		 * `tools/list`/`server/discover` only when `protectCatalog` is `true`.
+		 * A `"deferred"` outcome (a non-credential failure, e.g. the provider
+		 * being unavailable, or no opt-in) falls through to today's path
+		 * unchanged; only `"unauthenticated"` short-circuits to a real `401`.
+		 */
+		authenticate?(
+			request: Request,
+			signal: AbortSignal,
+		): Promise<McpAuthenticationOutcome>;
+		/** Gate `tools/list`/`server/discover` behind `authenticate` too. */
+		protectCatalog?: boolean;
 		execute(
 			value: Readonly<{
 				arguments: unknown;
@@ -194,6 +247,22 @@ export function createMcpIngress(
 				request.headers.get("mcp-name") !== params.name
 			) {
 				return protocolError(id, -32020, "Request metadata mismatch", 400);
+			}
+			// Authentication runs after transport/protocol validation (which
+			// discloses nothing app-specific and is identical for every caller)
+			// and before any method-specific dispatch, so an unauthenticated or
+			// invalid caller never learns the catalogue contents or whether a
+			// named tool exists.
+			if (
+				input.authenticate &&
+				(method === "tools/call" || input.protectCatalog)
+			) {
+				const authentication = await input.authenticate(
+					request,
+					request.signal,
+				);
+				if (authentication.kind === "unauthenticated")
+					return unauthorized(id, authentication.wwwAuthenticate);
 			}
 			const serverMetadata = {
 				"io.modelcontextprotocol/serverInfo": input.serverInfo,

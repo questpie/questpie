@@ -122,3 +122,53 @@ test("canonical Query maps only typed credential outcomes before URL decoding", 
 		});
 	}
 });
+
+test("canonical Query 401 carries the app-supplied WWW-Authenticate challenge on a missing/invalid credential", async () => {
+	const response = await transport({
+		resolvePrincipal: async () => null,
+		credentialChallenge: () =>
+			'Bearer resource_metadata="https://runtime.test/.well-known/oauth-protected-resource"',
+	}).fetch(
+		new Request(
+			"https://runtime.test/_questpie/query/messages.page?value=accepted",
+			{ headers: { "Questpie-Call-Id": "challenge-query" } },
+		),
+	);
+	expect(response?.status).toBe(401);
+	expect(response?.headers.get("www-authenticate")).toBe(
+		'Bearer resource_metadata="https://runtime.test/.well-known/oauth-protected-resource"',
+	);
+	expect(await response?.json()).toEqual({
+		callId: "challenge-query",
+		error: { code: "UNAUTHENTICATED", retryable: false },
+	});
+});
+
+test("canonical Query 401 omits WWW-Authenticate when the app declares no challenge, unchanged from today", async () => {
+	const response = await transport({
+		resolvePrincipal: async () => null,
+	}).fetch(
+		new Request(
+			"https://runtime.test/_questpie/query/messages.page?value=accepted",
+			{ headers: { "Questpie-Call-Id": "no-challenge-query" } },
+		),
+	);
+	expect(response?.status).toBe(401);
+	expect(response?.headers.has("www-authenticate")).toBe(false);
+});
+
+test("a Policy-neutral RUNTIME_UNAVAILABLE credential outcome never receives the challenge header", async () => {
+	const response = await transport({
+		resolvePrincipal: async () => {
+			throw new RuntimeCredentialUnavailable();
+		},
+		credentialChallenge: () => "Bearer",
+	}).fetch(
+		new Request(
+			"https://runtime.test/_questpie/query/messages.page?value=accepted",
+			{ headers: { "Questpie-Call-Id": "unavailable-query" } },
+		),
+	);
+	expect(response?.status).toBe(503);
+	expect(response?.headers.has("www-authenticate")).toBe(false);
+});
