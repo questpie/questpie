@@ -165,11 +165,10 @@ with `TMPDIR=/home/drepkovsky/.cache/v4-mcp-auth-tmp`.
   - `bun test tests/integration/postgres/team-support-desk.test.ts` — run
     alone, twice: **1 pass, 111 assertions**, both times.
   - Container removed after each session (`docker stop v4-mcp-auth-pg`).
-- Full `bun test tests/unit` (all unit tests, no PostgreSQL): started but its
-  runtime exceeded this session's foreground command window; it continued
-  running in the background. **Not confirmed complete at the time this
-  record was written** — see the final reply for its outcome once known, or
-  treat it as not run if no result is reported.
+- Full `bun test tests/unit` (all unit tests, no PostgreSQL): 981 pass, 1
+  skip, 0 fail, 18 snapshots, 5045 `expect()` calls across 982 tests / 191
+  files (278.88s). Confirmed complete after this record's first draft; the
+  skip is pre-existing (not investigated, but the run is 0 fail either way).
 - `quality:full` / `quality:release` (the full repository quality gate,
   including the release dry-run/conformance checksum): **not run**. The task
   brief states the release dry-run/conformance checksum
@@ -190,8 +189,8 @@ with `TMPDIR=/home/drepkovsky/.cache/v4-mcp-auth-tmp`.
 
 ## Unverified / follow-up
 
-- `quality:full`, `quality:release`, and the full `bun test tests/unit` run
-  (see above) were not confirmed complete within this session.
+- `quality:full` and `quality:release` (see above) were not run this
+  session.
 - No end-to-end fixture-level positive test exercises `challenge`/
   `protectCatalog` actually turned on through a full compile (only the
   unit-level `createMcpIngress`/`resolveHttpPrincipal` tests, and the
