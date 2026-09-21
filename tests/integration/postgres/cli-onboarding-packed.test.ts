@@ -70,6 +70,12 @@ test.skipIf(!enabled)(
 			DATABASE_URL: databaseUrl.href,
 			TMPDIR: root,
 			SUMMARY_WEBHOOK_URL: webhook.url.href,
+			// schema-lifecycle.mdx documents this as a required
+			// `export QUESTPIE_REALTIME_HMAC_KEY=$(openssl rand -hex 32)` step
+			// before `scripts/try-ticket.ts`/`questpie start` will run; fix it here
+			// so the packed-CLI proof is deterministic.
+			QUESTPIE_REALTIME_HMAC_KEY:
+				"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			BETTER_AUTH_URL: "http://localhost:5173",
 			BETTER_AUTH_SECRET: "barbershop-onboarding-test-secret-0123456789",
 		};
