@@ -181,6 +181,47 @@ phase lands the type-visibility gate.
   existing (equally unmapped) constraint violations, would have been an
   inconsistent, un-ratified special case. A `23503` on delete surfaces as
   the same sanitized failure any other constraint violation already does.
+- **F3 — an FK-refused delete is a normal outcome, not an edge case, for
+  any Collection left at the default `onDelete: "restrict"`, and it dooms
+  the whole enclosing Mutation transaction.** Savepoints are
+  `"notAvailable"` (ADR-0011), so a `23503` mid-Mutation rolls back
+  everything the Mutation wrote so far and makes every later `ctx.data`
+  call in that same Mutation fail too — proven by
+  `tests/integration/postgres/adr0047-f3-transaction-abort.test.ts`.
+  **Authoring guidance:** a Mutation that deletes a row with dependents
+  should check for them first — a `Query`/`list` read over the
+  referencing Collection before calling `.delete` — inside the same
+  Mutation, rather than relying on the FK violation as a control-flow
+  signal; the violation is an un-typed, sanitized failure, not a
+  recoverable declared error.
+- **F4 — Policy-only authorization holds under a realistic tenant-scoped
+  delete Policy**, not just the reference fixture's boolean-flag Policy:
+  cross-tenant delete-by-key returns neutral `null`, leaves the row in
+  place, and records no change-ledger fact for it, proven by
+  `tests/integration/postgres/adr0047-f4-tenancy.test.ts`. One asymmetry
+  is intentional and matches `update`, not a delete-specific regression:
+  the `lock` statement (`SELECT ... FOR UPDATE`) carries only the key
+  predicate, no Policy predicate — any authenticated caller can take a
+  `FOR UPDATE` lock on any row by primary key for the duration of the
+  transaction, the same as `update`'s lock already does. The Policy check
+  only gates the `currentValidation` read and the final `DELETE`.
+- **F5 — delete then create with the same key resets write-once Fields
+  and creation provenance.** `packages/compiler/src/schema/postgres/
+  internal-protocol-v3.ts`'s database-owned-value trigger pattern
+  (`IF TG_OP = 'INSERT' THEN NEW.created_at := transaction_timestamp()
+  ELSE NEW.created_at := OLD.created_at END IF`) only carries a
+  create-time value forward across an `UPDATE`; a fresh `INSERT` after a
+  `DELETE` has no `OLD` row, so `created_at` and any other
+  `immutable`/server-owned creation-time Field gets a brand new value —
+  the new row is not recognized as "the same logical entity" across the
+  delete+recreate boundary. A Collection that needs a stronger identity
+  guarantee across that boundary (a truly immutable creation timestamp,
+  an audit trail that must not restart) **should not grant `delete`** on
+  its default Policy. See the separate Proposed ADR-0048 (database-level
+  append-only Collections — not present on this branch, tracked
+  elsewhere), which forbids delete entirely for Collections that opt in —
+  that is the mechanism for Collections needing this guarantee, not a
+  delete-side workaround.
 
 ## Deferred decisions
 
