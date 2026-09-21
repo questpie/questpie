@@ -21,6 +21,7 @@
 			"types": "./dist/testing/index.d.ts",
 			"import": "./dist/testing/index.js"
 		},
+		"./package.json": "./package.json",
 		"./internal/client-projection": {
 			"types": "./dist/internal/client-projection.d.ts",
 			"import": "./dist/internal/client-projection.js"

@@ -128,6 +128,7 @@ for (const { path, json } of publicPackages) {
 				".",
 				"./internal/client-projection",
 				"./internal/observability",
+				"./package.json",
 				"./react-query",
 				"./testing",
 			])

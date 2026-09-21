@@ -11,4 +11,4 @@ export {
 	CleanupStack,
 	eventually,
 	waitForOutputLine,
-} from "questpie/testing";
+} from "../../questpie/src/testing/index";

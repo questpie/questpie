@@ -328,6 +328,14 @@ if (dryRun) {
 						"questpie/react-query: optional peer or mismatch boundary drifted",
 					);
 				await run(["bun", "-e", 'await import("questpie")'], consumer);
+				await run(
+					[
+						"bun",
+						"-e",
+						'const value = await import("questpie/testing"); if (typeof value.createIsolatedApplicationDatabase !== "function" || typeof value.createTestDatabase !== "function" || typeof value.runQuestpieCli !== "function" || typeof value.eventually !== "function") process.exit(1)',
+					],
+					consumer,
+				);
 				await verifyPackedNativeQuery(
 					artifact.firstTarball,
 					join(temporary, "consumer-native"),
@@ -366,7 +374,7 @@ if (dryRun) {
 					"-e",
 					profile.kind === "opentelemetry"
 						? 'const value = await import("questpie-opentelemetry"); if (typeof value.createOpenTelemetry !== "function") process.exit(1)'
-						: 'await import("questpie"); const value = await import("questpie/react-query"); if (typeof value.createQueryAdapter !== "function") process.exit(1)',
+						: 'await import("questpie"); const value = await import("questpie/react-query"); const testing = await import("questpie/testing"); if (typeof value.createQueryAdapter !== "function" || typeof testing.createIsolatedApplicationDatabase !== "function") process.exit(1)',
 				],
 				consumer,
 			);
@@ -436,7 +444,7 @@ if (dryRun) {
 			[
 				"bun",
 				"-e",
-				'await import("questpie"); const { createQueryAdapter } = await import("questpie/react-query"); const { QueryClient } = await import("@tanstack/react-query"); const React = await import("react"); const { renderToString } = await import("react-dom/server"); await import("questpie-opentelemetry"); if (typeof createQueryAdapter !== "function" || renderToString(React.createElement("p", null, "native")) !== "<p>native</p>") process.exit(1); new QueryClient().clear();',
+				'await import("questpie"); const { createQueryAdapter } = await import("questpie/react-query"); const { createIsolatedApplicationDatabase } = await import("questpie/testing"); const { QueryClient } = await import("@tanstack/react-query"); const React = await import("react"); const { renderToString } = await import("react-dom/server"); await import("questpie-opentelemetry"); if (typeof createQueryAdapter !== "function" || typeof createIsolatedApplicationDatabase !== "function" || renderToString(React.createElement("p", null, "native")) !== "<p>native</p>") process.exit(1); new QueryClient().clear();',
 			],
 			combinedConsumer,
 		);
