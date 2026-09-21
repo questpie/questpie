@@ -203,22 +203,18 @@ there would be a redundant, competing mechanism, not a gap.
   discovery/codegen pipeline now changes the digested contract, caught by
   `tests/unit/credential-resolver-composition-contract.test.ts`.
 
-## Open follow-up (F6(ii), not completed in this revision)
+## F6(ii): closed by a compiled-application test
 
-The reviewer asked for fixture-level tests "through the compiled
-application" (Team Support Desk or a synthetic fixture) covering every
-scenario in this ADR. This revision proves the mechanism at the unit level —
-`createMcpCredentialPreflight` directly (`tests/unit/mcp-authenticate.test.ts`,
-12 cases covering F1–F4), `createMcpIngress`'s gating/status/header/principal-
-passthrough behavior directly (`tests/unit/mcp02-runtime-ingress.test.ts`),
-`createMcpOperationAdapter`'s principal-passthrough directly
-(`tests/unit/mcp02-operation-adapter.test.ts`) — and confirms via both
-PostgreSQL regression suites, run alone, that a real compiled app with a
-credential resolver that configures none of these options compiles and
-behaves byte-identically. It does **not** include a fixture compiled with
-`protectCatalog`/`requireCredential` actually turned on and exercised through
-a live compile → migrate → HTTP call cycle. This is the one item from the
-review not closed here; it is the top follow-up for the next session.
+A later review round held that F6(ii) was not optional: unit tests against
+the extracted preflight cannot, by construction, catch an option silently
+dropped somewhere between `defineCredentialResolver` and the compiled
+runtime. `tests/integration/postgres/mcp-credential-gate.test.ts` closes
+this by compiling two real variants of the Team Support Desk fixture with
+the real CLI compiler, booting each with the real runtime, and driving
+`/_questpie/mcp` over the real `fetch` handler — see
+`docs/v4/implementation/mcp-credential-challenge.md` for the exact
+mechanism (including a real Bun dynamic-import cache defect hit and routed
+around while building it) and all six required assertions' results.
 
 ## Acceptance
 
