@@ -109,7 +109,15 @@ function catalogRow(
 		table,
 		triggerName,
 		triggerType,
-		triggerEnabled: "O" as const,
+		// Guards must fire even under session_replication_role = replica
+		// (every logical-replication apply worker, and on PG15+ any role
+		// granted SET ON PARAMETER session_replication_role without needing
+		// superuser). ENABLE ALWAYS is the only firing-status that survives
+		// that setting; the default 'O' (origin-only) would silently let a
+		// replication apply worker or a replica-role session bypass the
+		// guard. A guard found with any other status ('O' origin, 'D'
+		// disabled, 'R' replica-only) is drift.
+		triggerEnabled: "A" as const,
 		functionSchema: postgresSchema,
 		functionName,
 		functionLanguage: "plpgsql" as const,
@@ -299,9 +307,11 @@ REVOKE ALL ON FUNCTION ${functionName}() FROM PUBLIC;
 CREATE TRIGGER ${quote(guard.rowGuardTrigger)}
 BEFORE UPDATE OR DELETE ON ${schema}.${quote(guard.table)}
 FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+ALTER TABLE ${schema}.${quote(guard.table)} ENABLE ALWAYS TRIGGER ${quote(guard.rowGuardTrigger)};
 CREATE TRIGGER ${quote(guard.truncateGuardTrigger)}
 BEFORE TRUNCATE ON ${schema}.${quote(guard.table)}
-FOR EACH STATEMENT EXECUTE FUNCTION ${functionName}();`;
+FOR EACH STATEMENT EXECUTE FUNCTION ${functionName}();
+ALTER TABLE ${schema}.${quote(guard.table)} ENABLE ALWAYS TRIGGER ${quote(guard.truncateGuardTrigger)};`;
 }
 
 export function renderDropAppendOnlyGuard(
@@ -332,7 +342,8 @@ $questpie$;
 REVOKE ALL ON FUNCTION ${functionName}() FROM PUBLIC;
 CREATE TRIGGER ${quote(guard.triggerName)}
 BEFORE UPDATE ON ${schema}.${quote(guard.table)}
-FOR EACH ROW EXECUTE FUNCTION ${functionName}();`;
+FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+ALTER TABLE ${schema}.${quote(guard.table)} ENABLE ALWAYS TRIGGER ${quote(guard.triggerName)};`;
 }
 
 export function renderDropWriteOnceGuard(

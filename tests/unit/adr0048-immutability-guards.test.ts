@@ -88,6 +88,10 @@ describe("ADR-0048 database immutability guards", () => {
 		);
 		expect(appendOnlySql).toContain("REVOKE ALL ON FUNCTION");
 		expect(appendOnlySql).toContain("SECURITY INVOKER");
+		expect(appendOnlySql).toContain("ENABLE ALWAYS TRIGGER");
+		expect(projection.catalog.every((row) => row.triggerEnabled === "A")).toBe(
+			true,
+		);
 
 		const writeOnceSql = renderAddWriteOnceGuard(
 			projection,

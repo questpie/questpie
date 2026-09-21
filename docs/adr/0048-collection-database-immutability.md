@@ -176,14 +176,34 @@ FROM PUBLIC` on the function (matches `database-owned-update.ts`).
     trigger does but with much worse composability with the existing
     trigger-based Change Ledger capture — rejected.
   - **`BEFORE` row/statement triggers** are the only mechanism that (a) fire
-    for every writer regardless of role, short of superuser `session_replication_role
-= replica` bypass (an explicit, auditable, already-out-of-scope
-    escalation, consistent with ADR-0012's "actual superuser ... remain
-    trusted deployment boundaries, not protected application paths"), (b)
-    compose with `RETURNING`, `MERGE`, `ON CONFLICT DO UPDATE` the same way
-    `database-owned-update.ts`'s existing `BEFORE UPDATE` trigger already
-    does, and (c) can be ordered deterministically against the `AFTER`
-    Change Ledger capture trigger.
+    for every writer regardless of role, (b) compose with `RETURNING`,
+    `MERGE`, `ON CONFLICT DO UPDATE` the same way `database-owned-update.ts`'s
+    existing `BEFORE UPDATE` trigger already does, and (c) can be ordered
+    deterministically against the `AFTER` Change Ledger capture trigger.
+    **Correction (this pass, per adversarial review):** an earlier draft of
+    this ADR claimed the only bypass of a `BEFORE` trigger was a superuser
+    setting `session_replication_role = replica`. That was wrong on two
+    counts: (1) it requires no superuser — on PostgreSQL 15+ a role can be
+    granted `SET ON PARAMETER session_replication_role` without superuser,
+    and (2) it is not a rare escalation but the **default** posture of every
+    logical-replication apply worker, which always runs with
+    `session_replication_role = replica` so it does not re-fire triggers the
+    origin already fired. A trigger created with PostgreSQL's default firing
+    status (`'O'`, origin-only) is therefore skipped by every subscriber in
+    a logical-replication topology and by any session with that GUC set —
+    not just by a trusted superuser deployment boundary. **Fix shipped in
+    this pass:** every guard trigger is created `ENABLE ALWAYS`
+    (`ALTER TABLE ... ENABLE ALWAYS TRIGGER ...`, `pg_trigger.tgenabled =
+'A'`), the one firing status that fires regardless of
+    `session_replication_role`, and the expected catalog pins
+    `triggerEnabled: "A"` so a guard silently downgraded to `'O'`/`'D'`/`'R'`
+    out of band is `QP-SCHEMA-028` drift. Actual superuser bypass
+    (`ALTER TABLE ... DISABLE TRIGGER ALL`, direct catalog surgery, or
+    dropping the trigger outright) remains a trusted deployment boundary and
+    a conformance failure, not a protected application path — consistent
+    with ADR-0012's own framing — but the replication-role bypass this
+    correction closes required no superuser or deployment-boundary trust at
+    all, which is why it was a real bug, not an accepted risk.
   - `TRUNCATE`: covered by a `BEFORE STATEMENT` trigger on the append-only
     guard, refusing before the Change Ledger's own `AFTER TRUNCATE` capture
     trigger runs (see firing order below) — so an append-only table's

@@ -234,6 +234,40 @@ CREATE TABLE adr0048.notes (
 			`;
 				expect(row).toEqual({ label: "original", note: "revised" });
 
+				// the guard fires under session_replication_role = replica too
+				// (logical-replication apply workers and, on PG15+, any role
+				// granted SET ON PARAMETER session_replication_role run with
+				// this set without needing superuser; a trigger created with
+				// PostgreSQL's default firing status ('O') would be silently
+				// skipped)
+				const [second] = await database!<{ id: string }[]>`
+					insert into adr0048.evidence (kind) values ('published') returning id
+				`;
+				await database!.unsafe("set session_replication_role = 'replica'");
+				try {
+					await expectSqlstate(
+						database!.unsafe(
+							`update adr0048.evidence set kind = 'tampered' where id = '${second!.id}'`,
+						),
+						APPEND_ONLY_SQLSTATE,
+						"Collection collection:evidence is append-only",
+					);
+					await expectSqlstate(
+						database!.unsafe(
+							`delete from adr0048.evidence where id = '${second!.id}'`,
+						),
+						APPEND_ONLY_SQLSTATE,
+						"Collection collection:evidence is append-only",
+					);
+					await expectSqlstate(
+						database!.unsafe("truncate adr0048.evidence"),
+						APPEND_ONLY_SQLSTATE,
+						"Collection collection:evidence is append-only",
+					);
+				} finally {
+					await database!.unsafe("reset session_replication_role");
+				}
+
 				// out-of-band DROP TRIGGER is detected as drift
 				await verifyPostgresImmutabilityGuards(database!, guards);
 				await database!.unsafe(
@@ -242,7 +276,18 @@ CREATE TABLE adr0048.notes (
 				await expect(
 					verifyPostgresImmutabilityGuards(database!, guards),
 				).rejects.toMatchObject({ code: "QP-SCHEMA-028" });
+
+				// flipping a guard's firing status back to origin-only ('O') out
+				// of band -- e.g. an operator running ALTER TABLE ... ENABLE
+				// TRIGGER <name> instead of ENABLE ALWAYS TRIGGER -- is also drift
+				await database!.unsafe(
+					`alter table adr0048.notes enable trigger "${guards.writeOnceFields[0]!.triggerName}"`,
+				);
+				await expect(
+					verifyPostgresImmutabilityGuards(database!, guards),
+				).rejects.toMatchObject({ code: "QP-SCHEMA-028" });
 			},
+			120_000,
 		);
 
 		postgresTest(
@@ -398,6 +443,7 @@ export const evidenceLog = defineCollection({
 					await rm(temporary, { recursive: true, force: true });
 				}
 			},
+			120_000,
 		);
 	},
 );
