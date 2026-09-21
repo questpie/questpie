@@ -154,12 +154,14 @@ directly on `database-owned-update.ts`):
   application's own schema that unconditionally `RAISE EXCEPTION`s with a
   fixed SQLSTATE and a message naming the Collection identity. `REVOKE ALL ...
 FROM PUBLIC` on the function (matches `database-owned-update.ts`).
-- **Write-once Field guard**: one `BEFORE UPDATE` row trigger per Collection
-  that has at least one `immutable: "database"` field (not one trigger per
-  field — PostgreSQL fires row triggers per statement, and a single generated
-  function can check `IS DISTINCT FROM` for every guarded column on that
-  table and raise naming the first changed column), function generated the
-  same way.
+- **Write-once Field guard**: one `BEFORE UPDATE` row trigger **per
+  `immutable: "database"` Field**, not one shared trigger per Collection
+  (an earlier draft of this ADR described the shared-per-Collection shape;
+  it was never built — the shipped implementation is per-Field, matching
+  `database-owned-update.ts`'s own per-Field pattern exactly, so a
+  Collection with three write-once Fields gets three independent
+  functions and triggers). Each function checks `IS DISTINCT FROM` for its
+  one guarded column and raises naming that Field and its Collection.
 - **Mechanism choice — row/statement `BEFORE` triggers, not rules or bare
   `REVOKE`:**
   - `REVOKE` alone does not stop the table owner or a superuser, and the
@@ -211,39 +213,77 @@ FROM PUBLIC` on the function (matches `database-owned-update.ts`).
     matching "no DELETE at the database level" (`TRUNCATE` is unqualified
     delete-all).
 
+- **What actually shipped (this section corrected against the implementation
+  after adversarial review; an earlier draft described intent that was never
+  built).** Trigger/function names, as rendered by
+  `packages/compiler/src/schema/postgres/append-only.ts` via
+  `uniquelyShortenedPostgresName` (the same helper every other generated
+  name in this codebase uses, collision-checked against the whole schema):
+  `<table>_questpie_append_only_<hash>` (row guard) and
+  `<table>_questpie_append_only_truncate_<hash>` (statement guard) sharing
+  one function `qp_append_only_<table>_<hash>`, per append-only Collection;
+  `<table>_<column>_questpie_write_once_<hash>` with its own function
+  `qp_write_once_<table>_<column>_<hash>`, **per write-once Field** (not
+  per-Collection — a Collection with three write-once Fields gets three
+  independent triggers and functions, one per Field, matching
+  `database-owned-update.ts`'s existing per-Field pattern exactly). No
+  `qp00_` (or any other) ordering-token prefix was ever implemented; the
+  guard names carry no special ordering marker.
 - **Firing order vs. ADR-0012 Change Ledger capture (same table):**
-  PostgreSQL fires same-timing/same-event triggers in name order
-  (`pg_trigger.tgname`, alphabetical). The guard triggers are named with a
-  `questpie_guard_` prefix and the capture triggers already use a
-  `_questpie_capture_row`/`_questpie_capture_truncate` suffix pattern
-  (`shortenedPostgresName`) — sorting on the _table-qualified_ name would be
-  fragile, so this ADR requires the guard trigger name to embed an explicit
-  ordering token so guards always sort before any other trigger on the same
-  timing/event: `qp00_guard_<table>` (row) and `qp00_truncate_guard_<table>`
-  (statement), reusing `uniquelyShortenedPostgresName`. Because the guard is
-  `BEFORE` and capture is `AFTER`, PostgreSQL already fires all `BEFORE`
-  triggers (guard included) before any `AFTER` trigger (capture) regardless
-  of name — the `qp00_` prefix additionally protects against a second
-  `BEFORE` trigger kind being added later on the same table and firing before
-  the guard. Net effect: an `UPDATE`/`DELETE`/`TRUNCATE` on an append-only
-  table is refused before Change Ledger capture ever sees it — no ledger
-  fact is recorded for a rejected write, which is correct (nothing committed).
-  A Live Query watching the Collection is unaffected: it only observes
-  committed facts, and a refused write commits nothing.
+  PostgreSQL fires all `BEFORE` triggers on a statement before any `AFTER`
+  trigger, unconditionally — this ordering is by trigger _timing_
+  (`BEFORE` vs `AFTER`), not by name, and does not depend on any naming
+  convention. The guard is `BEFORE`; Change Ledger capture (ADR-0012) is
+  `AFTER`. So an `UPDATE`/`DELETE`/`TRUNCATE` on an append-only table is
+  always refused before Change Ledger capture ever sees it, regardless of
+  what either trigger is named — proven against a real database by this
+  pass's integration test (a refused write leaves the Change Ledger's row
+  count unchanged). A Live Query watching the Collection is unaffected: it
+  only observes committed facts, and a refused write commits nothing.
+- **Firing order between the two guard kinds, when a Collection is both
+  `appendOnly` and has a write-once Field (found by adversarial review):**
+  both guards are `BEFORE ROW` triggers on the same table and event
+  (`UPDATE`), so PostgreSQL orders them by name, and the two naming schemes
+  above are not designed to sort any particular way against each other —
+  observed in this pass's integration test, `<table>_<column>_questpie_
+write_once_*` sorts before `<table>_questpie_append_only_*` whenever the
+  column name starts with a letter earlier than `q`. **This is harmless as
+  shipped**, because item 4's compose-time refusal above already forbids
+  the one combination where firing order would matter for correctness
+  (`immutable: "database"` + `onUpdate: "now"` on the same Field): when
+  both guards can legally coexist on a table, either one refusing an
+  `UPDATE` is a correct refusal — there is no scenario in this shipped
+  slice where one guard firing before the other changes the _outcome_
+  (refused vs. accepted), only which SQLSTATE/message the caller sees. Not
+  treated as a bug; documented, not fixed with an ordering token.
 - **Name collisions:** guard function/trigger names are derived from
   `uniquelyShortenedPostgresName` the same way every other generated name is,
   guaranteeing no collision with capture (`_questpie_capture_*`),
   database-owned-update (`_questpie_on_update` / `qp_on_update_*`), or
   user-chosen Field/Collection names.
-- **Schema Fingerprint:** both new catalogs (`PostgresAppendOnlyGuardsV1`
-  collection guards, `PostgresWriteOnceFieldGuardsV1` field guards) are wired
-  into `expected-fingerprint.ts`/`fingerprint.ts` the same way
-  `verifyPostgresDatabaseOwnedUpdates` already is, so an out-of-band `DROP
-TRIGGER` on a guard is `QP-SCHEMA-028 changedObject` drift at startup, and
-  an out-of-band `CREATE TRIGGER` occupying a guard's reserved name is
-  `QP-SCHEMA-027 targetDrift` at `migration plan` time — both truthful,
-  matching the existing precedent for capture and database-owned-update
-  objects.
+- **Schema Fingerprint and drift (corrected):** the new catalog
+  (`PostgresImmutabilityGuardsV1`, one type covering both
+  `appendOnlyCollections` and `writeOnceFields` — not two separate exported
+  catalog types) is **not** wired into `expected-fingerprint.ts`, which
+  only ever covers columns/constraints/indexes (confirmed by reading it:
+  it has no trigger-shaped comparable at all). It is wired the same way
+  `change-capture.ts`/`database-owned-update.ts` already are: into
+  `fingerprint.ts`'s `verifyManagedCatalogObjects` (a direct catalog query
+  run alongside, not through, the columns/constraints/indexes comparable)
+  and into `managedObjectIdentities` (the allow-list that keeps the
+  generic catalog reader's unsupported-object scan from flagging the
+  guard's own trigger/function as an unmanaged object it doesn't
+  recognize), plus the parallel path in `database-readiness.ts` for
+  startup. Both `QP-SCHEMA-028 changedObject` (out-of-band `DROP TRIGGER`,
+  or any catalog difference from the expected row) and `QP-SCHEMA-027
+targetDrift` (an out-of-band object occupying a guard's reserved name
+  before it's installed) are proven against a real database by this pass's
+  integration tests — the reviewer's note asking this record be reconciled
+  is addressed by this correction: the wiring point named in the original
+  draft (`expected-fingerprint.ts`) was wrong; the actual wiring
+  (`fingerprint.ts` + `managedObjectIdentities` + `database-readiness.ts`)
+  is real, tested, and unchanged by this correction — only the ADR's
+  description of _where_ was wrong, not the shipped behavior.
 
 ### 3. Lifecycle of the declaration
 
@@ -430,6 +470,49 @@ database-immutable; it cannot change after insert`.
   "maps to a typed issue rather than a raw PostgreSQL error" — this is a
   small, mechanical addition to the existing PostgreSQL error → typed issue
   mapping and does not require new protocol.
+
+## Rolling deploy / rollback hazard (non-rolling adoption, per adversarial review)
+
+Adopting this feature is **not a rolling change**, the same way ADR-0043
+describes its own cutover. Once a `migration apply` installs a Collection's
+`appendOnly`/`immutable: "database"` guard objects, any **older** compiler
+or Runtime instance still pointed at that database — a slow rolling
+deploy's not-yet-upgraded pods, or a rollback — sees the guard's trigger
+and function as unmanaged objects it does not recognize (they are not in
+its own build's `managedObjectIdentities`) and refuses to start
+(`QP-SCHEMA-028`, the same drift protection this ADR exists to provide,
+now firing against the deploying application's own future self). This is
+the correct, safe failure mode (an old instance staying down is better
+than an old instance silently accepting writes a newer instance would have
+refused), but it means:
+
+- **Adoption order:** ship the compiler/Runtime version that knows about
+  `appendOnly`/`immutable: "database"` to every instance _before_ any
+  instance runs `migration apply` for a migration that adds the
+  declaration. A rolling deploy that applies the migration from a pod
+  running the new build while old-build pods are still serving traffic
+  against the same database will make those old pods refuse to start (or
+  crash-loop on next connection-time schema verification, depending on
+  where a given call site checks the fingerprint).
+- **Rollback procedure:** rolling back the _application code_ (the compiler
+  version, or an application that no longer declares `appendOnly`) after
+  the guard is already installed does not remove the guard — schema state
+  and application code roll back independently, as with every other
+  compiler-owned object in this codebase. To roll back cleanly: (1) commit
+  a new migration removing the declaration (destructive, requires
+  `--accept-destructive`, per the "Removing" lifecycle rule above), (2)
+  `migration apply` it while every instance still understands
+  `appendOnly`/`immutable: "database"` (so no instance sees the interim
+  state as drift), (3) only then roll back the application code that no
+  longer references the declaration. Rolling back application code first,
+  while the guard objects are still installed, reproduces the same
+  old-instance-refuses-to-start hazard as forward adoption.
+
+No code changes were made for this item — it is a documentation and
+operational-procedure gap, not a defect in the mechanism itself, and the
+existing `QP-SCHEMA-028` drift protection already does the right (safe)
+thing without needing new code; what was missing was writing down the
+adoption/rollback order for an operator to follow.
 
 ## Consequences
 

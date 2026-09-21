@@ -851,4 +851,24 @@ export const nonNullableWriteOnce = defineCollection({
 			await rm(temporary, { recursive: true, force: true });
 		}
 	});
+
+	test("classifies QP001/QP002 as a distinct, non-retryable Runtime failure that does not leak the raw PostgreSQL message", async () => {
+		const { postgresFailure } =
+			await import("../../packages/runtime/src/postgres/errors");
+		for (const code of [APPEND_ONLY_SQLSTATE, WRITE_ONCE_FIELD_SQLSTATE]) {
+			const rawMessage = `Collection collection:secret is append-only; UPDATE and DELETE are refused at the database level (${code})`;
+			const failure = postgresFailure({
+				error: { code, message: rawMessage },
+				phase: "statement",
+			});
+			expect(failure.code).toBe("immutabilityGuardViolation");
+			expect(failure.retry).toBe("never");
+			expect(failure.sqlState).toBe(code);
+			// the classification is the only thing safe to surface to a network
+			// caller; the raw driver message (which names the Collection) must
+			// not leak through the public shape of the error
+			expect(JSON.stringify(failure)).not.toContain("secret");
+			expect(String(failure)).not.toContain("secret");
+		}
+	});
 });

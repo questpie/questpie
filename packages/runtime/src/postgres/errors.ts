@@ -55,11 +55,26 @@ export function postgresFailure(
 						? "serializationFailure"
 						: state === "40P01"
 							? "deadlock"
-							: state?.startsWith("23")
-								? "constraint"
-								: state?.startsWith("08")
-									? "connectionLost"
-									: "queryFailed";
+							: // ADR-0048 database immutability guards: QP001 (append-only
+								// Collection) and QP002 (write-once Field) are compiler-owned,
+								// reserved SQLSTATE codes raised only by the guard trigger
+								// itself, never by application logic. A generated kernel
+								// should never reach a guard (compile-time capability
+								// suppression refuses the write before any SQL is emitted),
+								// so this classification only fires on a compiler capability
+								// bug, a raw bypass writer, or a Seed conflict path this
+								// runtime layer does not own. Never safe to retry: retrying
+								// the same write hits the same guard again. Deliberately
+								// does not carry the Collection/Field identity from the raw
+								// PostgreSQL error message into anything a network caller
+								// can read -- callers get the classification only.
+								state === "QP001" || state === "QP002"
+								? "immutabilityGuardViolation"
+								: state?.startsWith("23")
+									? "constraint"
+									: state?.startsWith("08")
+										? "connectionLost"
+										: "queryFailed";
 	return new QuestpiePostgresError({
 		code: classification,
 		phase: input.phase,
