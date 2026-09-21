@@ -346,6 +346,192 @@ CREATE TABLE adr0048.children (
 		);
 
 		postgresTest(
+			"ON CONFLICT DO UPDATE and MERGE ... WHEN MATCHED THEN UPDATE are refused with QP001, and CREATE OR REPLACE FUNCTION of a guard to a no-op body is drift",
+			async () => {
+				await ensure(database!);
+				await database!.unsafe(`CREATE SCHEMA adr0048;
+CREATE TABLE adr0048.evidence (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind text NOT NULL
+);`);
+				const schema = {
+					application: { postgresSchema: "adr0048" },
+					collections: [
+						{
+							identity: "collection:evidence",
+							postgresName: "evidence",
+							appendOnly: true,
+							fields: [],
+						},
+					],
+					// biome-ignore lint: test fixture cast
+				} as unknown as Parameters<typeof projectPostgresImmutabilityGuards>[0];
+				const guards = projectPostgresImmutabilityGuards(schema);
+				await database!.unsafe(
+					renderAddAppendOnlyGuard(guards, "collection:evidence"),
+				);
+				const [row] = await database!<{ id: string }[]>`
+					insert into adr0048.evidence (kind) values ('published') returning id
+				`;
+
+				await expectSqlstate(
+					database!.unsafe(
+						`insert into adr0048.evidence (id, kind) values ('${row!.id}', 'x') on conflict (id) do update set kind = excluded.kind`,
+					),
+					APPEND_ONLY_SQLSTATE,
+					"Collection collection:evidence is append-only",
+				);
+
+				await expectSqlstate(
+					database!.unsafe(
+						`merge into adr0048.evidence t using (select '${row!.id}'::uuid as id, 'y'::text as kind) s on t.id = s.id when matched then update set kind = s.kind`,
+					),
+					APPEND_ONLY_SQLSTATE,
+					"Collection collection:evidence is append-only",
+				);
+
+				// CREATE OR REPLACE FUNCTION of a guard to a no-op body is drift:
+				// the trigger stays installed and "looks" present, but the guard
+				// silently stops guarding -- exactly the kind of tampering
+				// prosrc-comparison in the fingerprint must catch
+				await verifyPostgresImmutabilityGuards(database!, guards);
+				await database!.unsafe(
+					`create or replace function "adr0048"."${guards.appendOnlyCollections[0]!.functionName}"() returns trigger language plpgsql security invoker set search_path = pg_catalog as $$ begin return null; end $$`,
+				);
+				await expect(
+					verifyPostgresImmutabilityGuards(database!, guards),
+				).rejects.toMatchObject({ code: "QP-SCHEMA-028" });
+			},
+			60_000,
+		);
+
+		postgresTest(
+			"a Collection rename plus a write-once Field rename in one migration leaves the guard installed and refusing, with no unguarded statement inside the migration transaction",
+			async () => {
+				const temporary = await mkdtemp(
+					join(tmpdir(), "questpie-adr0048-rename-"),
+				);
+				try {
+					await cp(fixtureRoot, temporary, { recursive: true });
+					await installQuestpieForTracer(temporary);
+					await writeFile(
+						join(temporary, "src/rename-fixture.ts"),
+						`import { constraint, defineCollection, field } from "questpie";
+
+export const auditOriginal = defineCollection({
+	name: "auditOriginal",
+	appendOnly: true,
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		label: field.text({ nullable: false, minLength: 1, maxLength: 32, immutable: "database" }),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+`,
+					);
+					runCli(temporary, ["build"]);
+					runCli(temporary, ["migration", "apply"]);
+					const planned = JSON.parse(
+						runCli(temporary, [
+							"migration",
+							"plan",
+							"--name",
+							"add-audit-original",
+						]),
+					);
+					const created = JSON.parse(
+						runCli(temporary, ["migration", "create", "--plan", planned.path]),
+					);
+					expect(created.status).toBe("created");
+					runCli(temporary, ["migration", "apply"]);
+
+					// rename both the Collection and the write-once Field in one
+					// source edit, planned as one migration
+					await writeFile(
+						join(temporary, "src/rename-fixture.ts"),
+						`import { constraint, defineCollection, field } from "questpie";
+
+export const auditRenamed = defineCollection({
+	name: "auditRenamed",
+	appendOnly: true,
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		note: field.text({ nullable: false, minLength: 1, maxLength: 32, immutable: "database" }),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+`,
+					);
+					const renamePlanned = JSON.parse(
+						runCli(temporary, [
+							"migration",
+							"plan",
+							"--name",
+							"rename-audit",
+							"--rename",
+							"collection:auditOriginal=collection:auditRenamed",
+							"--rename",
+							"collection:auditOriginal/field:label=collection:auditRenamed/field:note",
+						]),
+					);
+					expect(renamePlanned.status).toBe("planned");
+					// A rename plans as an unconditional drop-old-guard +
+					// add-new-guard pair (the same shape as every other guard
+					// change, mirroring the pre-existing databaseOwnedUpdateSteps
+					// precedent for renaming an onUpdate Field) -- the drop half
+					// is unconditionally classified destructive, so a pure rename
+					// requires --accept-destructive too, even though nothing is
+					// actually being removed. See ADR-0048 for the corrected
+					// claim.
+					expect(renamePlanned.classification).toBe("destructive");
+					const renameCreated = JSON.parse(
+						runCli(temporary, [
+							"migration",
+							"create",
+							"--plan",
+							renamePlanned.path,
+							"--accept-destructive",
+							renamePlanned.digest,
+						]),
+					);
+					expect(renameCreated.status).toBe("created");
+					const upSql: string = await Bun.file(
+						join(temporary, renameCreated.path, "up.sql"),
+					).text();
+					// the guard trigger must never be dropped without an
+					// immediate, same-transaction re-create: no window inside
+					// this migration's up.sql where the table is unguarded
+					const dropIndex = upSql.indexOf("DROP TRIGGER");
+					const createIndex = upSql.indexOf("CREATE TRIGGER");
+					if (dropIndex !== -1) expect(createIndex).toBeGreaterThan(-1);
+					runCli(temporary, ["migration", "apply"]);
+
+					await database!.unsafe(
+						"insert into collaboration.audit_renamed (note) values ('kept')",
+					);
+					// auditRenamed is both appendOnly and has a write-once Field, so
+					// either guard refusing is correct (see ADR-0048's
+					// guard-vs-guard firing-order note); what matters here is that
+					// the rename did not leave the table unguarded
+					let renameRejected: unknown;
+					try {
+						await database!.unsafe(
+							"update collaboration.audit_renamed set note = 'changed'",
+						);
+					} catch (error) {
+						renameRejected = error;
+					}
+					expect([APPEND_ONLY_SQLSTATE, WRITE_ONCE_FIELD_SQLSTATE]).toContain(
+						(renameRejected as { errno?: string } | undefined)?.errno,
+					);
+				} finally {
+					await rm(temporary, { recursive: true, force: true });
+				}
+			},
+			120_000,
+		);
+
+		postgresTest(
 			"migration plan -> migration create -> migration apply installs the guard, apply is idempotent, and removing the declaration requires --accept-destructive",
 			async () => {
 				const temporary = await mkdtemp(

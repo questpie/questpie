@@ -306,13 +306,33 @@ NULL` column, there is no data already in the table that could violate the
   developer's perspective, from "we never had this guarantee" — the same
   asymmetry-of-harm argument that already makes column drops and nullable
   relaxation destructive.
-- **Rename (Collection or Field):** the guard trigger/function names are
-  derived from the _physical_ table/column name via
-  `uniquelyShortenedPostgresName`, exactly like every other generated object
-  name in this codebase (see `database-owned-update.ts`). A rename plans as
-  drop-old-guard-name + create-new-guard-name bound to the same
-  `renameCollection`/`renameField` migration step, never as an add+remove of
-  the declaration itself — the guarantee is continuous across the rename.
+- **Rename (Collection or Field), corrected against what shipped:** the
+  guard trigger/function names are derived from the _physical_ table/column
+  name via `uniquelyShortenedPostgresName`, exactly like every other
+  generated object name in this codebase (see `database-owned-update.ts`).
+  A rename plans as an unconditional drop-old-guard + add-new-guard pair —
+  the same generic add/drop shape `immutabilityGuardSteps` uses for any
+  guard change, resolved to the renamed identity via the plan's `renames`
+  mapping (`mapIdentityBackward`/`mapIdentityForward`), the same mechanism
+  `databaseOwnedUpdateSteps` already uses for renaming an `onUpdate` Field.
+  **Correction:** an earlier draft of this ADR claimed this rename plans
+  as "never an add+remove of the declaration itself." That is contradicted
+  by the actual classification logic: the drop half of the pair is
+  unconditionally `destructive` (matching every other guard drop), so
+  renaming a guarded Collection/Field **does** require
+  `--accept-destructive`, even though nothing is actually being removed —
+  a pure rename genuinely costs the same acknowledgment as a real removal.
+  This is not a regression introduced by this ADR (the identical behavior
+  already exists for renaming an `onUpdate: "now"` Field via
+  `databaseOwnedUpdateSteps`); it is flagged here because it is
+  counter-intuitive and worth an operator knowing about, not because it is
+  wrong. **What is true, and proven against a real database by this pass's
+  integration test:** the guard stays installed and refusing after a
+  rename applies, and the migration's `up.sql` never has a window where
+  the renamed table is unguarded (every `DROP TRIGGER` for a guard is
+  followed, within the same migration file/transaction, by the matching
+  `CREATE TRIGGER` under the new name) — the guarantee is continuous across
+  the rename, which was the actual point of the original claim.
 - **Kernel capability suppression (compile-time, not runtime): implemented.**
   `packages/compiler/src/mutation/operation-set.ts`'s
   `projectCollectionOperationSets` rejects an `update` or `delete` member on
