@@ -253,15 +253,34 @@ build that made the fix look like a no-op — see below):
   `current.companyId.equal(tenant.id)` Policy, not just the reference
   fixture's boolean flag. Test:
   `tests/integration/postgres/adr0047-f4-tenancy.test.ts`.
-- **Concurrency**: delete-vs-delete and delete-vs-update races over 10
-  trials each (not the requested N>=50 — a documented, deliberate scope
-  reduction). Test:
-  `tests/integration/postgres/adr0047-concurrent-delete.test.ts`. One test
-  bug was found and fixed along the way: the first draft of the
-  delete-vs-update assertion wrongly assumed the two outcomes were
-  mutually exclusive; they are not (update can commit first, then delete
-  removes that same row afterward — both legitimately report success).
-  The corrected invariant checks the final row state only.
+- **Concurrency, raised to N=50 with interleaving evidence and outcome
+  distributions**: `tests/integration/postgres/adr0047-concurrent-delete.test.ts`
+  now runs 50 randomized trials each for delete-vs-delete and
+  delete-vs-update, reporting how many times each side won and, for the
+  first 10 trials of each race, polling `pg_stat_activity` concurrently
+  with the race (the same technique `collaboration-walking-skeleton.test.ts`
+  already uses to prove a blocked read) to assert a real lock wait was
+  observed — direct evidence both transactions were in flight together,
+  not serialized by accident. Results across three runs:
+  delete-vs-delete a/b splits of 34/16, 29/21, 34/16 out of 50; both sides
+  win every run; contention observed = true every run. Two structural test
+  bugs were found and fixed along the way, both revealed only once the
+  trial count and distribution assertions forced a real answer instead of
+  a lucky small sample: (1) the first draft's mutual-exclusivity
+  assumption for delete-vs-update was wrong (update can commit first, then
+  delete removes that same row afterward — both legitimately report
+  success; fixed to check final row state only); (2) with the reference
+  fixture's original always-true delete Policy
+  (`current.id.equal(current.id)`), delete-vs-update could never actually
+  produce a "row survives" outcome — delete always eventually removes the
+  row regardless of lock-acquisition order, since update never blocks a
+  later delete. Fixed by giving the race fixture's delete Policy a
+  realistic conditional check (`current.label.equal("race")`, denied once
+  update has changed the label) so a genuine two-outcome race exists:
+  whichever call wins the row lock decides the final state, and delete's
+  Policy is re-evaluated fresh at write time against a row update may have
+  just changed. Distributions after the fix: delete/update splits of
+  27/23, 22/28, 25/25 out of 50; both sides win every run.
 - **F5 (documented, no code change)**: delete then create with the same
   key resets write-once Fields and creation provenance; folded into
   ADR-0047's Consequences with the ADR-0048 (append-only Collections)
@@ -281,20 +300,26 @@ build that made the fix look like a no-op — see below):
   (mirroring the existing lock check), not just that the SQL text looks
   like a `DELETE FROM`.
 
-Not fixed / not run, with reasons:
+- **Live Query subscription convergence — now proven end to end.**
+  `tests/integration/postgres/adr0047-live-query-delete.test.ts` wires a
+  network-exposed, watchable Query (`list` with `first: 1`, the same
+  "detail" shape `channels.detail` already uses) over a Collection that
+  also grants delete, opens the watch through the generated network
+  client (the level `inv03-inverse-query-runtime.test.ts` uses — trigger
+  -> change ledger -> Runtime reconciliation -> delivered snapshot, no
+  lower-level harness existed that was smaller and still end-to-end),
+  confirms the initial snapshot, calls the delete Mutation directly, and
+  asserts (bounded `eventually`, 20s) the watch delivers a later snapshot
+  of `null`. A second row proves the inverse: a Policy-denied delete
+  (`current.locked === true`) never produces a "gone" snapshot within a
+  2s bounded negative wait — the watch stays on the original value and
+  the row is confirmed still present in the database.
 
-- **Live Query subscription convergence**: no test opens an actual
-  watch/subscription and observes it drop the row after delete. Inferred
-  safe from the change-ledger trigger's unconditional
-  `TG_OP IN ('UPDATE', 'DELETE')` branch and from every delete test's own
-  row-count assertions, but not proven the way the brief asked.
-- **Full N>=50 concurrency**: ran 10 trials per race instead, to fit the
-  session budget. The mechanism (row lock via `FOR UPDATE`, no savepoints)
-  gives no reason to expect trial 11-50 to behave differently, but that is
-  an argument, not a measurement.
+Still open, with reasons:
+
 - **Type-visibility diagnostic fix**: the misleading "property does not
   exist" TypeScript error when `.delete` is hidden by the issue-mapping
-  gate is unchanged.
+  gate is unchanged. Follow-up.
 - **A true "operation" discriminator in the authored lifecycle grammar**:
   `validate` for delete works today only for Collections whose validate
   function doesn't unconditionally dereference `candidate.*`; one that

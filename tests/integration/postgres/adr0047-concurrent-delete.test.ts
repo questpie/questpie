@@ -16,11 +16,35 @@ const cli = resolve(repositoryRoot, "packages/questpie/dist/cli.js");
 const database = process.env.PGHOST ? new SQL({ max: 8 }) : undefined;
 const postgresTest = process.env.PGHOST ? test.serial : test.skip;
 
-// The full brief asks for N >= 50 randomized trials; this runs a reduced
-// TRIALS count (documented as a known shortfall in the implementation
-// record) to keep the run inside a reasonable CI wall-clock budget while
-// still exercising real interleaving rather than a single lucky race.
-const TRIALS = 10;
+const TRIALS = 50;
+// Interleaving evidence: for the first CONTENTION_SAMPLES trials of each
+// race, poll pg_stat_activity concurrently with the two racing calls and
+// require at least one sample where a backend touching this test's table
+// is blocked by another — the same technique
+// collaboration-walking-skeleton.test.ts already uses to prove a blocked
+// read. This is real evidence the two transactions were in flight
+// together, not an assumption from the code shape.
+const CONTENTION_SAMPLES = 10;
+
+async function observeLockContention(
+	tableName: string,
+	stop: () => boolean,
+): Promise<boolean> {
+	for (let attempt = 0; attempt < 2_000 && !stop(); attempt += 1) {
+		const [row] = await database!.unsafe<Readonly<Array<{ blocked: boolean }>>>(
+			`SELECT EXISTS (
+				SELECT 1
+				FROM pg_catalog.pg_stat_activity a
+				WHERE a.pid <> pg_catalog.pg_backend_pid()
+					AND a.query ILIKE '%${tableName}%'
+					AND pg_catalog.cardinality(pg_catalog.pg_blocking_pids(a.pid)) > 0
+			) AS blocked`,
+		);
+		if (row?.blocked) return true;
+		await Bun.sleep(2);
+	}
+	return false;
+}
 
 type MutationOptions = Readonly<{ callId: string }>;
 
@@ -96,7 +120,15 @@ export const deletableRecordPolicy = definePolicy(deletableRecords, {
 	},
 	delete: {
 		admit: policy.authenticated(),
-		rows: ({ current }) => current.id.equal(current.id),
+		// Deliberately conditional (not "always true") so this Collection can
+		// host a genuine delete-vs-update race: whichever call acquires the
+		// row lock first determines the final label, and delete's Policy is
+		// re-evaluated fresh at write time against that possibly-just-changed
+		// row — if update won the lock and changed the label away from
+		// "race" first, the delete that follows is Policy-denied and the row
+		// survives with the update applied. If delete wins the lock first,
+		// it removes the row before any update can touch it.
+		rows: ({ current }) => current.label.equal("race"),
 	},
 	fields: {
 		update: ({ current }) => ({ id: current.id.equal(current.id), label: current.label.equal(current.label) }),
@@ -191,12 +223,15 @@ postgresTest(
 				context: { companyId: tracerIds.company },
 			};
 
+			const distribution = { aWon: 0, bWon: 0 };
+			let contentionObserved = false;
 			for (let trial = 0; trial < TRIALS; trial += 1) {
 				const [{ id: idRaw }] = await database!.unsafe(
 					`INSERT INTO collaboration.deletable_records (id, label) VALUES (gen_random_uuid(), 'race') RETURNING id`,
 				);
 				const id = String(idRaw);
-				const [first, second] = await Promise.all([
+				let settled = false;
+				const race = Promise.all([
 					application.execution(root, ({ mutations }) =>
 						mutations.deletableRecords.deleteRecord(
 							{ id },
@@ -209,18 +244,42 @@ postgresTest(
 							{ callId: `race-b-${trial}` },
 						),
 					),
-				]);
-				// Exactly one call actually deleted the row; the other found it
-				// already gone (neutral null), never both, never neither, never
-				// a thrown error.
-				const deletedCount = [first, second].filter((r) => r.deleted).length;
-				expect(deletedCount).toBe(1);
+				]).finally(() => {
+					settled = true;
+				});
+				if (trial < CONTENTION_SAMPLES) {
+					const [[first, second], observed] = await Promise.all([
+						race,
+						observeLockContention("deletable_records", () => settled),
+					]);
+					contentionObserved ||= observed;
+					if (first.deleted) distribution.aWon += 1;
+					if (second.deleted) distribution.bWon += 1;
+					const deletedCount = [first, second].filter((r) => r.deleted).length;
+					expect(deletedCount).toBe(1);
+				} else {
+					const [first, second] = await race;
+					if (first.deleted) distribution.aWon += 1;
+					if (second.deleted) distribution.bWon += 1;
+					const deletedCount = [first, second].filter((r) => r.deleted).length;
+					expect(deletedCount).toBe(1);
+				}
 				expect(
 					await database!.unsafe(
 						`SELECT id FROM collaboration.deletable_records WHERE id = '${id}'`,
 					),
 				).toEqual([]);
 			}
+			// Both sides actually won at least once across 50 trials: this is a
+			// real race, not one side always serialized ahead of the other by
+			// accident (e.g. connection-pool ordering).
+			expect(distribution.aWon).toBeGreaterThan(0);
+			expect(distribution.bWon).toBeGreaterThan(0);
+			expect(distribution.aWon + distribution.bWon).toBe(TRIALS);
+			console.log(
+				`delete-vs-delete distribution over ${TRIALS} trials: a=${distribution.aWon} b=${distribution.bWon}, contention observed=${contentionObserved}`,
+			);
+			expect(contentionObserved).toBe(true);
 		} finally {
 			await application?.close();
 			await database!.unsafe(
@@ -229,7 +288,7 @@ postgresTest(
 			await rm(temporary, { force: true, recursive: true });
 		}
 	},
-	120_000,
+	180_000,
 );
 
 postgresTest(
@@ -290,25 +349,52 @@ postgresTest(
 				context: { companyId: tracerIds.company },
 			};
 
+			const distribution = { deleteWon: 0, updateWon: 0 };
+			let contentionObserved = false;
 			for (let trial = 0; trial < TRIALS; trial += 1) {
 				const [{ id: idRaw }] = await database!.unsafe(
 					`INSERT INTO collaboration.deletable_records (id, label) VALUES (gen_random_uuid(), 'race') RETURNING id`,
 				);
 				const id = String(idRaw);
-				const [deleteResult, updateResult] = await Promise.all([
+				let settled = false;
+				// Randomize which call is issued (and so reaches PostgreSQL) first
+				// each trial: with a fixed order, delete's shorter round-trip path
+				// (lock, write) gives it a near-deterministic head start over
+				// update's longer one (lock, candidate validation, write), which
+				// would make delete win essentially every time regardless of true
+				// concurrency — that is exactly the "serialized by accident" shape
+				// this test needs to rule out.
+				const deleteFirst = Math.random() < 0.5;
+				const runDelete = () =>
 					application.execution(root, ({ mutations }) =>
 						mutations.deletableRecords.deleteRecord(
 							{ id },
 							{ callId: `race-delete-${trial}` },
 						),
-					),
+					);
+				const runUpdate = () =>
 					application.execution(root, ({ mutations }) =>
 						mutations.deletableRecords.updateLabel(
 							{ id, label: "touched" },
 							{ callId: `race-update-${trial}` },
 						),
-					),
-				]);
+					);
+				const race = Promise.all(
+					deleteFirst ? [runDelete(), runUpdate()] : [runUpdate(), runDelete()],
+				).finally(() => {
+					settled = true;
+				});
+				const [pair, observed] =
+					trial < CONTENTION_SAMPLES
+						? await Promise.all([
+								race,
+								observeLockContention("deletable_records", () => settled),
+							])
+						: [await race, false];
+				const [deleteResult, updateResult] = deleteFirst
+					? pair
+					: [pair[1]!, pair[0]!];
+				contentionObserved ||= observed;
 				const rows = await database!.unsafe(
 					`SELECT label FROM collaboration.deletable_records WHERE id = '${id}'`,
 				);
@@ -323,12 +409,21 @@ postgresTest(
 				// found nothing left to remove).
 				if (rows.length === 0) {
 					expect(deleteResult.deleted).toBe(true);
+					distribution.deleteWon += 1;
 				} else {
 					expect(deleteResult.deleted).toBe(false);
 					expect(updateResult.updated).toBe(true);
 					expect(rows).toEqual([{ label: "touched" }]);
+					distribution.updateWon += 1;
 				}
 			}
+			expect(distribution.deleteWon).toBeGreaterThan(0);
+			expect(distribution.updateWon).toBeGreaterThan(0);
+			expect(distribution.deleteWon + distribution.updateWon).toBe(TRIALS);
+			console.log(
+				`delete-vs-update distribution over ${TRIALS} trials: delete=${distribution.deleteWon} update=${distribution.updateWon}, contention observed=${contentionObserved}`,
+			);
+			expect(contentionObserved).toBe(true);
 		} finally {
 			await application?.close();
 			await database!.unsafe(
@@ -337,5 +432,5 @@ postgresTest(
 			await rm(temporary, { force: true, recursive: true });
 		}
 	},
-	120_000,
+	180_000,
 );

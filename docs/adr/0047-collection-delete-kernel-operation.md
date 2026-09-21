@@ -11,12 +11,14 @@
   conflict (see "Consequences"). A 2026-09-22 Opus security review (F1-F7)
   found and this branch fixed a real admission-gate bypass (F1/F2: delete
   ran no `validate` and bypassed issue-mapping coverage regardless of
-  Policy) and added proof for transaction-abort (F3), tenancy (F4), and
-  concurrency at reduced scale (10 trials, not the requested N>=50). See
+  Policy), added proof for transaction-abort (F3), tenancy (F4), Live
+  Query subscription convergence, and concurrency at N=50 randomized
+  trials per race with observed interleaving. See
   `docs/v4/implementation/collection-delete-kernel.md` for the shared-vs-new
-  code split, every gate result, and what remains unverified (Live Query
-  subscription convergence, full N>=50 concurrency, the type-visibility
-  diagnostic fix). Left Proposed, not flipped to Accepted, by instruction.
+  code split, every gate result, and what remains open (the type-
+  visibility diagnostic fix, an operation discriminator in the authored
+  lifecycle grammar). Left Proposed, not flipped to Accepted, by
+  instruction.
 
 ## Context
 
@@ -242,15 +244,16 @@ phase lands the type-visibility gate.
   extending ADR-0030/0031's Deferred item for all three write members, not
   a delete-only carve-out).
 - CAS/`expected` on delete.
-- Live Query subscription convergence proof (a real watch dropping the
-  row after delete) — inferred from the change-ledger trigger's
-  unconditional `TG_OP IN ('UPDATE', 'DELETE')` branch and from the row
-  being gone from the base table after every delete test, not proven by
-  an actual watch/subscription test; out of budget this pass.
-- Concurrency proof at the requested scale: delete-vs-delete and
-  delete-vs-update are proven over 10 randomized trials each
-  (`tests/integration/postgres/adr0047-concurrent-delete.test.ts`), not
-  the requested N >= 50 — a real, intentional scope reduction to fit the
-  session budget, not a skipped item.
+- Type-visibility diagnostic fix (the misleading "property does not
+  exist" TypeScript error when `.delete` is hidden by the issue-mapping
+  gate).
+
+Resolved since the first pass (see
+`docs/v4/implementation/collection-delete-kernel.md` for full detail):
+Live Query subscription convergence is proven end to end
+(`tests/integration/postgres/adr0047-live-query-delete.test.ts`), and
+concurrency is proven at N=50 randomized trials per race with
+`pg_stat_activity`-observed interleaving and reported win distributions
+(`tests/integration/postgres/adr0047-concurrent-delete.test.ts`).
 - Bulk/filtered delete (`deleteMany`) — this ADR is key-addressed single-row
   only, matching `update`.
