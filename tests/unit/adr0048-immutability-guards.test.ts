@@ -22,6 +22,7 @@ import {
 	renderDropWriteOnceGuard,
 	WRITE_ONCE_FIELD_SQLSTATE,
 } from "../../packages/compiler/src/schema/postgres/append-only";
+import { installQuestpieForTracer } from "../support/beta12-packed-questpie";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
@@ -379,5 +380,109 @@ export const messageEvents = defineCollection({
 		const removed = removeWithAck.commit();
 		expect(removed.files["up.sql"]).toContain("DROP TRIGGER");
 		expect(removed.files["up.sql"]).toContain("DROP FUNCTION");
+	});
+
+	test("refuses update and delete Mutation members on an append-only Collection as a compiler diagnostic", async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-capability-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await installQuestpieForTracer(temporary);
+			const messagesSource = await Bun.file(
+				join(temporary, "src/messages.ts"),
+			).text();
+			await writeFile(
+				join(temporary, "src/messages.ts"),
+				messagesSource.replace(
+					'defineCollection({\n\tname: "messages",',
+					'defineCollection({\n\tname: "messages",\n\tappendOnly: true,',
+				),
+			);
+			await writeFile(
+				join(temporary, "src/message-operations.ts"),
+				`import { defineCollectionOperations, mutation } from "questpie";
+
+import { channelMessagePage } from "./message-page";
+import { messagePolicy } from "./message-policy";
+import { messages } from "./messages";
+
+export const messageOperations = defineCollectionOperations(messages, {
+	name: "messages",
+	policy: messagePolicy,
+	network: true,
+	list: { data: channelMessagePage },
+	get: { select: { id: true, body: true, createdAt: true } },
+	update: {
+		input: ["body"],
+		values: ({ operationTime }) => ({
+			createdAt: mutation.overwrite(operationTime),
+		}),
+		select: { id: true, body: true, createdAt: true },
+	},
+});
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-COMPOSE-013",
+				diagnosticClass: "structuralTypeError",
+				message: expect.stringContaining(
+					"messages.update is not offered: Collection collection:messages is append-only",
+				),
+			});
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+
+	test("refuses a delete Mutation member on an append-only Collection as a compiler diagnostic", async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-capability-delete-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await installQuestpieForTracer(temporary);
+			const messagesSource = await Bun.file(
+				join(temporary, "src/messages.ts"),
+			).text();
+			await writeFile(
+				join(temporary, "src/messages.ts"),
+				messagesSource.replace(
+					'defineCollection({\n\tname: "messages",',
+					'defineCollection({\n\tname: "messages",\n\tappendOnly: true,',
+				),
+			);
+			await writeFile(
+				join(temporary, "src/message-operations.ts"),
+				`import { defineCollectionOperations } from "questpie";
+
+import { channelMessagePage } from "./message-page";
+import { messagePolicy } from "./message-policy";
+import { messages } from "./messages";
+
+export const messageOperations = defineCollectionOperations(messages, {
+	name: "messages",
+	policy: messagePolicy,
+	network: true,
+	list: { data: channelMessagePage },
+	get: { select: { id: true, body: true, createdAt: true } },
+	delete: { select: { id: true } },
+});
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-COMPOSE-013",
+				diagnosticClass: "structuralTypeError",
+				message: expect.stringContaining(
+					"messages.delete is not offered: Collection collection:messages is append-only",
+				),
+			});
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
 	});
 });

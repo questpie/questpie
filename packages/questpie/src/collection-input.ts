@@ -184,7 +184,7 @@ type UpdateNodeCodec<Node, Depth extends readonly unknown[]> =
 			? never
 			: Server extends true
 				? never
-				: Immutable extends true
+				: Immutable extends true | "database"
 					? never
 					: Optional<FieldCodec<Node>>
 		: Node extends InlineShapeDefinition<infer Fields>

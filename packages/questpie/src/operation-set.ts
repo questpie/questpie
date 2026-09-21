@@ -145,7 +145,7 @@ type TrustedFieldNames<Fields, Member> = {
 		? OnUpdate extends "now"
 			? never
 			: Member extends "update"
-				? Immutable extends true
+				? Immutable extends true | "database"
 					? never
 					: Key
 				: Key
