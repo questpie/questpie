@@ -1,7 +1,7 @@
 ---
-title: Native React Query integration
+title: React Query
 description: Understand generated native options, cache lifetime, hydration and commit outcomes.
-kind: explanation
+kind: reference
 ---
 
 The optional Query Adapter at `questpie/react-query` connects generated operations to
@@ -9,14 +9,12 @@ native TanStack Query. You do not repeat DTOs, cache-key maps, endpoints or
 pagination rules. TanStack owns the cache and React hooks; QUESTPIE supplies
 the generated transport, identity and scope lifetime.
 
-To build a complete screen, follow [Build a ticket screen with React Query](./react-query-basic).
-For SSR and hydration, follow [Render the ticket screen with TanStack Start](./react-query-start).
+To build a complete screen, follow [Build the React screen](./react-query-basic).
+For SSR and hydration, follow [Add server rendering](./react-query-start).
 
-Version availability: This page documents the beta.2 preview. Beta.2 is not
-published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
-released package contract.
+Available in QUESTPIE 4.0.0-beta.2.
 
-## Native options, not another hook layer
+## Native options
 
 `createQueryAdapter(scope, queryClient, options)` binds one generated Context
 scope to your QueryClient. Its `queries[qualifiedName]` exposes `options(input)` for native
@@ -152,4 +150,4 @@ Mutation completion can precede the next live snapshot, so temporary visual
 reversion is possible. TanStack DB, live infinite lists and offline/persistence
 are outside this integration.
 
-Next, [run durable Jobs and Reactions](./durable-reactions).
+Return to [the API reference](/docs/v4/api-reference).

@@ -1,6 +1,6 @@
 # QUESTPIE v4 handoff
 
-Current work is the manual beta.2 release on `feat/v4` in
+Current work is the documentation rewrite and onboarding CLI on `feat/v4` in
 `/home/drepkovsky/code/questpie-v4`. Inspect Git/worktree state before editing
 and use the repo-owned `.agents/skills/questpie-v4/SKILL.md`.
 
@@ -17,7 +17,22 @@ Beta.1 remains frozen history. The beta.2 implementation is integrated, but
 [scope inventory](docs/v4/beta2-release-scope.md), not older worktree handoffs,
 for the release contents.
 
-## Immediate continuation
+## Documentation and onboarding work — 2026-09-09
+
+The owner requested researched public documentation and explicitly authorized
+implementing missing CLI steps in this repository. No push or publication.
+See [the delivery record](docs/v4/implementation/docs-onboarding-cli.md) for
+scope, research, review dispositions, and current verification. The public
+learning path now uses one cumulative Barbershop ticket example and a separate
+API reference. New commands project the existing migration and Seed kernels:
+`init`, `migration plan`, `migration create`, and `seed create`.
+
+These working-tree changes are not covered by the earlier beta.2 acceptance
+or release evidence. Preserve that evidence and bind a fresh candidate before
+resuming release acceptance. Auth remains an application integration; Files,
+Search, Studio, and built-in health endpoints are not supplied by this work.
+
+## Manual release continuation (after this work)
 
 The owner chose a [manual beta.2 release](docs/v4/implementation/beta2-closure/MANUAL-RELEASE.md).
 CI/CD and runner provisioning are deferred. Existing checks and workload

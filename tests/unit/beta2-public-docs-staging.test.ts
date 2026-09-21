@@ -1,79 +1,87 @@
 import { expect, test } from "bun:test";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
-
 const docsRoot = resolve(import.meta.dir, "../../apps/docs/content/docs/v4");
+const page = (name: string) => readFile(resolve(docsRoot, name), "utf8");
 
-async function page(name: string): Promise<string> {
-	return Bun.file(resolve(docsRoot, name)).text();
-}
-
-test("the overview leads readers to application guides and keeps its links local", async () => {
-	const source = await page("index.mdx");
+test("navigation separates the cumulative tutorial from API lookup and resolves every public link", async () => {
+	const navigation = JSON.parse(await page("meta.json"));
+	expect(navigation.root).toBe(true);
+	const entries = navigation.pages.filter(
+		(name: string) => !name.startsWith("---"),
+	);
+	const linked: string[] = [];
+	for (const name of entries) {
+		const meta = Bun.file(resolve(docsRoot, name, "meta.json"));
+		if (await meta.exists()) {
+			const group = await meta.json();
+			expect(group.defaultOpen).toBe(false);
+			for (const child of group.pages)
+				linked.push(resolve(docsRoot, name, `${child}.mdx`));
+		} else linked.push(resolve(docsRoot, `${name}.mdx`));
+	}
+	expect(entries).toEqual([
+		"index",
+		"installation",
+		"concepts",
+		"tutorial",
+		"guides",
+		"reference",
+		"versions",
+	]);
+	expect(new Set(linked).size).toBe(linked.length);
+	const files = (await readdir(docsRoot))
+		.filter((name) => name.endsWith(".mdx"))
+		.map((name) => resolve(docsRoot, name));
+	expect([...linked].sort()).toEqual(files.sort());
+	for (const name of (await readdir(docsRoot)).filter((name) =>
+		name.endsWith(".mdx"),
+	)) {
+		const source = await page(name);
+		for (const match of source.matchAll(
+			/\]\((?:\/docs\/v4\/|\.\/)([a-z0-9-]+)(?:#[^)]+)?\)/gu,
+		))
+			expect(
+				await Bun.file(resolve(docsRoot, `${match[1]}.mdx`)).exists(),
+				`${name}: ${match[0]}`,
+			).toBe(true);
+	}
+	const overview = await page("index.mdx");
 	for (const target of [
-		"definition-composition",
-		"context-and-policy",
-		"react-query-basic",
-		"react-query-start",
-		"scheduled-jobs",
-		"beta2-release",
+		"installation",
+		"schema-lifecycle",
+		"clients",
+		"auth",
+		"uploads",
+		"custom-logic",
+		"escape-hatches",
+		"ecosystem",
+		"api-reference",
+	])
+		expect(overview).toContain(`(/docs/v4/${target})`);
+});
+
+test("release documentation targets beta.2 and retains exact package identity", async () => {
+	for (const name of [
+		"index.mdx",
+		"installation.mdx",
+		"react-query-basic.mdx",
+		"react-query-start.mdx",
+		"opentelemetry.mdx",
+		"reactive-query-resources.mdx",
+		"beta2-release.mdx",
 	]) {
-		expect(source).toContain(`(/docs/v4/${target})`);
+		const source = (await page(name)).replace(/\s+/gu, " ");
+		expect(source).toContain("4.0.0-beta.2");
+		expect(source).not.toContain("not published");
+		expect(source).not.toContain("beta.2 preview");
 	}
-	for (const match of source.matchAll(/\]\(\/docs\/v4\/([a-z0-9-]+)\)/gu)) {
-		expect(await Bun.file(resolve(docsRoot, `${match[1]}.mdx`)).exists()).toBe(
-			true,
-		);
-	}
-	expect(source).not.toContain("Studio reads application data");
-});
-
-test("native React Query tutorials are discoverable and retain preview staging", async () => {
-	const navigation = await Bun.file(resolve(docsRoot, "meta.json")).json();
-	const overview = await page("react-query.mdx");
-	for (const name of ["react-query-basic", "react-query-start"]) {
-		expect(navigation.pages).toContain(name);
-		expect(overview).toContain(`./${name}`);
-		const source = (await page(`${name}.mdx`)).replace(/\s+/gu, " ");
-		expect(source).toContain("beta.2 preview");
-		expect(source).toContain("Beta.2 is not published.");
-	}
-});
-
-test("public beta.2 guides state version availability and expose the exact preview inventory", async () => {
-	const [index, openTelemetry, reactiveQueries, inventory, navigation] =
-		await Promise.all([
-			page("index.mdx"),
-			page("opentelemetry.mdx"),
-			page("reactive-query-resources.mdx"),
-			page("beta2-release.mdx"),
-			Bun.file(resolve(docsRoot, "meta.json")).json() as Promise<{
-				pages: string[];
-			}>,
-		]);
-
-	for (const source of [index, openTelemetry, reactiveQueries, inventory]) {
-		const prose = source.replace(/\s+/gu, " ");
-		expect(prose).toContain("beta.2 preview");
-		expect(prose).toContain("Beta.2 is not published.");
-		expect(prose).toContain(
-			"[frozen beta.1 inventory](/docs/v4/beta1-release)",
-		);
-	}
-
-	const overview = index.replace(/\s+/gu, " ");
-	expect(overview).toContain(
-		"six executable Definition kinds: Query, Mutation, Action, Route, Reaction, and Job",
-	);
-	expect(overview).not.toContain(
-		"three executable Definition kinds: Query, Mutation, and Reaction",
-	);
-	expect(overview).toContain("[Review the beta.2 preview inventory]");
-	expect(navigation.pages).toContain("beta2-release");
-	expect(inventory).toContain("`questpie@4.0.0-beta.2`");
-	expect(inventory).toContain("`questpie/react-query`");
+	const inventory = await page("beta2-release.mdx");
+	for (const identity of [
+		"questpie@4.0.0-beta.2",
+		"questpie/react-query",
+		"questpie-opentelemetry@4.0.0-beta.2",
+	])
+		expect(inventory).toContain(identity);
 	expect(inventory).not.toContain("`questpie/react`");
-	expect(navigation.pages).toContain("react-query");
-	expect(inventory).toContain("`questpie-opentelemetry@4.0.0-beta.2`");
-	expect(inventory).not.toContain("`@questpie/react`");
-	expect(inventory).not.toContain("`@questpie/opentelemetry`");
 });

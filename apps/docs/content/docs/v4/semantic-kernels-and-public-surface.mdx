@@ -1,144 +1,70 @@
 ---
-title: Use the QUESTPIE v4 API surface
-description: Import structural builders, generated factories, and clients from their exact owners.
-kind: guide
+title: Imports and packages
+description: Look up the public package and generated entry points.
+kind: reference
 ---
 
-QUESTPIE v4 keeps one implementation kernel where semantics agree and exposes
-only the capabilities valid for each job. Public names tell you which contract
-owns the value.
+Use these entry points for application code. Generated names are specific to
+your compiled application; run `questpie build` before checking them.
 
-Version availability: This page includes the beta.2 preview. Beta.2 is not
-published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
-released package contract.
+| Import                   | Values                                                                                                                                                                                                         |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `questpie`               | `defineCollection`, `defineCollectionAugmentation`, `defineCollectionOperations`, `defineSeed`, `defineContext`, `definePolicy`, `defineService`, `defineCredentialResolver`                                   |
+| `questpie`               | `field`, `value`, `shape`, `codec`, `constraint`, `index`, `relation`, `relationRef`, `collection`, `seed`, `context`, `principal`, `policy`, `expr`, `query`, `dataQuery`, `operation`, `mutation`, `durable` |
+| `#questpie/app`          | `defineQuery`, `defineMutation`, `defineAction`, `defineRoute`, `defineJob`, `defineReaction`, `createApp`, and exact generated application types                                                              |
+| `#questpie/client`       | `createClient` and the exact generated network client                                                                                                                                                          |
+| `#questpie/package`      | Generated executable factories for a reusable composition Package                                                                                                                                              |
+| `questpie/react-query`   | `createQueryAdapter`                                                                                                                                                                                           |
+| `questpie-opentelemetry` | `createOpenTelemetry`                                                                                                                                                                                          |
 
-## Build values once
+`questpie` also exports the TypeScript helpers `DiscriminatedValue`,
+`DiscriminatedReference`, and `matchDiscriminated`. They model ordinary unions;
+they create no relation, foreign key, codec, Policy traversal, or live dependency.
 
-Use `codec.*` for Operation input and output, Context input, and durable
-payloads:
+## codec
 
-```ts
-import { codec, defineCollection, field } from "questpie";
+Codecs are runtime contracts for Operation input/output, Context input, and
+durable payloads. They validate values and supply generated types and network
+encoding. TypeScript interfaces disappear at runtime and cannot replace them.
 
-const messageId = codec.uuid();
+| Builder                         | Purpose                                                     |
+| ------------------------------- | ----------------------------------------------------------- |
+| `codec.uuid()`                  | UUID string.                                                |
+| `codec.text(options?)`          | Text with optional bounds.                                  |
+| `codec.boolean()`               | Boolean.                                                    |
+| `codec.integer(options?)`       | Integer with optional bounds.                               |
+| `codec.timestamp()`             | Timestamp decoded as a Date.                                |
+| `codec.object(members)`         | Closed object; unknown keys are rejected.                   |
+| `codec.array(item)`             | Array; use a bounded list where the transport requires one. |
+| `codec.list(item, { maximum })` | Bounded list.                                               |
+| `codec.nullable(inner)`         | Explicit null or an inner value.                            |
+| `codec.optional(inner)`         | Missing member or an inner value.                           |
+| `codec.cursor()`                | Opaque framework cursor.                                    |
 
-export const messages = defineCollection({
-	name: "messages",
-	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		body: field.text({ nullable: false }),
-	},
-});
-```
+Bigint, numeric, date, and JSON contracts are available through Field-derived
+input codecs; `codec` has no public factory for those kinds.
 
-`codec.uuid()` and `field.uuid()` share scalar identity and validation. A Field
-adds database-only behavior such as nullability, defaults, and column mapping.
-`value.*` retains the compatible embedded-JSONB vocabulary. Operation does not
-define a second `operation.uuid()` grammar.
+Use `field.*` for database fields and `value.*` for embedded JSONB members.
+They share scalar rules but add different storage capabilities. Field-derived
+`createInput` and `updateInput` retain constraints, bounds, nullability, and
+write provenance.
 
-A Codec is executable product data, not only a TypeScript type. Each layer uses
-the same closed description for a different proof:
+A validation library can validate UI state or provider responses in application
+code. Its arbitrary JavaScript refinements cannot replace a serializable
+QUESTPIE boundary Codec. Keep boundary validation and domain invariants explicit.
 
-| Layer            | What the Codec proves                                                                                                                                                                                                                |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| TypeScript       | Infers exact keys, optional and nullable members, scalar values, and provenance-derived Collection input types.                                                                                                                      |
-| Compiler         | Validates and canonicalizes the descriptor, preserves its bounds and nested options, and records it in the App Contract and Operation Wire.                                                                                          |
-| Runtime          | Validates direct inputs, handler outputs, Context and durable payloads; it rejects unknown keys and invalid bounds or value forms.                                                                                                   |
-| Generated client | Validates and encodes inputs before transport, independently validates results, and restores runtime values such as `Date`; invalid local input performs no request, while an invalid server result is a framework protocol failure. |
+See [Collections](/docs/v4/collections-reference),
+[Operations](/docs/v4/executable-definitions), and
+[the generated client](/docs/v4/client-reference).
 
-That shared authority keeps direct calls, network calls, stored durable values,
-generated declarations, and compatibility identities aligned. Field-derived
-Codecs preserve the Field's complete scalar contract recursively: text and
-integer bounds, numeric precision and scale, timestamp timezone semantics,
-embedded object properties, array limits, and tagged canonical JSON.
+## Discriminated application values
 
-General validation libraries such as Zod or TypeBox can validate values owned by
-application code, including form state. When a validation library permits
-arbitrary refinements or transforms, those extensions are executable
-JavaScript: QUESTPIE cannot deterministically serialize, hash, lower, reproduce
-in a generated client, or enforce that code after a durable or network
-boundary. Such a library therefore does not replace the QUESTPIE Codec required
-for an Operation, Context input, or durable payload.
+`DiscriminatedValue<{ ticket: { id: string }; note: { text: string } }>` produces
+`{ kind: "ticket"; id: string } | { kind: "note"; text: string }` with readonly
+members. `DiscriminatedReference<{ ticket: string; comment: string }>` produces
+the corresponding `{ kind; id }` union for references.
 
-This is also why QUESTPIE does not infer a boundary contract from a TypeScript
-type alone. TypeScript types disappear at runtime. A Codec remains available to
-the compiler, generated client, Runtime, durable worker, and compatibility
-checker, so all of them can enforce the same contract without shipping an
-application callback across the boundary. A projection package may expose a
-Codec to a form library, but that projection does not become contract authority.
-
-## Choose the owner of application work
-
-| Work                                                    | Owner                 | Boundary                                                                                                  |
-| ------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------- |
-| Canonicalize a generated Collection Operation Set input | its closed normalizer | Pure compiler-owned program; named Mutations use ordinary TypeScript before calling the Collection kernel |
-| Supply a trusted server value                           | `values`              | Mutation-owned assignment checked by the complete candidate Policy                                        |
-| Read or derive an authorized result                     | Query                 | One Policy-aware read snapshot                                                                            |
-| Decide whether a principal may perform work             | Policy                | Pure authorization decision over explicit subject, resource, and facts                                    |
-| Validate application state or write atomically          | Mutation              | One PostgreSQL transaction, including audit and durable acceptance                                        |
-| React to one exact committed fact                       | Reaction              | Durable committed-fact causation with no independent producer                                             |
-| Observe a changing authorized read                      | Live Query            | Re-evaluated Query result driven by committed invalidation                                                |
-
-Reaction is the committed-fact authoring meaning over the internal durable
-kernel. QUESTPIE does not expose a general lifecycle hook catalogue.
-
-Collection Field provenance decides which write lanes may supply a Field.
-Mutation owns trusted `values` and the transaction that merges them with caller
-input. Policy remains the sole authored authorization owner and checks the
-complete candidate after that merge. Keeping these owners separate removes
-repeated Field fences without turning trusted application code into a Policy
-bypass or exposing a Collection on the network.
-
-## Import executable factories from the current contract
-
-```ts
-import { codec } from "questpie";
-import { defineMutation, defineQuery } from "#questpie/app";
-
-export const messageById = defineQuery({
-	name: "messages.byId",
-	input: codec.object({ id: codec.uuid() }),
-	handler: ({ input, ctx }) => ctx.data.messages.get({ key: input }),
-});
-
-export const renameMessage = defineMutation({
-	name: "messages.rename",
-	input: codec.object({ id: codec.uuid(), body: codec.text() }),
-	handler: ({ input, ctx }) =>
-		ctx.data.messages.update({
-			key: { id: input.id },
-			patch: { body: input.body },
-		}),
-});
-```
-
-`#questpie/app` also exports `defineReaction`. Each factory has its own exact
-context; there is no universal Definition builder. Packages import the same
-names from their generated `#questpie/package` contract and cannot see
-host-only Resources.
-
-Generated server Operation maps use nested calls such as
-`ctx.mutations.delivery.sendMessage`. Generated network-client scopes group
-methods by kind and retain qualified-name keys, such as
-`api.queries["appointments.calendar"]`. Canonical Resource Identity remains
-`<kind>:<qualified-name>`; it is not that client accessor. QUESTPIE reports
-`QP-COMPOSE-023` when one same-kind Operation would be both a callable leaf and
-a namespace. It reports `QP-COMPOSE-024` when a final `then` segment would make
-the generated namespace Promise-like.
-
-Server capability maps are frozen objects with no inherited Object helpers.
-Names such as `constructor` and `prototype` are ordinary generated members.
-Treat the map as a typed capability surface, not as a general JavaScript object.
-
-## Watch Queries
-
-A supported generated Query method gains `.watch` and returns complete freshly
-authorized results. Watching does not bypass Policy: every recomputation is
-authorized again.
-
-The same method gains `.observe(input)` and returns a framework-neutral Query
-Resource. React applications use `createQueryAdapter` from the optional
-`questpie/react-query` subpath. It derives native TanStack options and binds
-the existing watch directly to TanStack's cache. It does not wrap a Query
-Resource or add another realtime transport. See
-[Native React Query integration](/docs/v4/react-query).
+`matchDiscriminated(value, cases)` requires exactly one callback for each
+literal `kind`. Each callback receives its narrowed variant; the return type is
+the union of callback results. Missing or unknown kinds fail. These are
+application value helpers; they add no database polymorphic relation or wire codec.

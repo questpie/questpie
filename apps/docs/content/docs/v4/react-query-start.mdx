@@ -1,17 +1,15 @@
 ---
-title: Render the ticket screen with TanStack Start
+title: Server rendering
 description: Give each SSR request its own cache, hydrate through TanStack, and start browser execution after the document handoff.
 kind: guide
 ---
 
 Render the Barbershop ticket Query on the server with the Query Adapter, then let its browser watch
 take over after hydration. Keep the backend files from
-[Build a ticket screen with React Query](./react-query-basic); replace that
-page's browser-only mount with this Start host.
+[Build the React screen](./react-query-basic); keep that
+page’s browser host and add this separate Start host. Run one frontend at a time.
 
-Version availability: This page documents the beta.2 preview. Beta.2 is not
-published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
-released package contract.
+Available in QUESTPIE 4.0.0-beta.2.
 
 The example's Policy admits authenticated callers but does not isolate tenant
 rows. A tenant ID in a URL or Context is routing input, not authorization.
@@ -38,13 +36,22 @@ bun add @tanstack/react-start@1.168.32 @tanstack/react-router@1.170.18 @tanstack
 bun add --dev vite@8.1.5 @vitejs/plugin-react@6.0.4
 ```
 
-```ts title="vite.config.ts"
+```ts title="vite.start.config.ts"
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
 	plugins: [tanstackStart({ srcDirectory: "web-start" }), react()],
+	server: {
+		host: "localhost",
+		port: 5173,
+		strictPort: true,
+		proxy: {
+			"/_questpie": "http://localhost:3001",
+			"/api/auth": "http://localhost:3001",
+		},
+	},
 	resolve: {
 		dedupe: [
 			"react",
@@ -55,6 +62,21 @@ export default defineConfig({
 	},
 });
 ```
+
+For local development, sign in through the basic host at `http://localhost:5173`
+first. Stop that Vite process, keep the QUESTPIE backend running, then start
+this host at the same browser origin:
+
+```sh
+export QUESTPIE_API_ORIGIN=http://localhost:3001
+bunx --no-install vite --config vite.start.config.ts
+```
+
+The browser retains the session cookie across that frontend restart. This
+chapter adds SSR, not another login UI. To change accounts, return to the basic
+host at the same origin, reload the document, and use its sign-out/sign-in flow.
+Keep its `vite.config.ts`, `web/index.html`, and `web/main.ts` intact. A production
+Start application must integrate that session transition into its own Auth UI.
 
 ## Create one owner per server request or browser document
 
@@ -392,22 +414,35 @@ pages. Keep generated continuation and retry defaults intact.
 
 ## Build and retire the host
 
-Use Start's Vite application builder, then include `web-start/**/*.ts`,
-`web-start/**/*.tsx`, `vite.config.ts` and `build-start.ts` in your strict TypeScript check.
-Retain `bun` from the basic guide's types and add `vite/client` for `import.meta.env`.
-This example uses Bun's fetch types, including its `preconnect` property.
-Run the TypeScript check after the Start build generates `routeTree.gen.ts`.
+Use Start's Vite application builder, then check this project after it generates
+`routeTree.gen.ts`. Keep the basic `tsconfig.json`; add this separate config.
+The `vite/client` types describe `import.meta.env`, while `bun` provides the
+Fetch types used by the server, including `preconnect`.
+
+```json title="tsconfig.start.json"
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": { "types": ["bun", "vite/client"] },
+	"include": [
+		"web-start/**/*.ts",
+		"web-start/**/*.tsx",
+		"vite.start.config.ts",
+		"build-start.ts"
+	]
+}
+```
 
 ```ts title="build-start.ts"
 import { createBuilder } from "vite";
 
-const builder = await createBuilder();
+const builder = await createBuilder({ configFile: "vite.start.config.ts" });
 await builder.buildApp();
 ```
 
 ```sh
-bunx questpie build
+bunx --no-install questpie build
 bun build-start.ts
+bunx tsc --noEmit -p tsconfig.start.json
 ```
 
 This host binds one tenant and credential lifetime to its document. Do not

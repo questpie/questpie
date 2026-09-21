@@ -1,0 +1,45 @@
+---
+title: Uploads
+description: Keep file metadata, bytes, authorization, and cleanup under explicit ownership.
+kind: guide
+---
+
+Use an application-owned upload integration when a Barbershop ticket needs a
+photo or attachment. QUESTPIE does not ship built-in Files, a byte-store
+adapter, upload widgets, or generated upload/finalize/delete endpoints.
+There is no supported `field.file()` or `runtime.byteStore` setup to copy.
+
+## Separate the database row from the bytes
+
+Store attachment metadata in an ordinary Collection: its ID, ticket relation,
+storage object key, expected size/type, and lifecycle state. Keep bytes in your
+chosen object store. Define Policy on the metadata and ticket access.
+A database transaction cannot atomically commit an external upload.
+
+An application can use its storage provider's signed-upload API and a Service
+for provider calls. Use an Action for typed external invocations, or a raw Route
+when you need streaming Request/Response handling. Neither choice supplies
+an upload protocol or automatically applies metadata Policy to storage reads.
+
+## Build an explicit upload flow
+
+1. Authorize the ticket and reserve pending metadata in a Mutation.
+2. Obtain a bounded upload capability through an application-owned provider
+   integration. Use an opaque object key and provider-side size/type/expiry limits.
+3. Upload bytes, then verify the stored object server-side. Do not trust a
+   browser's claim that upload completed.
+4. Finalize metadata in a separate authorized Mutation only after verification.
+5. Before each download, check current metadata/ticket access. Do not serve
+   pending metadata or expose a permanently public object URL for private files.
+6. Make deleted metadata unavailable before deleting bytes. Reconcile failed
+   deletes, abandoned reservations, and orphan objects with durable work.
+
+This is the design checklist for your integration, not a built-in runnable
+upload recipe. Its storage calls, streaming limits, content verification,
+malware processing, retries, and cleanup must be implemented and tested by the
+application. If those are core requirements today, budget that integration
+explicitly or choose a storage service that already provides them.
+
+For a form that only records an existing authorized URL, use a normal bounded
+text field and Mutation; that stores a URL and does not implement file storage.
+See [custom logic](/docs/v4/custom-logic) and [Services](/docs/v4/services).

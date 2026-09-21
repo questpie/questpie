@@ -1,0 +1,23 @@
+{
+	"title": "API reference",
+	"icon": "Code",
+	"defaultOpen": false,
+	"pages": [
+		"../api-reference",
+		"../semantic-kernels-and-public-surface",
+		"../definition-composition",
+		"../collections-reference",
+		"../context-and-policy",
+		"../executable-definitions",
+		"../client-reference",
+		"../realtime",
+		"../reactive-query-resources",
+		"../react-query",
+		"../services",
+		"../durable-reactions",
+		"../scheduled-jobs",
+		"../operation-http-and-openapi",
+		"../basic-mcp",
+		"../cli"
+	]
+}

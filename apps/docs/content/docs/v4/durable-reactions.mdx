@@ -1,422 +1,56 @@
 ---
-title: Run durable Jobs and Reactions
-description: Accept durable work, retry safely, and recover it after a crash.
-kind: guide
+title: Jobs and reactions
+description: Look up durable acceptance, current authority, retries, and external effects.
+kind: reference
 ---
 
-Use a Job for new application-owned durable work. A server Execution can accept
-it directly, and a Mutation can accept it in the same PostgreSQL transaction as
-its business writes. Use `notBefore` when it must not start until an absolute
-time.
-
-For a recurring sweep over application-owned due rows, use a
-[static UTC schedule and named Mutation checkpoint](./scheduled-jobs).
-Schedule activation is an explicit deployment command, separate from Runtime
-startup and schema migration.
-
-Reaction remains the committed-fact projection of the same durable kernel. A
-Mutation dispatches its typed intent in the owning PostgreSQL transaction, and
-a worker later runs it with a fresh authorized Context. Existing applications
-can keep using Reaction; new code does not need one merely to run work after a
-Mutation, because Mutation-owned Job acceptance is already atomic.
-
-Neither form needs an outbox Collection, Queue module, broker topic, or
-post-commit hook. QUESTPIE owns durable acceptance, attempts, leases, retries,
-cancellation, and retention. Start with [Accept an ordinary Job](#accept-an-ordinary-job)
-unless you specifically need the retained Reaction projection.
-
-## Define the Reaction beside its event
-
-This example comes from the Collaboration application. It uses the existing
-`channelMessagePage` structural Query and `message.recordDelivery` Mutation.
-The application's `deliverMessage` and `lookupDelivery` functions adapt its
-delivery provider; they are not framework capabilities.
-
-```ts title="src/message-published.ts"
-import { codec, durable, operation } from "questpie";
-
-import { defineReaction } from "#questpie/app";
-
-import { deliverMessage, lookupDelivery } from "./delivery";
-import { channelMessagePage } from "./message-page";
-
-export const messagePublished = defineReaction({
-	name: "messagePublished",
-	input: codec.object({
-		channelId: codec.uuid(),
-		companyId: codec.uuid(),
-		messageId: codec.uuid(),
-	}),
-	output: codec.object({
-		deliveryReceipt: codec.text(),
-		eventId: codec.uuid(),
-		messageId: codec.uuid(),
-	}),
-	runAs: durable.caller({ whenDenied: "fail" }),
-	retry: durable.retry({
-		maximumAttempts: 8,
-		initialDelay: "1s",
-		backoff: "exponential",
-		maximumDelay: "900s",
-		jitter: "full",
-		horizon: "24h",
-	}),
-	effects: ["deliver-message"],
-	errors: {
-		messageUnavailable: operation.error({
-			code: "MESSAGE_UNAVAILABLE",
-			status: 404,
-		}),
-	},
-	handler: async ({ input, ctx, errors }) => {
-		ctx.signal.throwIfAborted();
-		const page = await ctx.data.run(channelMessagePage, {
-			channelId: input.channelId,
-			first: 100,
-			after: null,
-		});
-		const message = page.nodes.find((node) => node.id === input.messageId);
-		if (message?.body === undefined) throw errors.messageUnavailable();
-		const body = message.body;
-		const deliveryReceipt = await ctx.run.effect("deliver-message").invoke({
-			input: { messageId: input.messageId, body },
-			perform: ({ attempt, effectId }) =>
-				deliverMessage({ attempt, body, effectId }),
-			recover: ({ effectId }) => lookupDelivery({ body, effectId }),
-		});
-		const recorded = await ctx.mutations.message.recordDelivery(
-			{ messageId: input.messageId },
-			{ callId: `run:${ctx.run.id}` },
-		);
-
-		// Optional: force an immediate ownership/cancellation observation after
-		// this long external step. The worker already heartbeats automatically.
-		await ctx.attempt.heartbeat();
-
-		return {
-			deliveryReceipt,
-			eventId: recorded.eventId,
-			messageId: input.messageId,
-		};
-	},
-});
-```
-
-`defineReaction` comes from the generated Current App Contract. Its input and
-output codecs type and validate the handler's values. The declared error map
-uses the same `operation.error({ code, status, payload? })` grammar as Query and
-Mutation. The `effects` array declares the literal names the handler can use.
-
-The Query returns at most 100 Policy-visible Messages. This example fails with
-`MESSAGE_UNAVAILABLE` when the Message is outside that bounded page or its body
-is not disclosed. It does not scan beyond the page or bypass Policy to find it.
-The nested `message.recordDelivery` call uses a stable Mutation Call ID derived
-from the Durable Run, so a later attempt can replay its committed receipt.
-The effect input includes the body sent to the provider. If a later attempt
-reads a changed body, the same Effect Identity conflicts before provider work.
-
-The Reaction Context contains immutable Principal, Tenant, Context values,
-signal, and deadline. It reads through current Collection Policy and changes
-application state through a generated Mutation. The retained Reaction effect
-handle owns provider receipt recovery separately from ordinary Action calls.
-It is not a Job checkpoint. A Reaction cannot write a Collection directly,
-dispatch more durable work implicitly, open a database handle, or select System
-Authority.
-
-## Dispatch in the Mutation transaction
-
-The Collaboration application's `message.publish` Mutation dispatches the
-Reaction after writing the Message:
-
-```ts title="src/message-publish.ts"
-await ctx.dispatch.messagePublished({
-	channelId: message.channelId,
-	messageId: message.id,
-	companyId: ctx.tenant.id,
-});
-```
-
-The Message, Channel update, Message Event, Change Ledger fact, durable dispatch,
-transactional audit, and Mutation result receipt commit together. Rollback
-leaves none. The Reaction does not run inside that transaction.
-
-A notification only wakes the worker. If the Runtime crashes after commit and
-before that notification, the durable-run scanner still finds the ready run.
-The Change Ledger reconciler also observes the same commit for Live Query.
-
-For this Mutation dispatch surface, QUESTPIE derives the scoped idempotency
-identity from the application, environment, Reaction, originating Mutation
-call, and static dispatch slot. The author does not pass another dispatch key.
-The generated dispatch member returns `Promise<void>`. Repeating its derived
-identity with the same canonical input maps to the same internal Durable Run.
-Reusing it with different input fails with `IDEMPOTENCY_CONFLICT`.
-
-The payload repeats `companyId` so the stored caller Context is independently
-decodable and can be checked against the intended company. It is not Policy
-evidence. Current Membership still decides access on every Physical Attempt.
-
-## Accept an ordinary Job
-
-Use a Job when the application asks for durable work directly. A Job is not a
-Reaction with a different name: it has an authored idempotency key and may be
-accepted without a preceding Mutation fact.
-
-Inside a Mutation, call the generated Job member. Every call joins the same
-PostgreSQL transaction as the business writes and Mutation receipt:
-
-```ts title="src/features/request-company-digest.ts"
-const primary = await ctx.jobs.reports.companyDigest.accept(
-	{ companyId: ctx.tenant.id },
-	{ idempotencyKey: `company-digest:${ctx.tenant.id}:primary` },
-);
-
-await ctx.jobs.reports.companyDigest.accept(
-	{ companyId: ctx.tenant.id },
-	{
-		idempotencyKey: `company-digest:${ctx.tenant.id}:delayed`,
-		notBefore: new Date(ctx.now.getTime() + 60_000),
-	},
-);
-```
-
-One Mutation may accept up to 100 independently keyed Jobs. Rollback removes
-all of them. `notBefore` is an absolute `Date`; there is no relative-delay
-option whose meaning could change on replay.
-
-A server Execution uses the same generated member outside a Mutation:
-
-```ts
-const receipt = await app.execution(executionInput, ({ jobs }) =>
-	jobs.reports.companyDigest.accept(
-		{ companyId: executionInput.context.companyId },
-		{ idempotencyKey: "customer-request:018f5f6e" },
-	),
-);
-```
-
-Both forms return `{ runId, resource }`, where `resource` retains the literal
-Job identity. Reusing the same scoped key with the same canonical input,
-`notBefore`, Context input, and run-as material returns that receipt. Changing
-any of those request values fails with `JOB_ACCEPTANCE_CONFLICT`.
-
-The browser client has no `jobs` member. Expose a Policy-protected Mutation when
-a browser must request the work. Job handlers also cannot accept another Job,
-open a database handle, or mutate a lease. Direct acceptance costs one separate
-read-committed transaction; Mutation-owned acceptance is the form to use when
-the Job and business rows must commit or roll back together.
-
-## Know which identity stays stable
-
-| Identity              | Meaning                                       |
-| --------------------- | --------------------------------------------- |
-| dispatch identity     | one accepted intent                           |
-| Durable Run identity  | one logical Reaction across every attempt     |
-| Physical Attempt      | one physical handler invocation               |
-| Lease Token           | the current worker fence                      |
-| Effect Identity       | one logical provider effect across attempts   |
-| cancellation identity | one durable request to stop the run           |
-| causation identity    | the Operation or dispatch that caused the run |
-| correlation identity  | a trace grouping that grants no authority     |
-
-QUESTPIE provides at-most-one Durable Run for one retained scoped idempotency
-identity. Physical Attempt execution is at least once. It does not promise
-that arbitrary code runs exactly once.
-
-## Reauthorize every attempt
-
-`durable.caller({ whenDenied: "fail" })` records Principal, Tenant, original
-actor, ordinary Authority class, and transport-neutral Context input
-references. It does not store a request, credential, resolved Context, Service,
-or database handle. `"fail"` records terminal `RUN_AS_DENIED`; `"cancel"`
-records a cancellation when loss of caller authority has that application
-meaning.
-
-Every attempt creates a fresh root Execution. QUESTPIE resolves Context once
-and checks current Policy. If the caller's Membership is revoked before an
-attempt, the run ends with `RUN_AS_DENIED`. A worker process, Queue, region, or
-missing credential cannot become System Authority.
-
-## Make external effects safe to retry
-
-`ctx.run.effect("deliver-message")` selects a declared effect handle. Its
-`invoke` call binds canonical input to one stable Effect Identity derived from
-the application, Reaction Resource, Durable Run, and literal name. The handle is
-not a string to pass as an ordinary Action's `effectKey`.
-
-`perform` receives the stable `effectId`, physical attempt number, and signal.
-`recover` uses that identity to return the provider's receipt, or `null` only
-when lookup establishes that the request was not accepted. A missing or failed
-lookup leaves an unknown outcome ambiguous. A completed effect returns its
-stored receipt without calling the provider again; changed canonical input
-conflicts. QUESTPIE cannot turn an unknown external outcome into an exactly-once
-guarantee.
-
-Do not use an attempt identity or random value for the provider key. Do not call
-the provider from a Mutation or lease-claim transaction.
-
-## Understand leases, retry, and cancellation
-
-A worker claims ready work in a short PostgreSQL transaction, creates a new
-attempt and, by default, a 30-second lease, then commits before it invokes the
-handler. The worker heartbeats every 10 seconds by default. Each attempt has a
-five-minute default deadline. The current public heartbeat carries no progress
-or checkpoint payload.
-
-Heartbeat, timeout, retry, cancellation, success, and terminal failure compare
-both Physical Attempt identity and Lease Token. When a lease expires, another
-worker can create a new Physical Attempt. The old worker cannot publish success
-or schedule retry.
-
-The declared retry policy makes at most eight attempts. It starts with
-1-second exponential backoff, applies full jitter, caps the delay at 15 minutes,
-and stops after a 24-hour retry horizon. Validation, a declared Reaction error,
-and run-as denial are permanent. Permanent failure or exhaustion creates a safe
-inspectable dead letter.
-
-Cancellation is cooperative. Before claim, it prevents the handler from
-starting. During an attempt, heartbeat and `ctx.signal` observe it. Success and
-cancellation have one fenced winner. Cancellation cannot recall provider work
-that already happened.
-
-### Usually let the worker heartbeat for you
-
-The worker renews the lease automatically every 10 seconds while an attempt is
-running. Application code does not need to call `heartbeat()` before and after
-ordinary database calls, Actions, or awaited provider SDK calls. Automatic
-heartbeat stops at the attempt deadline; it cannot keep an expired attempt
-alive.
-
-Call `ctx.attempt.heartbeat()` in a Reaction or Job
-only when you need an immediate ownership and cancellation observation between
-long chunks of work. The call checks the current Physical Attempt and Lease
-Token. If another worker already superseded the attempt, the stale handler is
-aborted and cannot publish a terminal result. The current public heartbeat
-carries no progress or checkpoint payload.
-
-Manual heartbeat does not extend the attempt deadline, make provider work
-exactly once, or make a blocking CPU loop cooperative. A CPU-heavy handler must
-split work into bounded chunks, yield to the event loop, and observe ownership
-between chunks. Move genuinely heavy CPU work to a separate process, worker, or
-service. An Action owns an external invocation and its ambiguity; calling an
-Action does not by itself isolate CPU work from the Runtime event loop.
-
-### Treat `ctx.signal` as the stop request
-
-`ctx.signal` aborts after the worker observes cancellation, attempt-deadline
-expiry, or lease loss through its automatic heartbeat or an explicit manual
-heartbeat. Cancellation is not pushed directly into the process, so automatic
-observation normally has up to one heartbeat interval of delay. Framework-owned
-calls use the same signal. Pass it to cooperative external APIs that accept an
-`AbortSignal`:
-
-```ts
-const response = await fetch(url, { signal: ctx.signal });
-```
-
-For synchronous or chunked application work, place
-`ctx.signal.throwIfAborted()` before the next irreversible chunk. It only checks
-the current signal and throws when already aborted; it cannot interrupt code,
-undo a committed database transaction, or recall a provider request that was
-already accepted.
-
-```ts
-for (const batch of batches) {
-	ctx.signal.throwIfAborted();
-	await processBatch(batch, { signal: ctx.signal });
-	await ctx.attempt.heartbeat();
-}
-```
-
-The same heartbeat placement works in a Reaction or Job.
-
-### Schedule durable waiting before an attempt
-
-When work should not begin before a known absolute time, accept the Job with
-`notBefore`. No worker, lease, heartbeat, or attempt is consumed while it waits:
-
-```ts
-await ctx.jobs.reports.companyDigest.accept(
-	{ companyId: ctx.tenant.id },
-	{
-		idempotencyKey: `digest:${ctx.callId}`,
-		notBefore: dueAt,
-	},
-);
-```
-
-The current public Job context has no durable `sleep` or `sleepUntil` method.
-Do not keep an attempt alive with a long timer when delayed acceptance expresses
-the same intent. A process-local timer can disappear in a crash and still
-occupies an active attempt and lease while it waits.
-
-## Stay within durable limits
-
-| Limit                                      | Default |
-| ------------------------------------------ | ------: |
-| active attempts per Principal              |      16 |
-| claim batch                                |      64 |
-| pending runs per Reaction                  | 100,000 |
-| dead letters per Reaction                  |  10,000 |
-| history events per run                     |   1,024 |
-| input payload                              | 256 KiB |
-| terminal result                            | 256 KiB |
-| retry horizon                              |    24 h |
-| attempt history retention                  | 30 days |
-| idempotency and terminal payload retention |  7 days |
-
-QUESTPIE fails a limit with `RESOURCE_LIMIT`; it does not truncate a durable
-value or grow state without a bound. Retention can erase payload, result,
-idempotency body, and old attempts. It preserves the minimal dispatch, run,
-causation, correlation, terminal, and audit identities.
-
-Named Mutation checkpoints retain their history with the run and refer to the
-existing Mutation result receipt. Mutation receipts have no expiry or pruning
-path. The ordinary retry horizon and payload-retention periods do not permit
-erasing a receipt required to recover retained checkpoint history.
+Import `defineJob` and `defineReaction` from `#questpie/app`, and `durable`,
+`codec`, and `operation` from `questpie`. Use
+[custom logic](/docs/v4/custom-logic) to decide whether work needs durability.
+
+## Definitions and acceptance
+
+Both kinds declare a stable name, input/output contract, run-as rule, bounded
+retry policy, and a handler. `durable.caller({ whenDenied: "fail" })` records
+the caller relationship; attempts resolve fresh Context and authorization.
+
+A Job is accepted explicitly through its generated server capability, with
+optional `notBefore` for an absolute due time. A Mutation can accept it in the
+same transaction as a business write. Reaction dispatch instead represents an
+explicit committed fact. Rollback preserves neither the write nor its dispatch.
+Neither kind is a generic browser Job-control API.
+
+## Attempts and retries
+
+`durable.retry` specifies `maximumAttempts`, `initialDelay`, `backoff`,
+`maximumDelay`, `jitter`, and `horizon`. Retries, attempts, leases, cancellation,
+and retained run identity live in PostgreSQL. Worker ownership is fenced;
+a stale attempt cannot claim successful completion after losing its lease.
+A provider request can still be uncertain after the worker loses contact.
+
+The ordinary CLI starts worker polling. A custom host must create a worker,
+poll it, and own drain/cleanup. A Fetch mount alone does not run Jobs.
+
+## External effects
+
+A Reaction can declare literal effect names and use its generated
+`ctx.run.effect(name).invoke({ input, perform, recover })` handle. The provider
+receives stable effect identity for idempotency/reconciliation. A changed input
+cannot reuse a recorded effect identity silently.
+
+Durable acceptance does not make an email provider transactional. Persisted
+intent, a performed external effect, and confirmed delivery are different facts.
+Use provider recovery rather than declaring an uncertain effect unsuccessful
+and sending it again blindly.
 
 ## Deploy without stranding a run
 
-Each accepted run records its Runtime Build and executable contract. A worker
-claims it only when the verified build digest and the executable contract both
-match. Matching Job or Reaction input/output types alone is not sufficient.
-Runs pinned to another build are excluded before the claim batch limit and do
-not consume an attempt. The worker checks the same binding again under the
-run's row lock. A mismatch there refuses the claim with `EXECUTABLE_RETIRED`
-before an attempt starts.
+Nonterminal runs can require their original Runtime Build and executable bytes.
+Retain compatible workers/artifacts until that work finishes. Removing a source
+Definition or replacing a build does not migrate retained work automatically.
+Maintenance operations require explicit host authorization and exact identities;
+there is no default browser/admin bypass.
 
-Keep the original generated build and a compatible worker available until its
-nonterminal runs finish or are cancelled. The digest covers the whole build,
-so even a change outside the handler can require keeping the old worker. A Job
-with a distant `notBefore` can extend that period. If the old build is
-unavailable, its work stays unclaimed. The Runtime does not substitute the
-latest handler. Restart a worker from the
-original build to resume work through a fresh Execution using that build's
-Context and Policy. This does not combine an old handler with the newest
-deployment's Policy code. Each Execution still resolves current authorization
-data through the retained build's definitions.
-
-Readiness verifies the build being loaded; a ready new Runtime does not prove
-that it can execute every older pending run. Calling the generated App's
-`close()` stops new claims, then lets current claims finish or their leases
-expire; see [readiness and drain](./runtime-and-studio#understand-readiness-and-drain).
-
-The Runtime requires internal protocol v9. Upgrading an older installation is
-an explicit non-rolling cutover. Stop incompatible Runtimes first and follow
-the [protocol upgrade procedure](./runtime-and-studio#upgrade-the-internal-protocol).
-Compatible v9 Runtime builds can roll after the cutover while preserving the
-retained-build rule above.
-
-Durable events are append-only. They contain safe correlation identities and
-error codes, not credentials, raw payloads, secrets, or stack traces.
-
-Reaction is the committed-fact projection of the shared durable kernel. Job is
-the explicitly accepted projection, including static UTC schedules and named
-Mutation checkpoints. [Sweep due tickets every minute](./scheduled-jobs) shows
-that complete boundary. Job has no Action checkpoint, durable timer, signal,
-callback step, or Workflow Resource. QUESTPIE has no generic browser Job control.
-
-QUESTPIE authors only ordinary B-tree Indexes for durable state. It emits no
-row-level security. Policy remains the authorization model.
-
-Review [Context and Policy](./context-and-policy) for current Membership
-authorization, then [run and inspect the application](./runtime-and-studio).
+For recurring work and recoverable transactional steps, see
+[schedules and checkpoints](/docs/v4/scheduled-jobs). A Job checkpoint is a named
+Mutation call, not an arbitrary external-effect callback.

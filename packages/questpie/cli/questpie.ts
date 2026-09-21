@@ -5,17 +5,21 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import type * as CompilerApi from "@questpie/compiler";
+
 import {
 	committedArtifactDirectories,
 	loadGeneratedMcpProjectionExplanation,
 	loadGeneratedSchemaProjection,
 	requestedPort,
 } from "./artifacts";
+import { initializeProject } from "./project";
 import {
 	activateScheduleFromDirectory,
 	requestedScheduleRevision,
 	scheduleFailureMessage,
 } from "./schedule";
+import { authorSchema } from "./schema-authoring";
 import {
 	createStartShutdown,
 	createTelemetryApplication,
@@ -23,31 +27,6 @@ import {
 	requestedTelemetry,
 } from "./telemetry";
 import { startDurableWorkerPolling, type CliDurableWorker } from "./worker";
-
-type Compiler = Readonly<{
-	compileApplication(
-		input: Readonly<{ applicationRoot: string; outputDirectory?: string }>,
-	): Promise<unknown>;
-	loadCommittedMigration(path: string): Promise<unknown>;
-	loadCommittedSeed(path: string): Promise<unknown>;
-	applyCommittedMigrations(
-		input: Readonly<{
-			allowNonRollingProtocolV8?: boolean;
-			allowNonRollingProtocolV9?: boolean;
-			connectionString?: string;
-			migrations: readonly unknown[];
-		}>,
-	): Promise<Readonly<{ status: string }>>;
-	applyCommittedSeeds(
-		input: Readonly<{
-			connectionString?: string;
-			schema: unknown;
-			seeds: readonly unknown[];
-		}>,
-	): Promise<
-		Readonly<{ applied: readonly string[]; alreadyApplied: readonly string[] }>
-	>;
-}>;
 
 type GeneratedApplication = Readonly<{
 	fetch(request: Request): Promise<Response>;
@@ -79,10 +58,10 @@ function fail(message: string): never {
 	process.exit(1);
 }
 
-async function compiler(): Promise<Compiler> {
+async function compiler(): Promise<typeof CompilerApi> {
 	return (await import(
 		new URL("./internal/compiler/index.js", import.meta.url).href
-	)) as Compiler;
+	)) as typeof CompilerApi;
 }
 
 function databaseUrl(): string {
@@ -100,6 +79,50 @@ async function main(): Promise<void> {
 	const root = process.cwd();
 	const cliArguments = Bun.argv.slice(2);
 	const [command, subcommand] = cliArguments;
+	if (command === "init") {
+		if (cliArguments.length !== 3 || subcommand !== "--name")
+			fail("use init --name <lowerCamelName>");
+		try {
+			await initializeProject(root, cliArguments[2]!);
+		} catch (error) {
+			fail(error instanceof Error ? error.message : "initialization failed");
+		}
+		console.log(
+			"questpie: project initialized; install questpie with Bun, add Definitions, then run questpie build",
+		);
+		return;
+	}
+	if (
+		(command === "migration" &&
+			(subcommand === "plan" || subcommand === "create")) ||
+		(command === "seed" && subcommand === "create")
+	) {
+		const api = await compiler();
+		try {
+			console.log(
+				JSON.stringify(
+					await authorSchema(api, root, cliArguments, process.env.DATABASE_URL),
+				),
+			);
+		} catch (error) {
+			if (error instanceof api.CompilerDiagnosticError) {
+				console.error(
+					JSON.stringify({
+						code: error.code,
+						class: error.diagnosticClass,
+						message: error.message,
+					}),
+				);
+				process.exit(2);
+			}
+			fail(
+				error instanceof TypeError
+					? error.message
+					: "schema authoring failed; check source, plan, artifacts, and database availability",
+			);
+		}
+		return;
+	}
 	if (command === "schedule") {
 		try {
 			const expectedRevision = requestedScheduleRevision(cliArguments.slice(1));
@@ -187,7 +210,9 @@ async function main(): Promise<void> {
 		if (seeds.length === 0) fail("no committed Seeds found");
 		const result = await api.applyCommittedSeeds({
 			connectionString: databaseUrl(),
-			schema: await loadGeneratedSchemaProjection(root),
+			schema: (await loadGeneratedSchemaProjection(
+				root,
+			)) as CompilerApi.SchemaProjectionV1,
 			seeds,
 		});
 		console.log(
@@ -273,7 +298,7 @@ async function main(): Promise<void> {
 		return;
 	}
 	fail(
-		"use build, check, migration apply, seed apply, schedule activate --expect-revision <decimal>, or start",
+		"use init --name <name>, build, check, migration plan/create/apply, seed create/apply, schedule activate --expect-revision <decimal>, explain projection mcp, or start",
 	);
 }
 

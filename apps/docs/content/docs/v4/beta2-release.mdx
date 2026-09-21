@@ -1,12 +1,10 @@
 ---
-title: Review the beta.2 preview inventory
-description: See the exact package, capability, limit, and exclusion boundary prepared for QUESTPIE 4.0.0-beta.2.
+title: Beta.2
+description: See the exact package, capability, limit, and exclusion boundary of QUESTPIE 4.0.0-beta.2.
 kind: reference
 ---
 
-This page is the beta.2 preview. Beta.2 is not published. The
-[frozen beta.1 inventory](/docs/v4/beta1-release) remains the released package
-contract.
+These pages document QUESTPIE 4.0.0-beta.2.
 
 ## Package inventory
 
@@ -27,24 +25,27 @@ An incompatible client/adapter contract fails closed, with no compatibility path
 
 ## Included capability inventory
 
-| Capability                                                                  | Public contract                                                                                 |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Beta.1 compiler, PostgreSQL, Policy, Mutation, Live Query, and durable core | [Frozen beta.1 inventory](/docs/v4/beta1-release)                                               |
-| Four-phase Collection lifecycle and Operation issue mapping                 | [Queries and Mutations](/docs/v4/queries-and-mutations)                                         |
-| Query, Mutation, Action, Route, Reaction, and Job Definitions               | [Executable application behavior](/docs/v4/executable-definitions)                              |
-| Bounded inverse Relation selection                                          | [Data and structural Queries](/docs/v4/data-and-queries)                                        |
-| Framework-neutral Query Resource                                            | [Reactive Query state](/docs/v4/reactive-query-resources)                                       |
-| Native React Query, Suspense, forward infinite and Start SSR/hydration      | [React Query integration](/docs/v4/react-query)                                                 |
-| Canonical Operation HTTP, shared documentation, and OpenAPI 3.1             | [Operation HTTP and OpenAPI](/docs/v4/operation-http-and-openapi)                               |
-| Stateless MCP Tools projection                                              | [Basic MCP](/docs/v4/basic-mcp)                                                                 |
-| Static UTC Job schedules and named Mutation checkpoints                     | [Scheduled Jobs](/docs/v4/scheduled-jobs)                                                       |
-| Runtime observation and the official OpenTelemetry adapter                  | [OpenTelemetry](/docs/v4/opentelemetry)                                                         |
-| Ordinary TypeScript discriminated-value helpers                             | [Discriminated values](/docs/v4/reactive-query-resources#model-a-discriminated-reference-value) |
-| Portable QUESTPIE Agent Skill                                               | Framework authoring guidance for the exact beta.2 contract                                      |
+| Capability                                                                  | Public contract                                                      |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Beta.1 compiler, PostgreSQL, Policy, Mutation, Live Query, and durable core | [Frozen beta.1 inventory](/docs/v4/beta1-release)                    |
+| Four-phase Collection lifecycle and Operation issue mapping                 | [Operation definitions](/docs/v4/executable-definitions)             |
+| Query, Mutation, Action, Route, Reaction, and Job Definitions               | [Operation definitions](/docs/v4/executable-definitions)             |
+| Bounded inverse Relation selection                                          | [Collections and Queries](/docs/v4/collections-reference)            |
+| Framework-neutral Query Resource                                            | [Query Resources](/docs/v4/reactive-query-resources)                 |
+| Native React Query, Suspense, forward infinite and Start SSR/hydration      | [React Query integration](/docs/v4/react-query)                      |
+| Canonical Operation HTTP, shared documentation, and OpenAPI 3.1             | [Operation HTTP and OpenAPI](/docs/v4/operation-http-and-openapi)    |
+| Stateless MCP Tools projection                                              | [MCP tools](/docs/v4/basic-mcp)                                      |
+| Static UTC Job schedules and named Mutation checkpoints                     | [Scheduled Jobs](/docs/v4/scheduled-jobs)                            |
+| Runtime observation and the official OpenTelemetry adapter                  | [OpenTelemetry](/docs/v4/opentelemetry)                              |
+| Ordinary TypeScript discriminated-value helpers                             | [Discriminated values](/docs/v4/semantic-kernels-and-public-surface) |
+| Portable QUESTPIE Agent Skill                                               | Framework authoring guidance for the exact beta.2 contract           |
 
 Every projection uses the compiler-owned App Contract. Authors do not repeat
 HTTP paths, MCP tool names, schemas, nullability, bounds, results, errors, or
 projection-specific descriptions.
+
+The local CLI also provides project initialization, reviewed migration
+planning/creation, and immutable Seed creation. See [CLI reference](/docs/v4/cli).
 
 ## Fixed limits
 
@@ -67,7 +68,7 @@ snapshot in place.
 ## Excluded from beta.2
 
 Beta.2 adds no polymorphic Relation, polymorphic codec, descriptor, registry,
-or Runtime traversal kernel. Heterogeneous values use the ordinary TypeScript
+or Runtime traversal. Heterogeneous values use the ordinary TypeScript
 helpers.
 
 Optimistic presentation stays in userland. Beta.2 adds no framework-owned
@@ -85,5 +86,5 @@ The schedule and checkpoint boundary has
 It requires the [protocol-v9 non-rolling upgrade](/docs/v4/runtime-and-studio#upgrade-the-internal-protocol)
 for existing installations and explicit schedule activation after migration.
 
-No new Files, Search, Studio, split Runtime roles, Autopilot, or landing-page
-surface is part of this package release.
+Built-in Files, Search, Studio, split Runtime roles, and offline persistence
+are unavailable. The application owns provider integrations.

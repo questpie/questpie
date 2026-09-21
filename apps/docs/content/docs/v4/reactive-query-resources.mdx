@@ -1,209 +1,35 @@
 ---
-title: Use reactive Query state
-description: Observe one generated Query through a framework-neutral resource.
-kind: guide
+title: Query resources
+description: Look up framework-neutral observed Query state and its lifetime.
+kind: reference
 ---
 
-A Query Resource keeps the latest complete result of one watchable Query in a
-framework-neutral client value. The generated client owns Query identity,
-input validation and encoding, Context partitioning, and Live Query transport.
-Consumers subscribe directly. For React applications, use the Query Adapter
-described in [Native React Query integration](/docs/v4/react-query). It binds the existing watch
-to TanStack's cache without wrapping a Query Resource.
+Call `scope.queries[qualifiedName].observe(input)` to obtain the latest complete
+result of a compiler-proven watchable Query. For React use
+[the native adapter](/docs/v4/react-query) instead of feeding a second cache.
 
-Version availability: This page documents the beta.2 preview. Beta.2 is not
-published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
-released package contract.
+These pages document QUESTPIE 4.0.0-beta.2.
 
-## Observe a generated Query
+| Member                         | Contract                                                                             |
+| ------------------------------ | ------------------------------------------------------------------------------------ |
+| `observe(input)`               | Validates input and returns the canonical resource for that input inside this scope. |
+| `resource.getSnapshot()`       | Frozen current snapshot, stable until state changes.                                 |
+| `resource.subscribe(listener)` | Subscribe to changes; returns unsubscribe.                                           |
 
-Create one immutable Context scope and use it for ordinary Query, Mutation, and
-Action calls:
+The snapshot is `pending`, `ready` with `value`, or `failed` with a closed
+failure. Pending/ready snapshots also report connection state. The first
+subscriber starts one watch; later subscribers share it. The last unsubscribe
+stops it. A later subscriber can reopen an idle resource.
 
-```ts title="web/barbershop-api.ts"
-import { createClient } from "#questpie/client";
+`initial`, `update`, and `reset` deliveries replace the complete result.
+During a retryable carrier reconnect, the resource can retain only already
+disclosed data inside the same Context scope. Terminal failure clears output.
+Call `observe` again for a fresh resource after resolving the failure.
 
-export const client = createClient({ baseUrl: location.origin });
+Resources are partitioned by immutable client scope. Equal Context values in
+different scopes share nothing. On a credential change, unsubscribe and create
+a fresh scope. Credentials are owned by the application's Auth integration.
 
-export function createBarbershopApi(shopId: string) {
-	const api = client.withContext({ shopId });
-	return api;
-}
-```
-
-`withContext` returns an ordinary immutable value. It does not open a
-connection or own a disposable resource. Keep using `api.queries`,
-`api.mutations`, and `api.actions`; do not wrap the scope in a callback or a
-disposal construct.
-
-Only a compiler-proven watchable generated Query has `observe`:
-
-```ts title="web/appointments-resource.ts"
-import { createBarbershopApi } from "./barbershop-api";
-
-export function observeAppointments(shopId: string, barberId: string) {
-	const api = createBarbershopApi(shopId);
-
-	return api.queries["appointments.calendar"].observe({
-		barberId,
-		after: null,
-		first: 50,
-	});
-}
-```
-
-`observe` validates and canonically encodes the same generated input used by a
-call or watch. Invalid input fails locally before registry work or I/O. A Query
-with unsupported reads stays callable once and has neither `.watch` nor
-`.observe`.
-
-Read the current snapshot and subscribe to changes:
-
-```ts title="web/render-appointments.ts"
-import { observeAppointments } from "./appointments-resource";
-
-const appointments = observeAppointments("shop:central", "barber:maya");
-
-function render() {
-	const snapshot = appointments.getSnapshot();
-	if (snapshot.kind === "pending") return showLoading();
-	if (snapshot.kind === "failed") return showFailure(snapshot.failure.code);
-	return showAppointments(snapshot.value.nodes);
-}
-
-render();
-const unsubscribe = appointments.subscribe(render);
-```
-
-The first subscriber opens one Live Query watch. Later subscribers share it.
-The last unsubscribe stops it. A later subscriber can reopen an idle resource.
-Every `initial`, `update`, or `reset` delivery replaces the complete value; the
-resource never merges rows or publishes a partial patch.
-
-## Read the closed snapshot state
-
-A resource returns the same frozen snapshot object until observable state
-changes. It is `pending`, `ready` with the complete Query output, or `failed`
-with one closed `WatchFailure`. Pending and ready state reports `idle`,
-`connecting`, `connected`, or `reconnecting` with a positive attempt number.
-
-During a retryable carrier reconnect, a ready resource retains only the
-complete value already disclosed inside the same Context scope. It exposes the
-existing reconnect attempt and adds no retry schedule. A successful delivery
-replaces the complete value.
-
-`AUTHORIZATION_FAILED`, `OUTPUT_INVALID`, `RESOURCE_LIMIT`,
-`TRANSPORT_FAILED`, and `VERSION_INCOMPATIBLE` are terminal. Terminal failure
-clears retained output, stops the watch, and exposes only the closed failure
-code. Call `observe` again to recover with a fresh resource. The resource does
-not fall back to polling or a one-shot Query.
-
-## Keep Context and credentials isolated
-
-One `withContext` scope is one Query Resource partition. Equivalent
-observations in that scope return the same resource. Different client or
-Context scopes never share, even when their Context input is byte-equal.
-
-Credentials remain owned by the application's Auth integration. On sign-in,
-sign-out, account switch, or another credential-lifetime transition, unmount
-the old UI and create a new immutable Context scope. QUESTPIE does not inspect
-cookies or infer that transition.
-
-Every server recomputation still resolves fresh Context and evaluates current
-Policy. An authority reset replaces the complete value. An authorization
-failure clears it before publishing `AUTHORIZATION_FAILED`.
-
-## Stay within the client bound
-
-Each Context scope retains at most 128 Query Resource identities. It evicts
-only an idle least-recently-used resource. Subscribed resources remain pinned.
-If all 128 entries are subscribed, a new observation returns an unregistered
-terminal `RESOURCE_LIMIT` resource and opens no watch.
-
-An evicted handle is also terminal `RESOURCE_LIMIT`. It cannot restart outside
-the registry or disturb a later resource with the same identity. Call
-`observe` again to get the current resource.
-
-One subscriber cannot cancel another. Last unsubscribe stops the shared watch
-and reconnect work. A failing subscriber callback does not change resource
-state or prevent peer notification.
-
-## Let committed Queries publish updates
-
-A Mutation result never writes or invalidates a Query Resource. A committed
-change can update it only after Change Ledger matching and a fresh authorized
-Live Query recomputation. Rollback publishes nothing.
-
-When one screen needs an atomic view, author and observe one composite Query.
-Independent Query Resources converge independently. Re-call a one-shot-only
-Query explicitly when the application needs another result.
-
-## Model a discriminated reference value
-
-Use ordinary TypeScript when a value can name one of several domain variants
-but needs no database Relation behavior:
-
-```ts title="src/domain/activity-subject.ts"
-import {
-	type DiscriminatedReference,
-	type DiscriminatedValue,
-	matchDiscriminated,
-} from "questpie";
-
-declare const appointmentIdBrand: unique symbol;
-export type AppointmentId = string & {
-	readonly [appointmentIdBrand]: true;
-};
-
-declare const barberIdBrand: unique symbol;
-export type BarberId = string & { readonly [barberIdBrand]: true };
-
-export type ActivitySubject = DiscriminatedReference<{
-	appointment: AppointmentId;
-	barber: BarberId;
-}>;
-
-export function activitySubjectHref(subject: ActivitySubject): string {
-	return matchDiscriminated(subject, {
-		appointment: ({ id }) => `/appointments/${id}`,
-		barber: ({ id }) => `/barbers/${id}`,
-	});
-}
-
-export type Activity = DiscriminatedValue<{
-	appointmentCreated: { id: AppointmentId; startsAt: Date };
-	barberUnavailable: { id: BarberId; reason: string };
-}>;
-
-export function activitySummary(activity: Activity) {
-	return matchDiscriminated(activity, {
-		appointmentCreated: ({ id, startsAt }) =>
-			({ href: `/appointments/${id}`, startsAt }) as const,
-		barberUnavailable: ({ id, reason }) => `${id}: ${reason}`,
-	});
-}
-
-export type ActivitySummary = ReturnType<typeof activitySummary>;
-// readonly { href: string; startsAt: Date } | string
-```
-
-The helpers preserve each branded ID and make the generated union's `kind`,
-`id`, and top-level variant fields readonly. `matchDiscriminated` requires one
-branch for every `kind`. Each branch parameter narrows to its matching variant,
-and the return type is the inferred union of all branch results. An omitted or
-extra branch fails TypeScript. Use `DiscriminatedValue` when each variant carries
-a larger object instead of one ID.
-
-TypeScript exhaustiveness applies only to typed values and a typed cases object.
-At runtime, an unknown `kind`, or an unsafe cases object with a missing,
-inherited, or non-callable case, makes `matchDiscriminated` throw the value-free
-`TypeError` message `invalid discriminated value`. It invokes only an own
-callable case. Validate data with the boundary's ordinary codec before matching
-it.
-
-These helpers create no codec, Field, foreign key, inverse, join, cascade,
-Policy traversal, Live Query dependency, generated descriptor, or Runtime
-polymorphic Relation. Resolve a target through an explicit named Query or
-Mutation so current Policy controls disclosure.
-
-Next, read [Native React Query integration](./react-query).
+There are at most 128 resource identities per scope. This abstraction adds no
+Mutation invalidation, polling fallback, offline persistence, or normalized
+entity store. Use [Live Query reference](/docs/v4/realtime) for transport limits.

@@ -1,0 +1,14 @@
+{
+	"title": "Guides",
+	"icon": "Compass",
+	"defaultOpen": false,
+	"pages": [
+		"../uploads",
+		"../custom-logic",
+		"../escape-hatches",
+		"../ecosystem",
+		"../runtime-and-studio",
+		"../multi-instance",
+		"../opentelemetry"
+	]
+}

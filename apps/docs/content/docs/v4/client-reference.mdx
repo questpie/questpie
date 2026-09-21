@@ -1,0 +1,63 @@
+---
+title: Client
+description: Look up client scopes, calls, errors, and recovery options.
+kind: reference
+---
+
+Import `createClient` from `#questpie/client`. Never import the server's
+`#questpie/app` in a browser bundle. The [client guide](/docs/v4/clients) has a
+complete module using the Barbershop Query.
+
+| Surface                                           | Contract                                                                                     |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `createClient({ baseUrl, fetch? })`               | Create a client for the matching backend; optional Fetch implementation belongs to the host. |
+| `client.withContext(input)`                       | Return a new immutable scope using generated Context input.                                  |
+| `scope.queries[qualifiedName](input, options?)`   | Return one decoded Query result.                                                             |
+| `scope.mutations[qualifiedName](input, options?)` | Return a decoded transactional result.                                                       |
+| `scope.actions[qualifiedName](input, options)`    | Invoke an Action with required effect identity material.                                     |
+| `api.mutations[name].isError(value)`              | React adapter binding: narrow only that Operation's declared errors.                         |
+| `query.watch(input, onValue, options?)`           | Subscribe when the compiler proves watchability; return a stop function.                     |
+| `query.observe(input)`                            | Return a framework-neutral Query Resource when watchable.                                    |
+
+Query and Mutation call options are `callId`, `signal`, and
+`timeoutMilliseconds`. Actions add required `effectKey`. Unknown option keys
+fail before transport. Server execution uses `deadline` instead. Preserve a
+Mutation’s `callId` for deliberate receipt recovery. Use the generated type for a particular Operation; no
+universal untyped request bag is required.
+
+The client validates input before transport and decodes exact result frames,
+including dates and declared errors. Its generated application, client-contract,
+and wire digests must match the server. Rebuild the client together with the
+server when the contract changes.
+
+## Declared errors without React
+
+A declared failure rejects with an `Error` carrying `code`, `status`, and
+`payload`; payloadless errors use `payload: null`. The client validates this
+shape against the Operation contract before rejecting. A plain scope has no
+public `isError` method. Match the known code/status/payload in application
+code; do not turn an unknown exception into a declared business failure.
+For `tickets.rename`, test `error instanceof Error`, then
+`"code" in error && error.code === "TICKET_UNAVAILABLE"`,
+`"status" in error && error.status === 404`, and
+`"payload" in error && error.payload === null`. Rethrow all other failures.
+The React adapter supplies a generated guard for this check.
+
+## Server calls have a different path shape
+
+The generated App's `execution(...)` creates a trusted server root. Its callback
+uses nested paths such as `queries.tickets.detailPage`, while network scopes
+use `queries["tickets.detailPage"]`. Direct execution requires trusted
+Principal input supplied by server code and applies the same Policy.
+
+## Failure does not always mean no change
+
+The generated transport does not automatically retry a Mutation or Action.
+Use an unchanged `callId` and input to recover a Mutation's committed receipt.
+Reusing that identity with changed input fails. Reusing a variables object in
+the React adapter creates no domain-level deduplication.
+
+On credentials/Context change, retire old watches and cache state before
+creating a new scope. Cancellation can stop outstanding work; it cannot undo
+a transaction that already committed. See [React Query](/docs/v4/react-query)
+for dispatched-write retirement and hydration rules.

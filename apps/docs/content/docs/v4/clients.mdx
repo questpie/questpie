@@ -1,0 +1,85 @@
+---
+title: Typed client
+description: Read and update the same Barbershop ticket from a typed client.
+kind: guide
+---
+
+Use the generated client when application code needs the ticket Query.
+It encodes Context and input, calls the right endpoint, checks the response,
+and restores values such as comment timestamps.
+
+Complete the [Query](/docs/v4/data-and-queries) and
+[Mutation](/docs/v4/queries-and-mutations) chapters first. To execute a data
+call, you also need a running backend with matching migrations, at least one
+ticket, and an authenticated session. See [deployment](/docs/v4/runtime-and-studio)
+and [Auth](/docs/v4/auth). These are runtime prerequisites, not work done by build.
+
+## Read one ticket
+
+Create this module and replace `https://support.example.com` with your backend
+origin. Call `loadTicket(tenantId, ticketId)` with UUIDs from your application.
+For browser sessions, use the same origin as the Auth host or explicitly configure
+your application transport and cookie policy.
+
+```ts title="web/client.ts"
+import { createClient } from "#questpie/client";
+
+const client = createClient({ baseUrl: "https://support.example.com" });
+
+export async function loadTicket(tenantId: string, ticketId: string) {
+	const api = client.withContext({ tenantId });
+	const page = await api.queries["tickets.detailPage"]({
+		ids: [ticketId],
+		first: 1,
+		after: null,
+	});
+	return page.nodes[0] ?? null;
+}
+
+export async function renameTicket(
+	tenantId: string,
+	id: string,
+	summary: string,
+	callId: string,
+) {
+	return client
+		.withContext({ tenantId })
+		.mutations["tickets.rename"]({ id, summary }, { callId });
+}
+
+export type TicketDetail = Awaited<ReturnType<typeof loadTicket>>;
+```
+
+The result is the first visible ticket or `null`. `TicketDetail` is inferred
+from the Query; its comments and decoded `Date` fields need no copied interface.
+Run `bun run types:check` to check the module against the generated client.
+
+## Give each session its own scope
+
+`withContext({ tenantId })` returns a new immutable scope. It cannot authenticate
+a caller or request privileged authority. Credentials travel through the HTTP
+Auth integration. Do not put a token or a caller-chosen Principal in Context.
+
+Create a fresh scope when credentials or Context change, even if their visible
+IDs are equal. Release subscriptions and remove old session data before showing
+the replacement session.
+
+## Update and handle outcomes
+
+Call `renameTicket(tenantId, ticketId, summary, callId)` to perform the edit.
+It resolves with `{}` on success; [the client reference](/docs/v4/client-reference)
+shows how a non-React caller identifies declared errors.
+
+The same scope exposes `mutations["tickets.rename"]`. It accepts the ID and
+summary from the previous chapter. The React adapter’s `isError` guard identifies
+`TICKET_UNAVAILABLE`; it does not identify every network failure as that error.
+
+The client performs no automatic Mutation retry. A lost response can hide a
+committed write. Preserve the original `callId` when deliberately recovering
+that call and keep its input unchanged. Reusing it with different input raises
+`IDEMPOTENCY_CONFLICT`.
+
+The next chapter supplies the complete form, Mutation call, and error handling:
+[build the React screen](/docs/v4/react-query-basic).
+For non-React consumers, see [Live Queries](/docs/v4/realtime) and
+[Query Resources](/docs/v4/reactive-query-resources).

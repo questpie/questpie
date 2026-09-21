@@ -54,6 +54,10 @@ export async function prepareNativeQueryDocs(
 		join(repository, "apps/docs/content/docs/v4/data-and-queries.mdx"),
 		"utf8",
 	);
+	const mutationGuide = await readFile(
+		join(repository, "apps/docs/content/docs/v4/queries-and-mutations.mdx"),
+		"utf8",
+	);
 	const packed = join(temporary, "packed");
 	const consumer = join(temporary, "consumer");
 	await mkdir(packed);
@@ -129,15 +133,8 @@ export async function prepareNativeQueryDocs(
 				"src/queries/ticket-detail.ts",
 			],
 		],
-		[
-			guide,
-			[
-				"src/data/policies.ts",
-				"src/mutations/rename-ticket.ts",
-				"web/support-screen.tsx",
-				"web/ticket-screen.tsx",
-			],
-		],
+		[mutationGuide, ["src/data/policies.ts", "src/mutations/rename-ticket.ts"]],
+		[guide, ["web/support-screen.tsx", "web/ticket-screen.tsx"]],
 	] as const)
 		for (const path of paths) {
 			await mkdir(dirname(join(consumer, path)), { recursive: true });

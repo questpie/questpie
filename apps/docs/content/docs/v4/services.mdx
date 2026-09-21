@@ -1,50 +1,45 @@
 ---
-title: Compose Services
-description: Own integration lifetimes with compiler-checked dependency and effect boundaries.
-kind: guide
+title: Services
+description: Look up dependency lifetime, effect classification, creation, and disposal.
+kind: reference
 ---
 
-QUESTPIE compiles integrations into the same application graph as Collections
-and Operations. Services own runtime dependencies with an explicit lifetime and
-an explicit effect classification. Policy remains the only authorization model.
+Import `defineService` from `questpie`. A Service owns a runtime dependency,
+such as the Barbershop Auth provider. It is not serialized Context or durable state.
+Use [Auth](/docs/v4/auth) or [custom logic](/docs/v4/custom-logic) for task guidance.
 
-## Own a dependency for the right lifetime
+## defineService
 
-A Service declares an application or execution lifetime and whether it is safe
-inside transactions:
+| Member                         | Contract                                                                         |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| `name`                         | Required stable qualified name.                                                  |
+| `lifetime`                     | Required `application` or `execution`.                                           |
+| `effect`                       | Required `read` or `external`.                                                   |
+| `dependencies`                 | Optional named map of other Services.                                            |
+| `create({ services, signal })` | Required factory; return the inferred instance, synchronously or asynchronously. |
+| `dispose(instance)`            | Optional cleanup; may return a Promise.                                          |
 
-```ts title="src/services/audit.ts"
-import { defineService } from "questpie";
+An application Service is created lazily once per Runtime instance.
+An execution Service is created lazily once per root execution. Concurrent
+consumers share creation. Cleanup runs once in reverse dependency order after
+success, failure, cancellation, or the end of an owned response stream.
 
-export const auditService = defineService({
-	name: "audit",
-	lifetime: "execution",
-	effect: "read",
-	create: ({ signal }) => createAuditReader({ signal }),
-	dispose: (audit) => audit.close(),
-});
-```
+## Dependency constraints
 
-Application Services are created lazily once for each running Runtime.
-Execution Services are created lazily once for each root Execution. Concurrent
-consumers share the same creation. Cleanup runs once in reverse dependency
-order after success, error, cancellation, or a returned stream finishes.
+The compiler rejects cycles. An application Service cannot depend on an
+execution Service. A `read` Service cannot depend on an `external` Service.
+Queries and Mutations cannot hide external effects through dependencies.
+An Action’s external Service must have `lifetime: "execution"`; use the
+application lifetime for the credential resolver’s provider instead.
+Creation does not silently retry provider work.
 
-The compiler rejects dependency cycles and unsafe directions. An application
-Service cannot depend on an execution Service. A transaction-safe Service
-cannot depend on an external-effect Service. Query and Mutation contexts
-therefore cannot hide a provider call behind a Service.
+The generated handler context exposes the Services allowed for that execution
+kind. Application lifetime does not mean a cluster singleton. Service instances
+are excluded from Context, artifact data, durable rows, and safe telemetry.
 
-Service instances are runtime state. They are not serialized in Context,
-artifacts, durable rows, or the Execution Envelope.
+## Credential resolver
 
-## Know the boundary
-
-- Application lifetime is per Runtime instance, not a process or cluster
-  singleton.
-- Execution lifetime includes a returned stream until EOF, error, or
-  cancellation.
-- Service creation does not silently retry external effects.
-- Service instances never enter safe telemetry.
-- Structural factories come from `questpie`. Application-specialized
-  executable factories come from `#questpie/app`.
+`defineCredentialResolver({ name, service, resolve })` takes one application
+Service with `effect: "external"`. Its resolver receives `{ request, service }`
+and returns an anonymous, malformed, unavailable, or resolved-Principal outcome.
+It verifies credentials; it does not decide data Policy or grant System Authority.

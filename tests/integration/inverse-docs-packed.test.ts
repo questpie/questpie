@@ -114,13 +114,28 @@ test("compiles the public inverse-list example against packed questpie", async (
 			}),
 		);
 
-		const documentation = await readFile(documentationPath, "utf8");
+		const documentation =
+			(await readFile(
+				resolve(
+					repositoryRoot,
+					"apps/docs/content/docs/v4/queries-and-mutations.mdx",
+				),
+				"utf8",
+			)) +
+			"\n" +
+			(await readFile(documentationPath, "utf8")) +
+			"\n" +
+			(await readFile(
+				resolve(repositoryRoot, "apps/docs/content/docs/v4/clients.mdx"),
+				"utf8",
+			));
 		for (const path of [
 			"src/context.ts",
 			"src/data/comments.ts",
 			"src/data/policies.ts",
 			"src/data/tickets.ts",
 			"src/queries/ticket-detail.ts",
+			"src/mutations/rename-ticket.ts",
 			"web/client.ts",
 		]) {
 			const target = join(consumer, path);

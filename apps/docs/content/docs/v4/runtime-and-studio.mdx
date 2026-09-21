@@ -1,284 +1,71 @@
 ---
-title: Run the application
-description: Build one immutable application, start the Runtime, and call it directly or through a generated client.
+title: Deployment
+description: Run a matching bundle and database, own shutdown, and upgrade explicitly.
 kind: guide
 ---
 
-QUESTPIE builds one immutable application bundle and runs it in one standalone
-Runtime. The Runtime owns HTTP requests, direct execution, Live Query
-reconciliation, Job and Reaction workers, schedule production, readiness, drain,
-and cleanup.
+Deploy the same built application whose migrations you reviewed. The Runtime
+owns network requests, realtime, and worker polling in one long-lived process.
+For a fresh local database follow [the Barbershop setup](/docs/v4/schema-lifecycle).
 
 ## Build, migrate, and start
 
-Set the Runtime database connection, then build, migrate, and start the same
-application bundle:
+Configure `DATABASE_URL` and a stable `QUESTPIE_REALTIME_HMAC_KEY` containing at
+least 32 bytes as hex. The CLI uses the database URL for both ordinary and direct
+connections. Select a compatible direct/session-affine connection.
 
-```bash
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5432/questpie"
-bunx questpie build
-bunx questpie migration apply
-bunx questpie start
+```sh
+bunx --no-install questpie build
+bunx --no-install questpie migration apply
+bunx --no-install questpie seed apply
+bunx --no-install questpie start --port 3000
 ```
 
-Build writes a checksum-verified bundle that joins the
-[compiled application and generated contract](./definition-composition#use-generated-output),
-the [reviewed migration and verified schema](./schema-lifecycle#apply-and-verify),
-and the [matched executable bindings](./executable-definitions#load-only-a-matched-runtime-build).
-It also binds the generated canonical HTTP projection. QUESTPIE publishes the
-complete bundle atomically.
+Run Seed apply when the application has committed Seeds. Startup never creates
+or applies a migration. It verifies the application, schema, migration head,
+Runtime Build, executable bindings, and internal protocol before accepting work.
+Rebuild after committing new migration/Seed artifacts.
 
-Migration apply is explicit. Runtime startup does not create or apply a
-migration. Startup verifies the bundle, Runtime ABI, Application Identity,
-migration head, Schema Fingerprint, executable bindings, and internal protocol
-before readiness becomes true.
+The ticket tutorial requires authenticated access. Configure its
+[credential resolver](/docs/v4/auth) before using it from a browser; without an
+Auth integration requests have no verified user identity.
 
-The Runtime does not discover source files, merge Packages, load plugins, or
-inspect handler source at startup. Structural verification evaluates no
-handler. Runtime load evaluates the statically bound executable module once. A
-mismatch fails before it accepts an Operation or worker claim.
+## Health and cleanup
 
-## Use an immutable generated client
+The Runtime does not provide built-in liveness or readiness HTTP endpoints.
+Unmatched paths return 404. A custom host must expose its own probes and use
+its startup/shutdown state to decide when to accept traffic.
 
-The `channels.overview` Query from
-[Build Queries and Mutations](./queries-and-mutations) returns authorized
-Company, Membership, Channel, and Message data. Create one client and bind its
-transport-neutral Context input:
-
-```ts title="web/messages.ts"
-import { createClient } from "#questpie/client";
-
-const client = createClient({
-	baseUrl: "https://app.example.com",
-});
-
-export async function loadChannel(companyId: string, channelId: string) {
-	const company = client.withContext({ companyId });
-
-	return company.queries["channels.overview"]({
-		channelId,
-		first: 20,
-		after: null,
-	});
-}
-```
-
-`withContext` returns a new immutable scope. It does not mutate the client,
-cookies, global state, or another concurrent scope. Credentials resolve on the
-server outside the request body. The Runtime constructs ordinary Authority, so
-the body cannot request System Authority. Reaction slots are not network
-Operations. See [immutable Context scopes](./context-and-policy#create-immutable-client-and-direct-scopes)
-for concurrent client and direct-root examples.
-
-The generated client binds the Application Identity, client contract, wire
-digest, Operation, Call Identity, Context input, Operation input, and timeout.
-It calls one kind-specific endpoint per Operation and decodes closed outcomes
-for a result, a declared application error, or a framework failure. It restores
-compiled values such as `Date` and preserves the exact declared error code,
-status, and payload.
-
-Generated calls send the current application, client-contract, and wire
-digests. If those headers are present, all three must match before work begins.
-The Runtime does not retain the former polymorphic endpoint or route old clients
-through a compatibility handler. Rebuild the generated client together with
-the application when this network contract changes.
-
-A Mutation that committed but whose result could not be produced returns
-`COMMITTED_RESULT_UNAVAILABLE`, HTTP `500`, `retryable: true`, with the request
-`callId` and committed PostgreSQL transaction identity. Retryability means the
-caller can replay the exact Idempotency-Key to recover its receipt; the
-generated transport still performs no automatic Mutation retry.
-
-QUESTPIE does not retry a Mutation automatically. If a response is lost after
-commit, the caller reuses the stable Call Identity to recover the stored result
-without applying the business change twice. Reusing its `callId` with different
-input fails with the operation-specialized `IDEMPOTENCY_CONFLICT` error. See
-[cancellation and response-loss behavior](./queries-and-mutations#understand-time-retry-and-cancellation).
-
-## Run a direct root
-
-The generated App runs the same Query without a network transport:
-
-```ts title="scripts/read-channel.ts"
-import { createApp, type DurableMaintenanceAuthorization } from "#questpie/app";
-
-export async function readChannel(
-	connectionUrl: string,
-	directConnectionUrl: string,
-	realtimeHmacKey: Uint8Array,
-	authorizeMaintenance: DurableMaintenanceAuthorization,
-	userId: string,
-	companyId: string,
-	channelId: string,
-) {
-	const app = await createApp({
-		postgres: { connectionUrl, directConnectionUrl },
-		realtime: { hmacKey: realtimeHmacKey },
-		maintenance: { authorize: authorizeMaintenance },
-	});
-
-	try {
-		return await app.execution(
-			{
-				principal: { kind: "user", id: userId },
-				context: { companyId },
-				signal: AbortSignal.timeout(5_000),
-			},
-			({ queries }) =>
-				queries.channels.overview({
-					channelId,
-					first: 20,
-					after: null,
-				}),
-		);
-	} finally {
-		await app.close();
-	}
-}
-```
-
-The generated App exposes `fetch`, `execution`, `durable`, `close`, and the compiler-owned
-`routes` direct-invocation projection. Raw Routes remain outside the generated
-JSON Operation client. Direct, Fetch, generated-client, nested, recompute, and
-worker calls use the same Context, Policy, Operation, error, transaction, and
-observation engine. `close` is idempotent.
-
-## Understand readiness and drain
-
-Liveness answers whether the process is running. Readiness answers whether the
-exact application can accept new work. Readiness stays false during startup,
-artifact or schema incompatibility, reconciliation, and drain.
-
-The Runtime exposes `/_questpie/health/live` and
-`/_questpie/health/ready`. Public health output contains only coarse state and
-reason. `STARTING`, `DRAINING`, and `DATABASE_UNAVAILABLE` are retryable
-readiness reasons. A drain that cannot complete inside its deadline records a
-drain timeout, fences owned durable attempts, and exits with a forced-drain
-failure instead of claiming a clean stop.
-
-Drain follows one bounded order:
-
-1. stop accepting new root Executions;
-2. stop new reconciliation and durable claims;
-3. finish owned work within the drain deadline;
-4. close watches with a retryable reset;
-5. abort remaining Executions and wait for their cleanup;
-6. fence timed-out attempts;
-7. dispose owned resources in reverse order;
-8. emit the terminal event and stop.
-
-QUESTPIE runs API, realtime, and workers together. It has no separate API or
-worker role.
-
-## Deploy compatible artifacts
-
-QUESTPIE checks compatibility by dimension. A canonical HTTP generated client
-must carry the current application, client-contract, and wire digests as one
-matched set.
-
-| Dimension          | Behavior                                                                 |
-| ------------------ | ------------------------------------------------------------------------ |
-| schema             | The migration head and Schema Fingerprint must agree.                    |
-| wire               | Only the current generated-client digest set runs.                       |
-| Policy and Context | A changed artifact applies to new roots and resets existing watches.     |
-| realtime           | An accepted Resume Token continues; every other client receives a reset. |
-| executable         | Pending durable work keeps compatible executable bytes available.        |
-| internal protocol  | Only a registered transactional upgrade can advance it.                  |
-
-Compatibility is not inferred from one bundle digest. A retained
-[Resume Token](./realtime#recover-committed-changes) or a nonterminal
-[Durable Run](./durable-reactions#deploy-without-stranding-a-run) can prevent
-retirement of an older build.
+For a custom host, create the generated App, own its Fetch listener and worker
+polling, and always close it. See [escape hatches](/docs/v4/escape-hatches).
+There are no split API/worker roles or a shipped Studio/admin UI.
 
 ## Upgrade the internal protocol
 
-The Runtime requires exact internal protocol v9. Stop incompatible Runtime
-instances before applying an upgrade; this is a non-rolling cutover, not a
-mixed-version deployment.
+Beta.2 requires exact internal protocol v9. Stop incompatible Runtime
+instances before applying the upgrade. This is a non-rolling cutover.
 
-| Existing database           | Required migration acknowledgement                                           |
-| --------------------------- | ---------------------------------------------------------------------------- |
-| Fresh database              | None                                                                         |
-| Protocol v8                 | `--allow-non-rolling-protocol-v9`                                            |
-| Supported protocol v6 or v7 | Both `--allow-non-rolling-protocol-v8` and `--allow-non-rolling-protocol-v9` |
+| Existing database | Required `migration apply` flags                                             |
+| ----------------- | ---------------------------------------------------------------------------- |
+| Fresh             | None                                                                         |
+| v8                | `--allow-non-rolling-protocol-v9`                                            |
+| Supported v6/v7   | Both `--allow-non-rolling-protocol-v8` and `--allow-non-rolling-protocol-v9` |
 
-If another process installs an older catalog while migration waits for its
-lock, the database is no longer fresh. The required acknowledgements still
-apply.
+Each upgrade commits separately. A failed v9 step can leave a valid committed
+v8 database; keep incompatible processes stopped and repair forward.
+There is no in-place downgrade. Retain executable bytes needed by nonterminal
+Jobs/Reactions until those runs finish.
 
-Pass the required flags to `bunx questpie migration apply` after building the
-new application. Both acknowledgements are checked before protocol mutation.
-Each upgrade owns a transaction: if v8 commits and v9 fails, the database stays
-at valid v8. Keep incompatible processes stopped and repair forward. A failed
-command does not promise that all earlier upgrades rolled back. There is no
-in-place downgrade or mixed-version fallback.
+Migrations and startup do not activate schedules. After migration and Seeds,
+use [explicit schedule activation](/docs/v4/scheduled-jobs).
 
-Migration and Runtime startup do not activate schedules. After migration and
-the application's required Seeds, activate the desired set explicitly with
-`bunx questpie schedule activate --expect-revision <revision>`. For the first
-activation, pass `--expect-revision 0`; its successful receipt records
-`acceptedRevision: "1"`. Keep revisions as decimal text and use the
-[schedule deployment and recovery procedure](./scheduled-jobs#activate-the-schedule-during-deployment)
-for later activations, response loss, and removal.
+## Operational limits
 
-## Inspect the Execution Envelope
+The default startup and drain deadlines are 30 seconds. Request and response
+bodies are bounded to 1 MiB, and active root executions per Principal to 64.
+`RESOURCE_LIMIT` and `RUNTIME_UNAVAILABLE` are explicit failures; an uncertain
+write still needs its own recovery identity.
 
-Every Runtime event carries one closed Execution Envelope. It contains the
-application identity, exact Runtime Build digest, opaque Runtime Instance,
-Execution, and event identities, the Principal kind, ordinary Authority class,
-Runtime timestamp, and optional neutral trace context. Closed links can name an
-artifact, Operation, PostgreSQL transaction, Dispatch, Durable Run, Physical
-Attempt, or Effect. The Envelope never contains Principal or Tenant identity,
-raw Call Identity, credentials, database URLs, request or response payloads,
-Context, Policy identity or evidence, Service state, SQL text or parameters,
-provider payloads, exception messages, or stack traces.
-
-## Run maintenance commands
-
-The maintenance contract has four commands: `acknowledgeAmbiguity`, `cancelRun`,
-`retryRun`, and the Runtime lifecycle operation `drainRuntime`. The host must
-supply the `maintenance.authorize` decision when it creates the generated App;
-there is no default allow. Each command requires maintenance Authority, exact
-identity, a bounded reason, idempotency, expected-version fencing, a typed
-winner, and append-only audit. A stale durable-command caller receives the
-current version it can retry against.
-
-Maintenance has no browser or canonical Operation transport in beta.1. Studio is
-deferred to a later privileged administration vertical; beta.1 does not ship an
-artifact viewer.
-
-## Stay within Runtime limits
-
-| Limit                                |    Default |
-| ------------------------------------ | ---------: |
-| active root Executions per Principal |         64 |
-| request body                         |      1 MiB |
-| response body                        |      1 MiB |
-| Runtime event                        |     64 KiB |
-| events per Execution                 |      2,048 |
-| startup deadline                     | 30 seconds |
-| drain deadline                       | 30 seconds |
-
-A limit fails with `RESOURCE_LIMIT`. Runtime unavailability fails with
-`RUNTIME_UNAVAILABLE`. Both are explicit and retryable when no ambiguous
-Mutation result exists.
-
-## Understand retention and backpressure
-
-QUESTPIE promises no telemetry retention period. The OpenTelemetry SDK owns
-finite buffering and export attempts; the Collector or backend owns retention.
-When the BatchSpanProcessor queue is full, it drops new finished spans instead
-of delaying application work. Audit retention is separately owned and has no
-framework-defined duration. Durable events follow the retention of their owning
-durable state.
-
-[Configure the optional OpenTelemetry adapter](./opentelemetry).
-
-## Keep one PostgreSQL and Policy boundary
-
-QUESTPIE runs against PostgreSQL through one provider-neutral application API.
-Policy remains the only product authorization model. QUESTPIE does not enable
-or generate PostgreSQL row-level security.
-
-Review [durable deployment and retention](./durable-reactions#deploy-without-stranding-a-run),
-or return to the [QUESTPIE v4 overview](./index).
+For multiple instances use [the deployment constraints](/docs/v4/multi-instance).
+For execution diagnostics configure [OpenTelemetry](/docs/v4/opentelemetry).
+Backups, database retention, and provider operations remain your responsibility.

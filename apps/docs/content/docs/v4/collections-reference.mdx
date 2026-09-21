@@ -1,0 +1,129 @@
+---
+title: Collections
+description: Look up fields, keys, relations, input derivation, and bounded selection.
+kind: reference
+---
+
+Import `defineCollection`, `field`, `constraint`, `index`, `relation`,
+`relationRef`, `shape`, and `value` from `questpie`. The
+[data tutorial](/docs/v4/data-and-queries) supplies a complete working declaration.
+
+## defineCollection
+
+| Member          | Contract                                                           |
+| --------------- | ------------------------------------------------------------------ |
+| `name`          | Required stable qualified resource name.                           |
+| `fields`        | Required map of Fields or Inline Shapes.                           |
+| `constraints`   | Required map containing exactly one named primary key.             |
+| `indexes`       | Optional B-tree indexes.                                           |
+| `relations`     | Optional owning `toOne` or inverse `toMany` relations.             |
+| `issues`        | Optional payloadless identities created with `collection.issue()`. |
+| `lifecycle`     | Optional `normalize`, `validate`, `check`, `afterWrite`.           |
+| `augmentations` | Optional literal tuple of accepted Collection Augmentations.       |
+| `postgres.name` | Optional physical table name.                                      |
+
+The result is a Definition, not a database connection. It also exposes
+`createInput()`, `updateInput()`, and the structural `list(...)` builder.
+Defining it creates no public network Operation.
+
+## Fields and values
+
+Every `field.*` call requires `nullable`. Shared options are `immutable`,
+`server`, and `postgres.name`. Their default flags are false.
+
+| Field       | Additional options                                  | Decoded value                    |
+| ----------- | --------------------------------------------------- | -------------------------------- |
+| `uuid`      | `default: "randomUuid"`                             | UUID string                      |
+| `text`      | `minLength`, `maxLength`, literal `default`         | string                           |
+| `boolean`   | literal `default`                                   | boolean                          |
+| `integer`   | `minimum`, `maximum`, literal `default`             | number                           |
+| `bigint`    | string `minimum`, `maximum`                         | canonical integer string         |
+| `numeric`   | required `precision`, `scale`                       | canonical decimal string         |
+| `timestamp` | `withTimezone`, `default: "now"`, `onUpdate: "now"` | `Date` at the operation boundary |
+| `date`      | shared options                                      | date string                      |
+| `object`    | required `properties` using `value.*`               | closed readonly object           |
+| `array`     | required `items` and `maximumItems`                 | bounded readonly array           |
+| `json`      | shared options                                      | tagged JSON value                |
+
+`shape.inline({ fields })` stores ordinary leaf columns; use segment-array paths
+for nested fields. `field.object` and `field.array` store a whole value in JSONB.
+Their interior values have no independent relation, Policy, index, or lifecycle.
+Open JSON uses `{ kind: "json", value }` to distinguish JSON null from SQL null.
+
+`default: "now"` initializes a timestamp. `onUpdate: "now"` makes updates
+database-owned; caller and trusted input cannot supply that field.
+`createInput()` derives create requiredness. `updateInput()` is sparse.
+Both support exact `.pick({ field: true })` and `.omit({ field: true })`.
+Immutable fields are caller-writable only on create. Server fields are absent
+from both caller helpers. Trusted `values` still pass complete candidate Policy.
+
+## Embedded value builders
+
+`value.*` describes members inside `field.object` and `field.array`. Every
+builder requires `nullable`; these members have no defaults, server ownership,
+physical names, or independent indexes.
+
+| Builder                                     | Additional options                                      |
+| ------------------------------------------- | ------------------------------------------------------- |
+| `value.uuid`, `value.boolean`, `value.date` | None.                                                   |
+| `value.text`                                | Optional `minLength`, `maxLength`.                      |
+| `value.integer`                             | Optional numeric `minimum`, `maximum`.                  |
+| `value.bigint`                              | Optional canonical integer-string `minimum`, `maximum`. |
+| `value.numeric`                             | Required `precision`, `scale`.                          |
+| `value.timestamp`                           | Required `withTimezone`.                                |
+| `value.object`                              | Required `properties` map of value builders.            |
+| `value.array`                               | Required `items` builder and `maximumItems`.            |
+
+There is no `value.json` builder. Use the tagged open-JSON Field when its
+unstructured contract is what the application needs.
+
+## Keys, indexes, and relations
+
+Use `constraint.primaryKey({ fields })`, `constraint.unique({ fields })`, and
+`constraint.check(...)` for constraints; use `index({ fields })` for B-tree
+indexes. Keys are explicit. There is no implicit ID or timestamp field.
+Text comparison uses deterministic `questpie.binary`, lowered to `COLLATE "C"`.
+
+`relation.toOne({ target, fields, references, onDelete?, onUpdate? })` declares
+the foreign key. Both actions default to `restrict`.
+`relation.toMany({ inverseOf: relationRef(collectionName, memberName) })`
+declares the inverse of an owning relation; it adds no column.
+
+## collection.list
+
+The root overload takes required `parameters`, `where`, `orderBy`, `select`,
+and `page`. Parameter codecs come from `codec`. `where: () => expr.always()` means no filter.
+The page callback returns `first` and `after`. The result has `nodes` and
+`pageInfo: { endCursor, hasNextPage }`.
+
+The nested overload takes a literal `first`, `orderBy`, `select`, and optional
+`where`. It returns a readonly child array with no cursor or `pageInfo`.
+Never mix the root and nested members. Every order ends in all fields of a
+non-null primary or unique key, and its order fields must be selected.
+
+| Limit                                | Bound                 |
+| ------------------------------------ | --------------------- |
+| Root page                            | 1–100 rows            |
+| Inverse child page                   | 1–50 rows             |
+| Inverse lists in the complete Query  | 1                     |
+| Relation edges in the complete Query | 4                     |
+| Complete result                      | 1 MiB                 |
+| Cursor                               | 2,048 bytes           |
+| Embedded array                       | 1–1,000 maximum items |
+| Embedded/inline nesting              | 8 levels              |
+
+Policy filters children before order and limit. The child filter affects its
+payload, not parent membership. A child array is empty when no authorized child
+is visible. A selected `toOne` result is nullable. Conditional output Policy can
+omit fields rather than returning them as null.
+
+## Failures and recovery
+
+`QP-DATA-008` means an order field is not selected as required.
+`QP-DATA-022` rejects a fifth relation edge. `QP-DATA-026` rejects an invalid
+inverse list, including a second list or mixed overloads. Fix the declaration
+and rebuild. Restart pagination with `after: null` after a cursor scope mismatch;
+do not parse or manufacture a cursor.
+
+Aggregates, polymorphic relations, arbitrary SQL, independent nested pagination,
+and typed JSON interior filtering are not available through this builder.

@@ -42,7 +42,7 @@ test("the exact Start tutorial builds with its packed generated Barbershop clien
 		Object.assign(manifest.dependencies, dependencies);
 		await writeFile(manifestPath, JSON.stringify(manifest));
 		for (const path of [
-			"vite.config.ts",
+			"vite.start.config.ts",
 			"build-start.ts",
 			"web-start/client.tsx",
 			"web-start/data/questpie.ts",
@@ -70,19 +70,13 @@ test("the exact Start tutorial builds with its packed generated Barbershop clien
 				join(repository, "tests/support", source!),
 				join(consumer, target!),
 			);
+		const startConfig = JSON.parse(
+			nativeQueryDocsExample(guide, "tsconfig.start.json"),
+		);
+		startConfig.include.push("start-docs-*.ts");
 		await writeFile(
 			join(consumer, "tsconfig.start.json"),
-			JSON.stringify({
-				extends: "./tsconfig.json",
-				compilerOptions: { types: ["bun", "vite/client"] },
-				include: [
-					"web-start/**/*.ts",
-					"web-start/**/*.tsx",
-					"vite.config.ts",
-					"build-start.ts",
-					"start-docs-*.ts",
-				],
-			}),
+			JSON.stringify(startConfig),
 		);
 		await runNativeQueryDocs(
 			["bun", "install", "--ignore-scripts"],

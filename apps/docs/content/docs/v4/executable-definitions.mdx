@@ -1,159 +1,117 @@
 ---
-title: Define executable application behavior
-description: Bind inline handlers to the exact generated application contract without registries or paired files.
-kind: guide
+title: Queries and mutations
+description: Look up executable factories, transaction boundaries, and lifecycle ownership.
+kind: reference
 ---
 
-Export one Definition with its handler. QUESTPIE supplies the exact generated
-application types at the handler site and binds the handler statically. Your
-source needs no handler registry, paired file, or repeated application generic.
+Import `defineQuery`, `defineMutation`, `defineAction`, `defineRoute`,
+`defineJob`, and `defineReaction` from `#questpie/app`. Build first to generate
+the current application types. Use [custom logic](/docs/v4/custom-logic) to
+choose a kind, or follow the [Mutation tutorial](/docs/v4/queries-and-mutations).
 
-## Import factories from the application
+## Query, Mutation, and Action
 
-Import executable Definition factories from `#questpie/app`:
+All three kinds require a stable `name`. Set `network: true` to expose a
+network Operation. Optional `describe` carries a summary, description, and examples.
 
-```ts title="src/features/messages/summary.ts"
-import { defineQuery } from "#questpie/app";
-import { codec } from "questpie";
+| Kind     | Required handler definition members                                                                                                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Query    | `input`, `output`, `handler({ input, ctx })`. No authored `policy` or `errors` member; Collection Policy governs reads.                                             |
+| Mutation | `input`, `output`, `policy`, `errors`, `handler({ input, ctx, errors })`. Use `errors: {}` when there are no declared errors.                                       |
+| Action   | `input`, `output`, `policy`, `errors`, `limits`, `handler({ input, ctx, effect, errors })`. Limits require `inputBytes`, `resultBytes`, and `durationMilliseconds`. |
 
-export const messageSummary = defineQuery({
-	name: "messages.summary",
-	input: codec.object({ id: codec.uuid() }),
-	output: codec.nullable(
-		codec.object({ id: codec.uuid(), body: codec.text() }),
-	),
-	handler: ({ input, ctx }) =>
-		ctx.data.messages.get({
-			key: { id: input.id },
-			select: { id: true, body: true },
-		}),
-});
-```
+Declare an error with `operation.error({ code, status, payload? })`.
+The compiler can infer supported closed outputs; pin recursive outputs explicitly.
 
-The generated factory supplies the exact current application type to `ctx`.
-A member absent from that handler's generated context is a TypeScript error.
-The source does not declare a global application registry or repeat an
-application generic.
+A plan-backed Query uses `query: collection.list(...)` instead of a handler.
+Its parameters and selected result derive the input/output contract.
+Do not provide two independent implementations of the read.
 
-These factories use the same generated type source:
+| Kind     | Generated capabilities and boundary                                                                       |
+| -------- | --------------------------------------------------------------------------------------------------------- |
+| Query    | Policy-aware reads in one snapshot; no writes, dispatch, raw SQL, or external effects.                    |
+| Mutation | Policy-aware reads and writes in one PostgreSQL transaction, stable `ctx.now`, atomic durable acceptance. |
+| Action   | Explicit external invocation using declared effects; no shared transaction with the provider.             |
+| Route    | Standard Request/Response handling with explicit path, method, credentials, admission and limits.         |
+| Job      | Durable work accepted explicitly, delayed, or by a static schedule.                                       |
+| Reaction | Durable work caused by a transactionally dispatched committed fact.                                       |
 
-```ts
-import { defineMutation, defineQuery, defineReaction } from "#questpie/app";
-```
+## Collection writes
 
-Executable Definition factories come from `#questpie/app`. Structural
-Definitions, codecs, and expressions come from `questpie`.
+The default Collection Policy’s declared `create` and `update` rules generate
+those data capabilities for named Mutations. `get`, `delete`, and `list` need
+their corresponding authored Collection Operation Set members.
 
-Every factory binds the same generated types. Importing a factory does not
-make its Runtime execution surface available; each executable guide states
-which calls the Runtime supports.
+A named Mutation calls `ctx.data.collectionName.create`, `get`, `update`, or
+`delete` with generated types. Keyed updates take `key` and caller `patch`;
+trusted assignments use the separate `values` member. The complete candidate
+still passes validation, Policy, and PostgreSQL constraints.
 
-## Generate the application types
+Collection Operation Sets from `defineCollectionOperations` expand selected
+CRUD members into ordinary Queries/Mutations at compile time. They create no
+second runtime or automatic network access. Use explicit named Operations when
+the command has business meaning, such as `tickets.rename`.
 
-Run a first sync after you add application Definitions:
+## Collection Operation Sets
 
-```bash
-bunx questpie sync
-```
+`defineCollectionOperations(collection, body)` comes from `questpie`.
+The body requires `name` and a Policy bound to that Collection. Optional
+`network: true` publishes its selected members; omission keeps them internal.
+Named Mutations already have generated data access.
+The Barbershop `tickets.rename` does not need a CRUD Operation Set.
 
-QUESTPIE does not create an empty or loosely typed App Contract. Before the
-first successful sync, an external TypeScript check cannot resolve
-`#questpie/app`. QUESTPIE then tells you to run `bunx questpie sync`.
+| Member             | Required shape                                                         |
+| ------------------ | ---------------------------------------------------------------------- |
+| `list`             | `{ data }`, where `data` is a structural data Query.                   |
+| `get`, `delete`    | `{ select }`, a Field selection map.                                   |
+| `create`, `update` | `{ input, select }`; `input` is a literal array of caller Field names. |
 
-After sync, stock TypeScript and editors read the last complete generated
-contract. `questpie dev` keeps it current during development.
+Each member supports `describe`. Writes also support `normalize`, `values`,
+`errors`, and `issueMappings`. The `values` callback receives symbolic `input`,
+`principal`, `tenant`, and `operationTime`. These are compiled Value Program
+operands, not arbitrary runtime values. `mutation.overwrite(operand)` marks an
+explicit trusted overwrite inside that callback; it does not bypass Policy or
+make an immutable or database-owned Field writable.
 
-Raw `tsc` proves types against the generated files that are currently on disk.
-It does not prove that source, Packages, configuration, or the lockfile are
-fresh. Use `questpie check` or `questpie build` in CI. Those commands construct
-the Current App Contract and reject stale generated output.
+## Collection lifecycle
 
-## Keep one handler with its Definition
+| Phase        | What belongs here                                                              |
+| ------------ | ------------------------------------------------------------------------------ |
+| `normalize`  | Pure input normalization.                                                      |
+| `validate`   | Pure candidate invariants.                                                     |
+| `check`      | Bounded Policy-aware transactional reads to check an invariant.                |
+| `afterWrite` | Bounded sequential transactional work before commit, including Job acceptance. |
 
-An inline handler is the normal form. The `messageSummary` Definition above
-owns one Executable Slot: the one handler position the compiler records for
-that Definition. Handler-backed Query, Mutation, Action, Reaction, and Job
-Definitions each carry exactly one handler. A plan-backed Query authors no
-handler.
+These functions compile to a restricted Lifecycle Program. They do not execute
+as arbitrary JavaScript callbacks. They cannot call a mail provider, read a
+Request, open a raw transaction, start timers, or launch detached work.
 
-The compiler keeps the handler and its runtime-only imports outside controlled
-structural evaluation. It records a stable slot in the structural contract and
-bundles the handler with its lexical dependencies in the Runtime Build.
+`collection.issue()` creates a payloadless internal invariant identity.
+`validate` and `check` can raise it. Each named Mutation must map all reachable
+issues with `issueMappings` to its own declared payloadless errors. Unmapped or
+forged issues roll back and become `INTERNAL`. A Collection issue is not an
+HTTP error definition.
 
-You can move a large handler into an ordinary module and check it with the
-handler type supplied by the generated App Contract before the Definition
-imports it.
+## Results, errors, and recovery
 
-The imported function is source organization only. QUESTPIE does not discover
-it as a second Definition, require a file-name convention, or ask you to list
-it in a binding registry.
+The Runtime validates input and output codecs. A declared error is created with
+`errors.member(...)`; React adapter bindings narrow it with their
+`isError` guard. It is distinct from a transport or framework failure.
 
-## Infer outputs or pin a recursive contract
+A Mutation receipt binds application, Tenant, Operation, Principal, `callId`,
+and canonical input. Exact replay recovers the stored result; changed input
+raises `IDEMPOTENCY_CONFLICT`. `COMMITTED_RESULT_UNAVAILABLE` means the write
+committed but the response could not be produced. Recover using the same identity;
+a cancelled or lost response does not prove rollback.
 
-QUESTPIE infers a supported handler output and emits its runtime codec and
-generated type. A Definition can call another Operation in the same build when
-their output types do not form a recursive component.
+An Action requires caller `effectKey` material for its declared effects.
+`ACTION_OUTCOME_AMBIGUOUS` after dispatch is not permission to retry blindly. Use the
+provider's idempotency or reconciliation support.
 
-A recursive output component cannot infer itself. Add one explicit output codec
-at the cycle boundary. QUESTPIE reports every Definition Origin in an unpinned
-cycle. It does not use an older generated result or a loose placeholder.
+## Routes
 
-An explicit output is a validation and encoding contract. It cannot cast an
-unsupported JavaScript value into a wire value.
-
-Changing only handler logic changes the Runtime Build. It does not change the
-Schema Projection, Data Contract Projection, structural Query bytes, operation
-codec, or public generated types. Changing the return contract also changes the
-operation codec and generated declarations.
-
-## Expand common Collection operations
-
-A Collection Operation Set declares any chosen `list`, `get`, `create`,
-`update`, and `delete` members once. The compiler expands each present member
-into an ordinary Query or Mutation before final identity collision resolution
-and Manifest emission.
-
-Each child has its own Resource Identity, Owner, member Origin, Package
-Inventory entry, exact generated server member, and network client member when
-exposed. A custom Resource with the same identity is a normal
-duplicate-identity error.
-
-The set does not exist at runtime. There is no separate CRUD dispatcher or
-Admin-only data engine.
-
-This explicit Operation surface is separate from the generated Collection
-create/update kernel available to named Mutations through typed `ctx.data`.
-Defining a Collection creates no client method. Only an Operation with explicit
-network exposure enters the generated network client.
-
-## Keep Package handlers isolated
-
-A reusable Package imports its executable factories from its generated
-`#questpie/package` contract. That contract contains only Package-owned
-Resources and accepted typed dependencies.
-
-The application can activate the Package into a wider App Contract. Extra host
-Collections and Operations remain invisible to Package source. A Package
-cannot gain host access through ambient type merging or a string lookup.
-
-[Learn how Packages are activated](./definition-composition#activate-packages-explicitly).
-
-## Load only a matched Runtime Build
-
-The Runtime Build contains every Executable Slot and the exact digests that
-pair it with the Build Input, executable Manifest projection, App Contract,
-runtime graph, toolchain, and server bundle.
-
-The generated loader binds slots statically. It refuses startup when a binding
-is missing, duplicated, stale, the wrong Resource kind, or belongs to another
-build. Runtime does not scan source, merge Definitions, or repair a mismatch.
-
-`questpie build` records Resource identity and Origin in `origin-map.json` and
-pairs executable slots with `runtime-build.json`. These generated artifacts do
-not execute application source when you inspect them. QUESTPIE does not
-currently publish a broad Resource or operational `explain` command.
-
-[Inspect the generated App Contract and artifacts](./definition-composition#use-generated-output).
-
-Next, [build Queries and Mutations](./queries-and-mutations) with these generated
-factories.
+`defineRoute` declares `name`, `method`, `path`, `policy`, `credentials`,
+`limits`, and a handler returning a standard Response. `credentials: "none"`
+is useful for the Auth provider's own public sign-in route; it does not grant
+access to protected data. Routes are outside the generated JSON Operation
+client, OpenAPI Operation projection, and MCP tools.

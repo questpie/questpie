@@ -1,0 +1,214 @@
+---
+title: Custom logic
+description: Put reads, transactions, provider calls, HTTP handlers, and background work in the right place.
+kind: guide
+---
+
+Choose the execution boundary before adding custom logic to Barbershop.
+Renaming a ticket, emailing its summary, and accepting an upload stream need
+different guarantees.
+
+| Need                                                  | Use      | Why                                                        |
+| ----------------------------------------------------- | -------- | ---------------------------------------------------------- |
+| Read a ticket and comments                            | Query    | Reads one authorized snapshot.                             |
+| Change the summary and record a database fact         | Mutation | Commits database changes together.                         |
+| Call an email or payment provider now                 | Action   | Makes external invocation and uncertain outcomes explicit. |
+| Receive a webhook or stream                           | Route    | Owns a standard Request/Response boundary.                 |
+| Run work after a write or at a later time             | Job      | Durable acceptance survives restart.                       |
+| Process one transactionally dispatched committed fact | Reaction | Preserves that causal relationship.                        |
+
+## Start with an ordinary function
+
+Pure TypeScript helpers can calculate prices, format a response, or normalize
+form input. Call them from a named handler. You do not need another Definition
+for every function. Keep network-facing behavior behind an explicit Operation
+with a Codec and Policy.
+
+Use the [ticket Mutation](/docs/v4/queries-and-mutations) as the first example.
+Its handler owns a transaction; it does not need to open one manually.
+
+## Validate at the right boundary
+
+Input codecs validate request shape. A Mutation can report expected business
+failures through declared `operation.error` values. Collection lifecycle phases
+apply invariants to every generated write path; use them when a rule belongs to
+the stored data, not just one command.
+
+`normalize` and `validate` are pure. `check` can read inside the transaction.
+`afterWrite` runs before commit and can accept a Job. These are restricted
+compiler-interpreted programs, not arbitrary JavaScript hooks.
+
+## Keep provider calls outside a transaction
+
+Put connection lifetime in a Service and invocation in an Action. Supply a stable `effectKey` for the logical provider request.
+An ambiguous response requires provider reconciliation; it does not prove that
+no email or payment happened. QUESTPIE cannot promise exactly-once provider effects.
+
+For durable work, accept a Job in the Mutation that records the business change.
+The write and acceptance commit together. Workers resolve current Context and
+permissions for attempts. Retry policy must be bounded and provider effects
+must be safe to recover.
+
+Use [Jobs and Reactions](/docs/v4/durable-reactions) for acceptance and effect
+semantics, and [schedules](/docs/v4/scheduled-jobs) for recurring work. A Job
+checkpoint calls a named Mutation; it cannot run an arbitrary callback, Action,
+timer, or signal workflow.
+
+The [Operation reference](/docs/v4/executable-definitions) lists exact factories
+and their generated capabilities. If the required capability is absent, consult
+[escape hatches](/docs/v4/escape-hatches) before opening a second data path.
+
+## Schedule one rename for later
+
+Add this file to the same Barbershop backend. The Mutation accepts the Job and
+returns its receipt; the worker later calls the existing `tickets.rename`
+Mutation through a recoverable checkpoint. This adds no second write handler.
+
+```ts title="src/jobs/rename-later.ts"
+import { codec, durable, policy } from "questpie";
+import { defineJob, defineMutation } from "#questpie/app";
+import { tickets } from "../data/tickets";
+
+export const renameLater = defineJob({
+	name: "tickets.renameLater",
+	input: tickets.createInput().pick({ id: true, summary: true }),
+	output: codec.object({}),
+	runAs: durable.caller({ whenDenied: "fail" }),
+	retry: durable.retry({
+		maximumAttempts: 3,
+		initialDelay: "1s",
+		backoff: "exponential",
+		maximumDelay: "10s",
+		jitter: "full",
+		horizon: "1h",
+	}),
+	handler: ({ input, ctx }) =>
+		ctx.run.step.mutation("rename", ctx.mutations.tickets.rename, input),
+});
+
+export const deferRename = defineMutation({
+	name: "tickets.deferRename",
+	network: true,
+	input: codec.object({
+		id: codec.uuid(),
+		summary: codec.text(),
+		requestKey: codec.uuid(),
+	}),
+	output: codec.object({ runId: codec.uuid(), resource: codec.text() }),
+	policy: policy.authenticated(),
+	errors: {},
+	handler: ({ input, ctx }) =>
+		ctx.jobs.tickets.renameLater.accept(
+			{ id: input.id, summary: input.summary },
+			{
+				idempotencyKey: input.requestKey,
+				notBefore: new Date(ctx.now.getTime() + 1_000),
+			},
+		),
+});
+```
+
+Rebuild and restart the backend. From an authenticated generated client scope,
+call `api.mutations["tickets.deferRename"]({ id, summary, requestKey })`, using
+a fresh UUID for a new request and retaining it for recovery of that same request.
+The result contains `runId` and `resource`; it confirms acceptance, not completion.
+With `questpie start` polling the worker, the ticket changes after its due time.
+The Job rechecks current authority when it runs, so permission removal can still
+prevent the rename. The delay is a minimum due time, not an exact execution time.
+
+## Send the ticket summary to a webhook
+
+Use an Action for a provider call. This Service keeps the provider URL in the
+server environment and passes the Action's effect identity to the provider.
+The destination must support that idempotency key before you rely on replay.
+
+Keep runtime environment reads outside the Definition discovery root:
+
+```ts title="runtime/summary-webhook.ts"
+export function createSummaryWebhook() {
+	const url = process.env.SUMMARY_WEBHOOK_URL;
+	if (!url) throw new Error("SUMMARY_WEBHOOK_URL is required");
+	return {
+		send: async (summary: string, effectId: string, signal: AbortSignal) => {
+			const response = await fetch(url, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"Idempotency-Key": effectId,
+				},
+				body: JSON.stringify({ summary }),
+				signal,
+			});
+			await response.body?.cancel();
+			if (response.status !== 202)
+				throw new Error("Webhook acceptance unconfirmed");
+		},
+	};
+}
+```
+
+```ts title="src/actions/send-summary.ts"
+import { codec, defineService, operation, policy } from "questpie";
+import { defineAction } from "#questpie/app";
+
+export const summaryWebhook = defineService({
+	name: "barbershop.summaryWebhook",
+	lifetime: "execution",
+	effect: "external",
+	create: async () => {
+		const { createSummaryWebhook } =
+			await import("../../runtime/summary-webhook");
+		return createSummaryWebhook();
+	},
+});
+
+export const sendSummary = defineAction({
+	name: "tickets.sendSummary",
+	network: true,
+	input: codec.object({ id: codec.uuid() }),
+	output: codec.object({}),
+	policy: policy.authenticated(),
+	errors: {
+		ticketUnavailable: operation.error({
+			code: "TICKET_UNAVAILABLE",
+			status: 404,
+		}),
+		outcomeUnknown: operation.error({
+			code: "WEBHOOK_OUTCOME_UNKNOWN",
+			status: 503,
+		}),
+	},
+	limits: {
+		inputBytes: 1_024,
+		resultBytes: 1_024,
+		durationMilliseconds: 5_000,
+	},
+	handler: async ({ input, ctx, effect, errors }) => {
+		const page = await ctx.queries.tickets.detailPage({
+			ids: [input.id],
+			first: 1,
+			after: null,
+		});
+		const ticket = page.nodes[0];
+		if (!ticket) throw errors.ticketUnavailable();
+		try {
+			await ctx.services["barbershop.summaryWebhook"].send(
+				ticket.summary,
+				effect.id,
+				ctx.signal,
+			);
+		} catch {
+			throw errors.outcomeUnknown();
+		}
+		return {};
+	},
+});
+```
+
+Configure `SUMMARY_WEBHOOK_URL` to your provider endpoint, rebuild, and restart.
+Call `api.actions["tickets.sendSummary"]({ id }, { effectKey })` from the same
+authenticated scope. Use a stable key for the same logical delivery. A successful
+`{}` means the provider returned HTTP 202; it does not prove final delivery.
+`WEBHOOK_OUTCOME_UNKNOWN` requires provider reconciliation, not a blind retry.
+This generic example sends no provider credential; add your provider's
+server-owned authentication in the Service before using a protected endpoint.

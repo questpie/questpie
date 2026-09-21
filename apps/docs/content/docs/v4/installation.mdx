@@ -1,0 +1,126 @@
+---
+title: Installation
+description: Create a project that compiles against the available QUESTPIE package surface.
+kind: guide
+---
+
+Set up the Barbershop backend project before writing its data definitions.
+Use Bun and a strict TypeScript project. Database execution requires PostgreSQL
+16 or newer with the configured UTF-8 locale and deterministic `C` collation.
+
+## Choose the package version
+
+These pages document QUESTPIE 4.0.0-beta.2.
+
+Install the package in a new project:
+
+```sh
+mkdir barbershop
+cd barbershop
+bun add questpie@4.0.0-beta.2
+bunx --no-install questpie init --name barbershopSupport
+mkdir -p src/data src/queries src/mutations
+```
+
+`--no-install` prevents Bun from downloading a different CLI. Run these commands
+from the application root after the package installation succeeds.
+
+`init` creates `packages/` for local package discovery. The package includes the CLI, compiler, and Runtime;
+do not install private `@questpie/compiler` or `@questpie/runtime` packages.
+
+## Configure discovery and imports
+
+`init` creates the following file at the project root. `source.root` contains backend Definitions;
+`web/` contains browser code outside that discovery root.
+
+```json title="questpie.json"
+{
+	"$schema": "https://questpie.dev/schema/application-v1.json",
+	"version": 1,
+	"application": { "name": "barbershopSupport" },
+	"postgres": {
+		"schema": "barbershop_support",
+		"minimumMajor": 16,
+		"databaseCollation": "C.UTF-8",
+		"databaseCType": "C.UTF-8",
+		"extensions": [],
+		"physicalNames": {}
+	},
+	"source": { "root": "src", "exclude": [] },
+	"packages": {}
+}
+```
+
+`init` also merges these members into `package.json`, preserving the installed
+QUESTPIE dependency. For an existing project, use these exact mappings manually.
+
+```json title="package.json (merge)"
+{
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#questpie/app": "./.questpie/generated/app.ts",
+		"#questpie/client": "./.questpie/generated/client.ts",
+		"#questpie/source/*": "./src/*"
+	},
+	"scripts": {
+		"build": "questpie build",
+		"check": "questpie check",
+		"types:check": "tsc --noEmit"
+	}
+}
+```
+
+`init` writes this TypeScript configuration as well:
+
+```json title="tsconfig.json"
+{
+	"compilerOptions": {
+		"module": "ESNext",
+		"moduleResolution": "Bundler",
+		"target": "ES2024",
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"types": ["bun"],
+		"paths": {
+			"#questpie/app": ["./.questpie/generated/app.ts"],
+			"#questpie/client": ["./.questpie/generated/client.ts"],
+			"#questpie/source/*": ["./src/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "web/**/*.ts", "scripts/**/*.ts"]
+}
+```
+
+`init` adds `node_modules/` and `.questpie/` to `.gitignore`. Keep `questpie/` tracked: it holds reviewed migration
+and Seed artifacts. Keep the Bun lockfile tracked as well.
+
+## Generate after adding the definitions
+
+Read [the core concepts](/docs/v4/concepts), then continue with [the data chapter](/docs/v4/data-and-queries), copy its complete
+files, then run:
+
+```sh
+bun run build
+bun run check
+bun run types:check
+```
+
+Build prints `questpie: application build complete` and creates
+`.questpie/generated/app.ts` and `client.ts`. Check prints
+`questpie: application contract valid`. Before the first build, your editor may
+report missing generated imports. Generate them before running TypeScript.
+
+## Run the database next
+
+Continue with [local database setup](/docs/v4/schema-lifecycle) to create a
+reviewed migration, insert demo rows through a Seed, and execute the first
+typed read/write. `build` generates contracts; it does not apply database changes.
+
+`init` refuses existing `questpie.json`, `tsconfig.json`, or conflicting generated
+imports. In that case, merge the configuration above rather than deleting your
+application files. There is no `sync` or `dev` command; run build after source changes.
+
+See [CLI reference](/docs/v4/cli) for exact arguments and recovery.

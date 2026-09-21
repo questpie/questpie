@@ -1,145 +1,61 @@
 ---
-title: QUESTPIE v4
-description: Define your TypeScript backend once. Generate typed clients, HTTP endpoints, OpenAPI documentation, and MCP tools for your PostgreSQL app.
+title: Introduction
+description: Build a TypeScript backend with PostgreSQL, shared permissions, typed clients, and live reads.
 kind: explanation
 ---
 
-## Build your backend once. Use it across your app.
+QUESTPIE is a TypeScript backend framework for PostgreSQL applications.
+You define stored data, permissions, and business operations. Its compiler
+builds the server contract, typed client, and HTTP endpoints from those definitions.
 
-QUESTPIE is a TypeScript backend framework for apps built on PostgreSQL.
-Define your data, permissions, and operations in TypeScript. QUESTPIE generates
-the typed client and HTTP endpoints from those definitions. Enable OpenAPI and
-MCP to generate API documentation and tools that AI clients can call.
+## Why use it?
 
-You write the application logic. You do not maintain another set of input
-types, endpoint handlers, and tool schemas for each way of calling it.
+A support ticket appears in a staff screen, a server task, and a live update.
+Each path needs the same answer to “may this person read or change this ticket?”
+QUESTPIE applies your Policy through its data operations on all of those paths.
+You write the rule once and keep the business logic in TypeScript.
 
-These pages are the beta.2 preview. Beta.2 is not published. The
-[frozen beta.1 inventory](/docs/v4/beta1-release) remains the released package
-contract.
+A Mutation groups database changes in one transaction. A Live Query sends a
+fresh authorized result when relevant data changes. Jobs keep accepted work
+across process restarts, using PostgreSQL for durable state.
 
-[Review the beta.2 preview inventory](/docs/v4/beta2-release)
+You still own your frontend, authentication provider, hosting, and database
+operations. The Runtime is a long-lived server. Compilation is a required build
+step, and database changes require reviewed migrations.
 
-## One operation, several ways to use it
+These pages document QUESTPIE 4.0.0-beta.2.
 
-Take a Barbershop booking screen. It needs to list appointments, accept a
-booking, and show changes made by another member of staff.
+[Review the beta.2 release notes](/docs/v4/beta2-release) before installing.
+Use the CLI to create the project, review migrations, apply demo data, and run
+a real typed read/write before connecting the browser.
 
-You define the data and its permissions, then write a Query to list
-appointments. Mark that Query `network: true` to make it callable over the
-network. From a Query named `appointments.list`, QUESTPIE derives:
+## Learn with one application
 
-| Surface               | Generated result                                                                  |
-| --------------------- | --------------------------------------------------------------------------------- |
-| TypeScript client     | A scoped `queries["appointments.list"]` call with inferred input and result types |
-| HTTP                  | `GET /_questpie/query/appointments.list`                                          |
-| OpenAPI, when enabled | The endpoint, parameters, response types, and declared errors                     |
-| MCP, when enabled     | A `query.appointments.list` tool with generated arguments and result types        |
+Build the support screen for **TanStack Barbershop**. Staff read a customer’s
+ticket and comments, then correct its summary. Every tutorial chapter extends
+that same example.
 
-Describe the operation once. OpenAPI and MCP use that shared documentation.
-Their calls run the same operation, not copies of its handler.
+1. [Install and configure the project](/docs/v4/installation).
+2. [Understand the main concepts](/docs/v4/concepts).
+3. [Define tickets, comments, and a Query](/docs/v4/data-and-queries).
+4. [Add a Mutation](/docs/v4/queries-and-mutations).
+5. [Run the local database example](/docs/v4/schema-lifecycle).
+6. [Call the generated client](/docs/v4/clients).
+7. [Connect authentication](/docs/v4/auth).
+8. [Build the React screen](/docs/v4/react-query-basic).
+9. [Render it with TanStack Start](/docs/v4/react-query-start).
 
-Enabling MCP exposes every network operation in a public tool catalogue.
-Beta.2 has no per-operation MCP switch. Policy checks each call, not which
-tool names and descriptions a client can discover.
+## Add what your application needs
 
-A Mutation owns the PostgreSQL transaction that books an appointment. QUESTPIE
-recomputes supported live Queries after relevant data changes and sends each
-successful authorized result. A failed recompute publishes no partial update.
-The screen does not need a separate update-event schema.
+[Auth and permissions](/docs/v4/auth) explains the provider boundary.
+[Uploads](/docs/v4/uploads) explains how to handle files using an application-owned storage integration. [Custom logic](/docs/v4/custom-logic) helps you choose a Query,
+Mutation, Action, Route, Job, or Reaction.
 
-See [HTTP and OpenAPI](/docs/v4/operation-http-and-openapi),
-[MCP tools](/docs/v4/basic-mcp), and
-[Live Queries](/docs/v4/realtime) for the exact behavior and limits.
+Use [escape hatches](/docs/v4/escape-hatches) when a normal operation does not
+fit, and check [the ecosystem](/docs/v4/ecosystem) before choosing an integration.
+Follow [deployment](/docs/v4/runtime-and-studio) for an existing application.
 
-## Keep permissions in one place
+## Look up an API
 
-A Collection describes stored data, such as appointments. Its Fields describe
-values such as the appointment time. A Policy defines who can read or change
-that data. Generated clients, server-side calls, background workers, and live
-updates use the same Policy-aware data operations.
-
-That matters when you add another way into the app. Exposing an operation as
-an MCP tool does not require a separate permission system. A live Query checks
-authorization again when it recomputes.
-
-You still choose your authentication system and write your Policy rules.
-Passing a tenant ID does not grant access to that tenant's data.
-
-[Connect identity and write Policy](/docs/v4/context-and-policy)
-
-## Add background work without a second queue
-
-Accept a Job in the same transaction as a business write. The write and the
-intent to run that Job commit together. The QUESTPIE Runtime runs the worker
-and owns its leases, retries, and cancellation.
-
-Use a static UTC schedule for recurring work, such as a sweep that finds
-appointments needing reminders. Dynamic due times stay in your application's
-rows.
-
-Your integration must still make external effects safe to retry. QUESTPIE
-cannot guarantee that an email provider sends a message exactly once.
-
-[Run Jobs and Reactions](/docs/v4/durable-reactions), or
-[write a scheduled sweep](/docs/v4/scheduled-jobs).
-
-## Keep control of your frontend
-
-Use the generated TypeScript client with your frontend. For React, the
-optional `questpie/react-query` adapter supplies native TanStack Query options,
-inferred types, and cache keys. TanStack owns the cache and hooks. The adapter
-uses QUESTPIE's existing live transport for supported browser Queries.
-
-Your application owns its screens, forms, authentication flow, and optimistic
-presentation. There is no generated admin UI. Whenever credentials or Context
-change, retire the old client scope and its cache, then create a fresh scope.
-This applies even when the user and tenant IDs stay the same.
-
-[Build a ticket screen with React Query](/docs/v4/react-query-basic) shows a
-live read and a typed Mutation using the ticket data from the data guide.
-It assumes an existing backend and authenticated session.
-[Add TanStack Start SSR and hydration](/docs/v4/react-query-start) when the
-screen also renders on the server.
-
-## Know what you are choosing
-
-QUESTPIE fits a TypeScript app that needs shared data permissions, live screens,
-and background work. Its compiler generates the code that connects those parts;
-it does not replace your domain logic.
-
-PostgreSQL is required. Run the long-lived QUESTPIE Runtime on your own
-infrastructure or alongside a compatible managed PostgreSQL service. You own
-hosting, database operations, and your external integrations.
-
-There is a build step. You review and apply migrations explicitly; starting
-the server does not update the database schema for you. Collection lifecycle
-functions use a restricted TypeScript subset, not arbitrary JavaScript.
-Upgrading an existing installation to beta.2 also requires stopping incompatible
-Runtime instances; it is not a rolling upgrade. Follow the
-[deployment procedure](/docs/v4/runtime-and-studio) before restarting them.
-
-Beta.2 has fixed Query and realtime limits: for example, one inverse child
-list per Query and 64 active watches per Principal (the caller identity).
-It includes neither Studio nor built-in Files or Search. Offline persistence, live infinite lists, and a
-workflow engine are also outside this beta.
-[Check the full scope before choosing it](/docs/v4/beta2-release).
-
-## Choose your next step
-
-For a new backend, start with
-[your application configuration](/docs/v4/definition-composition),
-then [data and migrations](/docs/v4/schema-lifecycle).
-[Queries and Mutations](/docs/v4/queries-and-mutations) covers CRUD, validation,
-and transactions. [Data and structural Queries](/docs/v4/data-and-queries)
-covers relations and pagination.
-
-The reference uses six executable Definition kinds: Query, Mutation, Action,
-Route, Reaction, and Job.
-[Learn when to use each one](/docs/v4/executable-definitions) and
-[where its imports come from](/docs/v4/semantic-kernels-and-public-surface).
-
-When the app works locally, follow
-[build, migration, and startup](/docs/v4/runtime-and-studio),
-[multi-instance operation](/docs/v4/multi-instance), and
-[OpenTelemetry setup](/docs/v4/opentelemetry).
+The [API reference](/docs/v4/api-reference) is separate from the tutorial.
+Use it for imports, required members, defaults, limits, and errors.

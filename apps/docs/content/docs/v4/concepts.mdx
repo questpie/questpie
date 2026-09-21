@@ -1,0 +1,52 @@
+---
+title: Core concepts
+description: Learn the few concepts needed to follow the Barbershop tutorial.
+kind: explanation
+---
+
+This page explains how source definitions become a running application.
+
+## Start with the problem
+
+Barbershop staff need to read tickets, edit them safely, and see updates from
+other staff. A TypeScript interface alone cannot validate a request, restrict
+which rows it reads, or keep a write atomic.
+
+## Give each part one job
+
+| Concept    | What it means in Barbershop                                                       |
+| ---------- | --------------------------------------------------------------------------------- |
+| Collection | Stored tickets or comments, with explicit Fields and a primary key.               |
+| Codec      | A runtime description of allowed values at an operation boundary.                 |
+| Query      | A read, such as one ticket with its comments.                                     |
+| Mutation   | A transaction, such as changing a ticket summary.                                 |
+| Principal  | The user, service, or anonymous caller.                                           |
+| Context    | Immutable execution facts resolved from typed input and trusted identity.         |
+| Policy     | Rules for admitting work, selecting rows, accepting fields, and returning fields. |
+| Definition | The named TypeScript value that declares one of these resources.                  |
+
+A Collection alone creates no public CRUD endpoint. A Query or Mutation must
+explicitly set `network: true` before a generated network client can call it.
+
+## Follow a request
+
+The Auth integration resolves credentials into a Principal. QUESTPIE decodes
+Context input and resolves the execution facts. The Operation validates its
+input and runs with the capabilities of its kind. Data reads and writes apply
+Collection Policy. The Runtime validates and encodes the result for the client.
+
+A tenant ID supplied by a browser selects context. It does not prove membership.
+A Policy must check the facts that actually authorize access.
+
+## Build before running
+
+`questpie.json` identifies the application and its source directory.
+`questpie build` discovers exported Definitions and generates `#questpie/app`
+and `#questpie/client`. The server factories know your current Collections;
+the client knows only the network Operations.
+
+Structural declarations must be deterministic. Put environment reads and
+provider connections in runtime Service creation, not in a Collection declaration.
+Folders organize your code; their names do not create framework modules.
+
+Next, [define the ticket data](/docs/v4/data-and-queries).

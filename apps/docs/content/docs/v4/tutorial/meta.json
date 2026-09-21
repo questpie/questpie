@@ -1,0 +1,14 @@
+{
+	"title": "Build Barbershop",
+	"icon": "BookOpen",
+	"defaultOpen": false,
+	"pages": [
+		"../data-and-queries",
+		"../queries-and-mutations",
+		"../schema-lifecycle",
+		"../clients",
+		"../auth",
+		"../react-query-basic",
+		"../react-query-start"
+	]
+}

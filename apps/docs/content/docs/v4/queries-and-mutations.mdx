@@ -1,604 +1,102 @@
 ---
-title: Build Queries and Mutations
-description: Define exact reads, transactional writes, Collection lifecycle programs, and public errors.
+title: Mutations
+description: Add a named Mutation with field permissions and a declared error.
 kind: guide
 ---
 
-QUESTPIE compiles each Query and Mutation into one statically bound Operation.
-A Query reads one consistent snapshot. A Mutation owns one PostgreSQL
-transaction. Direct calls and the generated network client enter the same
-Operation engine and therefore share Policy, declared errors, cancellation,
-limits, and transaction outcomes.
+Add the write operation used by the Barbershop staff form. A Mutation owns one
+PostgreSQL transaction, so a failed write does not leave a partial change.
+Start with the complete [data chapter](/docs/v4/data-and-queries).
 
-## Define a Query
+## Allow exactly the intended edit
 
-Use the application-specialized factory from `#questpie/app`. Its generated
-Context exposes Policy-aware reads but no write, dispatch, raw SQL, transaction,
-or external-effect capability.
+Replace `src/data/policies.ts` with this version. Read access stays the same.
+The update rule admits authenticated callers and allows them to supply only
+`summary`. It does not allow a caller to change the ticket ID.
 
-```ts
-import { defineQuery } from "#questpie/app";
-import { codec } from "questpie";
+```ts title="src/data/policies.ts"
+import { definePolicy, expr, policy } from "questpie";
+import { comments } from "./comments";
+import { tickets } from "./tickets";
 
-export const ticketDetail = defineQuery({
-	name: "tickets.detail",
-	input: codec.object({ id: codec.uuid() }),
-	output: codec.nullable(
-		codec.object({
-			id: codec.uuid(),
-			reference: codec.text(),
-			summary: codec.text(),
-			status: codec.text(),
-		}),
-	),
-	handler: async ({ input, ctx }) => {
-		const ticket = await ctx.data.tickets.get({
-			key: { id: input.id },
-			select: { id: true, reference: true, summary: true, status: true },
-		});
-		return ticket;
-	},
-	network: true,
-});
-```
-
-Missing and Policy-invisible rows both return `null`. Application code cannot
-use a read to distinguish them. `network: true` publishes this named Operation;
-defining a Collection never publishes CRUD.
-
-Use an explicit output codec when a contract must remain pinned or is recursive.
-Otherwise the compiler may infer a supported closed result and materialize its
-runtime codec from the same generated App Contract.
-
-## Derive exact caller input
-
-Field provenance derives caller codecs without granting network exposure:
-
-```ts
-export const createTicketInput = tickets.createInput().pick({
-	teamId: true,
-	reference: true,
-	summary: true,
-	description: true,
-});
-```
-
-Default Fields are caller-writable on create and update. `immutable: true`
-Fields are caller-writable only on create. `server: true` Fields are absent from
-both caller helpers and are available only to the trusted `values` lane.
-`onUpdate: "now"` Fields are database-owned and are available to neither lane.
-
-`createInput()` applies create requiredness after provenance. `updateInput()` is
-sparse. `.pick({ field: true })` and `.omit({ field: true })` preserve exact
-Field codecs and reject unknown Fields. A derived helper intentionally evolves
-when its Collection changes; pin a smaller key set when an Operation must stay
-stable.
-
-## Give a Collection a fixed lifecycle
-
-Collections may own exactly four lifecycle phases and payloadless issues:
-
-```ts
-import type { CollectionLifecycle } from "#questpie/app";
-import { collection, defineCollection, field } from "questpie";
-
-export const tickets = defineCollection({
-	name: "tickets",
-	fields: {
-		id: field.uuid({ default: "randomUuid", server: true, immutable: true }),
-		organizationId: field.uuid({ server: true, immutable: true }),
-		teamId: field.uuid({ immutable: true }),
-		reference: field.text({ minLength: 1, maxLength: 32, immutable: true }),
-		summary: field.text({ minLength: 1, maxLength: 240 }),
-		description: field.text({ minLength: 1, maxLength: 16_384 }),
-		status: field.text({ default: "open", server: true }),
-		closedAt: field.timestamp({ nullable: true, server: true }),
-		createdAt: field.timestamp({
-			default: "now",
-			server: true,
-			immutable: true,
-		}),
-		updatedAt: field.timestamp({ default: "now", onUpdate: "now" }),
-	},
-	constraints: {
-		/* primary key and unique constraints */
-	},
-	issues: {
-		closedWithoutTime: collection.issue(),
-		teamUnavailable: collection.issue(),
-	},
-	lifecycle: {
-		normalize: ({ input }) =>
-			input.summary?.includes("")
-				? { ...input, summary: input.summary.trim() }
-				: input,
-		validate: ({ candidate, issues }) => {
-			if (candidate.status === "closed" && candidate.closedAt === null)
-				throw issues.closedWithoutTime();
-		},
-	} satisfies CollectionLifecycle<"tickets">,
-});
-
-export const teams = defineCollection({
-	name: "teams",
-	fields: {
-		id: field.uuid({ default: "randomUuid", server: true, immutable: true }),
-		organizationId: field.uuid({ server: true, immutable: true }),
-		name: field.text({ minLength: 1, maxLength: 120 }),
-	},
-	constraints: {
-		/* primary key constraints */
-	},
-});
-
-export const ticketEvents = defineCollection({
-	name: "ticketEvents",
-	fields: {
-		id: field.uuid({ default: "randomUuid", server: true, immutable: true }),
-		organizationId: field.uuid({ server: true, immutable: true }),
-		ticketId: field.uuid({ server: true, immutable: true }),
-		kind: field.text({ server: true, immutable: true }),
-		occurredAt: field.timestamp({ server: true, immutable: true }),
-	},
-	constraints: {
-		/* primary key and ticket relation constraints */
-	},
-});
-```
-
-A Collection issue says which internal invariant failed. It carries no public
-code, status, message, payload, protected value, or transport behavior. The
-Operation decides what its caller may learn.
-
-Lifecycle callbacks use ordinary TypeScript syntax, but they are compiled
-definitions, not arbitrary JavaScript callbacks. The compiler lowers supported
-syntax to one canonical Lifecycle Program and Runtime interprets that program.
-Authored lifecycle JavaScript is never invoked.
-
-`normalize` and `validate` allow immutable locals, branches, exact object
-construction, static Field access, deterministic operators, and documented
-locale-free scalar methods. They reject imports and captures, ambient clocks,
-randomness, `fetch`, dynamic property access, constructors, mutation, arbitrary
-calls, async work, and unsupported built-ins with an Origin and a supported
-rewrite.
-
-`normalize` runs separately over the already authorized caller and trusted
-lanes. It may replace supplied values but cannot add, remove, move, or overlap
-Field paths. `validate` sees the complete candidate and optional current row,
-uses the transaction-stable `now`, and can throw a declared Collection issue.
-
-## Compose Collections and map issues in one Mutation
-
-A named Mutation owns one transaction, may compose several Collection kernels,
-and maps every reachable Collection issue explicitly:
-
-```ts
-import { defineMutation } from "#questpie/app";
-import { operation, policy } from "questpie";
-
-const invalidTicket = operation.error({
-	code: "INVALID_TICKET",
-	status: 422,
-});
-
-export const createTicket = defineMutation({
-	name: "ticket.create",
-	input: tickets.createInput(),
-	policy: policy.authenticated(),
-	errors: { invalidTicket },
-	issueMappings: {
-		tickets: {
-			closedWithoutTime: "invalidTicket",
-			teamUnavailable: "invalidTicket",
-		},
-	},
-	handler: async ({ input, ctx }) => {
-		const ticket = await ctx.data.tickets.create({
-			input,
-			values: { organizationId: ctx.tenant.id },
-		});
-
-		await ctx.data.ticketEvents.create({
-			input: {},
-			values: {
-				organizationId: ctx.tenant.id,
-				ticketId: ticket.id,
-				kind: "created",
-				occurredAt: ctx.now,
-			},
-		});
-
-		return ticket;
-	},
-	network: true,
-});
-```
-
-The Ticket, Ticket Event, Change Ledger facts, accepted lifecycle work, and
-result receipt commit together. Caller data enters through `input`; values
-chosen by the Mutation enter through the disjoint trusted `values` lane. An
-unknown trusted Field or caller/trusted overlap fails before SQL. Use `ctx.now`
-when several rows describe the same business instant.
-
-Inside a Mutation, `ctx.data.<collection>.get({ key })` locks the keyed row
-before reading its current state and applying fresh read Policy. It holds
-that row lock until the owning transaction ends. A missing or Policy-invisible
-row returns `null`. Standalone Queries use their read snapshot instead; they
-do not acquire this Mutation row lock.
-
-The mapping refers to a key in this Mutation's `errors` map. The target error
-must be payloadless. Another Mutation may map the same Collection issue to a
-different public error. A Collection never borrows the calling Mutation's error
-factories.
-
-The compiler computes transitive issue reachability. If `comments.afterWrite`
-writes `tickets`, the outer Mutation must map issues reachable through that
-nested call. A missing mapping is a compile error that shows the call path. The
-generated Mutation Context also withholds an issue-bearing kernel method when
-its mapping is incomplete.
-
-The first issue thrown in program order wins and immediately dooms the
-transaction. Catching it in application code cannot permit commit. After
-rollback, the shared Operation engine applies the mapping. An unmapped,
-malformed, or forged issue becomes a sanitized `INTERNAL` failure. Direct and
-network callers therefore see the same declared error and never receive a
-Collection identity, candidate row, protected Field, Policy evidence,
-PostgreSQL detail, or stack.
-
-Unsupported syntax, a captured value, or a phase capability mismatch reports
-`QP-COMPOSE-026` at the lifecycle Origin. An invalid or incomplete issue map
-reports `QP-COMPOSE-027` with the complete nested Collection-call path. Supplying
-an `onUpdate` Field reports `QP-DATA-023 databaseOwnedField`; exceeding the
-compiled lifecycle re-entry bound reports `QP-DATA-024
-lifecycleRecursionExceeded` and rolls back.
-
-## Add explicit ordinary Collection operations
-
-Define the common Collection surface once:
-
-```ts title="src/features/message-operations.ts"
-import { defineCollectionOperations } from "questpie";
-import { messages } from "../data/collaboration";
-import { channelMessagePage } from "./message-data";
-import { messagePolicy } from "./messages-policy";
-
-export const messageOperations = defineCollectionOperations(messages, {
-	name: "messages",
-	policy: messagePolicy,
-	network: true,
-
-	list: { data: channelMessagePage },
-	get: {
-		select: {
-			id: true,
-			title: true,
-			body: true,
-			createdAt: true,
-			updatedAt: true,
-		},
-	},
-	create: {
-		input: ["channelId", "title", "body"],
-		select: {
-			id: true,
-			channelId: true,
-			authorId: true,
-			title: true,
-			body: true,
-			createdAt: true,
-			updatedAt: true,
-		},
+export const ticketPolicy = definePolicy(tickets, {
+	name: "tickets.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: () => expr.always(),
 	},
 	update: {
-		input: ["title", "body"],
-		select: { id: true, title: true, body: true, updatedAt: true },
+		admit: policy.authenticated(),
+		rows: () => expr.always(),
+		candidate: () => expr.always(),
 	},
-	delete: { select: { id: true } },
+	fields: {
+		update: () => ({ summary: expr.always() }),
+	},
+});
+
+export const commentPolicy = definePolicy(comments, {
+	name: "comments.default",
+	read: {
+		admit: policy.authenticated(),
+		rows: () => expr.always(),
+	},
 });
 ```
 
-A generated write is still a named Mutation. When its Collection can raise a
-lifecycle issue, the write member must own a payloadless Operation error and an
-explicit mapping:
+## Define the Mutation
 
-```ts
-import { defineCollectionOperations, operation } from "questpie";
-import { messageEvents } from "../data/message-events";
-import { messageEventPolicy } from "./message-event-policy";
+Create this file. `createInput().pick(...)` derives required ID and summary
+codecs from the Collection; it does not choose which database action runs.
+The handler explicitly updates the ticket.
 
-const invalidMessage = operation.error({
-	code: "INVALID_MESSAGE",
-	status: 422,
-});
+```ts title="src/mutations/rename-ticket.ts"
+import { codec, operation, policy } from "questpie";
+import { defineMutation } from "#questpie/app";
+import { tickets } from "../data/tickets";
 
-export const messageEventOperations = defineCollectionOperations(
-	messageEvents,
-	{
-		name: "messageEvents",
-		policy: messageEventPolicy,
-		create: {
-			input: ["messageId", "kind"],
-			errors: { invalidMessage },
-			issueMappings: {
-				messageEvents: { invalidKind: "invalidMessage" },
-			},
-			select: { id: true },
-		},
+export const renameTicket = defineMutation({
+	name: "tickets.rename",
+	network: true,
+	input: tickets.createInput().pick({ id: true, summary: true }),
+	output: codec.object({}),
+	policy: policy.authenticated(),
+	errors: {
+		ticketUnavailable: operation.error({
+			code: "TICKET_UNAVAILABLE",
+			status: 404,
+		}),
 	},
-);
-```
-
-The compiler rejects a generated write with an unmapped reachable issue. The
-Collection therefore stays reusable and transport-free: only this Operation
-chooses the public error code and status.
-
-The compiler lowers each selected member to an ordinary Resource:
-
-| Member   | Resource                   | Consistency boundary  |
-| -------- | -------------------------- | --------------------- |
-| `list`   | Query `messages.list`      | read snapshot         |
-| `get`    | Query `messages.get`       | read snapshot         |
-| `create` | Mutation `messages.create` | one write transaction |
-| `update` | Mutation `messages.update` | one write transaction |
-| `delete` | Mutation `messages.delete` | one write transaction |
-
-The generated names in the table use the ordinary Resource contract described
-in [Define executable application behavior](./executable-definitions).
-
-The set is explicit Operation authoring and exposure shorthand. It is separate
-from the generated Collection create/update kernel used by named Mutations.
-Neither defining a Collection nor calling an input helper publishes CRUD.
-
-The generated client accepts only the declared caller Fields:
-
-```ts title="web/edit-message.ts"
-import type { GeneratedClient } from "#questpie/client";
-
-export async function editMessage(
-	client: GeneratedClient,
-	companyId: string,
-	channelId: string,
-) {
-	const company = client.withContext({ companyId });
-	const callId = crypto.randomUUID();
-	const page = await company.queries["messages.list"]({
-		channelId,
-		first: 20,
-		after: null,
-	});
-
-	const created = await company.mutations["messages.create"](
-		{
-			input: {
-				channelId,
-				title: "Ready for review",
-				body: "Please check this message.",
-			},
-		},
-		{ callId },
-	);
-	const found = await company.queries["messages.get"]({
-		key: { id: created.id },
-	});
-
-	const updated = await company.mutations["messages.update"]({
-		key: { id: created.id },
-		patch: { title: "Approved" },
-	});
-
-	if (updated !== null) {
-		await company.mutations["messages.delete"]({
-			key: { id: updated.id },
+	handler: async ({ input, ctx, errors }) => {
+		const ticket = await ctx.data.tickets.update({
+			key: { id: input.id },
+			patch: { summary: input.summary },
 		});
-	}
-
-	return { page, found };
-}
-```
-
-The network call option accepts a stable bounded text `callId`; it is not
-UUID-only. A supplied value must be valid Unicode, already NFC, contain 1–256
-Unicode scalar values, exclude U+0000, and occupy at most 1,024 UTF-8 bytes.
-The Runtime rejects rather than normalizes it. The generated client mints a UUID
-when the caller omits the value. This example deliberately supplies one so a
-retry can reuse the same Call Identity.
-
-Collection Operation Set writes fit caller Fields and database defaults.
-Collection lifecycle owns normalization, and `onUpdate: "now"` owns database
-update timestamps. When a write needs tenant, principal, or cross-Collection
-trusted values, expose a named Mutation and pass those values through its exact
-`ctx.data` call. Named Mutations and lifecycle programs use `ctx.now`.
-
-## Use `check` for database-backed integrity
-
-Policy authorizes. `validate` has no generated effect capability.
-`check` verifies an invariant that needs current database facts:
-
-```ts
-lifecycle: {
-	check: async ({ candidate, ctx, issues }) => {
-		const team = await ctx.data.teams.get({
-			key: { id: candidate.teamId },
-			select: { id: true },
-		});
-		if (team === null) throw issues.teamUnavailable();
+		if (ticket === null) throw errors.ticketUnavailable();
+		return {};
 	},
-}
-```
-
-Candidate Policy runs before `check`; an unauthorized candidate cannot use it
-as an existence oracle. Every `check` read is Policy-aware and selection-
-authorized, remains inside the Mutation transaction, and counts against its
-statement, row, dependency, duration, and cancellation budgets. Missing and
-invisible are still indistinguishable.
-
-## Use `afterWrite` only for bounded transactional work
-
-`afterWrite` runs after PostgreSQL constraints and database-owned values have
-produced the written row, but before commit. This example targets a Job already
-declared in the same generated App Contract:
-
-```ts
-import { defineJob } from "#questpie/app";
-import { codec, durable } from "questpie";
-
-export const reindexTicket = defineJob({
-	name: "ticket.reindex",
-	input: codec.object({ ticketId: codec.uuid() }),
-	output: codec.object({ ticketId: codec.uuid() }),
-	runAs: durable.caller({ whenDenied: "fail" }),
-	retry: durable.retry({
-		maximumAttempts: 3,
-		initialDelay: "1s",
-		backoff: "exponential",
-		maximumDelay: "10s",
-		jitter: "full",
-		horizon: "1h",
-	}),
-	handler: async ({ input }) => ({ ticketId: input.ticketId }),
 });
 ```
 
-The Collection can now accept that durable work before commit:
+Run `bun run build` and `bun run types:check` again. The generated client gains
+`mutations["tickets.rename"]`, with required `id` and `summary` input.
 
-```ts
-lifecycle: {
-	afterWrite: async ({ row, ctx }) => {
-		await ctx.jobs.ticket.reindex.accept({
-			input: { ticketId: row.id },
-			idempotencyKey: `ticket:${row.id}:${ctx.callId}`,
-		});
-	},
-}
-```
+A successful call returns `{}` after the summary update commits. A missing or
+invisible ticket raises the declared `TICKET_UNAVAILABLE` error with status 404.
+An empty or overlong summary fails the Field-derived input contract. Transport
+failures are separate from declared business errors.
 
-The exact acceptance object also permits `notBefore?: Date` for an absolute
-delayed start. No other key is accepted.
+## Keep transaction work inside the Mutation
 
-The compiler-recognized effect graph admits sequential bounded Collection
-reads/writes and Job acceptance only. A list requires an explicit `first`.
-Bounded `for...of` is legal only over a compiler-known bounded result.
-`Promise.all`, detached work, Services, Actions, Request, Route, filesystem,
-network, timers, raw SQL, and raw transactions are unrepresentable.
+Use `patch` for caller-supplied edits. A named Mutation can also provide trusted
+server-owned `values`; the complete candidate still passes Policy and validation.
+Neither lane grants System Authority.
 
-`ctx.data.teams.list` exists only when the application explicitly declares the
-`teams.list` Collection Operation. It accepts that Operation's exact parameters
-and returns its bounded `nodes` as a readonly array inside lifecycle code:
+Keep email, payment, and object-store requests outside the transaction. Use
+an [Action or durable Job](/docs/v4/custom-logic) for those effects. If the caller
+loses a response, do not assume the transaction rolled back. Recover with the
+same Call Identity; a new identity can perform another write.
 
-```ts
-import type { CollectionLifecycle } from "#questpie/app";
-
-export const ticketTeamReindexLifecycle = {
-	afterWrite: async ({ row, ctx }) => {
-		const teams = await ctx.data.teams.list({
-			organizationId: row.organizationId,
-			first: 2,
-			after: null,
-		});
-		for (const team of teams) {
-			await ctx.jobs.ticket.reindex.accept({
-				input: { ticketId: row.id },
-				idempotencyKey: `ticket:${row.id}:team:${team.id}`,
-			});
-		}
-	},
-} satisfies CollectionLifecycle<"tickets">;
-```
-
-This does not publish an automatic list Operation. The declared list's Policy,
-selection, ordering, and PostgreSQL plan execute in the owning Mutation
-transaction, and the observed rows count against the same budget.
-
-Nested lifecycle writes execute synchronously in authored invocation order
-through the same Collection kernel. They share the outer transaction and its
-budgets. Exceeding the compiled re-entry-depth limit, any fault, or cancellation
-rolls back the root write, nested writes, Change Ledger facts, accepted Jobs,
-and result receipt.
-
-`afterWrite` is for a small audit write or durable Job acceptance. An external
-effect belongs to an Action, normally called by an accepted Job after commit.
-There is no `afterRead` phase or general hook catalogue.
-
-## Follow the write order
-
-For each generated Collection write, QUESTPIE:
-
-1. Decodes exact Operation input and enforces Operation admission.
-2. Opens the Mutation transaction and freezes `ctx.now` from PostgreSQL
-   `transaction_timestamp()`.
-3. Decodes caller and trusted lanes, rejects unknown keys and overlap, scopes
-   and locks the current row, and authorizes caller Field paths.
-4. Runs scalar normalization and authored `normalize` separately per lane.
-5. Builds the complete candidate from the create base or locked current row,
-   trusted values, defaults, and nullable SQL `NULL` values.
-6. Runs complete Field/Codec validation and authored `validate`.
-7. Enforces candidate Policy, then runs Policy-aware `check`.
-8. Executes the PostgreSQL write, constraints, and database-owned
-   `onUpdate: "now"`, returning the final row.
-9. Runs pre-commit `afterWrite` and all bounded nested work.
-10. Applies output Field authority, validates the output and result receipt,
-    and commits once.
-11. Encodes the result.
-
-`values` bypasses only caller Field authority. The complete candidate still
-passes both validation layers, candidate Policy, and PostgreSQL constraints.
-Policy never supplies or rewrites a value.
-
-## Understand time, retry, and cancellation
-
-`ctx.now` is one transaction-stable `Date` owned by PostgreSQL. Use it when
-several writes describe one business instant. A Field with `onUpdate: "now"`
-is stronger: PostgreSQL owns the value and no lane may provide it. The compiler
-installs a `BEFORE UPDATE` invariant, so Collection kernels, ordinary SQL
-`UPDATE`, foreign-key update cascades, `INSERT ... ON CONFLICT DO UPDATE`,
-`MERGE`, and managed external writers all stamp the final row. `COPY` and plain
-`INSERT` do not perform an update. When they omit the Field or use `DEFAULT`,
-its database default owns the initial value; an explicitly supplied insert
-value is outside the update invariant.
-
-Startup verifies the exact trigger and function definition, owner, execution
-mode, fixed `search_path`, and revoked `PUBLIC` execute grant. A missing,
-disabled, replaced, or additional unmanaged object fails Schema readiness with
-`QP-SCHEMA-028`; QUESTPIE does not continue with a weaker clock guarantee.
-Returned or selected output observes the stamped value rather than the caller's
-attempted value, and a result receipt preserves those exact selected bytes. The
-Change Ledger captures the same committed update for invalidation and
-recomputation; it does not expose row values.
-
-QUESTPIE does not automatically retry arbitrary Mutation or lifecycle code. A
-pre-commit issue, fault, deadline, limit, or cancellation rolls back. Retrying
-the exact same uncommitted call starts a fresh transaction and reruns lifecycle
-work. Replaying an already committed Call Identity returns the stored receipt
-without rerunning handlers or lifecycle phases.
-
-Cancellation or response loss after commit cannot undo state. QUESTPIE returns
-`COMMITTED_RESULT_UNAVAILABLE` with stable call and transaction identities.
-`retryable: true` permits exact same-call recovery; it does not authorize a
-transport-owned automatic replay.
-
-## Observe lifecycle work through its Mutation
-
-Lifecycle execution is attributed to the owning Mutation call and PostgreSQL
-transaction. It uses the same call identity, transaction identity, deadline,
-cancellation signal, dependency accounting, and statement/row/duration budgets;
-direct and network entry therefore describe the same execution. Nested writes
-and Job acceptance remain visible as work of that transaction rather than as
-detached lifecycle calls.
-
-QUESTPIE exposes no separate public lifecycle telemetry API or
-lifecycle-specific telemetry fields. Observe the owning Mutation outcome,
-normal structured diagnostics, PostgreSQL transaction, result receipt, Change
-Ledger facts, and accepted Job identity; lifecycle phases do not create public
-hook-specific observation records.
-
-## Keep the failure classes distinct
-
-| Result                        | Meaning                                        | Public behavior                                                     |
-| ----------------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
-| `null` from keyed read/update | missing or Policy-invisible                    | intentionally indistinguishable                                     |
-| Collection Issue              | expected reusable `validate`/`check` invariant | mapped by the named Mutation after rollback                         |
-| PostgreSQL constraint failure | database race/constraint authority             | rolls back; no raw PostgreSQL detail crosses the Operation boundary |
-| unknown fault                 | bug, tampering, unsupported Runtime failure    | rollback plus sanitized `INTERNAL`                                  |
-| post-commit ambiguity         | commit may have succeeded but result was lost  | stable `COMMITTED_RESULT_UNAVAILABLE` recovery identity             |
-
-Next, [watch Queries in realtime](./realtime).
+Continue with [the generated client](/docs/v4/clients). The
+[Operation reference](/docs/v4/executable-definitions) covers exact members,
+lifecycle ownership, and error behavior.

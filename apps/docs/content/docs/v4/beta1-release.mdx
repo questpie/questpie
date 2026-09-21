@@ -1,64 +1,15 @@
 ---
-title: Install the beta.1 application server
-description: Build, migrate, and run the first QUESTPIE v4 backend from the published package.
-kind: guide
+title: Beta.1
+description: Check the frozen released capability set.
+kind: reference
 ---
 
-Install the beta.1 package in a Bun application:
+This is the frozen beta.1 inventory. The current tutorial describes a separate
+[beta.2 release](/docs/v4/beta2-release); do not use its new APIs with beta.1.
 
-```bash
-bun add questpie@4.0.0-beta.1
-```
-
-The `questpie` package contains the structural authoring API, generated
-declarations, compiler, Runtime kernels, and the `questpie` command. You do not
-install `@questpie/compiler` or `@questpie/runtime`; those are private
-implementation modules bundled inside the public package.
-
-## Build and migrate
-
-Compile the application and its immutable Runtime bundle:
-
-```bash
-bunx questpie build
-```
-
-The command reads `questpie.json`, the application source, its lockfile, and
-committed migrations. It writes `.questpie/generated` only after the complete
-contract compiles and type-checks. `questpie check` performs the same validation
-without replacing generated output.
-
-Apply reviewed committed migrations explicitly:
-
-```bash
-: "${DATABASE_URL:?Set DATABASE_URL in the deployment environment}"
-bunx questpie migration apply
-```
-
-Migration apply verifies the provider profile, checksums, migration order,
-schema fingerprint, and internal protocol. Runtime startup never applies a
-migration.
-
-## Start the standalone Runtime
-
-Supply a stable resume-token signing key containing at least 32 bytes as hex,
-then start the generated application:
-
-```bash
-: "${DATABASE_URL:?Set DATABASE_URL in the deployment environment}"
-export QUESTPIE_REALTIME_HMAC_KEY="$(openssl rand -hex 32)"
-export PORT=3000
-bunx questpie start
-```
-
-The beta.1 standalone server binds network requests to the anonymous Principal.
-Use generated direct Execution for trusted scripts that need a user or service
-Principal. Credential Auth and raw Route integration are later capabilities;
-beta.1 does not infer a user from headers or cookies.
-
-The process becomes ready only after its generated bundle, schema, migrations,
-internal protocol, realtime state, and durable work are compatible. `SIGINT`
-and `SIGTERM` drain the application and close it idempotently.
+`questpie@4.0.0-beta.1` is the released package version. It includes the public
+CLI, compiler and Runtime in one package. Its standalone CLI binds requests to
+an anonymous Principal; trusted server scripts can use generated direct execution.
 
 ## Know the beta.1 boundary
 
@@ -70,7 +21,4 @@ archive portability fixture.
 It does not include Studio, Action authoring, credential Auth, raw Routes,
 generic Jobs or Job checkpoint orchestration, File bytes, Search, OpenAPI, MCP, optional cache or
 brokers, split Runtime roles, a provider abstraction, non-B-tree indexes, or an
-RLS claim. These absences do not create placeholder APIs. ADR-0025 separately
-removes the framework event/presence Resource and carrier seam instead of
-deferring them beyond beta.1. ADR-0026 assigns checkpoint orchestration to Job
-and removes Workflow as a separate Resource/factory.
+RLS claim.

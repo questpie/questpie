@@ -1,0 +1,53 @@
+---
+title: Escape hatches
+description: Extend the application without assuming guarantees outside the framework boundary.
+kind: guide
+---
+
+Use the smallest supported extension point when Barbershop needs behavior
+outside a generated JSON Operation. Keep the lost guarantees visible.
+
+| Need                                        | Supported route                                             | Responsibility you take on                                                |
+| ------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Webhook, provider login, streaming response | `defineRoute`                                               | Request/Response parsing, method/path, admission, credentials and limits. |
+| External SDK or connection                  | `defineService` plus Action/Route                           | Provider lifecycle, cancellation, retries and uncertain effects.          |
+| A custom HTTP host                          | `createApp(...).fetch(request)`                             | Listener, trusted ingress, worker polling, readiness and shutdown.        |
+| Trusted server script                       | `app.execution(...)`                                        | Trusted Principal and Context input; close the App.                       |
+| Large business function                     | Ordinary TypeScript module imported by a handler            | Stay within that handler's generated capabilities.                        |
+| Generated source                            | External generator before build                             | Deterministic ordinary Definitions; no compiler hook.                     |
+| Customize a sealed Package                  | Vendor its Definitions and remove its activation/references | Preserve resource identities and review the resulting migration.          |
+
+## Custom hosting
+
+The generated App exposes `fetch`, `execution`, `routes`, `durable`, and `close`.
+A custom host must also run its worker: create `app.durable.worker()`, repeatedly
+call `poll()`, and own stopping/draining that loop. Mounting Fetch alone does not
+run the background work. Use `questpie start` when you do not need a custom host.
+
+`createApp` receives explicit `postgres` connections, a `realtime.hmacKey` when the generated application has realtime, and
+`maintenance.authorize`; optional observability belongs to the host.
+A maintenance decision is not a default administrator bypass.
+The [local script](/docs/v4/schema-lifecycle) shows creation and cleanup.
+
+## Direct SQL
+
+Query and Mutation contexts expose no raw SQL, ORM handle, or manual
+transaction. An application can independently connect to PostgreSQL using its
+own infrastructure, but those statements do not inherit QUESTPIE Policy,
+Collection lifecycle, result receipts, or a supported live-dependency contract.
+Do not present that as a framework data API.
+
+Manage schema changes through reviewed migrations. Handwritten changes in the
+application schema can make readiness fail on drift. There is no `db push`,
+unreviewed force mode, or handwritten SQL migration escape hatch in the schema artifact protocol.
+
+## Keep package boundaries explicit
+
+`questpie/internal/*` and `.questpie/generated/internal/*` are framework-owned
+implementation details. Private compiler/Runtime workspaces are not consumer
+APIs. Copying an internal import into application code does not turn it into
+a supported alternative.
+
+Ordinary installed libraries need no Package activation. Reusable Definitions
+use the static composition contract, with explicit inventory acceptance and
+owner-approved Augmentations. There is no runtime plugin registry.

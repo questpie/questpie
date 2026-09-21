@@ -1,0 +1,76 @@
+---
+title: CLI
+description: Initialize, compile, plan, create, apply, and run an application.
+kind: reference
+---
+
+The `questpie` executable ships in the `questpie` package. Run it from the
+Application Root, using Bun. For the full sequence see
+[installation](/docs/v4/installation) and [local database setup](/docs/v4/schema-lifecycle).
+
+| Command                  | Arguments and result                                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `init`                   | Required `--name <lowerCamelName>`; writes config, generated imports and directories. No dependency installation or database access.            |
+| `build`                  | Compiles source and atomically replaces `.questpie/generated/`.                                                                                 |
+| `check`                  | Compiles current source into temporary output; preserves generated editor output.                                                               |
+| `migration plan`         | Required `--name <lower-kebab-slug>`; optional repeated `--rename from=to`; returns Plan JSON, digest, classification and path, or `noChanges`. |
+| `migration create`       | Required `--plan <digest-named-file>`; optional exact `--accept-destructive <digest>`; creates the next immutable migration.                    |
+| `migration apply`        | Applies committed migrations using `DATABASE_URL`; supports explicit protocol-v8/v9 cutover acknowledgments.                                    |
+| `seed create`            | Compiles all source Seeds and persists new immutable artifacts; unchanged ones are retained.                                                    |
+| `seed apply`             | Applies committed Seeds in dependency order with immutable receipts.                                                                            |
+| `schedule activate`      | Required `--expect-revision <decimal>`; activates the built desired schedule set.                                                               |
+| `explain projection mcp` | Reads the generated MCP explanation; requires a matching prior build.                                                                           |
+| `start`                  | Starts the built Runtime; optional `--port <number>` or `--port=<number>`, and `--telemetry=opentelemetry`.                                     |
+
+## Initialization
+
+`init` takes a single lower-camel name of 1–63 ASCII characters. It derives the
+PostgreSQL schema by inserting underscores before capitals and lowercasing.
+It refuses existing `questpie.json` or `tsconfig.json` and conflicting generated
+imports. It preserves dependency entries and existing scripts.
+If initialization is interrupted after writing some files, inspect and complete
+them using the installation guide; `init` does not overwrite partial setup.
+For an existing TypeScript project, merge the configuration from the
+[installation guide](/docs/v4/installation) manually.
+
+## Artifact authoring
+
+Plan files contain exact canonical bytes at `.questpie/plans/<digest>.json`.
+Creation recompiles current source and checks the local migration head. Edited
+Plan bytes, changed source, changed history, or missing destructive acceptance
+cannot create a migration. Blocked plans cannot be committed.
+
+Migration artifacts contain six files. Seed artifacts contain three. These live
+under the tracked `questpie/` directory. Generated editor/runtime output lives
+under ignored `.questpie/`. Rebuild after artifact creation to bind the new history.
+
+Local schema authoring uses `.questpie/authoring.lock`. Another authoring command
+fails while the lock exists. After a crashed process, confirm the PID recorded
+in that file has stopped before removing the stale lock and retrying.
+Do not remove a lock held by a running command.
+
+## Environment and errors
+
+`DATABASE_URL` is required for apply, schedule activation, and start. Planning
+uses it when present to verify the live base; otherwise it plans offline.
+Start also requires `QUESTPIE_REALTIME_HMAC_KEY`, at least 32 bytes encoded as hex.
+`PORT` defaults to 3000 and is overridden by `--port`.
+
+Schema authoring emits compiler failures with `code`, `class`, and `message`
+and exits 2. Invalid command/file conditions exit 1. Successful commands exit 0.
+Do not treat a failed apply as proof that every earlier migration rolled back.
+
+The CLI has no schema push, handwritten SQL migration, down migration, or
+non-transactional DDL path. Use `build` after source edits; no `sync` or `dev`
+command is required for this workflow. Package inventory management and broad
+resource explanation are not exposed as CLI commands.
+
+The derived PostgreSQL schema must fit 63 bytes and cannot use reserved names
+or the `pg_` / `questpie_` prefixes. `init` rejects such names before writing.
+It also adds `.questpie/` and `node_modules/` to `.gitignore`.
+
+Rename hints use resource identities, for example
+`--rename 'collection:tickets/field:summary=collection:tickets/field:subject'`.
+Collection renames use `collection:old=collection:new`. Update source references
+as well. Every plan containing a rename is destructive and requires its exact
+`--accept-destructive` digest when creating the artifact.

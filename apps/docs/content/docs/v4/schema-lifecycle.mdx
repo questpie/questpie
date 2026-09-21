@@ -1,711 +1,191 @@
 ---
-title: Schema lifecycle
-description: Define PostgreSQL data, review migrations, detect drift, and run immutable Seeds.
+title: Database setup
+description: Create reviewed migrations, add demo rows, and execute a real read and write.
 kind: guide
 ---
 
-QUESTPIE uses one schema path from TypeScript Definitions to PostgreSQL.
-QUESTPIE compiles Definitions into the Compiled Manifest. The versioned Schema
-Projection inside that Compiled Manifest produces the Migration Plan, reviewed SQL, and
-Schema Fingerprint comparison.
+Run the tutorial against your own disposable PostgreSQL database. Complete the
+[data](/docs/v4/data-and-queries) and [Mutation](/docs/v4/queries-and-mutations)
+chapters first. This guide uses a trusted server script so you can test the data
+flow before connecting an Auth provider or browser.
 
-QUESTPIE tracks desired state, reviewed migration history, and actual
-PostgreSQL state separately:
+## Prepare PostgreSQL
 
-| Fact                      | Meaning                   | Authority                        |
-| ------------------------- | ------------------------- | -------------------------------- |
-| Compiled Manifest         | desired application state | current Definitions and compiler |
-| Committed Migration chain | reviewed change history   | files in version control         |
-| Schema Fingerprint        | actual PostgreSQL state   | the connected database           |
+Use PostgreSQL 16 or newer, UTF-8 encoding, `C.UTF-8` database locale, and the
+built-in deterministic `C` collation, matching `questpie.json`. Create a fresh
+database whose application schema `barbershop_support` does not yet exist.
+Set `DATABASE_URL` in your shell to that database's connection string.
+Use a direct/session-affine connection for migration and Runtime work.
 
-QUESTPIE does not push an unrecorded schema. A local combined command creates
-the same Committed Migration that a deployment applies.
+Set `QUESTPIE_REALTIME_HMAC_KEY` to a secret of at least 32 bytes encoded as hex.
+Keep the same key across compatible Runtime instances and restarts. These are
+server environment values; do not commit them or place them in browser code.
 
-## Define Collections
+If you use Docker for local development, this creates a separate PostgreSQL 17
+container with the required locale. It requires Docker and OpenSSL. Keep the
+generated password in your local environment for later terminals.
 
-This example defines the tenant side of the Barbershop Relation.
-
-```ts title="src/data/tenants.ts"
-import { constraint, defineCollection, field } from "questpie";
-
-export const tenants = defineCollection({
-	name: "tenants",
-	fields: {
-		id: field.uuid({
-			nullable: false,
-			default: "randomUuid",
-			immutable: true,
-		}),
-		slug: field.text({ nullable: false, maxLength: 80 }),
-		name: field.text({ nullable: false, maxLength: 160 }),
-	},
-	constraints: {
-		primary: constraint.primaryKey({ fields: ["id"] }),
-		slugUnique: constraint.unique({ fields: ["slug"] }),
-	},
-});
+```sh
+export BARBERSHOP_DB_PASSWORD=$(openssl rand -hex 16)
+docker run --name barbershop-postgres --detach \
+  --publish 127.0.0.1:54329:5432 \
+  --env POSTGRES_PASSWORD="$BARBERSHOP_DB_PASSWORD" \
+  --env POSTGRES_DB=barbershop \
+  --env 'POSTGRES_INITDB_ARGS=--encoding=UTF8 --locale=C.UTF-8' \
+  postgres:17
+export DATABASE_URL="postgresql://postgres:$BARBERSHOP_DB_PASSWORD@127.0.0.1:54329/barbershop"
+export QUESTPIE_REALTIME_HMAC_KEY=$(openssl rand -hex 32)
+docker exec barbershop-postgres pg_isready -h 127.0.0.1 -U postgres -d barbershop
 ```
 
-The appointments Definition adds a check Constraint, an Index, and a Relation.
-The Relation also defines the PostgreSQL foreign key.
+Wait until `pg_isready` reports “accepting connections” before planning.
+An existing container or occupied port is not replaced; choose another name/port
+and update the connection string in that case. To pause this local database,
+run `docker stop barbershop-postgres`; resume it with `docker start barbershop-postgres`.
+The container retains its data until you remove it.
 
-```ts title="src/data/appointments.ts"
-import { constraint, defineCollection, field, index, relation } from "questpie";
+## Plan, review, and create the migration
 
-import { tenants } from "./tenants";
+Run in the application directory:
 
-const appointmentFields = {
-	id: field.uuid({
-		nullable: false,
-		default: "randomUuid",
-		immutable: true,
-	}),
-	tenantId: field.uuid({ nullable: false, server: true, immutable: true }),
-	customerName: field.text({ nullable: false, maxLength: 160 }),
-	startsAt: field.timestamp({ nullable: false, withTimezone: true }),
-	endsAt: field.timestamp({ nullable: false, withTimezone: true }),
-	status: field.text({
-		nullable: false,
-		maxLength: 24,
-		default: "scheduled",
-	}),
-	createdAt: field.timestamp({
-		nullable: false,
-		withTimezone: true,
-		default: "now",
-		server: true,
-		immutable: true,
-	}),
-	updatedAt: field.timestamp({
-		nullable: false,
-		withTimezone: true,
-		default: "now",
-		server: true,
-	}),
-};
-
-export const appointments = defineCollection({
-	name: "appointments",
-	fields: appointmentFields,
-	constraints: {
-		primary: constraint.primaryKey({ fields: ["id"] }),
-		validWindow: constraint.check<typeof appointmentFields>(({ fields }) =>
-			fields.endsAt.greaterThan(fields.startsAt),
-		),
-	},
-	indexes: {
-		byTenantAndStart: index({
-			fields: ["tenantId", { field: "startsAt", order: "asc" }],
-		}),
-	},
-	relations: {
-		tenant: relation.toOne({
-			target: tenants,
-			fields: ["tenantId"],
-			references: ["id"],
-			onDelete: "cascade",
-			onUpdate: "restrict",
-		}),
-	},
-});
+```sh
+bunx --no-install questpie migration plan --name create-support
 ```
 
-Declare the Fields object before the Collection and pass its type to
-`constraint.check`. The explicit type argument keeps Field names and scalar
-compatibility exact. The compiler evaluates the callback once and stores only
-its closed expression tree, so the callback does not enter migration artifacts
-or deployment.
+The JSON result contains `path`, `digest`, `classification`, and the full `plan`.
+Review the schema, fields, constraints, and relations in that plan. `safe`
+adds state; `guarded` may lock or fail on existing data; `destructive` can remove
+or narrow state; `blocked` cannot be committed by this migration protocol.
 
-Field provenance declares which write lane may supply a scalar Field. It is
-separate from nullability and database defaults:
+Copy the exact returned path into `PLAN_FILE`, then create the artifact:
 
-| Field declaration               | Caller create input | Caller update patch | Trusted `values` |
-| ------------------------------- | ------------------- | ------------------- | ---------------- |
-| default                         | allowed             | allowed             | allowed          |
-| `immutable: true`               | allowed             | forbidden           | create only      |
-| `server: true`                  | forbidden           | forbidden           | allowed          |
-| `server: true, immutable: true` | forbidden           | forbidden           | create only      |
-
-The Collection owns this boundary because the rule must be the same in every
-Mutation that writes the Field. A named Mutation can narrow the caller surface,
-but it cannot make an immutable Field writable or turn a server-owned Field
-into caller input.
-
-Provenance changes the Data Contract and generated application types, not the
-PostgreSQL column. Changing only `server` or `immutable` does not create a schema
-Migration.
-
-QUESTPIE calculates caller requiredness after provenance removes server-owned
-Fields from the caller surface. A caller-writable, non-nullable create Field
-without a database default is required. A defaulted or nullable create Field is
-optional, and an absent nullable Field without a default becomes SQL `NULL`.
-Every update patch Field is optional. A Mutation must supply a non-nullable
-server-owned Field without a default through trusted `values`; otherwise
-QUESTPIE rejects the incomplete candidate before it writes.
-
-Configure the Application Identity, PostgreSQL schema, and discovery root in
-the [`questpie.json` Application Root](./definition-composition#configure-one-application-root).
-
-Application-owned objects stay in `barbershop`. Runtime bookkeeping stays in
-the reserved `questpie_internal` schema. An unexpected object in `barbershop`
-is Drift.
-
-The Application Identity uses the Qualified Resource Name grammar. The schema
-name and explicit physical names use unquoted lower-snake ASCII. After the
-database has a Migration or Seed Receipt, you cannot change the Application
-Identity or physical schema name. A different Application Identity or schema
-name identifies another application. QUESTPIE does not implicitly adopt the old
-schema or receipts. Apply reports `QP-SCHEMA-029 applicationBindingMismatch`
-when the configured identity or schema disagrees with the stored binding.
-
-## Field and Relation limits
-
-Schema Projection v1 requires PostgreSQL 16 or later. It supports these Field
-constructors:
-
-| Constructor       | PostgreSQL storage           | Contract                                      | Canonical committed value |
-| ----------------- | ---------------------------- | --------------------------------------------- | ------------------------- |
-| `field.uuid`      | `uuid`                       | optional random UUID default                  | lowercase UUID text       |
-| `field.text`      | `text COLLATE "C"`           | optional minimum and maximum length           | NFC string                |
-| `field.boolean`   | `boolean`                    | optional literal default                      | boolean                   |
-| `field.integer`   | `integer`                    | optional bounds and default                   | safe JSON integer         |
-| `field.bigint`    | `bigint`                     | client value is a string                      | signed decimal text       |
-| `field.numeric`   | `numeric(precision, scale)`  | explicit precision and scale                  | fixed-scale decimal text  |
-| `field.timestamp` | `timestamp` or `timestamptz` | explicit time-zone behavior                   | millisecond ISO timestamp |
-| `field.date`      | `date`                       | ISO date client value                         | `YYYY-MM-DD`              |
-| `field.object`    | `jsonb`                      | closed typed `value.*` properties             | canonical JSON            |
-| `field.array`     | `jsonb`                      | bounded typed `value.*` items                 | canonical JSON            |
-| `field.json`      | `jsonb`                      | open tagged JSON without typed interior paths | canonical JSON            |
-
-Every Field must state `nullable`. Literal defaults exist only for text,
-boolean, and integer Fields. `field.uuid` supports `"randomUuid"`.
-`field.timestamp` supports `"now"`.
-Bigint, numeric, date, and arbitrary SQL literal defaults are not valid in v1.
-JSON-backed Fields have no schema default in v1. `field.object` and
-`field.array` use a separate closed `value.*` grammar; embedded values cannot
-own defaults, physical names, Constraints, Indexes, Relations, or independent
-lifecycle. Every embedded array declares `maximumItems` from 1 through 1,000.
-Embedded containers have a maximum depth of eight, and each JSONB-backed Field
-has at most 1,048,576 canonical UTF-8 JSON bytes. Open JSON distinguishes SQL
-`NULL` from top-level JSON `null` with `{ kind: "json", value: null }`.
-
-Use `shape.inline` to group ordinary column Fields without creating a stored
-container. Each leaf keeps its own identity and segment-array path, such as
-`["address", "city"]`; QUESTPIE never parses a dotted string as a path. Use an
-explicit Collection and Relation for a nested concept with identity,
-independent Policy or lifecycle, unbounded growth, querying, or pagination.
-QUESTPIE never synthesizes a hidden Collection. See
-[Data and structural Queries](./data-and-queries#choose-a-nested-data-model).
-
-Bigint text cannot have leading zeroes. Numeric text cannot use an exponent.
-A timestamp without time zone uses local ISO form. A timestamp with time zone
-uses UTC form ending in `Z`. QUESTPIE rejects noncanonical input. It does not
-round or normalize it.
-
-Text length and integer bounds create named check Constraints. Their stable
-identity derives from the Field and bound. They appear in the Schema
-Projection, SQL, and Drift output.
-
-V1 supports primary-key, unique, and check Constraints. It supports B-tree
-Indexes and `toOne` Relations. A referenced Field list must be a primary or
-unique key, and the local and referenced lists must have equal length. Index
-entries default to ascending order with nulls last. Descending entries default
-to nulls first. The allowed referential actions are `restrict`, `cascade`,
-`setNull`, and `noAction`. `setNull` requires nullable local Fields.
-
-After Augmentations resolve, every regular Collection must have exactly one
-named `constraint.primaryKey({ fields: [...] })`. `id` is an ordinary Field;
-there is no `field.id()` or `primaryKey: true` modifier. `createdAt` and
-`updatedAt` are likewise ordinary timestamp Fields. A `"now"` default
-initializes them on insert. A Mutation must assign every `updatedAt` change
-explicitly; the schema does not attach a callback.
-
-Every text Field uses semantic collation `questpie.binary`, lowered to explicit
-PostgreSQL `COLLATE "C"` for checks, keys, uniqueness, Indexes, filters,
-ordering, and cursor seeks. QUESTPIE fails if deterministic libc collation `C`
-is unavailable; it does not substitute a database default, `C.UTF-8`, or ICU.
-
-The compiler accepts only the callback's closed serializable expression tree.
-The authoring module and callback run inside QUESTPIE's controlled structural
-evaluator. Environment, I/O, clock, random, process, and other forbidden
-build-time effects stop compilation. The evaluator enforces deterministic
-compilation. It is not a security sandbox for hostile Package code. No
-executable callback enters a Committed Migration or deploy runner.
-
-## Identity and PostgreSQL names
-
-Resource and member identity comes from semantic names:
-
-```text
-collection:appointments
-collection:appointments/field:startsAt
-collection:appointments/constraint:validWindow
-collection:appointments/index:byTenantAndStart
-collection:appointments/relation:tenant
+```sh
+PLAN_FILE='.questpie/plans/<digest-from-plan-result>.json'
+bunx --no-install questpie migration create --plan "$PLAN_FILE"
 ```
 
-A file move or export rename does not change these identities. QUESTPIE sorts
-semantic sets before it writes the Schema Projection, so Definition order does
-not change its bytes.
+This writes six files under `questpie/migrations/000001_create-support/`.
+Review and commit all six, including `up.sql` and `checksum.sha256`.
+Do not edit the generated SQL. Creation does not apply database changes.
 
-Default PostgreSQL names are deterministic:
+When `DATABASE_URL` is set, planning checks the live database against the local
+base. Without it, planning is offline and application checks happen at apply.
+The same source and history produce the same Plan bytes in both modes.
 
-| Semantic name                         | PostgreSQL name                          |
-| ------------------------------------- | ---------------------------------------- |
-| `appointments`                        | `appointments`                           |
-| `booking.availability`                | `booking__availability`                  |
-| `startsAt`                            | `starts_at`                              |
-| `validWindow` check on `appointments` | `qp_ck_appointments_valid_window`        |
-| `byTenantAndStart` Index              | `qp_ix_appointments_by_tenant_and_start` |
+## Add deterministic demo data
 
-QUESTPIE shortens a name over PostgreSQL's 63-byte limit and adds a stable
-SHA-256 suffix. The compiler fails if physical names collide. It does not
-resolve a collision by Definition order.
+Create this source Seed. Its fixed IDs let the next script select the same
+Barbershop ticket on every run. This is demo data, not a user or session Seed.
 
-Set `postgres: { name: "lower_snake_case" }` on a Collection or member to use
-an explicit physical name. For a target that you cannot annotate inline, set
-its exact semantic identity under `postgres.physicalNames`:
-
-```json title="questpie.json → postgres.physicalNames"
-{
-	"collection:appointments/index:byAuditId": "qp_ix_appointments_audit_id"
-}
-```
-
-You cannot supply both forms for one identity. Every override key must resolve
-to one compiled non-`application:` schema target. QUESTPIE reports
-`QP-SCHEMA-003 invalidReference` for an unknown or stale key. The override
-changes only the physical projection and uses a reviewed rename Migration.
-
-Every physical name uses unquoted lower-snake ASCII. It must fit in 63 bytes.
-It cannot start with `pg_` or `questpie_`. Application schema names also cannot
-be `public`, `information_schema`, `pg_catalog`, or `questpie_internal`.
-
-## Compile and create a Migration Plan
-
-Compile desired state without changing PostgreSQL:
-
-```bash
-bunx questpie schema compile
-```
-
-The command writes `.questpie/generated/manifest.json` and
-`.questpie/generated/schema-projection.json`. The Compiled Manifest contains a
-versioned Schema Projection. Non-schema Resources do not enter schema history.
-RFC 8785 canonical JSON plus one LF and the
-`questpie-schema-projection-v1\0` digest prefix make identical schema inputs
-byte stable. The Schema Projection contains no absolute paths, timestamps,
-secrets, Origin locations, or ORM values.
-
-Create a read-only Migration Plan:
-
-```bash
-bunx questpie migration plan --name create-appointments
-```
-
-The planner always compares the current and latest committed Schema
-Projections. When you provide a database connection, it also compares the
-Schema Fingerprint. It prints every planned step with its classification,
-containing Resource identity, expected lock, scan or rewrite flag, Origin, and
-recovery step. Migration Plan steps contain no SQL.
-
-The command writes the exact canonical Migration Plan to
-`.questpie/plans/$PLAN_DIGEST.json`. The command prints the path and digest.
-Database observations and rendered diagnostic prose cannot enter Migration Plan bytes.
-With a connection, QUESTPIE requires the live Schema Fingerprint to match the
-local base before it emits the Migration Plan. Offline planning uses that same local base,
-and apply performs the live check later. The same base, target, slug, and rename
-mappings therefore produce the same Migration Plan online and offline.
-
-`--name` is the lower-kebab slug stored in the Migration Plan. Migration creation combines
-it with the next six-digit sequence.
-
-Plans use four classifications:
-
-| Class         | Meaning                                                                             |
-| ------------- | ----------------------------------------------------------------------------------- |
-| `safe`        | adds state without reading or removing existing data                                |
-| `guarded`     | can scan, lock, or fail on existing data                                            |
-| `destructive` | can remove a schema object or data, narrow values, or break a physical SQL contract |
-| `blocked`     | v1 cannot execute the change without another contract                               |
-
-| Change                                                                                                        | Class         |
-| ------------------------------------------------------------------------------------------------------------- | ------------- |
-| create schema/Collection; add nullable Field without default; relax a bound                                   | `safe`        |
-| add nullable `field.object`, `field.array`, or `field.json` without a default                                 | `safe`        |
-| add literal default, nullable defaulted Field, check, unique, Relation, Index; widen integer to bigint        | `guarded`     |
-| explicit Collection, Field, or physical-name rename; drop an object; required-to-nullable                     | `destructive` |
-| add required Field with literal default; nullable-to-required with literal backfill                           | `destructive` |
-| drop/change default; strengthen bound; reduce precision; change scale                                         | `destructive` |
-| change Constraint Fields/expression, Index shape, or Relation endpoints/actions                               | `destructive` |
-| required Field without literal backfill; unsupported Field-kind or timestamp-zone change                      | `blocked`     |
-| add or change the embedded codec of an existing JSONB Field                                                   | `blocked`     |
-| generated/identity column, RLS, expression/unique Index, custom collation/opclass, or unlisted semantic delta | `blocked`     |
-| non-transactional or handwritten DDL                                                                          | `blocked`     |
-
-Increasing the PostgreSQL minimum or adding a required extension is `guarded`.
-Lowering the minimum or removing an unused extension requirement is `safe`.
-Changing database collation or character classification after the first
-applied migration is `blocked`. If no schema step or provider-profile change exists, QUESTPIE
-returns `noChanges` with exit `0` and writes no Migration Plan.
-
-`randomUuid` and `now` are not literal backfills for an existing table.
-
-QUESTPIE does not guess a rename. You must supply a one-to-one identity mapping:
-
-```bash
-bunx questpie migration plan --name rename-start \
-  --rename 'collection:appointments/field:startsAt=collection:appointments/field:beginsAt'
-```
-
-Without that mapping, the planner reports an addition and a destructive
-removal. It does not use a similarity heuristic or block an intentional
-remove-and-add.
-
-A mapped Collection or Field rename also enumerates generated Constraint,
-Index, and Relation-constraint names. If a child physical name changes, the
-Migration Plan contains a separate rename step for it. The parent step does not hide a
-physical cascade. A mapped rename remains `destructive` because it changes the
-physical SQL contract.
-
-## Commit a reviewed migration
-
-Create a Committed Migration from one exact Migration Plan file. This sample digest has
-the required 64-character shape. You must use the path and digest printed by
-your Migration Plan:
-
-```bash
-export PLAN_DIGEST=6b17c2d908d4d6e70f0d22a2f96bf9d38d0c6d2406c5974138270ebd46f4f70a
-export PLAN_FILE=".questpie/plans/$PLAN_DIGEST.json"
-bunx questpie migration create --plan "$PLAN_FILE"
-```
-
-A destructive Migration Plan requires the same digest as its acknowledgement:
-
-```bash
-bunx questpie migration create \
-  --plan "$PLAN_FILE" \
-  --accept-destructive "$PLAN_DIGEST"
-```
-
-A generic `--force` cannot approve a destructive change. A changed Definition
-produces another digest and invalidates the previous acknowledgement.
-Migration creation recompiles the Schema Projection and verifies that the Migration Plan
-base remains the local chain head. An intervening Definition or migration
-change reports `QP-SCHEMA-022 stalePlan`. You must create another Migration Plan.
-QUESTPIE also re-derives the typed semantic steps from the exact base and target
-snapshots. Migration Plan steps contain no SQL. The fixed v1 renderer generates `up.sql`;
-an edited step or renderer mismatch is stale and cannot become handwritten SQL.
-
-The first migration has this layout:
-
-```text
-questpie/migrations/000001_create-appointments/
-  migration.json
-  plan.json
-  base-schema.json
-  target-schema.json
-  up.sql
-  checksum.sha256
-```
-
-You must commit all six files. The checksum covers the exact metadata, Migration Plan,
-base and target Schema Projections, and SQL bytes. Applied
-Committed Migrations are immutable.
-
-The first `base-schema.json` is the canonical empty Schema Projection. It has
-the Application Identity and physical schema name, but no Collections. Apply
-requires the application schema to be absent before migration 000001 creates
-it. Every later migration carries both its base and target snapshots.
-
-Origin is current compiler diagnostic metadata. A Committed Migration does not
-store Origin, so a source file or export move cannot change migration history.
-
-The migration checksum is SHA-256 over these exact UTF-8 bytes:
-
-```text
-questpie-migration-v1\0
-<migration.json bytes>\0
-<plan.json bytes>\0
-<base-schema.json bytes>\0
-<target-schema.json bytes>\0
-<up.sql bytes>
-```
-
-`checksum.sha256` stores the 64 lowercase hexadecimal characters and one LF.
-
-Migration identities form one linear six-digit sequence. If two branches
-allocate the same sequence, you must resolve the source conflict and replan. V1
-does not merge a migration graph.
-
-## Apply and verify
-
-Apply committed migrations and then inspect Drift:
-
-```bash
-bunx questpie migration apply
-bunx questpie schema drift
-```
-
-Apply and Seed commands require a direct PostgreSQL connection or a pool in
-session mode. V1 rejects transaction-pooling endpoints because its advisory
-lock must span multiple committed transactions. For managed Supabase, use the
-direct or session-mode connection endpoint.
-
-QUESTPIE verifies the chain and checksums before it executes SQL. The first time
-you apply a migration or run a Seed, QUESTPIE takes a database-scoped bootstrap
-lock and installs the versioned `questpie.internal.v1` receipt protocol in
-`questpie_internal`. Every later apply and Seed run verifies its protocol
-checksum and stored shape. QUESTPIE then takes the application-scoped lock. A
-mismatch makes QUESTPIE stop before application SQL.
-
-For one Committed Migration, QUESTPIE wraps the DDL, target Schema Fingerprint
-check, and immutable Migration Receipt in one PostgreSQL transaction.
-
-QUESTPIE compares the live database only with the applied chain head. It does
-not compare an old migration target after a later migration exists. The next
-pending migration must continue from that head. One apply command advances all
-pending migrations in chain order while it holds the application lock.
-
-Each migration commits separately. If a later pending migration fails,
-QUESTPIE lists the migrations committed by that invocation, the failed identity,
-and the remaining identities. QUESTPIE releases the lock and a retry continues
-from the new receipt head.
-
-If SQL fails, PostgreSQL rolls back the DDL and receipt. If the success response
-is lost after commit, a retry finds the same identity and checksum, verifies the
-target Schema Fingerprint, and returns `alreadyApplied`. It does not execute the
-SQL twice. QUESTPIE also verifies the target after commit. A post-commit mismatch
-makes QUESTPIE report blocking Drift. Every retry repeats that check.
-
-Apply stops before SQL for these history errors:
-
-- an applied migration is missing locally;
-- a local predecessor or sequence is missing;
-- the applied checksum differs;
-- the Application Identity or PostgreSQL schema differs from the stored binding;
-- the live Schema Fingerprint does not match the migration base.
-
-An external DDL session does not honor the QUESTPIE advisory lock. You must stop
-external DDL while apply runs. The post-commit Schema Fingerprint detects a
-conflicting external schema change.
-
-Schema Projection v1 cannot run non-transactional DDL. Any unsupported
-non-transactional step fails with:
-
-```text
-QP-SCHEMA-031 nonTransactionalDdl
-CREATE INDEX CONCURRENTLY cannot run in the v1 migration transaction.
-Use the supported blocking Index in a reviewed maintenance window.
-Artifact v1 cannot perform another form of this change.
-```
-
-V1 cannot generate a down migration, accept handwritten migration SQL, pull or
-push a database, or adopt an existing schema.
-
-## Drift classes
-
-The Schema Fingerprint includes all tables, columns, defaults, generated or
-identity settings, Constraints, Indexes, and declared extensions in the
-application schema. It normalizes expressions, predicates, collations,
-validation state, deferrability, operator classes, null order, and referential
-actions. It excludes OIDs, owners, statistics, storage paths, comments,
-creation times, catalog row order, and physical column ordinal.
-
-Provider validation separately requires the configured database collation,
-character classification, PostgreSQL major version, and extension presence.
-These observations do not enter the semantic Schema Fingerprint Digest.
-
-QUESTPIE maps supported catalog attributes into the same closed values as
-the Schema Projection. It does not hash PostgreSQL deparser text. A primary or
-unique Constraint owns its PostgreSQL backing Index, so that backing Index does
-not appear again as an authored Index. The Schema Fingerprint Digest excludes
-exact server and extension versions. V1 checks extension presence and reports
-the installed version as an observation. It does not order extension version
-strings.
-
-The Schema Fingerprint enumerates schemas, PostgreSQL relation kinds, types,
-routines, triggers, row-level security policies, and rules. V1 cannot author
-those objects. If one appears in the application schema, QUESTPIE reports
-`unexpectedObject` Drift. QUESTPIE ignores an object outside the application
-schema unless an application object depends on it. Only PostgreSQL built-ins
-and compiler-required extensions are valid external dependencies in v1.
-
-`schema drift` names one comparison and class:
-
-| Comparison                                                    | Classes                                                                                                                                   |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| local chain against Migration Receipts                        | `pendingMigration`, `missingLocalMigration`, `unknownAppliedMigration`, `orderMismatch`, `checksumMismatch`, `applicationBindingMismatch` |
-| applied-head Schema Projection against PostgreSQL             | `missingObject`, `unexpectedObject`, `changedObject`, `invalidObject`, `undeclaredDependency`                                             |
-| current Schema Projection against committed Schema Projection | `unplannedDesiredChange`                                                                                                                  |
-| required provider profile against PostgreSQL                  | `unsupportedPostgres`, `missingExtension`, `incompatibleExtension`                                                                        |
-
-Each diagnostic uses the shared versioned JSON envelope and includes the
-semantic identity, physical name, containing Resource identity, current Origin
-locations, expected and actual fragments, and exact recovery commands. Origin
-does not enter Migration Plan or Committed Migration bytes. A diagnostic does not print the
-database URL, environment values, or source text.
-
-| Exit | Meaning                                      |
-| ---- | -------------------------------------------- |
-| `0`  | success                                      |
-| `2`  | command, configuration, or Definition error  |
-| `3`  | required guarded or destructive confirmation |
-| `4`  | artifact, history, provider, or Drift block  |
-| `5`  | database execution or availability failure   |
-
-`--format json` emits the same format, version, code,
-severity, blocking effect, comparison, class, identity, physical name,
-container identity, Origins, expected and actual fragments, summary, and
-recovery commands.
-
-For example, the JSON form of a checksum failure is:
-
-```json
-{
-	"format": "questpie.diagnostic",
-	"version": 1,
-	"code": "QP-SCHEMA-023",
-	"severity": "error",
-	"blocking": "fatal",
-	"comparison": "localToReceipts",
-	"class": "checksumMismatch",
-	"identity": "000001_create-appointments",
-	"physicalName": null,
-	"containerIdentity": "application:barbershop",
-	"origins": [],
-	"summary": "The applied migration checksum differs from the committed migration.",
-	"expected": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-	"actual": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-	"recovery": [
-		{
-			"description": "Inspect the local changes, then restore the reviewed bytes that were applied.",
-			"command": null
-		}
-	]
-}
-```
-
-## Run an immutable Seed
-
-A v1 Seed is a once-only declarative data initialization step.
+Seed timestamps use canonical ISO strings in the committed JSON artifact.
+Operation results decode those timestamps to JavaScript `Date` objects.
 
 ```ts title="src/data/demo-seed.ts"
 import { defineSeed, seed } from "questpie";
+import { tickets } from "./tickets";
+import { comments } from "./comments";
 
-import { appointments } from "./appointments";
-import { tenants } from "./tenants";
-
-export const demoBarbershop = defineSeed({
-	name: "barbershop.demo.v1",
-	dependsOn: [],
+export const supportDemo = defineSeed({
+	name: "barbershopSupport.demo.v1",
 	steps: [
-		seed.insert(tenants, {
-			id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
-			slug: "downtown",
-			name: "Downtown Barbers",
+		seed.insert(tickets, {
+			id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131",
+			summary: "Can I move my appointment?",
 		}),
-
-		seed.insert(appointments, {
-			id: "018f5f70-0a0c-7f11-89f9-2aa4f8df3945",
-			tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
-			customerName: "Nina Horvath",
-			startsAt: "2026-08-11T09:00:00.000Z",
-			endsAt: "2026-08-11T09:30:00.000Z",
-			status: "scheduled",
+		seed.insert(comments, {
+			id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7132",
+			ticketId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131",
+			body: "I can come on Friday instead.",
+			createdAt: "2026-09-09T09:00:00.000Z",
 		}),
 	],
 });
 ```
 
-Seed timestamp values are canonical strings. `Date` values and clock reads such as
-`Date.now()` or `new Date()` are not valid Seed values.
+Persist new Seed artifacts, rebuild the bundle with the committed migration,
+then apply the migration and Seed:
 
-QUESTPIE compiles these immutable Seed files. You must commit all three:
-
-```text
-questpie/seeds/barbershop.demo.v1/
-  seed.json
-  steps.json
-  checksum.sha256
+```sh
+bunx --no-install questpie seed create
+bunx --no-install questpie build
+bunx --no-install questpie migration apply
+bunx --no-install questpie seed apply
 ```
 
-`seed.json` records the Seed identity, sorted dependency identities, and Steps
-Digest. `seed.insert`, `seed.update`, `seed.upsert`, and `seed.delete` produce
-data-only steps in `steps.json`. They do not accept a runtime callback. The
-checksum covers the exact metadata and step bytes with the
-`questpie-seed-v1\0` prefix. Seed steps preserve authored order. Each step sorts
-its Field values by semantic Field identity.
+`seed create` writes three immutable files per new Seed under `questpie/seeds/`.
+Commit them. Repeating apply recovers the existing receipts and does not insert
+the rows twice. To change initialized data later, author a new Seed identity;
+do not edit the old one. `dependsOn` orders dependent Seeds.
 
-Update, delete, and upsert keys must contain the complete non-null primary key.
-Update and delete must affect exactly one row. Insert conflicts and zero-row
-updates or deletes roll back the Seed. Upsert inserts the key plus create values
-or updates non-key values. It must affect exactly one row.
+## Execute the typed read and write
 
-Run or inspect Seeds:
+Create this script outside `src/`. It supplies a trusted user Principal because
+you run it on the server. It is not an authentication endpoint and accepts no
+browser-supplied Principal. The tutorial Policy allows any authenticated user
+and does not isolate shops by tenant.
 
-```bash
-bunx questpie seed status
-bunx questpie seed run barbershop.demo.v1
+```ts title="scripts/try-ticket.ts"
+import { createApp } from "#questpie/app";
+import { principal } from "questpie";
+
+const connectionUrl = process.env.DATABASE_URL;
+const encodedKey = process.env.QUESTPIE_REALTIME_HMAC_KEY;
+if (
+	!connectionUrl ||
+	!encodedKey ||
+	!/^(?:[0-9a-fA-F]{2}){32,}$/.test(encodedKey)
+)
+	throw new Error("Set DATABASE_URL and a hex QUESTPIE_REALTIME_HMAC_KEY");
+
+const app = await createApp({
+	postgres: { connectionUrl, directConnectionUrl: connectionUrl },
+	realtime: { hmacKey: Uint8Array.from(Buffer.from(encodedKey, "hex")) },
+	maintenance: { authorize: () => false },
+});
+try {
+	const result = await app.execution(
+		{
+			principal: principal.user({ id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7133" }),
+			context: { tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7134" },
+			signal: AbortSignal.timeout(5_000),
+		},
+		async ({ queries, mutations }) => {
+			const id = "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131";
+			await mutations.tickets.rename(
+				{ id, summary: "Please move my appointment" },
+				{ callId: "barbershop-demo-rename-v1" },
+			);
+			return queries.tickets.detailPage({ ids: [id], first: 1, after: null });
+		},
+	);
+	console.log(result.nodes[0]?.summary);
+} finally {
+	await app.close();
+}
 ```
 
-QUESTPIE runs Seeds in dependency order. It records `started` before the Seed
-transaction. QUESTPIE commits the Seed writes, immutable Seed Receipt, and
-`succeeded` event in one transaction. When the transaction fails, PostgreSQL
-rolls back the data and receipt, and QUESTPIE records `failed`.
+Run `bun scripts/try-ticket.ts`. It prints `Please move my appointment`.
+Run it again: the same Mutation identity and input recover the committed receipt.
+The Query reads the updated row. The script always closes its Runtime.
 
-A Seed run takes the same application lock as migration apply, so both commands
-cannot race. A preflight failure records a `blocked` attempt with its diagnostic
-code. Before a pending Seed writes data, QUESTPIE validates its data steps
-against the current Migration Receipt head and requires the live Schema
-Fingerprint to match that head. A historical matching migration is not
-sufficient. The Seed Receipt records the Schema Projection Digest used for the
-successful run, but that observation does not enter the Seed checksum.
+To serve network requests instead, run `bunx --no-install questpie start`. Configure
+[Auth](/docs/v4/auth) before using the protected ticket from a browser;
+the direct script's Principal is not a browser session.
 
-A crash before commit leaves only `started`. The next run records `interrupted`
-and retries. A crash after commit leaves the receipt and `succeeded`. A retry
-with the same identity and checksum returns `alreadyApplied` and does not record
-an interruption.
+## Change the schema safely
 
-During deploy, QUESTPIE interprets only the committed data steps. The deploy
-runner cannot execute Seed SQL, a runtime callback, an external service,
-environment access, filesystem access, network access, a subprocess, or a
-runtime import.
-The authoring module executes inside the Controlled Structural Evaluator. A
-forbidden top-level effect stops compilation.
+Edit source, make a new named plan, review it, and create the next artifact.
+Explicit renames use repeated `--rename fromIdentity=toIdentity` arguments.
+The planner never guesses a rename. Destructive creation also requires
+`--accept-destructive` with the exact returned digest. A generic force flag
+cannot substitute for it.
 
-If you change code under an applied Seed identity, QUESTPIE reports
-`QP-SEED-004 checksumMismatch`. You must restore the committed Seed. To apply
-another change, you must create an identity such as `barbershop.demo.v2` and
-make it depend on v1. V1 has no `--force` and no repeatable Seed. You cannot
-change an applied Seed.
+`QP-SCHEMA-020` requires that acknowledgment. `QP-SCHEMA-022` means source or
+history changed since planning: make a fresh plan. `QP-SCHEMA-023` means stored
+artifact bytes do not match their checksum. Recover the original reviewed
+artifact; do not recalculate a checksum around edited SQL.
 
-## Use the local combined command
-
-For local work, this command compiles, plans, creates a Committed Migration,
-applies it, and verifies Drift:
-
-```bash
-bunx questpie migration dev --name create-appointments
-```
-
-The command prints the complete classification and SQL, then asks for the Plan
-Digest. After confirmation, it creates the Committed Migration and applies it.
-It cannot apply an uncommitted Migration Plan.
-
-A non-interactive process must pass the digest:
-
-```bash
-export PLAN_DIGEST=6b17c2d908d4d6e70f0d22a2f96bf9d38d0c6d2406c5974138270ebd46f4f70a
-bunx questpie migration dev \
-  --name create-appointments \
-  --accept-plan "$PLAN_DIGEST"
-```
-
-For a destructive Migration Plan, replace `--accept-plan` with
-`--accept-destructive "$PLAN_DIGEST"`.
-
-Use `--format json` with every schema, migration, and Seed command to read the
-same diagnostic codes and recovery steps in an agent or CI process.
-
-Next, [define data and structural Queries](./data-and-queries).
+A failed apply can leave earlier migrations committed because each migration
+owns its own transaction. Keep the application stopped, inspect the failure,
+and repair forward. Rebuild after adding committed artifacts, then follow
+[deployment](/docs/v4/runtime-and-studio).

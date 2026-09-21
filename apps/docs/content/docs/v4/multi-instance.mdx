@@ -1,65 +1,31 @@
 ---
-title: Run multiple instances without optional authority
-description: Scale requests, realtime, and durable workers while PostgreSQL remains the only durable source of truth.
+title: Multiple instances
+description: Share PostgreSQL state and route only to compatible Runtime instances.
 kind: guide
 ---
 
-QUESTPIE is correct with ten compatible Runtime instances by default. Any
-instance can accept a request, client POST, realtime reconnect, or durable
-claim. No application leader, queue leader, process registry, or
-sticky-session correctness is required.
+Run compatible Runtime instances against the same PostgreSQL application when
+you need more capacity or recovery from a process failure. PostgreSQL owns
+Mutation receipts, Change Ledger state, durable runs, and leases.
+Application Services remain per-instance resources, not cluster singletons.
 
-PostgreSQL owns every fact that must survive a crash. Correctness needs
-PostgreSQL and nothing else: no external cache, queue, or delivery service
-takes part in a Context, Policy, Query result, or durable decision.
+Requests, Mutation POSTs, realtime reconnects, and worker claims can reach
+different compatible instances. Multiplexed SSE and Fetch/POST need no sticky
+routing for correctness. A failed instance loses local connections; another
+can reconcile committed state or reclaim eligible expired work.
 
-## Route any request to a compatible instance
+Compatibility has separate schema, wire, Context/Policy, realtime, executable,
+and internal-protocol dimensions. Route a generated client only to servers
+supporting its exact digest set. A rejected incompatible request must not be
+turned into an automatic Mutation retry against another server.
 
-Application Services live once per Runtime instance. Execution Services live
-once per root. Neither is a cluster singleton.
+Retain the builds required by nonterminal durable runs and retained resume state.
+Old and new compatible workers claim work only with the required executable
+bytes. The [protocol-v9 upgrade](/docs/v4/runtime-and-studio#upgrade-the-internal-protocol)
+is explicitly non-rolling; do not mix incompatible protocol versions.
 
-Mutation call receipts, Change Ledger frontiers, and durable runs and leases
-live in PostgreSQL. A crashed Runtime loses only its local roots, connections,
-buffers, and Services. Another instance can reclaim expired work or resume the
-client.
-
-During a rolling deployment, an instance claims only work whose pinned
-executable bytes it carries. Old and new compatible builds may run at the same
-time, each claiming its own pinned runs. Every participating worker must enforce
-this build check.
-Nonterminal runs and retained Resume Tokens can block retirement when they
-still require the old bytes.
-
-Durable workers require an exact match with the accepted Runtime Build, in
-addition to the Job or Reaction contract checks. This build check does not
-replace the separate schema, wire, Policy/Context, realtime, or internal-protocol
-compatibility checks. Keep old workers and generated artifacts while their runs
-still need them; see [deploying without stranding a run](./durable-reactions#deploy-without-stranding-a-run).
-
-## Use one multiplexed realtime transport
-
-QUESTPIE uses one bounded SSE downstream per client scope and Fetch/POST
-upstream. The SSE connection may carry several Live Query bindings:
-
-```text
-browser -- SSE --------------------------> Runtime A
-browser -- Mutation POST ---------------> Runtime B
-browser -- reconnect + opaque token ----> Runtime C
-                                               |
-                                               v
-                                          PostgreSQL
-```
-
-Runtime A can disappear after the POST commits. Runtime C reconciles
-PostgreSQL and either resumes retained compatible state or sends a complete
-freshly authorized reset. Sticky routing can reduce reconnects, but it grants
-no stronger guarantee.
-
-## Inspect the same operational truth
-
-Health, CLI, Studio, and telemetry consume the accepted Execution Envelope and
-canonical Runtime state. They can show connection reset, claims, and executable
-compatibility without exposing credentials, raw Context, Policy evidence,
-payloads, or database URLs.
-
-The Index contract is B-tree-only, and QUESTPIE emits no RLS claim.
+Use the same stable realtime signing key and compatible database connection
+configuration across instances. PostgreSQL is the required durable dependency;
+optional cache/broker bindings are not shipped setup APIs in beta.2.
+Test failure and recovery under your own deployment topology before relying
+on a throughput target. Framework correctness is not a capacity guarantee.

@@ -1,0 +1,6 @@
+{
+	"title": "Releases",
+	"icon": "History",
+	"defaultOpen": false,
+	"pages": ["../beta2-release", "../beta1-release"]
+}

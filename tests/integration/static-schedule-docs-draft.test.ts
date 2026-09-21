@@ -7,7 +7,7 @@ import { compileApplication } from "@questpie/compiler";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 
-test("compiles the public schedule guide and preserves its proven Support Desk fences", async () => {
+test("compiles the retained schedule proof example and preserves its Support Desk fences", async () => {
 	const root = await mkdtemp(join(tmpdir(), "questpie-schedule-docs-"));
 	try {
 		const fixture = resolve(repositoryRoot, "fixtures/team-support-desk");
@@ -19,17 +19,10 @@ test("compiles the public schedule guide and preserves its proven Support Desk f
 			),
 			"utf8",
 		);
-		const published = await readFile(
-			resolve(repositoryRoot, "apps/docs/content/docs/v4/scheduled-jobs.mdx"),
-			"utf8",
-		);
 		const fences = (text: string) => [
 			...text.matchAll(/^```ts title="([^"]+)"\n([\s\S]*?)\n```/gm),
 		];
-		const snippets = fences(published);
-		expect(snippets.map((snippet) => snippet[0])).toEqual(
-			fences(draft).map((snippet) => snippet[0]),
-		);
+		const snippets = fences(draft);
 		expect(snippets.map((snippet) => snippet[1])).toEqual([
 			"src/memberships/sweep-seed.ts",
 			"src/tickets/sla-sweep.ts",

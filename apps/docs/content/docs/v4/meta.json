@@ -1,28 +1,14 @@
 {
 	"title": "QUESTPIE v4",
+	"root": true,
 	"pages": [
 		"index",
-		"definition-composition",
-		"schema-lifecycle",
-		"data-and-queries",
-		"context-and-policy",
-		"executable-definitions",
-		"queries-and-mutations",
-		"realtime",
-		"reactive-query-resources",
-		"react-query",
-		"react-query-basic",
-		"react-query-start",
-		"durable-reactions",
-		"scheduled-jobs",
-		"multi-instance",
-		"semantic-kernels-and-public-surface",
-		"services",
-		"operation-http-and-openapi",
-		"basic-mcp",
-		"beta1-release",
-		"beta2-release",
-		"runtime-and-studio",
-		"opentelemetry"
+		"---Get started---",
+		"installation",
+		"concepts",
+		"tutorial",
+		"guides",
+		"reference",
+		"versions"
 	]
 }

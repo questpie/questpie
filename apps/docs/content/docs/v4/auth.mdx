@@ -1,0 +1,231 @@
+---
+title: Authentication
+description: Bring a session provider, resolve a Principal, and enforce access with Policy.
+kind: guide
+---
+
+Connect authentication when the Barbershop browser must read private tickets.
+The local server script supplies a trusted Principal only for that process;
+it creates no browser login. Keep login/session handling in your Auth provider
+and data permission rules in QUESTPIE Policy.
+
+## Know the four parts
+
+| Part                                      | Owner                                         |
+| ----------------------------------------- | --------------------------------------------- |
+| Sign-up, sign-in, cookies, password reset | Your Auth provider and its client.            |
+| Session verification                      | An application Service calling that provider. |
+| Principal mapping                         | The application's `defineCredentialResolver`. |
+| Permission to read/change a ticket        | Operation admission and Collection Policy.    |
+
+QUESTPIE includes the Service, credential resolver, and raw Fetch Route seams.
+It does not include a ready-made Better Auth Package, login UI, or provider-owned
+schema. Better Auth is an application integration; use its own database and
+migration instructions for its tables.
+
+## Install Better Auth
+
+This recipe uses Better Auth 1.7.1 and PostgreSQL. The provider owns its tables
+in `public`; QUESTPIE owns the separate `barbershop_support` schema.
+Keep the database from [local setup](/docs/v4/schema-lifecycle) running.
+
+```sh
+bun add better-auth@1.7.1 pg@8.23.0
+bun add --dev auth@1.7.1 @types/pg@8.23.1
+mkdir -p runtime src/auth
+export BETTER_AUTH_URL=http://localhost:5173
+export BETTER_AUTH_SECRET=$(openssl rand -hex 32)
+```
+
+Keep that secret stable between backend restarts. The browser host in the next
+chapter runs at `localhost:5173` and proxies requests to QUESTPIE on port 3001.
+For another deployment, set the URL to its actual public origin.
+
+Add `"runtime/**/*.ts"` to the `include` array in `tsconfig.json` so the
+provider migration entry is checked along with the backend.
+
+## Open the provider at runtime
+
+Keep environment reads and provider setup outside the Definition discovery root.
+The dynamic package import below also keeps Better Auth out of the generated
+server bundle; the installed package loads at runtime.
+
+```ts title="runtime/auth.ts"
+import type * as BetterAuth from "better-auth";
+import { Pool } from "pg";
+
+const runtimePackage = (specifier: string): Promise<unknown> =>
+	import(specifier);
+
+export async function createBarbershopAuth() {
+	const connectionString = process.env.DATABASE_URL;
+	const baseURL = process.env.BETTER_AUTH_URL;
+	const secret = process.env.BETTER_AUTH_SECRET;
+	if (!connectionString || !baseURL || !secret) {
+		throw new Error(
+			"DATABASE_URL, BETTER_AUTH_URL and BETTER_AUTH_SECRET are required",
+		);
+	}
+	const database = new Pool({
+		connectionString,
+		options: "-c search_path=public",
+	});
+	try {
+		const { betterAuth } = (await runtimePackage(
+			"better-auth",
+		)) as typeof BetterAuth;
+		const auth = betterAuth({
+			appName: "Barbershop",
+			baseURL,
+			secret,
+			database,
+			emailAndPassword: { enabled: true },
+			advanced: { database: { generateId: () => crypto.randomUUID() } },
+		});
+		return { auth, close: () => database.end() };
+	} catch (error) {
+		await database.end();
+		throw error;
+	}
+}
+```
+
+Expose the provider to Better Auth's migration command:
+
+```ts title="runtime/auth-migration.ts"
+import { createBarbershopAuth } from "./auth";
+
+export const { auth } = await createBarbershopAuth();
+```
+
+```sh
+bunx auth migrate --config runtime/auth-migration.ts --yes
+```
+
+This creates the provider's user, session, account, and verification tables.
+QUESTPIE migrations must not manage these same tables. See the provider's
+[installation](https://www.better-auth.com/docs/installation) for its own
+schema and deployment requirements.
+
+## Verify cookies and resolve the Principal
+
+A Service owns the provider's connection pool. The resolver verifies the
+request's real session before mapping its user ID to a Principal.
+
+```ts title="src/auth/service.ts"
+import { defineService } from "questpie";
+
+export const barbershopAuth = defineService({
+	name: "barbershop.auth",
+	lifetime: "application",
+	effect: "external",
+	create: async () => {
+		const { createBarbershopAuth } = await import("../../runtime/auth");
+		const provider = await createBarbershopAuth();
+		return {
+			handler: (request: Request) => provider.auth.handler(request),
+			principalId: async (headers: Headers): Promise<string | null> => {
+				const session = await provider.auth.api.getSession({ headers });
+				return session?.user.id ?? null;
+			},
+			close: provider.close,
+		};
+	},
+	dispose: (service) => service.close(),
+});
+```
+
+```ts title="src/auth/credentials.ts"
+import { defineCredentialResolver, principal } from "questpie";
+import { barbershopAuth } from "./service";
+
+export const applicationCredentials = defineCredentialResolver({
+	name: "barbershop.credentials",
+	service: barbershopAuth,
+	resolve: async ({ request, service }) => {
+		try {
+			const id = await service.principalId(request.headers);
+			return id === null
+				? { kind: "anonymous" }
+				: { kind: "resolved", principal: principal.user({ id }) };
+		} catch {
+			return { kind: "unavailable" };
+		}
+	},
+});
+```
+
+A provider outage returns `unavailable`, not a successful anonymous session.
+A browser cannot supply a resolved Principal through `withContext`.
+
+## Mount sign-in and session routes
+
+The provider's routes skip credential resolution to avoid making login depend
+on an existing login. Protected ticket Operations still resolve credentials.
+
+```ts title="src/auth/routes.ts"
+import { policy } from "questpie";
+import { defineRoute } from "#questpie/app";
+
+export const authGet = defineRoute({
+	name: "barbershop.authGet",
+	method: "GET",
+	path: "/api/auth/*path",
+	policy: policy.public(),
+	credentials: "none",
+	limits: { bodyBytes: 65_536, durationMs: 5_000 },
+	handler: ({ request, ctx }) =>
+		ctx.services["barbershop.auth"].handler(request),
+});
+
+export const authPost = defineRoute({
+	name: "barbershop.authPost",
+	method: "POST",
+	path: "/api/auth/*path",
+	policy: policy.public(),
+	credentials: "none",
+	limits: { bodyBytes: 65_536, durationMs: 5_000 },
+	handler: ({ request, ctx }) =>
+		ctx.services["barbershop.auth"].handler(request),
+});
+```
+
+```sh
+bun run build
+bun run types:check
+bunx --no-install questpie start --port 3001
+```
+
+The next chapter supplies a browser sign-up/sign-in form. Successful sign-in
+sets a session cookie, and the ticket Query then returns the seeded ticket.
+A request without that cookie cannot read it. Follow the
+[React screen](/docs/v4/react-query-basic) to try both states.
+
+## Add shop membership rules
+
+The tutorial admits every authenticated user and has no tenant row filter.
+Before using it for separate shops, model shop membership and ownership in
+Collections. Resolve the selected shop through trusted Context logic and
+check current membership in Policy. Apply the shop row condition to tickets
+and comments. The user selecting a `tenantId` is not proof of membership.
+
+Use bounded bootstrap lookup for Context and Policy's `expr.exists` for
+current relational evidence. A denied keyed ticket must remain indistinguishable
+from a nonexistent one. Permission to read membership evidence need not expose
+membership rows to the caller.
+
+## Verify the session transition
+
+Test anonymous access, a valid staff session, a non-member session, removed
+membership, provider failure, and logout while a Query is active. Check both
+one-shot calls and live recomputation. Do not infer isolation from a successful
+login or TypeScript check.
+
+On credentials change, unmount the old credential subtree, await adapter
+`dispose()`, clear application-owned protected copies, and create a fresh
+scope before showing the next session. The [React tutorial](/docs/v4/react-query-basic)
+contains that cleanup. For SSR, forward credentials only to the configured
+backend origin as shown in [TanStack Start](/docs/v4/react-query-start).
+
+Look up [Context and Policy](/docs/v4/context-and-policy),
+[Services](/docs/v4/services), and [Route definitions](/docs/v4/executable-definitions).

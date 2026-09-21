@@ -1,240 +1,51 @@
 ---
-title: Watch Queries in realtime
-description: Subscribe to one authorized Query and recover safely after committed changes or disconnects.
-kind: guide
+title: Live queries
+description: Look up watch eligibility, delivery, cleanup, and resource limits.
+kind: reference
 ---
 
-A Live Query keeps the complete authorized result of one ordinary Query
-current. Define the Query once. Call its generated method for one result, or
-call `.watch` on that same method for continuing results.
+A supported generated Query has `.watch(input, onValue, options?)`.
+The compiler proves eligibility from its data reads; returning a page-shaped
+object from an arbitrary handler is not proof of watchability.
+For a complete consumer, use [the React screen](/docs/v4/react-query-basic).
 
-QUESTPIE does not require a second realtime handler, channel name, client query,
-or manual invalidation list.
+| Argument/result            | Contract                                         |
+| -------------------------- | ------------------------------------------------ |
+| `input`                    | Same exact input as the one-shot Query.          |
+| `onValue(value, delivery)` | Receives the complete decoded authorized result. |
+| `options.signal`           | Optional caller cancellation.                    |
+| `options.onStateChange`    | Connection/reconnection state notification.      |
+| `options.onError`          | Terminal typed watch failure.                    |
+| Return value               | Function that stops the watch.                   |
 
-## Watch a generated Query
+Delivery is `initial`, `update`, or `reset`. Reset reasons include
+`authority-changed`, `deployment-changed`, and `resume-unavailable`.
+Replace the displayed result on every successful delivery, including removed
+rows and omitted fields. Do not merge it as an entity patch.
 
-The `channels.overview` Query from
-[Build Queries and Mutations](./queries-and-mutations) returns Company,
-Membership, Channel, and Message data. The generated client adds `.watch` to
-that exact method:
+## Authorization and recovery
 
-```ts title="web/watch-channel.ts"
-import type { GeneratedClient } from "#questpie/client";
+Relevant committed changes cause recomputation with fresh Context and Policy.
+The Runtime tracks reads, relation membership, ordering boundaries, and Policy
+evidence. A failed recomputation publishes no partial result.
+Separate Queries do not publish one atomic combined snapshot.
 
-export function watchChannel(
-	client: GeneratedClient,
-	companyId: string,
-	channelId: string,
-) {
-	const company = client.withContext({ companyId });
+The transport uses multiplexed SSE downstream and Fetch/POST upstream.
+After reconnect, an opaque compatible Resume Token can resume retained work;
+otherwise the server sends a complete authorized reset. A token is not authority.
+No sticky-session routing is needed across compatible instances.
 
-	return company.queries["channels.overview"].watch(
-		{ channelId, first: 20, after: null },
-		(overview, delivery) => {
-			// Every delivery is the complete current Query result.
-			console.log(overview.channel.name, overview.messages);
+On logout or a credential change, stop old watches and create a fresh client
+scope. Terminal authorization/protocol failures require recovery of that scope;
+there is no fallback polling loop. Cancellation or stopping a watch does not
+undo an already committed Mutation.
 
-			if (delivery.kind === "reset") {
-				console.info("Replaced local state", delivery.reason);
-			}
-		},
-		{
-			onStateChange: (state) => {
-				if (state.kind === "reconnecting") {
-					console.info("Showing the last result while reconnecting");
-				}
-			},
-			onError: (error) => console.error("Watch ended", error.code),
-		},
-	);
-}
-```
+| Limit                        | Bound |
+| ---------------------------- | ----- |
+| Active watches per Principal | 64    |
+| Dependency tokens per plan   | 256   |
+| Complete result              | 1 MiB |
 
-`.watch` returns a function that stops the watch. The `signal` watch option can
-connect the same cleanup to an `AbortController`.
-
-The third argument accepts `signal`, `onStateChange`, and `onError`.
-`onStateChange` receives `connected`, or `reconnecting` with its attempt number.
-`onError` receives a terminal typed failure.
-
-The value passed to the callback has the exact same generated type as a single
-call:
-
-```ts title="web/read-channel.ts"
-import type { GeneratedClient } from "#questpie/client";
-
-export async function readChannel(
-	client: GeneratedClient,
-	companyId: string,
-	channelId: string,
-	signal: AbortSignal,
-) {
-	const company = client.withContext({ companyId });
-
-	return company.queries["channels.overview"](
-		{ channelId, first: 20, after: null },
-		{ signal, deadline: new Date(Date.now() + 5_000) },
-	);
-}
-```
-
-The single-call method keeps its optional call options. `.watch` adds a lifecycle;
-it does not reinterpret the Query contract.
-
-## Replace state on every delivery
-
-The generated delivery type is:
-
-```ts
-type QueryDelivery =
-	| { readonly kind: "initial" }
-	| { readonly kind: "update" }
-	| {
-			readonly kind: "reset";
-			readonly reason:
-				| "authority-changed"
-				| "deployment-changed"
-				| "resume-unavailable";
-	  };
-```
-
-Every delivery contains one complete validated Query result. Replace the old
-value. Do not merge it as a patch or interpret it as a database event.
-
-The generated client manages reconnect and its authenticated Resume Token. The
-Resume Token is opaque and is not part of the watch options. Application code
-cannot decode it, compare it, use it as a page cursor, or infer database order
-from it. If compatible retained state is unavailable, the client receives a
-fresh authorized result with `kind: "reset"`.
-
-Resume state belongs to the active generated client. A new process or watch
-without retained state starts with a fresh initial result. QUESTPIE does not
-persist Live Query resume state for offline use.
-
-## Understand observed reads
-
-The compiler determines whether a Query uses only supported watchable reads.
-The Runtime records the supported reads that each Execution actually reaches:
-
-- Collection keys and ranges, including an empty range;
-- Structural Query filters, total order, page boundary, and `first + 1`
-  sentinel;
-- Relation endpoints and misses;
-- Tenant partitions;
-- Bootstrap Reads from Context Resolution;
-- Relational Policy evidence;
-- Supported nested generated reads.
-
-A successful recomputation replaces the previous dependency set. It does not
-keep a union of every branch ever executed. A failed or unauthorized
-recomputation retains the last successful set and sends no partial result. See
-[Data and structural Queries](./data-and-queries) for ordering and page
-boundaries.
-
-A Query that uses an unsupported raw read stays callable as a single call. Its
-generated method has no `.watch`. QUESTPIE does not guess dependencies from
-arbitrary SQL text.
-
-## Rely on fresh authorization
-
-Every recomputation creates a fresh root Execution. QUESTPIE resolves current
-Context, opens the Query snapshot, and evaluates current Policy before it sends
-another result.
-
-Connection state and an earlier allow decision are not authority. If the active
-Membership used by Context or Policy is revoked, the watch cannot send another
-result under the old decision. QUESTPIE cannot withdraw a result that it
-already delivered. A terminal `AUTHORIZATION_FAILED` reaches `onError` and
-ends the watch. A security-sensitive screen can then clear its last result.
-
-See [Resolve Context and authorize with Policy](./context-and-policy) for the
-Membership and relational Policy model.
-
-## Recover committed changes
-
-For a Collection that participates in Live Query invalidation, QUESTPIE uses
-compiler-owned PostgreSQL capture. The business write and its bounded Change
-Ledger facts commit in the same transaction. Rollback commits neither.
-
-`LISTEN`/`NOTIFY` is only a wake hint. The hint can be missing, duplicated,
-delayed, or coalesced. Durable reconciliation reads the Change Ledger after
-startup and while the listener runs, so QUESTPIE still processes every
-committed refresh.
-
-The Reconciliation Frontier tracks committed transactions. It never skips an
-earlier transaction that commits late.
-
-The Change Ledger is invalidation evidence. It is never sent as authorized
-Query output.
-
-## Know the database capture boundary
-
-The compiler-owned capture trigger covers these writers and write paths:
-
-| Writer or write path                                                             | Behavior                                                                            |
-| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| QUESTPIE Mutation or Collection operation                                        | QUESTPIE records facts in its transaction                                           |
-| supported raw DML                                                                | the installed trigger records facts                                                 |
-| foreign-key cascade                                                              | each affected Collection that participates in Live Query invalidation records facts |
-| supported `COPY`, `ON CONFLICT`, `MERGE`, or `TRUNCATE`                          | QUESTPIE records bounded facts                                                      |
-| external client using the managed writer role                                    | the managed role invokes the same capture                                           |
-| superuser, replication bypass, disabled/dropped trigger, or uninstrumented table | QUESTPIE may not observe the change; the watch can stay stale                       |
-
-Schema validation rejects a partitioned Collection that would participate in
-Live Query invalidation.
-
-The managed writer can modify business tables. It cannot read or forge ledger
-or reconciliation state, disable capture, or assume replication or superuser
-authority.
-
-QUESTPIE authors only ordinary B-tree Indexes for this capture contract. It
-does not author expression, partial, operator-class, raw-SQL, generic `using`,
-or non-B-tree Indexes.
-
-QUESTPIE emits no row-level security for Live Query. Policy remains the
-application authorization model. See
-[Resolve Context and authorize with Policy](./context-and-policy).
-
-## Stay within realtime limits
-
-One dependency token records one observed read boundary. One retained Resume
-Token records one available continuation. The beta protocol fixes these limits:
-
-| Limit                                |                   Bound |
-| ------------------------------------ | ----------------------: |
-| active watches per Principal         |                      64 |
-| dependency tokens per dependency set |                     256 |
-| complete result size                 | 1 MiB (1,048,576 bytes) |
-| buffered data per client             | 2 MiB (2,097,152 bytes) |
-| fanout per batch                     |                   1,024 |
-| unreconciled ledger lag              |        30 s (30,000 ms) |
-| retained Resume Tokens per Principal |                     128 |
-| retained Resume Token age            |    24 h (86,400,000 ms) |
-
-A watch slot belongs to one Principal within one exact application and
-deployment digest, not to one Runtime instance or to the deployment as a
-whole. Different Principals do not consume one another's 64 slots, and adding
-Runtime instances does not reset or multiply a Principal's bound. During a
-rolling change, a distinct deployment digest has its own slot scope.
-
-QUESTPIE coalesces frequent changes into the latest complete authorized result.
-A result over its cap fails with `RESOURCE_LIMIT`; QUESTPIE does not truncate
-it. QUESTPIE rejects a watch with `RESOURCE_LIMIT` when its dependency set is
-too large. QUESTPIE rejects a new watch when its Principal reaches the
-active-watch cap. It resets or disconnects a slow client before its buffer grows
-without bound. It schedules fanout in bounded batches. When unreconciled ledger
-lag exceeds its cap, QUESTPIE rejects realtime work with `RESOURCE_LIMIT` until
-reconciliation catches up. When retained Resume Token count or age reaches its
-limit, QUESTPIE expires the continuation and reconnects with a fresh reset.
-
-## Keep independent Queries independent
-
-Each watched Query recomputes in its own consistent Query snapshot and
-converges after relevant commits. QUESTPIE does not publish several independent
-Query Resources as one atomic client transaction.
-
-When a screen needs one atomic view of Messages, Membership, Channel state, and
-counters, define one composite Query that returns that view and watch it.
-
-Next, [use reactive Query state](./reactive-query-resources), or
-[run durable Jobs and Reactions](./durable-reactions).
+Live infinite lists and offline/persistent resume are not available.
+The [Query Resource](/docs/v4/reactive-query-resources) wraps a watch for
+framework-neutral state; [React Query](/docs/v4/react-query) uses native cache ownership.

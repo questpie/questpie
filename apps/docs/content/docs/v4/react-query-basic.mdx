@@ -1,5 +1,5 @@
 ---
-title: Build a ticket screen with React Query
+title: React UI
 description: Read a live ticket, submit a typed Mutation, and retire its cache when credentials change.
 kind: guide
 ---
@@ -9,48 +9,31 @@ The generated client supplies Operation inputs, decoded results and error
 types. Your component owns the form and the pending message, not a second copy
 of the server result.
 
-Version availability: This page documents the beta.2 preview. Beta.2 is not
-published. The [frozen beta.1 inventory](/docs/v4/beta1-release) remains the
-released package contract.
+Available in QUESTPIE 4.0.0-beta.2.
 
-## Start with the ticket Query
+## Continue with the same backend
 
-This recipe adds a client-rendered screen to an existing, running backend.
-It does not create an Auth service, a database or a browser dev server. Before
-mounting the screen, [build, migrate and start](./runtime-and-studio#build-migrate-and-start)
-the application, establish a valid authenticated session, and create a ticket
-that the session can read. An empty database displays “Ticket unavailable.”
-Use your application's reviewed data setup; the appointment Seed in the schema
-guide does not create support tickets.
-
-Use the complete files in [Select one bounded inverse child
-list](./data-and-queries#select-one-bounded-inverse-child-list):
-`src/context.ts`, `src/data/tickets.ts`, `src/data/comments.ts`,
-`src/data/policies.ts` and `src/queries/ticket-detail.ts`. Keep your
-[`questpie.json` Application Root](./definition-composition#configure-one-application-root).
-The Query is `tickets.detailPage`; it returns one selected ticket with its
-visible comments. You do not need the earlier page's `web/client.ts` helper.
-
-This example's read Policy admits every authenticated Principal. Its Context
-accepts a tenant ID, but the Collections have no tenant Field or tenant row
-filter. Use it to learn the integration, not as a tenant-isolation template.
-Keep your application's credential resolver and
-[membership-aware Policy](./context-and-policy) at the server boundary.
+Complete [data](/docs/v4/data-and-queries), [the Mutation](/docs/v4/queries-and-mutations),
+and [the local database setup](/docs/v4/schema-lifecycle). This chapter adds a
+browser screen to those same files. Configure [Auth](/docs/v4/auth) and establish
+a valid staff session before mounting it. The trusted local script does not
+create that session. The tutorial inbox allows every authenticated user and
+does not implement tenant isolation.
 
 Install the browser dependencies beside `questpie`:
 
 ```sh
-bun add questpie@4.0.0-beta.2 react@^19.2.0 react-dom@^19.2.0 @tanstack/react-query@^5.102.8
-bun add --dev @types/react @types/react-dom
+bun add react@^19.2.0 react-dom@^19.2.0 @tanstack/react-query@^5.102.8
+bun add --dev @types/react @types/react-dom vite@8.1.5 @vitejs/plugin-react@6.0.4
 ```
 
 `questpie/react-query` is a subpath of `questpie`, not a separate package.
 Applications that do not use it do not need React or TanStack Query.
 
 Keep browser components in `web/`, outside the backend's `source.root: "src"`.
-The TypeScript project still checks both directories. Use this configuration
-with the generated import mappings from
-[the Application Root](./definition-composition#configure-one-application-root):
+The TypeScript project still checks both directories. Replace the installation `tsconfig.json` with this version. It adds JSX,
+checks `.tsx` files, and enables `exactOptionalPropertyTypes` so an omitted
+optional member differs from one explicitly set to `undefined`:
 
 ```json title="tsconfig.json"
 {
@@ -71,92 +54,22 @@ with the generated import mappings from
 			"#questpie/source/*": ["./src/*"]
 		}
 	},
-	"include": ["src/**/*.ts", "web/**/*.ts", "web/**/*.tsx"]
+	"include": [
+		"src/**/*.ts",
+		"web/**/*.ts",
+		"web/**/*.tsx",
+		"scripts/**/*.ts",
+		"runtime/**/*.ts"
+	]
 }
 ```
 
-Your browser bundler must support React JSX and resolve `#questpie/client` to
-the generated client file. Serve that bundle from your existing browser host,
-with `/_questpie/*` reaching the same backend origin. The code below uses
-same-origin session cookies and does not configure a cross-origin proxy or Auth.
+The browser host below serves `web/` and proxies `/_questpie/*` and `/api/auth/*`
+to the backend. The browser uses one origin for session cookies and data calls.
 
-## Add one named Mutation
-
-Replace `src/data/policies.ts` with this version. It preserves both read
-Policies and allows an authenticated caller to change a ticket's summary.
-The Field rule does not allow changing its ID.
-
-```ts title="src/data/policies.ts"
-import { definePolicy, expr, policy } from "questpie";
-import { comments } from "./comments";
-import { tickets } from "./tickets";
-
-export const ticketPolicy = definePolicy(tickets, {
-	name: "tickets.default",
-	read: {
-		admit: policy.authenticated(),
-		rows: () => expr.always(),
-	},
-	update: {
-		admit: policy.authenticated(),
-		rows: () => expr.always(),
-		candidate: () => expr.always(),
-	},
-	fields: {
-		update: () => ({ summary: expr.always() }),
-	},
-});
-
-export const commentPolicy = definePolicy(comments, {
-	name: "comments.default",
-	read: {
-		admit: policy.authenticated(),
-		rows: () => expr.always(),
-	},
-});
-```
-
-The Mutation derives its required ID and summary codecs from the Collection.
-`createInput()` describes required Field input here; the handler still calls
-the Collection's update kernel. It does not create a ticket or expose CRUD.
-
-```ts title="src/mutations/rename-ticket.ts"
-import { codec, operation, policy } from "questpie";
-import { defineMutation } from "#questpie/app";
-import { tickets } from "../data/tickets";
-
-export const renameTicket = defineMutation({
-	name: "tickets.rename",
-	network: true,
-	input: tickets.createInput().pick({ id: true, summary: true }),
-	output: codec.object({}),
-	policy: policy.authenticated(),
-	errors: {
-		ticketUnavailable: operation.error({
-			code: "TICKET_UNAVAILABLE",
-			status: 404,
-		}),
-	},
-	handler: async ({ input, ctx, errors }) => {
-		const ticket = await ctx.data.tickets.update({
-			key: { id: input.id },
-			patch: { summary: input.summary },
-		});
-		if (ticket === null) throw errors.ticketUnavailable();
-		return {};
-	},
-});
-```
-
-Generate the contracts after adding the Mutation:
-
-```sh
-bunx questpie build
-```
-
-Keep the generated `#questpie/app`, `#questpie/client` and `#questpie/source/*`
-aliases in your TypeScript and browser build configuration. The browser imports
-the client contract, not the server app contract.
+The [Mutation chapter](/docs/v4/queries-and-mutations) already added the write
+Policy and `tickets.rename`. Keep those files and run `questpie build` after
+any backend change. The form below calls that existing Operation.
 
 ## Own the credential lifetime outside the component
 
@@ -344,4 +257,154 @@ problem. Equal Context values do not make the failed scope reusable.
 For the cache, retirement and commit rules behind this screen, read
 [Native React Query integration](./react-query). Keep this browser host out of
 server rendering; Start needs a fresh owner for each request and a native
-hydration handoff. Continue with [Render the ticket screen with TanStack Start](./react-query-start).
+hydration handoff. Continue with [Add server rendering](./react-query-start).
+
+## Run the complete browser host
+
+Create the Vite configuration at the project root. The proxy preserves the
+browser's origin for Better Auth's origin check.
+
+```ts title="vite.config.ts"
+import { fileURLToPath } from "node:url";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+	root: "web",
+	plugins: [react()],
+	resolve: {
+		alias: {
+			"#questpie/client": fileURLToPath(
+				new URL("./.questpie/generated/client.ts", import.meta.url),
+			),
+		},
+	},
+	server: {
+		host: "localhost",
+		port: 5173,
+		strictPort: true,
+		proxy: {
+			"/_questpie": "http://localhost:3001",
+			"/api/auth": "http://localhost:3001",
+		},
+	},
+});
+```
+
+```html title="web/index.html"
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Barbershop support</title>
+	</head>
+	<body>
+		<form id="login">
+			<label
+				>Email <input name="email" type="email" required autocomplete="email"
+			/></label>
+			<label
+				>Password
+				<input
+					name="password"
+					type="password"
+					required
+					minlength="8"
+					autocomplete="current-password"
+			/></label>
+			<button name="intent" value="signin">Sign in</button>
+			<button name="intent" value="signup">Create demo account</button>
+		</form>
+		<button id="logout" type="button" hidden>Sign out</button>
+		<p id="status" role="status"></p>
+		<main id="ticket"></main>
+		<script type="module" src="/main.ts"></script>
+	</body>
+</html>
+```
+
+```ts title="web/main.ts"
+import { createAuthClient } from "better-auth/client";
+import { mountSupportTicket } from "./support-screen";
+
+const auth = createAuthClient({ baseURL: window.location.origin });
+const login = document.querySelector<HTMLFormElement>("#login")!;
+const logout = document.querySelector<HTMLButtonElement>("#logout")!;
+const status = document.querySelector<HTMLElement>("#status")!;
+const ticket = document.querySelector<HTMLElement>("#ticket")!;
+let close: (() => Promise<void>) | undefined;
+let busy = false;
+
+async function transition(work: () => Promise<void>) {
+	if (busy) return;
+	busy = true;
+	status.textContent = "Please wait…";
+	try {
+		await close?.();
+		close = undefined;
+		await work();
+		const session = await auth.getSession();
+		if (session.error) throw new Error("Session unavailable");
+		login.hidden = session.data !== null;
+		logout.hidden = session.data === null;
+		if (session.data) {
+			close = mountSupportTicket(
+				ticket,
+				{
+					tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7134",
+				},
+				"018f5f6e-5f2c-7b41-a854-3d9a6b6b7131",
+			);
+		}
+		status.textContent = session.data
+			? "Signed in."
+			: "Sign in to read the demo ticket.";
+	} catch {
+		login.hidden = true;
+		logout.hidden = true;
+		status.textContent =
+			"Could not complete the session change. Reload before trying again.";
+	} finally {
+		busy = false;
+	}
+}
+
+login.addEventListener("submit", (event) => {
+	event.preventDefault();
+	const fields = new FormData(login);
+	const email = String(fields.get("email"));
+	const password = String(fields.get("password"));
+	const signup =
+		event.submitter instanceof HTMLButtonElement &&
+		event.submitter.value === "signup";
+	void transition(async () => {
+		const result = signup
+			? await auth.signUp.email({ name: "Demo staff", email, password })
+			: await auth.signIn.email({ email, password });
+		if (result.error) throw new Error("Sign-in failed");
+	});
+});
+logout.addEventListener("click", () => {
+	void transition(async () => {
+		const result = await auth.signOut();
+		if (result.error) throw new Error("Sign-out failed");
+	});
+});
+void transition(async () => {});
+```
+
+Keep `questpie start --port 3001` running with the Auth environment from the
+previous chapter. In a second terminal at the application root:
+
+```sh
+bun run types:check
+bunx vite --config vite.config.ts
+```
+
+Open `http://localhost:5173`. Create a demo account with an email and a password
+of at least eight characters. You should see the seeded ticket and its comment.
+Rename it, then sign out: the ticket subtree disappears and its Query cache is
+cleared. Reloading while signed out shows the login form. For a production host,
+also route provider notifications about cross-tab login/logout through the same
+cleanup path; this small host handles its own form transitions and page reloads.
