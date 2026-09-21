@@ -358,10 +358,25 @@ export function fieldContract(
 		value.immutable,
 		`field.${key}.immutable`,
 	);
+	const fieldNullable = boolean(value.nullable, `field.${key}.nullable`);
+	if (fieldImmutability.databaseImmutable && fieldNullable)
+		invalid(
+			`field.${key}.immutable`,
+			// The write-once guard compares NEW IS DISTINCT FROM OLD, which
+			// treats NULL as a real, fixed value once inserted: a nullable
+			// database-immutable Field that is inserted NULL can never be
+			// populated afterward (NULL -> value is refused exactly like
+			// value -> value). Rather than ship a footgun that only shows up
+			// the first time someone tries to backfill a nullable write-once
+			// column, this is refused at compose time; declare the Field
+			// non-nullable instead, or drop immutable: "database" if the
+			// value legitimately needs to move from NULL to a real value once.
+			'cannot combine "database" with nullable: true; the value would be fixed at INSERT including NULL, which can never be populated afterward',
+		);
 	return {
 		path,
 		type,
-		nullable: boolean(value.nullable, `field.${key}.nullable`),
+		nullable: fieldNullable,
 		...(fieldImmutability.immutable ? { immutable: true } : {}),
 		...(fieldImmutability.databaseImmutable ? { databaseImmutable: true } : {}),
 		...(server ? { server: true } : {}),

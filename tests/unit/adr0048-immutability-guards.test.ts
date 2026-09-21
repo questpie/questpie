@@ -772,4 +772,83 @@ export const auditTrail = defineCollection({
 			await rm(temporary, { recursive: true, force: true });
 		}
 	});
+
+	test('refuses immutable: "database" on a nullable Field (NULL -> value would be refused by the write-once guard forever)', async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-nullable-write-once-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/nullable-write-once-fixture.ts"),
+				`import { constraint, defineCollection, field } from "questpie";
+
+export const nullableWriteOnce = defineCollection({
+	name: "nullableWriteOnce",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		resolvedAt: field.timestamp({
+			nullable: true,
+			withTimezone: true,
+			immutable: "database",
+		}),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-001",
+				diagnosticClass: "invalidDefinition",
+				message: expect.stringContaining(
+					'cannot combine "database" with nullable: true',
+				),
+			});
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+
+	test('accepts immutable: "database" on a non-nullable Field', async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-non-nullable-write-once-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/non-nullable-write-once-fixture.ts"),
+				`import { constraint, defineCollection, field } from "questpie";
+
+export const nonNullableWriteOnce = defineCollection({
+	name: "nonNullableWriteOnce",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		createdAt: field.timestamp({
+			nullable: false,
+			default: "now",
+			withTimezone: true,
+			immutable: "database",
+		}),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+`,
+			);
+			const compilation = await compileApplication({
+				applicationRoot: temporary,
+			});
+			const schema = JSON.parse(
+				compilation.generatedFiles["schema-projection.json"] ?? "null",
+			);
+			const collection = schema.collections.find(
+				(value: { identity: string }) =>
+					value.identity === "collection:nonNullableWriteOnce",
+			);
+			expect(collection).toBeTruthy();
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
 });

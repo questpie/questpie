@@ -365,6 +365,30 @@ CONFLICT (...) DO NOTHING` (never fires the row guard) and, only when that
     against a real database by this pass's Postgres integration test).
     `onDelete` on a relation owned by an _ordinary_ (non-append-only)
     Collection is unaffected.
+- **Write-once semantics with `NULL`, decided and pinned, found by
+  adversarial review:** the write-once guard's `NEW IS DISTINCT FROM OLD`
+  treats `NULL` as an ordinary, fixed value once a row is inserted —
+  `IS DISTINCT FROM` correctly reports `NULL -> value` as a change (unlike
+  `=`, which is unknown/false for any comparison involving `NULL`), so it is
+  refused exactly like `value -> value`. That means a nullable
+  `immutable: "database"` Field that is inserted `NULL` can never be
+  populated afterward. **Decision: keep the semantics strict** (the value,
+  including `NULL`, is fixed forever at `INSERT` — this is what
+  "write-once" means, and a Field that needs a later one-time fill-in from
+  `NULL` to a real value is a different, unimplemented feature, not this
+  one) **and refuse the combination at compose time** rather than merely
+  document it: `immutable: "database"` on a `nullable: true` Field is
+  `QP-SCHEMA-001`. Rejected: documenting it loudly but allowing it — a
+  compose-time refusal is strictly better here because there is no
+  legitimate use of a nullable write-once Field under the strict semantics
+  (if the value is allowed to be absent at insert and filled in later, it
+  is not actually write-once). `field.*({ immutable: true })` (kernel-only,
+  no database enforcement) is unaffected and still allowed on nullable
+  Fields. Separately noted for the record: PostgreSQL's `numeric` type
+  makes `1.0` and `1.00` equal under both `=` and `IS DISTINCT FROM` (scale
+  does not participate in equality), so a `numeric` write-once Field
+  written as `1.0` and later re-submitted as `1.00` from a Seed or a retry
+  is correctly treated as unchanged, not a violation.
 
 ### 4. Error identity
 
