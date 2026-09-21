@@ -54,7 +54,8 @@ export type CompositionDiagnosticCode =
 	| "QP-SEED-009"
 	| "QP-SEED-011"
 	| "QP-SEED-012"
-	| "QP-SEED-014";
+	| "QP-SEED-014"
+	| "QP-SEED-015";
 
 export function controlledEvaluationFailure(
 	stderr: string,
@@ -225,6 +226,7 @@ const diagnosticClassesByCode = {
 	"QP-SEED-011": ["seedInsertConflict"],
 	"QP-SEED-012": ["seedCardinalityMismatch"],
 	"QP-SEED-014": ["seedSchemaDrift"],
+	"QP-SEED-015": ["seedAppendOnlyConflict"],
 } as const satisfies Readonly<
 	Record<CompositionDiagnosticCode, readonly string[]>
 >;

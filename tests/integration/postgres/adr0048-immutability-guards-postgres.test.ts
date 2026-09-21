@@ -445,5 +445,125 @@ export const evidenceLog = defineCollection({
 			},
 			120_000,
 		);
+
+		postgresTest(
+			"a second Seed's idempotent upsert of an already-seeded append-only row succeeds; a conflicting upsert is a clear Seed diagnostic, not QP001",
+			async () => {
+				const temporary = await mkdtemp(
+					join(tmpdir(), "questpie-adr0048-seed-"),
+				);
+				try {
+					await cp(fixtureRoot, temporary, { recursive: true });
+					await installQuestpieForTracer(temporary);
+					await writeFile(
+						join(temporary, "src/ledger-entries.ts"),
+						`import { collection, constraint, defineCollection, field } from "questpie";
+
+export const ledgerEntries = defineCollection({
+	name: "ledgerEntries",
+	appendOnly: true,
+	fields: {
+		id: field.uuid({ nullable: false }),
+		note: field.text({ nullable: false, minLength: 1, maxLength: 64 }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+});
+`,
+					);
+					await writeFile(
+						join(temporary, "src/ledger-seed-one.ts"),
+						`import { defineSeed, seed } from "questpie";
+import { ledgerEntries } from "./ledger-entries";
+
+export const ledgerSeedOne = defineSeed({
+	name: "ledgerEntries.seedOne",
+	steps: [
+		seed.upsert(ledgerEntries, {
+			key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200" },
+			create: { note: "shared baseline" },
+			update: { note: "shared baseline" },
+		}),
+	],
+});
+`,
+					);
+
+					runCli(temporary, ["build"]);
+					runCli(temporary, ["migration", "apply"]);
+					const planned = JSON.parse(
+						runCli(temporary, ["migration", "plan", "--name", "add-ledger"]),
+					);
+					const created = JSON.parse(
+						runCli(temporary, ["migration", "create", "--plan", planned.path]),
+					);
+					expect(created.status).toBe("created");
+					runCli(temporary, ["migration", "apply"]);
+					runCli(temporary, ["seed", "create"]);
+					const applyOne = runCli(temporary, ["seed", "apply"]);
+					expect(applyOne).toContain("already applied");
+
+					// a second, different Seed re-asserting the same key with the
+					// same resulting values must succeed (idempotent upsert intent),
+					// not QP001
+					await writeFile(
+						join(temporary, "src/ledger-seed-two.ts"),
+						`import { defineSeed, seed } from "questpie";
+import { ledgerEntries } from "./ledger-entries";
+
+export const ledgerSeedTwo = defineSeed({
+	name: "ledgerEntries.seedTwo",
+	steps: [
+		seed.upsert(ledgerEntries, {
+			key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200" },
+			create: { note: "shared baseline" },
+			update: { note: "shared baseline" },
+		}),
+	],
+});
+`,
+					);
+					runCli(temporary, ["seed", "create"]);
+					const applyTwo = runCli(temporary, ["seed", "apply"]);
+					expect(applyTwo).toContain("1 new, ");
+
+					// a THIRD Seed upserting the same key with a DIFFERENT value is a
+					// genuine conflict: a clear Seed diagnostic, not a raw QP001
+					await writeFile(
+						join(temporary, "src/ledger-seed-three.ts"),
+						`import { defineSeed, seed } from "questpie";
+import { ledgerEntries } from "./ledger-entries";
+
+export const ledgerSeedThree = defineSeed({
+	name: "ledgerEntries.seedThree",
+	steps: [
+		seed.upsert(ledgerEntries, {
+			key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200" },
+			create: { note: "conflicting value" },
+			update: { note: "conflicting value" },
+		}),
+	],
+});
+`,
+					);
+					runCli(temporary, ["seed", "create"]);
+					const failure = Bun.spawnSync(["bun", cli, "seed", "apply"], {
+						cwd: temporary,
+						env: { ...process.env, DATABASE_URL: postgresUrl() },
+						stdout: "pipe",
+						stderr: "pipe",
+					});
+					expect(failure.exitCode).not.toBe(0);
+					const failureOutput =
+						failure.stdout.toString() + failure.stderr.toString();
+					expect(failureOutput).toContain("QP-SEED-015");
+					expect(failureOutput).not.toContain("QP001");
+				} finally {
+					await rm(temporary, { recursive: true, force: true });
+				}
+			},
+			120_000,
+		);
 	},
 );

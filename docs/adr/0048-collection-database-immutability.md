@@ -303,6 +303,42 @@ NULL` column, there is no data already in the table that could violate the
   deadline pressure "just" backfilling one extra column while the guard is
   down); a future slice may reconsider this with its own explicit ADR if a
   real product need proves the two-migration workaround insufficient.
+- **Seeds against an append-only Collection.** Found by adversarial review:
+  `seed.upsert(...)` compiles to `INSERT ... ON CONFLICT (...) DO UPDATE
+SET ...`; `DO UPDATE` fires the row `BEFORE UPDATE` guard even when every
+  written value is identical to what is already there, so a second,
+  different Seed that idempotently re-asserts a row a prior Seed already
+  created (a normal, common Seed pattern — Seeds are immutable once
+  committed under their identity, so "re-seeding" the same logical baseline
+  from a newer Seed is how it is expressed) would die with a raw `QP001`.
+  **Decision: keep `seed.upsert`, change how the append-only case executes
+  it**, rather than add a compose-time diagnostic that would forbid Seeds
+  from targeting append-only Collections outright (rejected: it is exactly
+  Seeds, as the framework's own legitimate writer, that need to populate an
+  audit/evidence table with baseline rows — refusing them at compose time
+  would make the declaration and Seeds mutually exclusive for no reason).
+  For an append-only Collection's `upsert` step,
+  `packages/compiler/src/seed/postgres/apply.ts` now issues `INSERT ... ON
+CONFLICT (...) DO NOTHING` (never fires the row guard) and, only when that
+  returns no row (a real conflict), a follow-up `SELECT` comparing the
+  existing row's columns to what the step would have written. An exact
+  match is silently treated as success (this is what "idempotent" means for
+  Seeds). A mismatch is `QP-SEED-015 seedAppendOnlyConflict`, a normal Seed
+  diagnostic naming the step and the mismatched column(s) — not a raw
+  PostgreSQL trigger error. An explicit `seed.update(...)` step (not
+  `upsert`) against an append-only Collection is refused the same way,
+  before issuing any SQL, since there is no idempotent reading of "update
+  this specific existing row" against a guarantee that forbids updating any
+  row. **Known limitation, not hardened further in this pass:** the
+  mismatch comparison uses `!==` on decoded PostgreSQL values as returned by
+  `bun:sql`; it can under- or over-report a mismatch for types where
+  PostgreSQL round-trips a different in-memory representation than what was
+  written (e.g. `numeric` scale — `1.0` and `1.00` are `=` in SQL and in
+  this comparison, matching Postgres semantics, whereas a Field whose
+  decoded value normalizes differently, e.g. a `jsonb` key-order change,
+  could false-positive a mismatch). No application in this repository's
+  fixtures exercises `immutable`/`appendOnly` Fields of those scalar kinds
+  yet; revisit if one does.
 
 ### 4. Error identity
 

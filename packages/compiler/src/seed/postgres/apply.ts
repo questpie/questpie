@@ -160,7 +160,14 @@ async function executeSeedStep(
 		collection,
 		step.kind === "update" ? (step.values ?? []) : (step.update ?? []),
 	);
+	const appendOnly = collection.appendOnly === true;
 	if (step.kind === "update") {
+		if (appendOnly)
+			return fail(
+				"QP-SEED-015",
+				"seedAppendOnlyConflict",
+				`${step.stepId} cannot UPDATE ${collection.identity}: it is append-only (ADR-0048)`,
+			);
 		const assignments = values.names
 			.map(
 				(name, index) => `${quoted(name)} = $${key.values.length + index + 1}`,
@@ -192,6 +199,45 @@ async function executeSeedStep(
 			"seedTargetMismatch",
 			`${step.stepId} upsert update is empty`,
 		);
+	if (appendOnly) {
+		// An append-only Collection's row can never be re-touched by
+		// `DO UPDATE`, even to write back the exact same values: the guard
+		// trigger fires on every UPDATE regardless of whether any column
+		// actually changes. Seeds are the framework's own legitimate writer,
+		// so a re-run must not hit the raw QP001 guard error: insert once,
+		// and on a second run do nothing at the database level, verifying the
+		// existing row already matches what this Seed step would have
+		// written. A real mismatch is a Seed-authoring bug (the Seed tried to
+		// change an append-only row), reported as QP-SEED-015, not a raw
+		// PostgreSQL trigger error.
+		const inserted = await sql.unsafe(
+			`INSERT INTO ${table} (${insertNames.map(quoted).join(", ")}) VALUES (${placeholders(insertValues.length)}) ON CONFLICT (${key.names.map(quoted).join(", ")}) DO NOTHING RETURNING 1`,
+			insertValues,
+		);
+		if (inserted.length === 1) return;
+		const expectedNames = [...create.names, ...values.names];
+		const expectedValues = [...create.values, ...values.values];
+		const [existing] = await sql.unsafe(
+			`SELECT ${expectedNames.map(quoted).join(", ")} FROM ${table} WHERE ${predicate}`,
+			key.values,
+		);
+		if (!existing)
+			return fail(
+				"QP-SEED-012",
+				"seedCardinalityMismatch",
+				`${step.stepId} matched no existing row after a conflicting insert`,
+			);
+		const mismatched = expectedNames.filter(
+			(name, index) => (existing as JsonRecord)[name] !== expectedValues[index],
+		);
+		if (mismatched.length > 0)
+			return fail(
+				"QP-SEED-015",
+				"seedAppendOnlyConflict",
+				`${step.stepId} already exists in append-only ${collection.identity} with a different value for ${mismatched.join(", ")}`,
+			);
+		return;
+	}
 	const result = await sql.unsafe(
 		`INSERT INTO ${table} (${insertNames.map(quoted).join(", ")}) VALUES (${placeholders(insertValues.length)}) ON CONFLICT (${key.names.map(quoted).join(", ")}) DO UPDATE SET ${updates} RETURNING 1`,
 		[...insertValues, ...values.values],
