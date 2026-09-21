@@ -202,11 +202,39 @@ export interface PostgresUpdateOperationPlanV1 {
 	readonly limits: Readonly<{ rows: number; durationMilliseconds: number }>;
 }
 
+/**
+ * Delete addresses one row by key and writes no Field values, so it has no
+ * candidate/normalizer/server-value/trusted-value lane and no authored
+ * lifecycle wiring in this slice (ADR-0047): the row-scope Policy `current`
+ * check is the only gate, evaluated fresh in the same statement as the
+ * `DELETE ... RETURNING` write, after the row is locked.
+ */
+export interface PostgresDeleteOperationPlanV1 {
+	readonly identity: CollectionOperationProgramV1["identity"];
+	readonly target: CollectionOperationProgramV1["target"];
+	readonly member: "delete";
+	readonly policy: CollectionOperationProgramV1["policy"];
+	readonly outputCardinality: "optionalOne";
+	readonly lifecycle: readonly [
+		"keyedRowLock",
+		"freshCurrentPolicy",
+		"postgresConstraints",
+		"selection",
+		"outputFieldAuthority",
+	];
+	readonly lock: PostgresGetOperationPlanV1["lock"];
+	readonly currentPolicy: PostgresCreateOperationPlanV1["candidatePolicy"];
+	readonly outputAuthority: PostgresCreateOperationPlanV1["outputAuthority"];
+	readonly write: PostgresCreateOperationPlanV1["write"];
+	readonly limits: Readonly<{ rows: number; durationMilliseconds: number }>;
+}
+
 export interface PostgresCollectionOperationPlansV1 {
 	readonly format: "questpie.postgres-collection-operation-plans";
 	readonly version: 1;
 	readonly plans: readonly (
 		| PostgresCreateOperationPlanV1
+		| PostgresDeleteOperationPlanV1
 		| PostgresGetOperationPlanV1
 		| PostgresUpdateOperationPlanV1
 	)[];

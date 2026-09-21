@@ -265,7 +265,7 @@ export function outputAuthority(
 export function header(
 	plan: RecordValue,
 	operation: LinkedCollectionOperationProgramV1,
-	member: "create" | "get" | "update",
+	member: "create" | "delete" | "get" | "update",
 ): void {
 	if (
 		plan.identity !== operation.identity ||

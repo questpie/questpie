@@ -31,6 +31,7 @@ export { projectPostgresMutationTransactionStatements } from "./postgres-transac
 export type {
 	PostgresCollectionOperationPlansV1,
 	PostgresCreateOperationPlanV1,
+	PostgresDeleteOperationPlanV1,
 	PostgresGetOperationPlanV1,
 } from "./postgres-contract";
 

@@ -36,6 +36,7 @@ import type {
 	LinkedPostgresCollectionOperationPlanV1,
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresCreateOperationPlanV1,
+	LinkedPostgresDeleteOperationPlanV1,
 	LinkedPostgresGetOperationPlanV1,
 	LinkedPostgresUpdateOperationPlanV1,
 } from "./postgres-program";
@@ -57,7 +58,9 @@ type CollectionLeaf =
 	| LinkedPostgresUpdateOperationPlanV1["candidateValidation"]
 	| NonNullable<LinkedPostgresUpdateOperationPlanV1["candidatePolicyCheck"]>
 	| LinkedPostgresUpdateOperationPlanV1["fieldAuthority"]["checks"][number]
-	| LinkedPostgresUpdateOperationPlanV1["write"];
+	| LinkedPostgresUpdateOperationPlanV1["write"]
+	| LinkedPostgresDeleteOperationPlanV1["lock"]
+	| LinkedPostgresDeleteOperationPlanV1["write"];
 export type ExecuteCollectionLeaf = (
 	leaf: CollectionLeaf,
 	parameters: readonly PostgresParameter[],
@@ -335,6 +338,7 @@ export function createCollectionMutationData(
 			create?: LinkedPostgresCreateOperationPlanV1;
 			get?: LinkedPostgresGetOperationPlanV1;
 			update?: LinkedPostgresUpdateOperationPlanV1;
+			delete?: LinkedPostgresDeleteOperationPlanV1;
 		}
 	>();
 	for (const plan of input.plans.plans) {
@@ -347,6 +351,7 @@ export function createCollectionMutationData(
 		if (plan.member === "create" && admitted) members.create = plan;
 		else if (plan.member === "update" && admitted) members.update = plan;
 		else if (plan.member === "get") members.get = plan;
+		else if (plan.member === "delete" && admitted) members.delete = plan;
 		collections.set(name, members);
 	}
 	data = Object.freeze(
@@ -789,6 +794,74 @@ export function createCollectionMutationData(
 										started,
 									);
 									return written;
+								},
+							}
+						: {}),
+					...(plans.delete
+						? {
+								delete: async (rawRequest: unknown) => {
+									const plan = plans.delete!;
+									const started = performance.now();
+									const request = exactRequestWithOptionalKeys(
+										rawRequest,
+										["key"],
+										[],
+										"Collection delete request",
+									);
+									const key = record(request.key, "Collection key");
+									exactPaths(
+										inputPaths(key, "Collection key", plan.operation.keyFields),
+										plan.operation.keyFields,
+										"Collection key",
+									);
+									const values = { key };
+									// Lock first (round trip 1), matching update: a future
+									// authored `validate` phase can run between the lock and
+									// the write without reshaping this plan. A row that does
+									// not exist short-circuits here instead of paying for the
+									// DELETE statement.
+									const locked = await execute(
+										plan,
+										started,
+										plan.lock,
+										bind(
+											plan.lock.parameters,
+											values,
+											input.facts,
+											input.operationTime,
+										),
+									);
+									if (locked.length === 0) return null;
+									if (locked.length !== 1)
+										throw new TypeError(
+											"Collection delete lock returned multiple rows",
+										);
+									// Round trip 2: DELETE ... RETURNING, gated by the same
+									// row-scope Policy check re-evaluated fresh in this
+									// statement. Zero rows means not-found and Policy-denied
+									// stayed indistinguishable, exactly like update.
+									const rows = await execute(
+										plan,
+										started,
+										plan.write,
+										bind(
+											plan.write.parameters,
+											values,
+											input.facts,
+											input.operationTime,
+										),
+									);
+									consumeRows(rows.length);
+									if (rows.length === 0) return null;
+									if (rows.length > plan.limits.rows || rows.length !== 1)
+										throw new TypeError(
+											"Collection delete exceeded its row limit",
+										);
+									return decodeRow(
+										rows[0]!,
+										plan.write.result,
+										input.resultValuesDecoded,
+									);
 								},
 							}
 						: {}),

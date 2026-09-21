@@ -4,6 +4,7 @@ import {
 	bindPostgresCollectionStatement,
 	decodePostgresCollectionParameters,
 } from "./postgres-collection-statement";
+import { deletePlan } from "./postgres-delete-program";
 import { decodePostgresStatement as statement } from "./postgres-program-codec";
 import {
 	array,
@@ -36,6 +37,7 @@ export type {
 	LinkedPostgresCollectionOperationPlanV1,
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresCreateOperationPlanV1,
+	LinkedPostgresDeleteOperationPlanV1,
 	LinkedPostgresGetOperationPlanV1,
 	LinkedPostgresUpdateOperationPlanV1,
 } from "./postgres-program-types";
@@ -592,16 +594,20 @@ export function linkPostgresCollectionOperationPlans(
 		const operation = input.operations.byIdentity.get(identity);
 		if (
 			!operation ||
-			!new Set(["create", "get", "update"]).has(operation.member)
+			!new Set(["create", "delete", "get", "update"]).has(operation.member)
 		)
 			fail(`plan ${identity} has no executable Collection Operation`);
 		if (operation.member === "create") return createPlan(plan, operation);
 		if (operation.member === "update") return updatePlan(plan, operation);
+		if (operation.member === "delete") return deletePlan(plan, operation);
 		return getPlan(plan, operation);
 	});
 	const required = input.operations.operations.filter(
 		({ member }) =>
-			member === "create" || member === "get" || member === "update",
+			member === "create" ||
+			member === "delete" ||
+			member === "get" ||
+			member === "update",
 	);
 	if (
 		required.length !== linked.length ||

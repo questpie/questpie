@@ -50,6 +50,7 @@ export type {
 	LinkedPostgresCollectionOperationPlanV1,
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresCreateOperationPlanV1,
+	LinkedPostgresDeleteOperationPlanV1,
 	LinkedPostgresGetOperationPlanV1,
 } from "./postgres-program";
 
