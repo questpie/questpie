@@ -5,6 +5,7 @@ import {
 	executeCollectionStatement,
 	type CollectionExecutionBudget,
 } from "./collection-budget";
+import { createCollectionDeleteExecutor } from "./collection-delete";
 import { createCollectionGetExecutor } from "./collection-get";
 import {
 	assertAllowedCollectionPaths as allowedPaths,
@@ -276,13 +277,16 @@ export function createCollectionMutationData(
 			durationMilliseconds: plan.limits.durationMilliseconds,
 			use: () => input.executeLeaf(leaf, parameters),
 		});
-	const executeGet = createCollectionGetExecutor({
+	const keyedRowAccess = {
 		execute,
-		bind: (parameters, key) =>
+		bind: (parameters: readonly Parameter[], key: Row) =>
 			bind(parameters, { key }, input.facts, input.operationTime),
-		decode: (row, result) => decodeRow(row, result, input.resultValuesDecoded),
+		decode: (row: Row, result: readonly Result[]) =>
+			decodeRow(row, result, input.resultValuesDecoded),
 		consumeRows,
-	});
+	};
+	const executeGet = createCollectionGetExecutor(keyedRowAccess);
+	const executeDelete = createCollectionDeleteExecutor(keyedRowAccess);
 	const lists = createCollectionListAccess({
 		operations: input.collectionOperations,
 		execute: input.executeList,
@@ -799,70 +803,8 @@ export function createCollectionMutationData(
 						: {}),
 					...(plans.delete
 						? {
-								delete: async (rawRequest: unknown) => {
-									const plan = plans.delete!;
-									const started = performance.now();
-									const request = exactRequestWithOptionalKeys(
-										rawRequest,
-										["key"],
-										[],
-										"Collection delete request",
-									);
-									const key = record(request.key, "Collection key");
-									exactPaths(
-										inputPaths(key, "Collection key", plan.operation.keyFields),
-										plan.operation.keyFields,
-										"Collection key",
-									);
-									const values = { key };
-									// Lock first (round trip 1), matching update: a future
-									// authored `validate` phase can run between the lock and
-									// the write without reshaping this plan. A row that does
-									// not exist short-circuits here instead of paying for the
-									// DELETE statement.
-									const locked = await execute(
-										plan,
-										started,
-										plan.lock,
-										bind(
-											plan.lock.parameters,
-											values,
-											input.facts,
-											input.operationTime,
-										),
-									);
-									if (locked.length === 0) return null;
-									if (locked.length !== 1)
-										throw new TypeError(
-											"Collection delete lock returned multiple rows",
-										);
-									// Round trip 2: DELETE ... RETURNING, gated by the same
-									// row-scope Policy check re-evaluated fresh in this
-									// statement. Zero rows means not-found and Policy-denied
-									// stayed indistinguishable, exactly like update.
-									const rows = await execute(
-										plan,
-										started,
-										plan.write,
-										bind(
-											plan.write.parameters,
-											values,
-											input.facts,
-											input.operationTime,
-										),
-									);
-									consumeRows(rows.length);
-									if (rows.length === 0) return null;
-									if (rows.length > plan.limits.rows || rows.length !== 1)
-										throw new TypeError(
-											"Collection delete exceeded its row limit",
-										);
-									return decodeRow(
-										rows[0]!,
-										plan.write.result,
-										input.resultValuesDecoded,
-									);
-								},
+								delete: async (rawRequest: unknown) =>
+									executeDelete(plans.delete!, rawRequest, performance.now()),
 							}
 						: {}),
 				}),
