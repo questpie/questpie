@@ -94,17 +94,23 @@ function declarationTarget(value: unknown): string | undefined {
 
 function declarationInventory(packageRoot: string, json: PackageJson) {
 	return Object.entries(json.exports ?? {})
-		.map(([exportName, value]) => {
+		.flatMap(([exportName, value]) => {
+			// A bare string export that is not a declaration file is the
+			// self-referencing "./package.json" convention: it has no compiled
+			// type surface to bind, so it is intentionally outside the manifest.
+			if (typeof value === "string" && !value.endsWith(".d.ts")) return [];
 			const target = declarationTarget(value);
 			if (!target)
 				fail(
 					`${json.name ?? packageRoot}: ${exportName} has no declaration target`,
 				);
-			return {
-				export: exportName,
-				target,
-				sha256: sha256(resolve(packageRoot, target)),
-			};
+			return [
+				{
+					export: exportName,
+					target,
+					sha256: sha256(resolve(packageRoot, target)),
+				},
+			];
 		})
 		.sort((left, right) => left.export.localeCompare(right.export));
 }
@@ -190,6 +196,7 @@ function linkPackageDependencies(
 	consumer: string,
 	packageRoot: string,
 	dependencies: Readonly<Record<string, string>> | undefined,
+	owner: string,
 ): void {
 	for (const dependency of Object.keys(dependencies ?? {})) {
 		const source = resolve(
@@ -198,9 +205,7 @@ function linkPackageDependencies(
 			...dependency.split("/"),
 		);
 		if (!existsSync(source))
-			fail(
-				`questpie-opentelemetry: dependency is unavailable for isolated import: ${dependency}`,
-			);
+			fail(`${owner}: dependency is unavailable for isolated import: ${dependency}`);
 		const target = join(consumer, "node_modules", ...dependency.split("/"));
 		mkdirSync(dirname(target), { recursive: true });
 		symlinkSync(source, target, "dir");
@@ -327,6 +332,17 @@ if (dryRun) {
 					fail(
 						"questpie/react-query: optional peer or mismatch boundary drifted",
 					);
+				// The packed tarball ships questpie's own production dependencies
+				// (e.g. `pg` for questpie/testing) as ordinary package.json
+				// dependencies, not bundled output; link them the same way the
+				// OpenTelemetry package's dependencies are linked below so the
+				// isolated single-package import check reflects a real install.
+				linkPackageDependencies(
+					consumer,
+					packageRoot,
+					installed.dependencies,
+					"questpie",
+				);
 				await run(["bun", "-e", 'await import("questpie")'], consumer);
 				await run(
 					[
@@ -365,7 +381,12 @@ if (dryRun) {
 				) as PackageJson;
 				if (installed.peerDependencies?.questpie !== releaseVersion)
 					fail("questpie-opentelemetry: exact peer boundary drifted");
-				linkPackageDependencies(consumer, packageRoot, installed.dependencies);
+				linkPackageDependencies(
+					consumer,
+					packageRoot,
+					installed.dependencies,
+					"questpie-opentelemetry",
+				);
 			}
 
 			await run(

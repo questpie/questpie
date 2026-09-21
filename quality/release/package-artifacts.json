@@ -7,12 +7,12 @@
 			"name": "questpie",
 			"version": "4.0.0-beta.2",
 			"filename": "questpie-4.0.0-beta.2.tgz",
-			"sha256": "8f8321d066b7fa76ec83b005e495ddb3420d5c8f86a144a0da8f33ae46466b89",
+			"sha256": "17343439cb2518f8ce63a5b02a1c2e09d7bd95ff838f30a06c6d82a3115142e7",
 			"declarations": [
 				{
 					"export": ".",
 					"target": "./dist/index.d.ts",
-					"sha256": "89cc806c0bba9d61c4b1278eff454216cf4e35cdb8eabd81b77e229a3e4ea721"
+					"sha256": "06ed62324c6220174d87bfb2bf0d18131d3b751fc285cc1db1374629701f5a91"
 				},
 				{
 					"export": "./internal/client-projection",
@@ -28,6 +28,11 @@
 					"export": "./react-query",
 					"target": "./dist/react-query/index.d.ts",
 					"sha256": "8b846c4f2fa6f3846e62e15ccdd18b67faeb54221437c7ea3ebe11de49835884"
+				},
+				{
+					"export": "./testing",
+					"target": "./dist/testing/index.d.ts",
+					"sha256": "a27df1aeb3fc6f868d6fc13357dded0e05153b39c8b615a6a5c0c67a2905778a"
 				}
 			]
 		},

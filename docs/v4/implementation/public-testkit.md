@@ -60,7 +60,13 @@ TEMPLATE`, avoiding a full migration replay per test file.
   installed `questpie` CLI, resolved via
   `import.meta.resolve("questpie/package.json")` — which required adding a
   `"./package.json"` export so the resolution also works under Node, not
-  only Bun's more lenient resolver.
+  only Bun's more lenient resolver. `runQuestpieCli` forwards whatever
+  `arguments` a caller supplies, so it can also drive the onboarding CLI's
+  authoring commands (`migration plan`, `migration create`, `seed create`);
+  `createMigratedTemplateDatabase`/`createTestDatabaseFromTemplate` themselves
+  only ever run the existing `migration apply`/`seed apply` commit-time
+  commands against already-committed migrations and Seeds, since template
+  cloning is a test-isolation concern, not an authoring one.
 - `@questpie/testkit` stays private and is retained; it re-exports its three
   lifecycle helpers from `packages/questpie/src/testing/index.ts` **by
   relative source path**, not the built `questpie/testing` package specifier
