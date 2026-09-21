@@ -224,10 +224,21 @@ phase lands the type-visibility gate.
   guarantee across that boundary (a truly immutable creation timestamp,
   an audit trail that must not restart) **should not grant `delete`** on
   its default Policy. See the separate Proposed ADR-0048 (database-level
-  append-only Collections — not present on this branch, tracked
-  elsewhere), which forbids delete entirely for Collections that opt in —
-  that is the mechanism for Collections needing this guarantee, not a
-  delete-side workaround.
+  append-only Collections), which forbids delete entirely for Collections
+  that opt in — that is the mechanism for Collections needing this
+  guarantee, not a delete-side workaround. Concretely, after the two
+  branches were integrated (2026-09-22): `defineCollection({ appendOnly:
+  true })` makes `projectCollectionMutationKernels`
+  (`packages/compiler/src/mutation/kernel.ts`) refuse to emit this ADR's
+  `delete` kernel for that Collection at compose time — a Policy declaring
+  a `delete` operation on an append-only Collection is the same
+  `QP-COMPOSE-013 structuralTypeError` diagnostic ADR-0048 already uses for
+  the `update` kernel and for an authored Operation Set `delete` member
+  (`packages/compiler/src/mutation/operation-set.ts`). `compileApplication`
+  throws before any delete-capable SQL is generated; there is no runtime
+  fallback path. See
+  `tests/unit/adr0047-adr0048-delete-append-only-refusal.test.ts` and
+  `tests/integration/postgres/adr0047-adr0048-delete-append-only-refusal.test.ts`.
 
 ## Deferred decisions
 
