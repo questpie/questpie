@@ -1,6 +1,7 @@
 # ADR-0048: Compiler-owned database-level Collection and Field immutability
 
-- Status: Proposed
+- Status: Proposed (implemented; not marked Accepted — owner sign-off items
+  remain, see below)
 - Date: 2026-09-21
 - Owners: compiler, schema lifecycle
 - Ticket: Autopilot port kill criterion — see
@@ -227,14 +228,16 @@ TRIGGER` on a guard is `QP-SCHEMA-028 changedObject` drift at startup, and
 ### 3. Lifecycle of the declaration
 
 - **Adding `appendOnly: true` / `immutable: "database"` to an existing
-  Collection/Field:** classified `guarded` (existing `migration-classification.ts`
-  vocabulary) if the table/column currently has rows — the guard trigger
-  itself is instantaneous DDL (no table rewrite, no scan), but planning
-  treats _adding a new invariant over existing data_ the same conservative way
-  ADR-0002 treats a new `NOT NULL` without a default: the plan surfaces it,
-  no silent data loss is possible (a guard only _rejects future writes_, it
-  never touches existing rows), so this is a **safe** addition, not
-  destructive. No `--accept-destructive` required to add.
+  Collection/Field:** classified `safe` (existing `migration-classification.ts`
+  vocabulary, as implemented in `migration-diff.ts`'s `immutabilityGuardSteps`
+  and the equivalent block in `createSteps`) unconditionally — the guard is a
+  `CREATE FUNCTION`/`CREATE TRIGGER` pair, instantaneous DDL that only takes a
+  brief `ACCESS EXCLUSIVE`/`SHARE ROW EXCLUSIVE` lock, never rewrites the
+  table, and never touches existing rows (a guard only rejects _future_
+  writes). No `--accept-destructive` required to add, and none of the
+  existing rows are scanned, validated, or at risk — unlike adding a `NOT
+NULL` column, there is no data already in the table that could violate the
+  new guarantee retroactively.
 - **Removing `appendOnly` / `immutable: "database"`:** classified
   **destructive**, requiring `migration create --accept-destructive` (the
   existing machinery, per `migration-classification.ts`'s existing pattern of
@@ -250,40 +253,63 @@ TRIGGER` on a guard is `QP-SCHEMA-028 changedObject` drift at startup, and
   drop-old-guard-name + create-new-guard-name bound to the same
   `renameCollection`/`renameField` migration step, never as an add+remove of
   the declaration itself — the guarantee is continuous across the rename.
-- **Kernel capability suppression (compile-time, not runtime):** the compiler
-  must not offer `update`/`delete` capability at all for an append-only
-  Collection, and must reject a `Mutation` body that attempts `update`/
-  `delete` calls against it as a compiler diagnostic
-  (`QP-SCHEMA-0xx unsupportedCapability`, new code — see open item below),
-  the same category of error as any other capability-shape violation the
-  compiler already catches statically. This turns "the framework's own
+- **Kernel capability suppression (compile-time, not runtime): implemented.**
+  `packages/compiler/src/mutation/operation-set.ts`'s
+  `projectCollectionOperationSets` rejects an `update` or `delete` member on
+  an append-only Collection's Operation Set with the existing
+  `QP-COMPOSE-013 structuralTypeError` diagnostic (the same code this file
+  already uses for every other statically-caught capability-shape violation,
+  e.g. exposing a database-owned or kernel-immutable Field as caller input)
+  — no new diagnostic code was needed. This turns "the framework's own
   writer would hit the trigger" into a build-time error instead of a runtime
-  `RAISE EXCEPTION`, matching item 4's "kernel hit maps to a typed issue, not
-  a raw PostgreSQL error" requirement one layer earlier (it never reaches the
-  database at all for the generated kernel's own code).
-- **Compiler-planned bypass for migrations:** **supported, explicit, and
-  audited**, scoped to inside a single compiler-planned migration transaction
-  only. A migration step type `alterAppendOnlyBackfill`/`alterWriteOnceBackfill`
-  may wrap operator-authored backfill SQL with `ALTER TABLE ... DISABLE
-TRIGGER <guard>` / `... ENABLE TRIGGER <guard>` inside the same transaction
-  as the rest of the migration (never outside one), recorded in the Committed
-  Migration artifact so it is visible in history exactly like every other
-  step (ADR-0006 transactional schema artifact protocol already guarantees
-  the whole file commits atomically or not at all). This is deliberately
-  narrow: it is not a general "disable my guard" escape hatch available
-  outside `migration create`-generated files, and the disable/enable pair
-  must bracket exactly the backfill statements the migration author wrote,
-  not the whole migration.
+  `RAISE EXCEPTION`: `compileApplication` throws before any SQL is generated
+  for that Mutation. Field-level write-once exclusion from the `update`
+  caller-input and trusted-value lanes required no new logic at all, because
+  `immutable: "database"` already sets the field contract's `immutable: true`
+  (a strict superset), and the existing `contract.immutable === true` checks
+  in the same file already exclude it.
+- **Compiler-planned bypass for migrations: NOT supported in this slice
+  (v1).** Supervisor decision, reversing this ADR's earlier draft position.
+  An append-only Collection cannot be backfilled by a migration at all while
+  `appendOnly: true` is set: there is no step type that disables a guard,
+  audited or otherwise. A migration that needs to backfill such a table must
+  either (a) apply while the declaration is temporarily removed (a
+  destructive-class change requiring `--accept-destructive`, per the
+  "Removing" bullet above) and re-added afterward as a second, separately
+  acknowledged migration, or (b) be written before the Collection ever
+  becomes append-only. This is deliberately conservative: an audited
+  disable/enable escape hatch is exactly the kind of narrow exception that
+  is easy to state and easy to misuse later (a migration author under
+  deadline pressure "just" backfilling one extra column while the guard is
+  down); a future slice may reconsider this with its own explicit ADR if a
+  real product need proves the two-migration workaround insufficient.
 
 ### 4. Error identity
 
-- Both guard functions `RAISE EXCEPTION` with a fixed, reserved SQLSTATE
-  (recommend a custom class code such as `QP001` for the append-only guard,
-  `QP002` for the write-once guard — PostgreSQL reserves the ability to
-  register application error codes outside its own `22xxx`/`23xxx`/`42xxx`
-  ranges; this needs confirmation this is collision-free against any
-  extension in use, flagged as unverified below) and a message that embeds
-  the Collection identity (and, for write-once, the Field identity):
+- Both guard functions `RAISE EXCEPTION` with a fixed, reserved SQLSTATE:
+  `QP001` for the append-only guard, `QP002` for the write-once guard
+  (`packages/compiler/src/schema/postgres/append-only.ts`,
+  `APPEND_ONLY_SQLSTATE`/`WRITE_ONCE_FIELD_SQLSTATE`). **Verified, per
+  supervisor instruction:** PostgreSQL's SQLSTATE scheme (documented in its
+  manual's Appendix A, "PostgreSQL Error Codes") gives every condition a
+  5-character code whose first two characters are its "class". A class is
+  standard-defined only when its first character is a digit `0`-`4` or a
+  letter `A`-`H`; classes whose first character is a digit `5`-`9` or a
+  letter `I`-`Z` are reserved for implementation- and application-defined
+  conditions and will never be assigned a standard meaning. `Q` (the first
+  character of both `QP001` and `QP002`) falls in the `I`-`Z` range, so
+  neither code can collide with any current or future PostgreSQL-defined
+  condition. A repository-wide `grep` for `RAISE EXCEPTION`/`USING ERRCODE`
+  across `packages/compiler/src/schema/postgres/*.ts` (`internal-protocol-v3*.ts`,
+  `internal-protocol-v4-sql.ts`, `internal-protocol-v3-realtime.ts`) found no
+  other custom SQLSTATE anywhere in this codebase — every other raised
+  exception uses plpgsql's default `P0001`, so `QP001`/`QP002` also do not
+  collide with an existing compiler-owned condition. Collision against a
+  third-party PostgreSQL _extension_ the deployment happens to install
+  remains unverified (no such extension was in the test database) and is
+  carried forward as a residual, lower-probability risk, not blocking.
+  A message that embeds the Collection identity (and, for write-once, the
+  Field identity) is included:
   `Collection <identity> is append-only; UPDATE and DELETE are refused at the
 database level` / `Field <identity> on Collection <identity> is
 database-immutable; it cannot change after insert`.
@@ -313,25 +339,48 @@ database-immutable; it cannot change after insert`.
 - Removing either declaration is a destructive-class migration change,
   requiring explicit `--accept-destructive` acknowledgment.
 - The generated kernel can never itself trigger either guard under normal
-  operation; only a compiler-planned, transaction-scoped, explicitly-authored
-  backfill step may temporarily disable a guard.
+  operation (compile-time `update`/`delete` capability suppression for
+  append-only Collections; write-once Fields already excluded from the
+  update lane via the existing `immutable` contract). There is no
+  compiler-planned bypass for migrations in this slice: an append-only
+  Collection cannot be backfilled while the declaration is set; the
+  declaration must be temporarily removed (destructive, acknowledged) and
+  re-added afterward.
+- Implemented and proven against a real PostgreSQL 17 database (see
+  `docs/v4/implementation/collection-db-immutability.md`): direct
+  `psql`-equivalent `UPDATE`/`DELETE`/`TRUNCATE` refused with the reserved
+  SQLSTATE; `migration apply` idempotent; out-of-band `DROP TRIGGER`
+  detected as `QP-SCHEMA-028` drift; the fixed `bunx questpie migration plan`
+  recovery hint (item 3 below) shipped in this slice.
 
 ## Open items for owner sign-off
 
-1. **Custom SQLSTATE codes** (`QP001`/`QP002` proposed) need a collision check
-   against any PostgreSQL extension the deployment target uses; not verified
-   in this pass.
+1. ~~Custom SQLSTATE codes need a collision check against any PostgreSQL
+   extension~~ — **resolved for this repository's own code**: `QP001`/`QP002`
+   verified against PostgreSQL's Appendix A class-reservation rule and
+   against every other `RAISE EXCEPTION`/`USING ERRCODE` in this codebase
+   (see "Error identity" above). Collision against a third-party extension
+   installed by a specific deployment remains unverified and is a residual,
+   low-probability risk for the owner to accept or reject.
 2. Whether to _additionally_ `REVOKE UPDATE, DELETE ON <table> FROM
 <application_role>` as defense in depth once the kernel is compile-time
-   incapable of emitting those statements anyway — likely still valuable
-   against a compromised/misused application credential, but changes the
-   privilege model for shared roles and needs its own review; not decided
-   here, left for the implementation slice.
-3. The dangling `QP-SCHEMA-027` recovery hint (`bunx questpie schema drift`,
-   a command that does not exist) should be fixed to point at
-   `bunx questpie migration plan` (the command that actually surfaces drift)
-   or filed as a follow-up if out of scope for this ADR's implementation
-   slice.
+   incapable of emitting those statements anyway — **decided for this
+   slice: no.** Supervisor instruction: not implemented; left as optional
+   future defense in depth. It would still be valuable against a
+   compromised/misused application credential, but changes the privilege
+   model for shared roles (the generated kernel typically connects as the
+   table owner) and needs its own review, separate from this slice.
+3. ~~The dangling `QP-SCHEMA-027` recovery hint~~ — **fixed in this slice**:
+   `packages/compiler/src/schema/postgres/apply.ts`'s drift recovery now
+   reads `bunx questpie migration plan --name <slug>` (the command that
+   actually surfaces drift, via `inspectSchemaFingerprint` when a
+   `DATABASE_URL`/connection string is available), replacing the
+   nonexistent `bunx questpie schema drift`.
+4. **New in this slice**: whether the two-migration workaround for
+   backfilling an append-only table (remove declaration → backfill →
+   re-add declaration) is acceptable product ergonomics, or whether a
+   future ADR should add the narrower audited-bypass step type this ADR's
+   first draft proposed and the supervisor then declined for v1.
 
 ## Rejected alternatives
 
