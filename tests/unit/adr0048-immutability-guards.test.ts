@@ -603,4 +603,173 @@ export const evidenceEntriesPolicy = definePolicy(evidenceEntries, {
 			await rm(temporary, { recursive: true, force: true });
 		}
 	});
+
+	test('refuses immutable: "database" combined with onUpdate: "now" on the same Field', async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-self-brick-field-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/self-brick-field-fixture.ts"),
+				`import { constraint, defineCollection, field } from "questpie";
+
+export const brokenRecords = defineCollection({
+	name: "brokenRecords",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		touchedAt: field.timestamp({
+			nullable: false,
+			default: "now",
+			withTimezone: true,
+			onUpdate: "now",
+			immutable: "database",
+		}),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-001",
+				diagnosticClass: "invalidDefinition",
+				message: expect.stringContaining(
+					'cannot combine onUpdate: "now" with immutable: "database"',
+				),
+			});
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+
+	test("refuses an append-only Collection that also has a database-owned onUpdate Field", async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-self-brick-collection-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/self-brick-collection-fixture.ts"),
+				`import { constraint, defineCollection, field } from "questpie";
+
+export const brokenLog = defineCollection({
+	name: "brokenLog",
+	appendOnly: true,
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		touchedAt: field.timestamp({
+			nullable: false,
+			default: "now",
+			withTimezone: true,
+			onUpdate: "now",
+		}),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-001",
+				diagnosticClass: "invalidDefinition",
+				message: expect.stringContaining(
+					"cannot combine appendOnly with a database-owned onUpdate Field",
+				),
+			});
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+
+	test("refuses a relation with onDelete cascade/setNull owned by an append-only Collection", async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-fk-cascade-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/fk-cascade-fixture.ts"),
+				`import { constraint, defineCollection, field, relation } from "questpie";
+import { channels } from "./channels";
+
+export const auditTrail = defineCollection({
+	name: "auditTrail",
+	appendOnly: true,
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		channelId: field.uuid({ nullable: false }),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+	relations: {
+		channel: relation.toOne({
+			target: channels,
+			fields: ["channelId"],
+			references: ["id"],
+			onDelete: "cascade",
+		}),
+	},
+});
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-001",
+				diagnosticClass: "invalidDefinition",
+				message: expect.stringContaining('cannot use onDelete: "cascade"'),
+			});
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
+
+	test("accepts a relation with onDelete restrict owned by an append-only Collection", async () => {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-immutability-fk-restrict-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/fk-restrict-fixture.ts"),
+				`import { constraint, defineCollection, field, relation } from "questpie";
+import { channels } from "./channels";
+
+export const auditTrail = defineCollection({
+	name: "auditTrail",
+	appendOnly: true,
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		channelId: field.uuid({ nullable: false }),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+	relations: {
+		channel: relation.toOne({
+			target: channels,
+			fields: ["channelId"],
+			references: ["id"],
+			onDelete: "restrict",
+		}),
+	},
+});
+`,
+			);
+			const compilation = await compileApplication({
+				applicationRoot: temporary,
+			});
+			const schema = JSON.parse(
+				compilation.generatedFiles["schema-projection.json"] ?? "null",
+			);
+			expect(
+				schema.collections.some(
+					(value: { identity: string }) =>
+						value.identity === "collection:auditTrail",
+				),
+			).toBe(true);
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	});
 });

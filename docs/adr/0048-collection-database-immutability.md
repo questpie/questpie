@@ -339,6 +339,32 @@ CONFLICT (...) DO NOTHING` (never fires the row guard) and, only when that
   could false-positive a mismatch). No application in this repository's
   fixtures exercises `immutable`/`appendOnly` Fields of those scalar kinds
   yet; revisit if one does.
+- **Self-bricking and undefined combinations are compose-time diagnostics,
+  found by adversarial review:**
+  - `immutable: "database"` and `onUpdate: "now"` on the **same** Field is
+    refused (`QP-SCHEMA-001`): the two are directly contradictory (one says
+    "the database sets this on every UPDATE," the other says "this can never
+    change"), and if it were allowed the `onUpdate` trigger would set
+    `NEW.col` on every UPDATE, which the write-once guard would then always
+    see as changed, refusing every UPDATE to the row forever — not just
+    writes to that column.
+  - `appendOnly: true` on a Collection that also has any `onUpdate: "now"`
+    Field is refused (`QP-SCHEMA-001`): not a correctness bug (the
+    `onUpdate` trigger simply can never fire, since the append-only guard
+    already refuses every UPDATE), but a silently-inert declaration that
+    would mislead a reader into thinking the column is maintained.
+  - A `relation.toOne(...)` with `onDelete: "cascade"` or `onDelete:
+"setNull"` **owned by** (declared on) an append-only Collection is
+    refused (`QP-SCHEMA-001`), naming both Collections: a cascaded
+    `DELETE`/`UPDATE` from the referenced parent would hit the child's own
+    append-only guard, refusing the _parent's_ delete too — discoverable
+    only in production without this check. A relation owned by an
+    append-only Collection must use `onDelete: "restrict"` (PostgreSQL's own
+    `ON DELETE RESTRICT`, which refuses the parent delete with its standard
+    foreign-key SQLSTATE `23503` before ever touching the child row, proven
+    against a real database by this pass's Postgres integration test).
+    `onDelete` on a relation owned by an _ordinary_ (non-append-only)
+    Collection is unaffected.
 
 ### 4. Error identity
 

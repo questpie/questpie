@@ -291,6 +291,61 @@ CREATE TABLE adr0048.notes (
 		);
 
 		postgresTest(
+			"a parent's DELETE is refused by ON DELETE RESTRICT before it can reach an append-only child's guard",
+			async () => {
+				await ensure(database!);
+				await database!.unsafe(`CREATE SCHEMA adr0048;
+CREATE TABLE adr0048.parents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+);
+CREATE TABLE adr0048.children (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_id uuid NOT NULL REFERENCES adr0048.parents(id) ON DELETE RESTRICT
+);`);
+				const schema = {
+					application: { postgresSchema: "adr0048" },
+					collections: [
+						{
+							identity: "collection:children",
+							postgresName: "children",
+							appendOnly: true,
+							fields: [],
+						},
+					],
+					// biome-ignore lint: test fixture cast
+				} as unknown as Parameters<typeof projectPostgresImmutabilityGuards>[0];
+				const guards = projectPostgresImmutabilityGuards(schema);
+				await database!.unsafe(
+					renderAddAppendOnlyGuard(guards, "collection:children"),
+				);
+				const [parent] = await database!<{ id: string }[]>`
+					insert into adr0048.parents default values returning id
+				`;
+				await database!.unsafe(
+					`insert into adr0048.children (parent_id) values ('${parent!.id}')`,
+				);
+				// ON DELETE RESTRICT refuses the parent delete with the standard
+				// PostgreSQL foreign-key SQLSTATE, never reaching (and therefore
+				// never needing) the child's append-only guard -- this is the
+				// database behavior a relation owned by an append-only Collection
+				// must declare (onDelete: "restrict"); onDelete: "cascade" or
+				// "setNull" would instead try to touch the guarded child row and
+				// get refused by the guard itself, which is exactly the
+				// compose-time diagnostic this ADR now raises instead.
+				let rejected: unknown;
+				try {
+					await database!.unsafe(
+						`delete from adr0048.parents where id = '${parent!.id}'`,
+					);
+				} catch (error) {
+					rejected = error;
+				}
+				expect(rejected).toMatchObject({ errno: "23503" });
+			},
+			60_000,
+		);
+
+		postgresTest(
 			"migration plan -> migration create -> migration apply installs the guard, apply is idempotent, and removing the declaration requires --accept-destructive",
 			async () => {
 				const temporary = await mkdtemp(
