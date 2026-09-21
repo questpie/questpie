@@ -60,6 +60,7 @@ import {
 import {
 	expectedComparable,
 	projectPostgresDatabaseOwnedUpdates,
+	projectPostgresImmutabilityGuards,
 	projectManifest,
 	projectMemberContributions,
 } from "./schema";
@@ -209,10 +210,15 @@ export async function createArtifacts(
 	});
 	const changeCapture = projectLiveQueryChangeCapture(baseSchema, liveQuery);
 	const databaseOwnedUpdates = projectPostgresDatabaseOwnedUpdates(baseSchema);
+	const immutabilityGuards = projectPostgresImmutabilityGuards(baseSchema);
 	const schema = Object.freeze({
 		...baseSchema,
 		changeCapture,
 		...(databaseOwnedUpdates.fields.length > 0 ? { databaseOwnedUpdates } : {}),
+		...(immutabilityGuards.appendOnlyCollections.length > 0 ||
+		immutabilityGuards.writeOnceFields.length > 0
+			? { immutabilityGuards }
+			: {}),
 	});
 	const finalManifest: Readonly<Record<string, unknown>> = Object.freeze({
 		...manifest,

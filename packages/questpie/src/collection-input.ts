@@ -49,7 +49,7 @@ export type FieldOperationValue<Node> =
 		infer Nullable,
 		FieldDefinition["default"],
 		infer Scalar,
-		boolean,
+		boolean | "database",
 		boolean,
 		infer Options
 	>

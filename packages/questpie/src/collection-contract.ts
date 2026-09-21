@@ -165,6 +165,7 @@ export interface CollectionDefinition<
 	readonly issues: Issues;
 	readonly augmentations: readonly CollectionAugmentation[];
 	readonly postgresName: string | null;
+	readonly appendOnly: boolean;
 	readonly list: CollectionListAuthoring<Name, Fields, Relations>;
 	createInput(): CollectionInputCodec<CreatePropertiesFor<Fields>>;
 	updateInput(): CollectionInputCodec<UpdatePropertiesFor<Fields>>;

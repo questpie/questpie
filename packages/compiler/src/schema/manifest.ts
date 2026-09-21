@@ -236,6 +236,9 @@ export function projectManifest(
 				nullable: contract.nullable,
 				default: contract.default,
 				...(contract.onUpdate === "now" ? { onUpdate: "now" } : {}),
+				...(contract.databaseImmutable === true
+					? { databaseImmutable: true }
+					: {}),
 				collation:
 					record(contract.type, "field type").kind === "text"
 						? "questpie.binary"
@@ -364,6 +367,7 @@ export function projectManifest(
 			constraints,
 			indexes,
 			relations,
+			...(resource.value.appendOnly === true ? { appendOnly: true } : {}),
 		};
 	});
 	const collectionMap = new Map(

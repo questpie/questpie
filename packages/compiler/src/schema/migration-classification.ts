@@ -70,6 +70,7 @@ function literalDefault(value: unknown): boolean {
 
 function fieldRemainder(field: FieldShape): Readonly<Record<string, unknown>> {
 	const {
+		databaseImmutable: _databaseImmutable,
 		default: _default,
 		identity: _identity,
 		nullable: _nullable,

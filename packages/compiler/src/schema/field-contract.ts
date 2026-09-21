@@ -45,6 +45,19 @@ function boolean(value: unknown, label: string): boolean {
 	return value;
 }
 
+type Immutability = Readonly<{
+	immutable: boolean;
+	databaseImmutable: boolean;
+}>;
+
+function immutability(value: unknown, label: string): Immutability {
+	if (value === true) return { immutable: true, databaseImmutable: false };
+	if (value === false || value === undefined)
+		return { immutable: false, databaseImmutable: false };
+	if (value === "database") return { immutable: true, databaseImmutable: true };
+	return invalid(label, 'must be a boolean or "database"');
+}
+
 function memberKey(value: string, label: string): void {
 	if (!/^[a-z][A-Za-z0-9]{0,62}$/.test(value))
 		invalid(label, "must use the 1-to-63 lower-camel ASCII member grammar");
@@ -341,13 +354,16 @@ export function fieldContract(
 			normalizedDefault = { kind: "literal", value: rawDefault };
 		} else invalid(`field.${key}`, "does not accept that default");
 	}
+	const fieldImmutability = immutability(
+		value.immutable,
+		`field.${key}.immutable`,
+	);
 	return {
 		path,
 		type,
 		nullable: boolean(value.nullable, `field.${key}.nullable`),
-		...(boolean(value.immutable, `field.${key}.immutable`)
-			? { immutable: true }
-			: {}),
+		...(fieldImmutability.immutable ? { immutable: true } : {}),
+		...(fieldImmutability.databaseImmutable ? { databaseImmutable: true } : {}),
 		...(server ? { server: true } : {}),
 		...(onUpdate === "now" ? { onUpdate } : {}),
 		default: normalizedDefault,

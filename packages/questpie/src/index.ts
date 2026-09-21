@@ -122,7 +122,7 @@ export const collection = Object.freeze({
 
 type FieldBaseOptions = Readonly<{
 	nullable: boolean;
-	immutable?: boolean;
+	immutable?: boolean | "database";
 	server?: boolean;
 	postgres?: Readonly<{ name: string }>;
 }>;
@@ -171,7 +171,7 @@ function fieldDefinition<
 		? Default
 		: null,
 	Scalar,
-	Options extends { immutable: infer Immutable extends boolean }
+	Options extends { immutable: infer Immutable extends boolean | "database" }
 		? Immutable
 		: false,
 	Options extends { server: infer Server extends boolean } ? Server : false,
@@ -209,7 +209,7 @@ function fieldDefinition<
 			? Default
 			: null,
 		Scalar,
-		Options extends { immutable: infer Immutable extends boolean }
+		Options extends { immutable: infer Immutable extends boolean | "database" }
 			? Immutable
 			: false,
 		Options extends { server: infer Server extends boolean } ? Server : false,
@@ -551,6 +551,13 @@ export function defineCollection<
 		lifecycle?: CollectionLifecycleDefinition<Fields, Issues>;
 		augmentations?: readonly CollectionAugmentation[];
 		postgres?: Readonly<{ name: string }>;
+		/**
+		 * Database-level immutability: no `UPDATE` and no `DELETE` are ever
+		 * accepted on this Collection's table, enforced by a compiler-owned
+		 * PostgreSQL trigger (ADR-0048). Distinct from `field.*.immutable`,
+		 * which is kernel-only and per-Field.
+		 */
+		appendOnly?: boolean;
 	}>,
 ): CollectionDefinition<Name, Fields, Constraints, Indexes, Relations, Issues> {
 	const collection = {
@@ -566,6 +573,7 @@ export function defineCollection<
 		issues: input.issues ?? ({} as Issues),
 		augmentations: input.augmentations ?? [],
 		postgresName: input.postgres?.name ?? null,
+		appendOnly: input.appendOnly ?? false,
 	} as const;
 	return Object.freeze({
 		...collection,

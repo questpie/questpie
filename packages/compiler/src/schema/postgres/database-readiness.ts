@@ -10,6 +10,10 @@ import type {
 
 import type { SchemaProjectionV1 } from "../contracts";
 import type { SchemaFingerprintV1 } from "../postgres-types";
+import {
+	assertPostgresImmutabilityGuards,
+	type PostgresImmutabilityCatalogRowV1,
+} from "./append-only";
 import { reduceCatalogTableColumns } from "./catalog-reader-columns";
 import { reduceCatalogTableConstraintsAndIndexes } from "./catalog-reader-constraints";
 import {
@@ -386,6 +390,67 @@ ORDER BY c.relname, t.tgname`,
 	},
 });
 
+const immutabilityGuardsStatementDefinition = defineStatement<
+	Readonly<{ schema: string; triggers: readonly string[] }>,
+	readonly PostgresImmutabilityCatalogRowV1[]
+>({
+	name: "readiness.immutability-guards",
+	operation: "SELECT",
+	text: `SELECT c.relname, t.tgname, t.tgtype::integer, t.tgenabled,
+       pn.nspname, p.proname, l.lanname, p.prosrc, p.prosecdef, p.proconfig,
+       c.relowner = n.nspowner AND p.proowner = n.nspowner,
+       pg_catalog.has_function_privilege('public', p.oid, 'EXECUTE')
+FROM pg_catalog.pg_trigger t
+JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid
+JOIN pg_catalog.pg_namespace pn ON pn.oid = p.pronamespace
+JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+WHERE n.nspname = $1 AND t.tgname = ANY($2::text[]) AND NOT t.tgisinternal
+ORDER BY c.relname, t.tgname`,
+	parameterCount: 2,
+	parameters: (input) => [
+		text(input.schema, "application schema"),
+		input.triggers.map((value) => text(value, "immutability guard trigger")),
+	],
+	decode(result) {
+		return Object.freeze(
+			selectRows(result, undefined, "immutability guards result").map((row) => {
+				if (
+					row.length !== 12 ||
+					typeof row[2] !== "number" ||
+					!Number.isSafeInteger(row[2]) ||
+					typeof row[3] !== "string" ||
+					typeof row[6] !== "string" ||
+					typeof row[8] !== "boolean" ||
+					!Array.isArray(row[9]) ||
+					typeof row[10] !== "boolean" ||
+					typeof row[11] !== "boolean"
+				)
+					throw new TypeError(
+						"invalid PostgreSQL database readiness immutability guards result",
+					);
+				return Object.freeze({
+					table: text(row[0], "immutability guard table"),
+					triggerName: text(row[1], "immutability guard trigger"),
+					triggerType: row[2],
+					triggerEnabled: row[3],
+					functionSchema: text(row[4], "immutability guard function schema"),
+					functionName: text(row[5], "immutability guard function"),
+					functionLanguage: row[6],
+					functionSource: text(row[7], "immutability guard function source"),
+					functionSecurityDefiner: row[8],
+					functionConfiguration: Object.freeze(
+						row[9].map((value) => text(value, "function configuration")),
+					),
+					ownerMatches: row[10],
+					publicExecute: row[11],
+				});
+			}),
+		);
+	},
+});
+
 function managedObjectIdentities(schema: SchemaProjectionV1): Set<string> {
 	return new Set([
 		...(schema.changeCapture?.triggerCatalog.map(
@@ -393,6 +458,17 @@ function managedObjectIdentities(schema: SchemaProjectionV1): Set<string> {
 				`${schema.application.postgresSchema}.${trigger.table}.${trigger.name}`,
 		) ?? []),
 		...(schema.databaseOwnedUpdates?.fields.flatMap((field) => [
+			`${schema.application.postgresSchema}.${field.table}.${field.triggerName}`,
+			`function:${schema.application.postgresSchema}.${field.functionName}()`,
+		]) ?? []),
+		...(schema.immutabilityGuards?.appendOnlyCollections.flatMap(
+			(collection) => [
+				`${schema.application.postgresSchema}.${collection.table}.${collection.rowGuardTrigger}`,
+				`${schema.application.postgresSchema}.${collection.table}.${collection.truncateGuardTrigger}`,
+				`function:${schema.application.postgresSchema}.${collection.functionName}()`,
+			],
+		) ?? []),
+		...(schema.immutabilityGuards?.writeOnceFields.flatMap((field) => [
 			`${schema.application.postgresSchema}.${field.table}.${field.triggerName}`,
 			`function:${schema.application.postgresSchema}.${field.functionName}()`,
 		]) ?? []),
@@ -437,6 +513,9 @@ export async function verifyPostgresDatabaseSchemaReadiness(
 	);
 	const databaseOwnedUpdatesStatement = bindStatement(
 		databaseOwnedUpdatesStatementDefinition,
+	);
+	const immutabilityGuardsStatement = bindStatement(
+		immutabilityGuardsStatementDefinition,
 	);
 	const requiredExtensions = schema.requiredPostgres.extensions.map(
 		(extension) => extension.name,
@@ -623,6 +702,33 @@ export async function verifyPostgresDatabaseSchemaReadiness(
 	else if (databaseOwnedUpdates.length !== 0)
 		throw new TypeError(
 			"PostgreSQL database-owned updates exist without a compiler projection",
+		);
+	const immutabilityGuardTriggerNames = [
+		...(schema.immutabilityGuards?.appendOnlyCollections.flatMap(
+			(collection) => [
+				collection.rowGuardTrigger,
+				collection.truncateGuardTrigger,
+			],
+		) ?? []),
+		...(schema.immutabilityGuards?.writeOnceFields.map(
+			(field) => field.triggerName,
+		) ?? []),
+	];
+	const immutabilityGuards = await transaction.execute(
+		immutabilityGuardsStatement,
+		{
+			schema: schema.application.postgresSchema,
+			triggers: immutabilityGuardTriggerNames,
+		},
+	);
+	if (schema.immutabilityGuards)
+		assertPostgresImmutabilityGuards(
+			schema.immutabilityGuards,
+			immutabilityGuards,
+		);
+	else if (immutabilityGuards.length !== 0)
+		throw new TypeError(
+			"PostgreSQL database immutability guards exist without a compiler projection",
 		);
 	return Object.freeze({
 		format: "questpie.schema-fingerprint",

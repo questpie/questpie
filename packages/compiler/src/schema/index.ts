@@ -81,6 +81,22 @@ export type {
 	PostgresDatabaseOwnedUpdatesV1,
 } from "./postgres/database-owned-update";
 export {
+	APPEND_ONLY_SQLSTATE,
+	assertPostgresImmutabilityGuards,
+	projectPostgresImmutabilityGuards,
+	renderAddAppendOnlyGuard,
+	renderAddWriteOnceGuard,
+	renderDropAppendOnlyGuard,
+	renderDropWriteOnceGuard,
+	verifyPostgresImmutabilityGuards,
+	WRITE_ONCE_FIELD_SQLSTATE,
+} from "./postgres/append-only";
+export type {
+	PostgresAppendOnlyCollectionV1,
+	PostgresImmutabilityGuardsV1,
+	PostgresWriteOnceFieldV1,
+} from "./postgres/append-only";
+export {
 	assertPostgresCatalogComparable,
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
