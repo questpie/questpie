@@ -588,13 +588,25 @@ export function linkPostgresCollectionOperationPlans(
 		)
 	)
 		fail("plan identities must be unique and sorted");
+	// An Operation Set "delete" member with no backing Policy delete rule is
+	// type-visible but never executable (unchanged pre-existing behavior);
+	// only a kernel-owned delete (identified by its `__collectionKernel`
+	// identity) is required to have, and may be linked to, a PostgreSQL plan.
+	const isKernelDeleteOperation = (
+		operation: LinkedCollectionOperationProgramV1,
+	) =>
+		operation.member === "delete" &&
+		operation.identity.startsWith("mutation:__collectionKernel.");
 	const linked = rawPlans.map((raw, index) => {
 		const plan = record(raw, `plan ${index}`);
 		const identity = identities[index]!;
 		const operation = input.operations.byIdentity.get(identity);
 		if (
 			!operation ||
-			!new Set(["create", "delete", "get", "update"]).has(operation.member)
+			!(
+				new Set(["create", "get", "update"]).has(operation.member) ||
+				isKernelDeleteOperation(operation)
+			)
 		)
 			fail(`plan ${identity} has no executable Collection Operation`);
 		if (operation.member === "create") return createPlan(plan, operation);
@@ -603,11 +615,11 @@ export function linkPostgresCollectionOperationPlans(
 		return getPlan(plan, operation);
 	});
 	const required = input.operations.operations.filter(
-		({ member }) =>
-			member === "create" ||
-			member === "delete" ||
-			member === "get" ||
-			member === "update",
+		(operation) =>
+			operation.member === "create" ||
+			operation.member === "get" ||
+			operation.member === "update" ||
+			isKernelDeleteOperation(operation),
 	);
 	if (
 		required.length !== linked.length ||

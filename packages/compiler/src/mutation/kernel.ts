@@ -214,16 +214,30 @@ export function projectCollectionKernelExecutionPrograms(
 	kernels: CollectionOperationProgramsV1,
 	operationSetPrograms: CollectionOperationProgramsV1,
 ): CollectionOperationProgramsV1 {
-	// "delete" is now exclusively kernel-owned, like "create"/"update": an
-	// authored Operation Set `delete` member never executed anything on its
-	// own (no PostgreSQL statement builder existed for it), so excluding it
-	// here only drops a dead declaration and avoids a duplicate-member clash
-	// in the generated `ctx.data.<collection>` contract.
+	// "delete" is kernel-owned only where the Collection's default Policy
+	// declares operations.delete (mirroring create/update). An authored
+	// Operation Set `delete` member never executed anything on its own (no
+	// PostgreSQL statement builder existed for it); it still passes through
+	// unchanged here when there is no Policy-declared delete, so existing
+	// Collections that only declared an Operation Set `delete` (a
+	// type-visible but non-executable member, unchanged by this task) are
+	// not affected. Only the identity clash case — a Collection with both a
+	// Policy-declared delete and an authored Operation Set `delete` member —
+	// drops the Operation Set entry, since the kernel is then the sole
+	// PostgreSQL-executable owner and the generated contract allows exactly
+	// one owner per (target, member).
+	const kernelOwnedTargets = new Set(
+		kernels.operations
+			.filter(({ member }) => member === "delete")
+			.map(({ target }) => target),
+	);
 	const operations = [
 		...kernels.operations,
 		...operationSetPrograms.operations.filter(
-			({ member }) =>
-				member !== "create" && member !== "update" && member !== "delete",
+			({ member, target }) =>
+				member !== "create" &&
+				member !== "update" &&
+				!(member === "delete" && kernelOwnedTargets.has(target)),
 		),
 	].toSorted((left, right) => compareAscii(left.identity, right.identity));
 	return Object.freeze({

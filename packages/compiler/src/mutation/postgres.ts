@@ -723,9 +723,19 @@ export function lowerPostgresCollectionOperationPlans(
 		"questpie.collection-operation-programs",
 		"operations",
 	) as readonly CollectionOperationProgramV1[];
+	// An Operation Set may still declare a "delete" member with no backing
+	// Policy delete rule (type-visible but never executable, unchanged
+	// pre-existing behavior). Only a kernel-owned delete — identifiable by
+	// its `__collectionKernel` identity, produced solely when the default
+	// Policy declares `operations.delete` — has a PostgreSQL plan.
+	const isKernelDeleteOperation = (operation: CollectionOperationProgramV1) =>
+		operation.member === "delete" &&
+		operation.identity.startsWith("mutation:__collectionKernel.");
 	const plans = operations
-		.filter((operation) =>
-			["get", "create", "update", "delete"].includes(operation.member),
+		.filter(
+			(operation) =>
+				["get", "create", "update"].includes(operation.member) ||
+				isKernelDeleteOperation(operation),
 		)
 		.map((operation) => {
 			const collection = postgresMutationCollection(
