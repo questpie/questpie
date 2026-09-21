@@ -233,7 +233,12 @@ export function projectPostgresImmutabilityGuards(
 				),
 			),
 		),
-	];
+	].sort((left, right) =>
+		compareAscii(
+			`${left.table}\0${left.triggerName}`,
+			`${right.table}\0${right.triggerName}`,
+		),
+	);
 	return Object.freeze({
 		version: 1 as const,
 		postgresSchema,

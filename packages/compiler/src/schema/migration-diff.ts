@@ -430,6 +430,39 @@ export function createSteps(
 			}),
 		);
 	}
+	for (const collection of target.immutabilityGuards?.appendOnlyCollections ??
+		[]) {
+		if (!targetCollectionIdentities.has(collection.identity)) continue;
+		steps.push(
+			step({
+				kind: "addAppendOnlyGuard",
+				targetIdentity: collection.identity,
+				containerIdentity: collection.identity,
+				lock: "accessExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
+	}
+	for (const field of target.immutabilityGuards?.writeOnceFields ?? []) {
+		const collectionIdentity =
+			field.identity.split("/field:")[0] ?? field.identity;
+		if (!targetCollectionIdentities.has(collectionIdentity)) continue;
+		steps.push(
+			step({
+				kind: "addWriteOnceGuard",
+				targetIdentity: field.identity,
+				containerIdentity: collectionIdentity,
+				lock: "shareRowExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
+	}
 	return sortSteps(steps);
 }
 
