@@ -40,9 +40,11 @@ export async function installQuestpieForTracer(
 		JSON.stringify({
 			name: "questpie",
 			type: "module",
+			bin: { questpie: "./dist-cli.js" },
 			exports: {
 				".": "./index.ts",
 				"./react-query": "./react-query/index.ts",
+				"./testing": "./testing.ts",
 				"./internal/observability": "./internal/observability.ts",
 				"./internal/client-projection": "./internal/client-projection.ts",
 			},
@@ -57,6 +59,16 @@ export async function installQuestpieForTracer(
 		resolve(repositoryRoot, "packages/questpie/src/react-query"),
 		join(packageRoot, "react-query"),
 		"dir",
+	);
+	await symlink(
+		resolve(repositoryRoot, "packages/questpie/src/testing/index.ts"),
+		join(packageRoot, "testing.ts"),
+		"file",
+	);
+	await symlink(
+		resolve(repositoryRoot, "packages/questpie/dist/cli.js"),
+		join(packageRoot, "dist-cli.js"),
+		"file",
 	);
 	await symlink(
 		resolve(repositoryRoot, "packages/questpie/src/internal/observability.ts"),

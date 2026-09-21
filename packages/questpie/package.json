@@ -17,6 +17,10 @@
 			"types": "./dist/react-query/index.d.ts",
 			"import": "./dist/react-query/index.js"
 		},
+		"./testing": {
+			"types": "./dist/testing/index.d.ts",
+			"import": "./dist/testing/index.js"
+		},
 		"./internal/client-projection": {
 			"types": "./dist/internal/client-projection.d.ts",
 			"import": "./dist/internal/client-projection.js"

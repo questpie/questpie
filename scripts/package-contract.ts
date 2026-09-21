@@ -116,7 +116,9 @@ for (const { path, json } of publicPackages) {
 		(!inspection.includes("dist/internal/observability.d.ts") ||
 			!inspection.includes("dist/internal/observability.js") ||
 			!inspection.includes("dist/react-query/index.d.ts") ||
-			!inspection.includes("dist/react-query/index.js"))
+			!inspection.includes("dist/react-query/index.js") ||
+			!inspection.includes("dist/testing/index.d.ts") ||
+			!inspection.includes("dist/testing/index.js"))
 	)
 		fail(`${label}: tarball omits a required public subpath`);
 	if (
@@ -127,6 +129,7 @@ for (const { path, json } of publicPackages) {
 				"./internal/client-projection",
 				"./internal/observability",
 				"./react-query",
+				"./testing",
 			])
 	)
 		fail(`${label}: exports an unexpected public surface`);
