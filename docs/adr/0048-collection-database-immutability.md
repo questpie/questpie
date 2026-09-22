@@ -1,7 +1,6 @@
 # ADR-0048: Compiler-owned database-level Collection and Field immutability
 
-- Status: Proposed (implemented; not marked Accepted — owner sign-off items
-  remain, see below)
+- Status: Accepted (owner, 2026-09-22; residual third-party SQLSTATE collision risk accepted, two-migration backfill ergonomics accepted for v1)
 - Date: 2026-09-21
 - Owners: compiler, schema lifecycle
 - Ticket: Autopilot port kill criterion — see
@@ -562,7 +561,7 @@ adoption/rollback order for an operator to follow.
   detected as `QP-SCHEMA-028` drift; the fixed `bunx questpie migration plan`
   recovery hint (item 3 below) shipped in this slice.
 
-## Open items for owner sign-off
+## Owner sign-off items (accepted 2026-09-22)
 
 1. ~~Custom SQLSTATE codes need a collision check against any PostgreSQL
    extension~~ — **resolved for this repository's own code**: `QP001`/`QP002`

@@ -1,6 +1,6 @@
 # ADR-0047: Collection `delete` kernel operation
 
-- Status: Proposed
+- Status: Accepted (owner, 2026-09-22)
 - Date: 2026-09-21
 - Owners: compiler, runtime
 - Ticket: named-Mutation `ctx.data.<collection>.delete(...)` gap (Autopilot R1

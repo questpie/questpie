@@ -1,6 +1,6 @@
 # ADR-0045: Freeze public testing surface
 
-- Status: Proposed
+- Status: Accepted (owner, 2026-09-22)
 - Date: 2026-09-21
 - Owners: Product architecture, public TypeScript surface, release
 

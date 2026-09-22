@@ -36,10 +36,10 @@ Search, Studio, and built-in health endpoints are not supplied by this work.
 
 `work/v4-integration-20260921` (worktree `questpie-v4-worktrees/integration`)
 merges the docs/onboarding-CLI line above with `work/autopilot-rewrite-additions`:
-the public `questpie/testing` DB-backed test harness (**ADR-0045, Proposed**)
+the public `questpie/testing` DB-backed test harness (**ADR-0045, Accepted 2026-09-22**)
 and the MCP/canonical-HTTP credential challenge gate — `challenge`,
 `protectCatalog`, `requireCredential` on `defineCredentialResolver`
-(**ADR-0046, Proposed**). See
+(**ADR-0046, Accepted 2026-09-22**). See
 [the delivery record](docs/v4/implementation/integration-2026-09-21.md) for
 the merge-conflict resolutions, the exact release-artifact manifest entries
 that changed and why, and every gate command and result.
@@ -56,10 +56,10 @@ npm registry write ran.
 
 The same branch and worktree then merged two more feature lines, one at a
 time: `work/collection-delete-kernel` (`ctx.data.<collection>.delete({ key
-})` for named Mutations, **ADR-0047, Proposed**) and
+})` for named Mutations, **ADR-0047, Accepted 2026-09-22**) and
 `work/collection-db-immutability` (`defineCollection({ appendOnly: true })`,
 `field.*({ immutable: "database" })`, compiler-owned `ENABLE ALWAYS` guard
-triggers, **ADR-0048, Proposed**). See
+triggers, **ADR-0048, Accepted 2026-09-22**). See
 [the delivery record](docs/v4/implementation/integration-2026-09-22.md) for
 the two merge-conflict resolutions (`docs/adr/README.md` and
 `packages/compiler/src/mutation/kernel.ts`), the cross-feature rule built
@@ -75,7 +75,7 @@ only `questpie`'s archive sha256 and root `.` declaration sha256 changed
 entry, and all of `questpie-opentelemetry`, is byte-identical to the prior
 manifest. `bun run scripts/release.ts --dry-run` passes end to end. Nothing
 was pushed, tagged, or published; no npm registry write ran. ADR-0045
-through ADR-0048 are all Proposed, not Accepted.
+through ADR-0048 were accepted by the owner on 2026-09-22; ADR-0039 (the beta.2 release slice) remains Proposed.
 
 ## Manual release continuation (after this work)
 

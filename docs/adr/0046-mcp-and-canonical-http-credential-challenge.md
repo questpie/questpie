@@ -1,6 +1,6 @@
 # ADR-0046: MCP and canonical HTTP credential challenge
 
-- Status: Proposed
+- Status: Accepted (owner, 2026-09-22)
 - Date: 2026-09-21 (revised same day after a security review; see
   "Revision" below)
 - Owners: Product architecture, Runtime ingress, MCP projection
