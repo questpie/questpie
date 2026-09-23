@@ -86,13 +86,49 @@ interface ExecuteOptions<T> {
 export class McpPublicError extends Error {
 	readonly code: McpPublicErrorCode;
 	readonly correlationId: string;
+	/** Caller-safe text appended to the public message; see {@link mcpInvalidInputError}. */
+	readonly detail: string | undefined;
 
-	constructor(code: McpPublicErrorCode, correlationId: string = randomUUID()) {
-		super(`${publicMessage(code)} (${code}; correlationId=${correlationId})`);
+	constructor(
+		code: McpPublicErrorCode,
+		correlationId: string = randomUUID(),
+		detail?: string,
+	) {
+		super(
+			`${publicMessage(code, detail)} (${code}; correlationId=${correlationId})`,
+		);
 		this.name = "McpPublicError";
 		this.code = code;
 		this.correlationId = correlationId;
+		this.detail = detail;
 	}
+}
+
+const MAX_INPUT_ISSUES = 8;
+const MAX_ISSUE_MESSAGE_CHARS = 200;
+
+/**
+ * The caller's own arguments failed the tool's input schema. Unlike any other
+ * failure, the issues describe only what the caller sent, so their paths and
+ * messages go back to it — without them a caller can only guess which field to
+ * fix. Only the input parse may use this: a ZodError thrown later, inside a
+ * handler, can describe server data and stays the opaque `invalid_input`.
+ */
+export function mcpInvalidInputError(
+	error: z.ZodError,
+	correlationId?: string,
+): McpPublicError {
+	const issues = error.issues.slice(0, MAX_INPUT_ISSUES).map((issue) => {
+		const path = issue.path.map(String).join(".") || "(root)";
+		return `${path}: ${issue.message.slice(0, MAX_ISSUE_MESSAGE_CHARS)}`;
+	});
+	const omitted = error.issues.length - issues.length;
+	if (omitted > 0) issues.push(`(${omitted} more)`);
+	return new McpPublicError(
+		"invalid_input",
+		correlationId,
+		`invalid input — ${issues.join("; ")}`,
+	);
 }
 
 export class McpAccessDeniedError extends Error {
@@ -390,10 +426,9 @@ export function snapshotBoundedMcpValue(
 	return snapshot.value;
 }
 
-function publicMessage(code: McpPublicErrorCode): string {
-	return code === "access_denied"
-		? "MCP access denied"
-		: "MCP operation failed";
+function publicMessage(code: McpPublicErrorCode, detail?: string): string {
+	if (code === "access_denied") return "MCP access denied";
+	return detail ? `MCP operation failed: ${detail}` : "MCP operation failed";
 }
 
 function classifyError(error: unknown, correlationId: string): McpPublicError {
@@ -500,7 +535,9 @@ export function toMcpToolError(error: unknown): CallToolResult {
 			: classifyError(error, randomUUID());
 	return {
 		isError: true,
-		content: [{ type: "text", text: publicMessage(resolved.code) }],
+		content: [
+			{ type: "text", text: publicMessage(resolved.code, resolved.detail) },
+		],
 		_meta: {
 			[PUBLIC_ERROR_META_KEY]: {
 				code: resolved.code,

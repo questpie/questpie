@@ -6,6 +6,7 @@ import type { ResolvedMcpCatalog } from "./catalog.js";
 import {
 	McpAccessDeniedError,
 	type McpHandlerExtra,
+	mcpInvalidInputError,
 } from "./execution-boundary.js";
 import {
 	evaluateMcpRule,
@@ -142,9 +143,13 @@ export async function executeCustomToolCall(
 		},
 		concurrencyKey: () => workloadAuthorization?.concurrencyKey,
 		invoke: async ({ ctx, signal, requestId, correlationId }) => {
-			const parsedInput = tool.config.inputSchema
-				? await tool.config.inputSchema.parseAsync(input)
-				: await z.object({}).strict().parseAsync(input);
+			const parsed = await (
+				tool.config.inputSchema ?? z.object({}).strict()
+			).safeParseAsync(input);
+			if (!parsed.success) {
+				throw mcpInvalidInputError(parsed.error, correlationId);
+			}
+			const parsedInput = parsed.data;
 			const invoke = () =>
 				tool.handler({
 					input: parsedInput,
