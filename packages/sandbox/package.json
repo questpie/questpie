@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/sandbox",
-	"version": "3.28.10",
+	"version": "3.28.11",
 	"private": false,
 	"description": "Hardened isolated-script execution for QUESTPIE",
 	"repository": {

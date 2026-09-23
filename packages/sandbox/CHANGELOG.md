@@ -1,5 +1,13 @@
 # @questpie/sandbox
 
+## 3.28.11
+
+### Patch Changes
+
+- Updated dependencies [[`6efe6b7`](https://github.com/questpie/questpie/commit/6efe6b74adc4511e07601a35fadccfad30ef0bbc)]:
+  - @questpie/mcp@3.28.11
+  - questpie@3.28.11
+
 ## 3.28.10
 
 ### Patch Changes
