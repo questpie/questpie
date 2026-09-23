@@ -107,17 +107,20 @@ const WALK_MAP_KEYS = ["properties", "$defs", "definitions"] as const;
  *   (`McpServer#validateToolInput` in `zod-json-schema-compat.js`'s caller,
  *   `mcp.js`), never against this projected JSON Schema, so removing the
  *   annotation does not change what gets rejected.
- * - Drops a `format: "uuid"` sibling only when a `pattern` also sits on the
- *   same node: `pattern` is the only keyword of the pair 2020-12 validators
- *   are required to enforce (`format` is annotation-only), so once `pattern`
- *   is present `format` is redundant. When no `pattern` is present, `format`
- *   is left alone — it is the only signal left.
+ * - Drops the `pattern` on a `format: "uuid"` node, keeping `format`. The
+ *   pattern is the zod-generated uuid regex that always accompanies
+ *   `format: "uuid"` in this codebase's schemas (there is no path that sets
+ *   `format: "uuid"` other than zod's own `.uuid()`), and the MCP SDK
+ *   validates call-time arguments against the *original* zod schema, never
+ *   against this projected JSON Schema, so the regex is redundant here.
+ *   `pattern` on any other node — a node without `format: "uuid"` — is a
+ *   user-authored constraint and is left untouched.
  */
 function walkSchemaNode(node: unknown): void {
 	if (!isPlainObject(node)) return;
 
 	if (node.format === "uuid" && typeof node.pattern === "string") {
-		delete node.format;
+		delete node.pattern;
 	}
 	if (node.additionalProperties === false) {
 		delete node.additionalProperties;

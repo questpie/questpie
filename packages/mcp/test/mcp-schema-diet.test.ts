@@ -36,7 +36,7 @@ describe("applyMcpSchemaDiet (unit)", () => {
 		expect(schema).not.toHaveProperty("$schema");
 	});
 
-	it("drops format:uuid only when a pattern sits on the same node", () => {
+	it("drops the pattern on a uuid node but keeps format:uuid", () => {
 		const schema = applyMcpSchemaDiet({
 			type: "object",
 			properties: {
@@ -56,10 +56,23 @@ describe("applyMcpSchemaDiet (unit)", () => {
 				withoutPattern: Record<string, unknown>;
 			};
 		};
-		expect(schema.properties.withPattern.pattern).toBe("^[0-9a-f-]{36}$");
-		expect(schema.properties.withPattern).not.toHaveProperty("format");
-		// No pattern present: format is the only signal left, so it stays.
+		expect(schema.properties.withPattern.format).toBe("uuid");
+		expect(schema.properties.withPattern).not.toHaveProperty("pattern");
 		expect(schema.properties.withoutPattern.format).toBe("uuid");
+		expect(schema.properties.withoutPattern).not.toHaveProperty("pattern");
+	});
+
+	it("never touches a pattern on a node that isn't format:uuid", () => {
+		const schema = applyMcpSchemaDiet({
+			type: "object",
+			properties: {
+				slug: {
+					type: "string",
+					pattern: "^[a-z0-9-]+$",
+				},
+			},
+		}) as { properties: { slug: Record<string, unknown> } };
+		expect(schema.properties.slug.pattern).toBe("^[a-z0-9-]+$");
 	});
 
 	it("drops additionalProperties:false but keeps additionalProperties schemas", () => {
@@ -114,11 +127,11 @@ describe("applyMcpSchemaDiet (unit)", () => {
 				Legacy: { type: "string", format: "uuid", pattern: "^u$" },
 			},
 		});
-		expect(JSON.stringify(schema)).not.toContain('"format":"uuid"');
+		expect(JSON.stringify(schema)).not.toContain('"pattern":"^u$"');
 		expect(JSON.stringify(schema)).not.toContain(
 			'"additionalProperties":false',
 		);
-		expect(JSON.stringify(schema)).toContain('"pattern":"^u$"');
+		expect(JSON.stringify(schema)).toContain('"format":"uuid"');
 	});
 
 	it("never touches examples, default, const, or enum payloads, even when they carry keys named like schema keywords", () => {
@@ -230,7 +243,7 @@ describe("MCP tools/list schema diet (integration)", () => {
 		}
 	});
 
-	it("keeps the uuid pattern on a uuid field while dropping the redundant format", async () => {
+	it("keeps format:uuid on a uuid field while dropping the redundant pattern", async () => {
 		const { setup, server } = await buildFixtureServer();
 		const { client, close } = await connect(server);
 		try {
@@ -238,8 +251,8 @@ describe("MCP tools/list schema diet (integration)", () => {
 			const byId = tools.tools.find((tool) => tool.name === "custom.byId");
 			const raw = JSON.stringify(byId?.inputSchema);
 			expect(raw).toContain('"id"');
-			expect(raw).not.toContain('"format":"uuid"');
-			expect(raw).toMatch(/"pattern":"[^"]+"/);
+			expect(raw).toContain('"format":"uuid"');
+			expect(raw).not.toMatch(/"pattern":"[^"]+"/);
 		} finally {
 			await close();
 			await setup.cleanup();
