@@ -57,6 +57,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 
 - [Slice the beta.2 DX release](./0039-slice-the-beta-two-dx-release.md)
 - [Freeze local OpenAPI projection explanation](./0041-freeze-local-openapi-projection-explanation.md)
+- [MCP `outputSchema` opt-in and schema diet](./0049-mcp-output-schema-opt-in.md)
 
 ## Open decisions
 
@@ -163,6 +164,11 @@ projection explanation. It would print the existing canonical explanation
 artifact unchanged after complete checksum and cross-pin verification, without
 source evaluation, Runtime or database access, a CLI-owned envelope, or a
 broader Resource/operational explain surface.
+ADR-0049 narrowly supersedes ADR-0038's unconditional `outputSchema` clause:
+`outputSchema` becomes opt-in (`projections.mcp.outputSchema: true`) and is
+off by default, while `inputSchema` unconditionally drops `$schema` and the
+redundant `uuid` `pattern` alongside `format: "uuid"`. It changes nothing else
+in ADR-0038 and does not touch ADR-0036's OpenAPI projection.
 ADR-0042 replaces the scoped React and OpenTelemetry package placement with
 exactly two public npm packages: `questpie` and
 `questpie-opentelemetry`. It deletes the old identities without aliases or
