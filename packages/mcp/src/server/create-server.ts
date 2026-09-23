@@ -61,10 +61,7 @@ function reportSchemaDietInstallFailure(message: string): void {
  * it is the smallest surface that lets the diet apply without re-deriving
  * every tool's schema ourselves. */
 export function installSchemaDietListToolsHandler(server: McpServer): void {
-	const protocol = server.server as unknown as {
-		_requestHandlers?: unknown;
-	};
-	const handlers = protocol._requestHandlers;
+	const handlers: unknown = Reflect.get(server.server, "_requestHandlers");
 	if (!(handlers instanceof Map)) {
 		reportSchemaDietInstallFailure(
 			"could not install the tools/list schema diet — McpServer#server's " +
