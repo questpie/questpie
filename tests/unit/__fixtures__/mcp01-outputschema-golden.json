@@ -1,0 +1,5465 @@
+{
+	"action:notification.sendTicketSummary": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"effectId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"providerReceipt": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"ticketReference": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							}
+						},
+						"required": ["effectId", "providerReceipt", "ticketReference"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOTIFICATION_OUTCOME_UNKNOWN"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOTIFICATION_PROVIDER_REJECTED"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "TICKET_UNAVAILABLE"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "ACTION_OUTCOME_AMBIGUOUS"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"mutation:ticket.addComment": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"comment": {
+								"additionalProperties": false,
+								"properties": {
+									"authorMembershipId": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"body": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"createdAt": {
+										"format": "date-time",
+										"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["canonicalMillisecondTimestamp"]
+										},
+										"x-questpie-timezone": true
+									},
+									"id": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"kind": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"ticketId": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									}
+								},
+								"required": [
+									"authorMembershipId",
+									"body",
+									"createdAt",
+									"id",
+									"kind",
+									"ticketId"
+								],
+								"type": "object"
+							},
+							"job": {
+								"additionalProperties": false,
+								"properties": {
+									"resource": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"runId": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									}
+								},
+								"required": ["resource", "runId"],
+								"type": "object"
+							}
+						},
+						"required": ["comment", "job"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "TICKET_UNAVAILABLE"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "COMMITTED_RESULT_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							},
+							"transactionId": {
+								"pattern": "^[1-9][0-9]{0,19}$",
+								"type": "string"
+							}
+						},
+						"required": ["code", "retryable", "transactionId"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"mutation:ticket.assign": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"assigneeMembershipId": {
+								"anyOf": [
+									{
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"closedAt": {
+								"anyOf": [
+									{
+										"format": "date-time",
+										"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["canonicalMillisecondTimestamp"]
+										},
+										"x-questpie-timezone": true
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"createdAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							},
+							"description": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"id": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"organizationId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"priority": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"reference": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"requesterMembershipId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"status": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"summary": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"teamId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"updatedAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							}
+						},
+						"required": [
+							"assigneeMembershipId",
+							"closedAt",
+							"createdAt",
+							"description",
+							"id",
+							"organizationId",
+							"priority",
+							"reference",
+							"requesterMembershipId",
+							"status",
+							"summary",
+							"teamId",
+							"updatedAt"
+						],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INVALID_TICKET"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "TICKET_UNAVAILABLE"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "COMMITTED_RESULT_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							},
+							"transactionId": {
+								"pattern": "^[1-9][0-9]{0,19}$",
+								"type": "string"
+							}
+						},
+						"required": ["code", "retryable", "transactionId"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"mutation:ticket.close": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"assigneeMembershipId": {
+								"anyOf": [
+									{
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"closedAt": {
+								"anyOf": [
+									{
+										"format": "date-time",
+										"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["canonicalMillisecondTimestamp"]
+										},
+										"x-questpie-timezone": true
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"createdAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							},
+							"description": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"id": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"organizationId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"priority": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"reference": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"requesterMembershipId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"status": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"summary": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"teamId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"updatedAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							}
+						},
+						"required": [
+							"assigneeMembershipId",
+							"closedAt",
+							"createdAt",
+							"description",
+							"id",
+							"organizationId",
+							"priority",
+							"reference",
+							"requesterMembershipId",
+							"status",
+							"summary",
+							"teamId",
+							"updatedAt"
+						],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INVALID_TICKET"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "TICKET_TRANSITION_REJECTED"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "TICKET_UNAVAILABLE"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "COMMITTED_RESULT_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							},
+							"transactionId": {
+								"pattern": "^[1-9][0-9]{0,19}$",
+								"type": "string"
+							}
+						},
+						"required": ["code", "retryable", "transactionId"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"mutation:ticket.create": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"assigneeMembershipId": {
+								"anyOf": [
+									{
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"closedAt": {
+								"anyOf": [
+									{
+										"format": "date-time",
+										"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["canonicalMillisecondTimestamp"]
+										},
+										"x-questpie-timezone": true
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"createdAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							},
+							"description": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"id": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"organizationId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"priority": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"reference": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"requesterMembershipId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"status": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"summary": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"teamId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"updatedAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							}
+						},
+						"required": [
+							"assigneeMembershipId",
+							"closedAt",
+							"createdAt",
+							"description",
+							"id",
+							"organizationId",
+							"priority",
+							"reference",
+							"requesterMembershipId",
+							"status",
+							"summary",
+							"teamId",
+							"updatedAt"
+						],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INVALID_TICKET"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "TICKET_UNAVAILABLE"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "COMMITTED_RESULT_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							},
+							"transactionId": {
+								"pattern": "^[1-9][0-9]{0,19}$",
+								"type": "string"
+							}
+						},
+						"required": ["code", "retryable", "transactionId"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"mutation:ticket.edit": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"assigneeMembershipId": {
+								"anyOf": [
+									{
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"closedAt": {
+								"anyOf": [
+									{
+										"format": "date-time",
+										"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["canonicalMillisecondTimestamp"]
+										},
+										"x-questpie-timezone": true
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"createdAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							},
+							"description": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"id": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"organizationId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"priority": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"reference": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"requesterMembershipId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"status": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"summary": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"teamId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"updatedAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							}
+						},
+						"required": [
+							"assigneeMembershipId",
+							"closedAt",
+							"createdAt",
+							"description",
+							"id",
+							"organizationId",
+							"priority",
+							"reference",
+							"requesterMembershipId",
+							"status",
+							"summary",
+							"teamId",
+							"updatedAt"
+						],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INVALID_TICKET"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "TICKET_UNAVAILABLE"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "COMMITTED_RESULT_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							},
+							"transactionId": {
+								"pattern": "^[1-9][0-9]{0,19}$",
+								"type": "string"
+							}
+						},
+						"required": ["code", "retryable", "transactionId"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"mutation:ticket.reopen": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"assigneeMembershipId": {
+								"anyOf": [
+									{
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"closedAt": {
+								"anyOf": [
+									{
+										"format": "date-time",
+										"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["canonicalMillisecondTimestamp"]
+										},
+										"x-questpie-timezone": true
+									},
+									{
+										"type": "null"
+									}
+								]
+							},
+							"createdAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							},
+							"description": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"id": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"organizationId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"priority": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"reference": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"requesterMembershipId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"status": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"summary": {
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["nfc", "noLoneSurrogate"]
+								}
+							},
+							"teamId": {
+								"format": "uuid",
+								"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+								"type": "string"
+							},
+							"updatedAt": {
+								"format": "date-time",
+								"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+								"type": "string",
+								"x-questpie-runtime-validation": {
+									"exact": false,
+									"requirements": ["canonicalMillisecondTimestamp"]
+								},
+								"x-questpie-timezone": true
+							}
+						},
+						"required": [
+							"assigneeMembershipId",
+							"closedAt",
+							"createdAt",
+							"description",
+							"id",
+							"organizationId",
+							"priority",
+							"reference",
+							"requesterMembershipId",
+							"status",
+							"summary",
+							"teamId",
+							"updatedAt"
+						],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INVALID_TICKET"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "TICKET_TRANSITION_REJECTED"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "TICKET_UNAVAILABLE"
+							},
+							"payload": {
+								"type": "null"
+							}
+						},
+						"required": ["code", "payload"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "COMMITTED_RESULT_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							},
+							"transactionId": {
+								"pattern": "^[1-9][0-9]{0,19}$",
+								"type": "string"
+							}
+						},
+						"required": ["code", "retryable", "transactionId"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"query:labels.page": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"nodes": {
+								"items": {
+									"additionalProperties": false,
+									"properties": {
+										"color": {
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["nfc", "noLoneSurrogate"]
+											}
+										},
+										"createdAt": {
+											"format": "date-time",
+											"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["canonicalMillisecondTimestamp"]
+											},
+											"x-questpie-timezone": true
+										},
+										"id": {
+											"format": "uuid",
+											"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+											"type": "string"
+										},
+										"name": {
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["nfc", "noLoneSurrogate"]
+											}
+										},
+										"organizationId": {
+											"format": "uuid",
+											"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+											"type": "string"
+										},
+										"ticketId": {
+											"format": "uuid",
+											"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+											"type": "string"
+										}
+									},
+									"required": [
+										"color",
+										"createdAt",
+										"id",
+										"name",
+										"organizationId",
+										"ticketId"
+									],
+									"type": "object"
+								},
+								"type": "array"
+							},
+							"pageInfo": {
+								"additionalProperties": false,
+								"properties": {
+									"endCursor": {
+										"anyOf": [
+											{
+												"type": "string",
+												"x-questpie-runtime-validation": {
+													"exact": false,
+													"requirements": ["nfc", "noLoneSurrogate"]
+												}
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"hasNextPage": {
+										"type": "boolean"
+									}
+								},
+								"required": ["endCursor", "hasNextPage"],
+								"type": "object"
+							}
+						},
+						"required": ["nodes", "pageInfo"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"query:teams.list": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"nodes": {
+								"items": {
+									"additionalProperties": false,
+									"properties": {
+										"id": {
+											"format": "uuid",
+											"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+											"type": "string"
+										},
+										"name": {
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["nfc", "noLoneSurrogate"]
+											}
+										},
+										"organizationId": {
+											"format": "uuid",
+											"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+											"type": "string"
+										},
+										"routingStatus": {
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["nfc", "noLoneSurrogate"]
+											}
+										}
+									},
+									"required": ["id", "name", "organizationId", "routingStatus"],
+									"type": "object"
+								},
+								"type": "array"
+							},
+							"pageInfo": {
+								"additionalProperties": false,
+								"properties": {
+									"endCursor": {
+										"anyOf": [
+											{
+												"type": "string",
+												"x-questpie-runtime-validation": {
+													"exact": false,
+													"requirements": ["nfc", "noLoneSurrogate"]
+												}
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"hasNextPage": {
+										"type": "boolean"
+									}
+								},
+								"required": ["endCursor", "hasNextPage"],
+								"type": "object"
+							}
+						},
+						"required": ["nodes", "pageInfo"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"query:tickets.detail": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"anyOf": [
+							{
+								"additionalProperties": false,
+								"properties": {
+									"assignee": {
+										"anyOf": [
+											{
+												"additionalProperties": false,
+												"properties": {
+													"id": {
+														"format": "uuid",
+														"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+														"type": "string"
+													},
+													"principalId": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													},
+													"role": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													}
+												},
+												"required": ["id", "principalId", "role"],
+												"type": "object"
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"assigneeMembershipId": {
+										"anyOf": [
+											{
+												"format": "uuid",
+												"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+												"type": "string"
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"closedAt": {
+										"anyOf": [
+											{
+												"format": "date-time",
+												"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+												"type": "string",
+												"x-questpie-runtime-validation": {
+													"exact": false,
+													"requirements": ["canonicalMillisecondTimestamp"]
+												},
+												"x-questpie-timezone": true
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"comments": {
+										"items": {
+											"additionalProperties": false,
+											"properties": {
+												"authorMembershipId": {
+													"format": "uuid",
+													"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+													"type": "string"
+												},
+												"body": {
+													"type": "string",
+													"x-questpie-runtime-validation": {
+														"exact": false,
+														"requirements": ["nfc", "noLoneSurrogate"]
+													}
+												},
+												"createdAt": {
+													"format": "date-time",
+													"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+													"type": "string",
+													"x-questpie-runtime-validation": {
+														"exact": false,
+														"requirements": ["canonicalMillisecondTimestamp"]
+													},
+													"x-questpie-timezone": true
+												},
+												"id": {
+													"format": "uuid",
+													"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+													"type": "string"
+												},
+												"kind": {
+													"type": "string",
+													"x-questpie-runtime-validation": {
+														"exact": false,
+														"requirements": ["nfc", "noLoneSurrogate"]
+													}
+												},
+												"ticketId": {
+													"format": "uuid",
+													"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+													"type": "string"
+												}
+											},
+											"required": [
+												"authorMembershipId",
+												"createdAt",
+												"id",
+												"kind",
+												"ticketId"
+											],
+											"type": "object"
+										},
+										"type": "array"
+									},
+									"createdAt": {
+										"format": "date-time",
+										"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["canonicalMillisecondTimestamp"]
+										},
+										"x-questpie-timezone": true
+									},
+									"description": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"id": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"lastSlaFollowUpAt": {
+										"anyOf": [
+											{
+												"format": "date-time",
+												"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+												"type": "string",
+												"x-questpie-runtime-validation": {
+													"exact": false,
+													"requirements": ["canonicalMillisecondTimestamp"]
+												},
+												"x-questpie-timezone": true
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"organizationId": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"priority": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"reference": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"requester": {
+										"anyOf": [
+											{
+												"additionalProperties": false,
+												"properties": {
+													"id": {
+														"format": "uuid",
+														"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+														"type": "string"
+													},
+													"principalId": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													},
+													"role": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													}
+												},
+												"required": ["id", "principalId", "role"],
+												"type": "object"
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"requesterMembershipId": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"status": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"summary": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"team": {
+										"anyOf": [
+											{
+												"additionalProperties": false,
+												"properties": {
+													"id": {
+														"format": "uuid",
+														"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+														"type": "string"
+													},
+													"name": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													},
+													"routingStatus": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													}
+												},
+												"required": ["id", "name", "routingStatus"],
+												"type": "object"
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"teamId": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"updatedAt": {
+										"format": "date-time",
+										"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["canonicalMillisecondTimestamp"]
+										},
+										"x-questpie-timezone": true
+									}
+								},
+								"required": [
+									"assignee",
+									"assigneeMembershipId",
+									"closedAt",
+									"comments",
+									"createdAt",
+									"description",
+									"id",
+									"lastSlaFollowUpAt",
+									"organizationId",
+									"priority",
+									"reference",
+									"requester",
+									"requesterMembershipId",
+									"status",
+									"summary",
+									"team",
+									"teamId",
+									"updatedAt"
+								],
+								"type": "object"
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"query:tickets.queue": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"additionalProperties": false,
+						"properties": {
+							"nodes": {
+								"items": {
+									"additionalProperties": false,
+									"properties": {
+										"assignee": {
+											"anyOf": [
+												{
+													"additionalProperties": false,
+													"properties": {
+														"id": {
+															"format": "uuid",
+															"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+															"type": "string"
+														},
+														"principalId": {
+															"format": "uuid",
+															"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+															"type": "string"
+														},
+														"role": {
+															"type": "string",
+															"x-questpie-runtime-validation": {
+																"exact": false,
+																"requirements": ["nfc", "noLoneSurrogate"]
+															}
+														}
+													},
+													"required": ["id", "principalId", "role"],
+													"type": "object"
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"assigneeMembershipId": {
+											"anyOf": [
+												{
+													"format": "uuid",
+													"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+													"type": "string"
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"id": {
+											"format": "uuid",
+											"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+											"type": "string"
+										},
+										"organizationId": {
+											"format": "uuid",
+											"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+											"type": "string"
+										},
+										"priority": {
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["nfc", "noLoneSurrogate"]
+											}
+										},
+										"reference": {
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["nfc", "noLoneSurrogate"]
+											}
+										},
+										"requesterMembershipId": {
+											"format": "uuid",
+											"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+											"type": "string"
+										},
+										"status": {
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["nfc", "noLoneSurrogate"]
+											}
+										},
+										"summary": {
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["nfc", "noLoneSurrogate"]
+											}
+										},
+										"team": {
+											"anyOf": [
+												{
+													"additionalProperties": false,
+													"properties": {
+														"id": {
+															"format": "uuid",
+															"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+															"type": "string"
+														},
+														"name": {
+															"type": "string",
+															"x-questpie-runtime-validation": {
+																"exact": false,
+																"requirements": ["nfc", "noLoneSurrogate"]
+															}
+														},
+														"organization": {
+															"anyOf": [
+																{
+																	"additionalProperties": false,
+																	"properties": {
+																		"id": {
+																			"format": "uuid",
+																			"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+																			"type": "string"
+																		},
+																		"name": {
+																			"type": "string",
+																			"x-questpie-runtime-validation": {
+																				"exact": false,
+																				"requirements": [
+																					"nfc",
+																					"noLoneSurrogate"
+																				]
+																			}
+																		}
+																	},
+																	"required": ["id", "name"],
+																	"type": "object"
+																},
+																{
+																	"type": "null"
+																}
+															]
+														},
+														"routingStatus": {
+															"type": "string",
+															"x-questpie-runtime-validation": {
+																"exact": false,
+																"requirements": ["nfc", "noLoneSurrogate"]
+															}
+														}
+													},
+													"required": [
+														"id",
+														"name",
+														"organization",
+														"routingStatus"
+													],
+													"type": "object"
+												},
+												{
+													"type": "null"
+												}
+											]
+										},
+										"teamId": {
+											"format": "uuid",
+											"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+											"type": "string"
+										},
+										"updatedAt": {
+											"format": "date-time",
+											"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+											"type": "string",
+											"x-questpie-runtime-validation": {
+												"exact": false,
+												"requirements": ["canonicalMillisecondTimestamp"]
+											},
+											"x-questpie-timezone": true
+										}
+									},
+									"required": [
+										"assignee",
+										"assigneeMembershipId",
+										"id",
+										"organizationId",
+										"priority",
+										"reference",
+										"requesterMembershipId",
+										"status",
+										"summary",
+										"team",
+										"teamId",
+										"updatedAt"
+									],
+									"type": "object"
+								},
+								"type": "array"
+							},
+							"pageInfo": {
+								"additionalProperties": false,
+								"properties": {
+									"endCursor": {
+										"anyOf": [
+											{
+												"type": "string",
+												"x-questpie-runtime-validation": {
+													"exact": false,
+													"requirements": ["nfc", "noLoneSurrogate"]
+												}
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"hasNextPage": {
+										"type": "boolean"
+									}
+								},
+								"required": ["endCursor", "hasNextPage"],
+								"type": "object"
+							}
+						},
+						"required": ["nodes", "pageInfo"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	},
+	"query:tickets.searchByReference": {
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"oneOf": [
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"result": {
+						"anyOf": [
+							{
+								"additionalProperties": false,
+								"properties": {
+									"assignee": {
+										"anyOf": [
+											{
+												"additionalProperties": false,
+												"properties": {
+													"id": {
+														"format": "uuid",
+														"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+														"type": "string"
+													},
+													"principalId": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													},
+													"role": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													}
+												},
+												"required": ["id", "principalId", "role"],
+												"type": "object"
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"assigneeMembershipId": {
+										"anyOf": [
+											{
+												"format": "uuid",
+												"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+												"type": "string"
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"id": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"organizationId": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"priority": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"reference": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"requesterMembershipId": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"status": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"summary": {
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["nfc", "noLoneSurrogate"]
+										}
+									},
+									"team": {
+										"anyOf": [
+											{
+												"additionalProperties": false,
+												"properties": {
+													"id": {
+														"format": "uuid",
+														"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+														"type": "string"
+													},
+													"name": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													},
+													"routingStatus": {
+														"type": "string",
+														"x-questpie-runtime-validation": {
+															"exact": false,
+															"requirements": ["nfc", "noLoneSurrogate"]
+														}
+													}
+												},
+												"required": ["id", "name", "routingStatus"],
+												"type": "object"
+											},
+											{
+												"type": "null"
+											}
+										]
+									},
+									"teamId": {
+										"format": "uuid",
+										"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+										"type": "string"
+									},
+									"updatedAt": {
+										"format": "date-time",
+										"pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+										"type": "string",
+										"x-questpie-runtime-validation": {
+											"exact": false,
+											"requirements": ["canonicalMillisecondTimestamp"]
+										},
+										"x-questpie-timezone": true
+									}
+								},
+								"required": [
+									"assignee",
+									"assigneeMembershipId",
+									"id",
+									"organizationId",
+									"priority",
+									"reference",
+									"requesterMembershipId",
+									"status",
+									"summary",
+									"team",
+									"teamId",
+									"updatedAt"
+								],
+								"type": "object"
+							},
+							{
+								"type": "null"
+							}
+						]
+					}
+				},
+				"required": ["callId", "result"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "DEADLINE_EXCEEDED"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "INTERNAL"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "NOT_FOUND"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "PROTOCOL_UNSUPPORTED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RESOURCE_LIMIT"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "RUNTIME_UNAVAILABLE"
+							},
+							"retryable": {
+								"const": true
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			},
+			{
+				"additionalProperties": false,
+				"properties": {
+					"callId": {
+						"maxLength": 256,
+						"minLength": 1,
+						"type": "string",
+						"x-questpie-runtime-validation": {
+							"requirements": [
+								"maxUtf8Bytes:1024",
+								"nfc",
+								"noNull",
+								"noLoneSurrogate"
+							]
+						}
+					},
+					"error": {
+						"additionalProperties": false,
+						"properties": {
+							"code": {
+								"const": "UNAUTHENTICATED"
+							},
+							"retryable": {
+								"const": false
+							}
+						},
+						"required": ["code", "retryable"],
+						"type": "object"
+					}
+				},
+				"required": ["callId", "error"],
+				"type": "object"
+			}
+		]
+	}
+}

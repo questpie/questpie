@@ -1,4 +1,4 @@
-# ADR-0049: MCP `outputSchema` becomes opt-in; drop `$schema` and redundant `uuid` `pattern` by default
+# ADR-0049: MCP `outputSchema` becomes opt-in; drop `inputSchema`'s top-level `$schema` by default
 
 - Status: Proposed
 - Date: 2026-09-23
@@ -34,20 +34,28 @@ page, not per-tool bytes; `tool_search_tool_*`/`defer_loading` is a
 Messages-API context-window optimization that still requires the full
 `tools/list` catalogue to already be on the wire) — dropping `outputSchema`
 outright is the only lever that acts on wire bytes directly, and it is the
-cheapest one available: on this fixture, dropping `outputSchema` alone saves
-**87.3%** of the catalogue (measured below).
+cheapest one available: on this fixture, the default configuration below
+(`outputSchema` dropped, `inputSchema` losing only its top-level `$schema`)
+saves **84.3%** of the catalogue (measured below).
 
-Two smaller, independent levers stack with it. `$schema` is a fixed 56-byte
+One smaller, independent lever stacks with it. `$schema` is a fixed 56-byte
 `"https://json-schema.org/draft/2020-12/schema"` string repeated on every
 `inputSchema` and (previously) every `outputSchema` — it identifies the JSON
 Schema dialect, not a per-tool fact, and MCP `2026-07-28` does not require a
-tool schema to declare it. `format: "uuid"` fields today also carry a
-`pattern` (`^[0-9a-f]{8}-...$`) that duplicates what `format: "uuid"` already
-asserts — one JSON Schema keyword pair encoding the same constraint twice.
+tool schema to declare it; an absent `$schema` is universally treated as
+2020-12 by JSON Schema tooling, which is the only dialect this compiler ever
+emits.
+
+An earlier draft of this ADR also proposed dropping the `pattern` on
+`format: "uuid"` fields, reasoning that `format` alone already asserted the
+same constraint. **That reasoning was wrong and the change was reverted before
+acceptance** — see "Uuid `pattern` is kept, not dropped" below. `inputSchema`
+therefore loses only its own top-level `$schema` key; every codec-derived
+schema underneath it, uuid fields included, is untouched.
 
 The owner decided 2026-09-23 to take this schema diet: **`outputSchema`
-becomes opt-in and defaults off**; the smaller `$schema`/`uuid` trims apply to
-what remains always-on (`inputSchema` and the embedded `context` schema).
+becomes opt-in and defaults off**; the `$schema` trim applies to what remains
+always-on (`inputSchema`, at its own top level only).
 
 ## Proposed decision
 
@@ -71,9 +79,13 @@ below) with:
 { "projections": { "mcp": { "outputSchema": true } } }
 ```
 
-`projections.mcp.outputSchema` accepts only literal `true`; any other value,
-or an unknown sibling key under `projections.mcp`, is a compile-time
-`QP-COMPOSE-017 invalidApplicationRoot` diagnostic, matching every other
+`projections.mcp` accepts exactly `true` or `{ "outputSchema": true }`; any
+other shape — a wrong-valued `outputSchema`, an `outputSchema` key missing
+from the nested object, or an unknown sibling key under `projections.mcp` —
+is a compile-time `QP-COMPOSE-017 invalidApplicationRoot` diagnostic with the
+message `projections.mcp must be true or { outputSchema: true }` (unknown-key
+shapes get the sibling `projections.mcp has unknown key <name>` message every
+other `questpie.json` block already uses), matching every other
 `questpie.json` validation in `packages/compiler/src/index.ts`. There is no
 per-Operation `mcp` member or per-Operation `outputSchema` override — ADR-0038
 already forbids per-Operation MCP authoring in the basic slice
@@ -82,35 +94,60 @@ slice"), and this ADR does not reopen that.
 
 When `outputSchema` is included (opt-in), it is produced by the exact same
 code ADR-0038 specified and is **byte-identical to today's `outputSchema`**:
-same closed `oneOf`, same `$schema` declaration, same `uuid` `format`+
-`pattern` pair on every branch that carries a uuid-typed field. This ADR does
-not redesign `outputSchema`'s content or encoding — the `$defs`/`$ref`
+same closed `oneOf`, same top-level `$schema` declaration, same `uuid`
+`format`+`pattern` pair on every branch that carries a uuid-typed field. This
+ADR does not redesign `outputSchema`'s content or encoding — the `$defs`/`$ref`
 de-duplication design the research pass also scoped (61.6% saved, keeps
 validation value) is a _different_, not-yet-decided lever and is explicitly
 out of scope here (see "Alternatives rejected"). Opting in trades bytes for
-today's exact fidelity; it is not a smaller, redesigned `outputSchema`.
+today's exact fidelity; it is not a smaller, redesigned `outputSchema`. The
+acceptance test suite proves this against a golden fixture captured directly
+from the pre-ADR-0049 compiler, not merely against this ADR's own
+implementation — see "Measured effect" below.
 
 Independent of that opt-in, every tool's `inputSchema` (which is always
-emitted — the MCP spec requires it) drops two things unconditionally,
-regardless of the `outputSchema` setting:
+emitted — the MCP spec requires it) drops exactly one thing, unconditionally,
+regardless of the `outputSchema` setting: its own **top-level `$schema` key**.
+`tools/list` never places a top-level `$schema` on `inputSchema`, whether or
+not `outputSchema` is opted in — the two schemas are independent objects, and
+opting into `outputSchema` does not restore `inputSchema`'s `$schema`. Nothing
+else about `inputSchema` changes: every codec-derived field underneath it —
+`uuid` fields included, with both `format` and `pattern` — is exactly what
+`projectOperationCodecSchema` (the same function the canonical HTTP/OpenAPI
+projection, ADR-0036, also uses) already produced. `inputSchema` is
+codec-exact apart from that one omitted top-level key.
 
-1. **`$schema`** is no longer emitted on `inputSchema`. `tools/list` never
-   places a `$schema` key at all when `outputSchema` is off (the default);
-   when an application opts into `outputSchema`, that field's `$schema` is
-   still present (untouched fidelity, see above) but `inputSchema`'s is not.
-2. **`format: "uuid"` fields drop the redundant `pattern`.** Wherever the
-   compact `inputSchema` (including the embedded `context` schema and any
-   nested object/array) reaches a `{ "type": "string", "format": "uuid",
-"pattern": "^[0-9a-f]{8}-..." }` triple, the `pattern` key is removed,
-   leaving `{ "type": "string", "format": "uuid" }`. This only fires when
-   `format` is exactly `"uuid"`; a `pattern` paired with any other `format`
-   (or with none) is untouched. It is applied by a small recursive
-   post-processing pass over the assembled `inputSchema`
-   (`compactUuidSchema` in `packages/compiler/src/mcp/index.ts`), not by
-   changing the shared `projectOperationCodecSchema` codec-to-schema
-   projector — that function is also used by the canonical HTTP/OpenAPI
-   projection (ADR-0036), which this ADR does not touch. OpenAPI's `uuid`
-   schema keeps both `format` and `pattern` exactly as today.
+### Uuid `pattern` is kept, not dropped
+
+A pre-acceptance draft of this ADR additionally proposed dropping the
+`pattern` on `format: "uuid"` fields, on the reasoning that `format` alone
+already asserted the same constraint. Adversarial review (2026-09-23)
+found that reasoning false on two independent grounds, and the change was
+reverted before this ADR was accepted:
+
+- **`format` is annotation-only in JSON Schema 2020-12.** The 2020-12
+  specification does not require implementations to treat `format` as an
+  assertion; a compliant validator may accept any string for
+  `format: "uuid"` without checking it looks like a UUID at all. `pattern`
+  is the only keyword in this schema that is a real, universally-enforced
+  assertion. Dropping it would not have removed a duplicate constraint — it
+  would have removed the only constraint most validators actually enforce.
+- **RFC 4122 and this codec disagree on case.** RFC 4122 permits uppercase
+  hex digits in a UUID's textual form; this framework's uuid codec
+  (`packages/runtime/src/codec/index.ts`) and its MCP/OpenAPI schema
+  projection (`packages/compiler/src/operation-projection/schema.ts`) both
+  accept lowercase only (`^[0-9a-f]{8}-...$`). A client relying on
+  `format: "uuid"` alone (per RFC 4122) could construct an uppercase value
+  that validates against the advertised schema and is then rejected by the
+  real codec at call time — a real, avoidable client-visible correctness
+  regression, not merely a cosmetic one.
+
+Dropping `pattern` would also have broken ADR-0038's Acceptance item 2,
+"codec-exact JSON Schema 2020-12 input" — `inputSchema` is supposed to be an
+exact projection of the Operation's input codec, and the lowercase-only
+constraint is part of that codec. This ADR keeps that acceptance item intact:
+`inputSchema` is unconditionally codec-exact, with the sole documented
+exception of the top-level `$schema` key.
 
 ### What an MCP client loses, and why it is acceptable
 
@@ -195,7 +232,44 @@ pattern the artifact already uses for `title`/`description` (present only
 `packages/runtime/src/application/mcp/artifact.ts`'s `decodeMcpProjection`
 now treats `outputSchema` as present-when-present rather than
 always-required, validating its shape only when the key exists — an
-`inputSchema`-only tool binding is not itself invalid runtime state.
+`inputSchema`-only tool binding is not itself invalid runtime state. Every
+tool in one catalogue must agree on presence: either all carry `outputSchema`
+or none do (`decodeMcpProjection` fails closed on a mixed catalogue). This
+matches the config surface, which is an application-wide posture, not a
+per-Operation one — a hand-tampered or otherwise-inconsistent artifact is
+rejected rather than silently accepted with partial coverage.
+
+### Compatibility posture
+
+The artifact's `format`/`version` pair stays `"questpie.mcp-projection"`/`1`
+— this is not a wire format redesign, only an additive change to which keys
+one tool binding inside it carries. Concretely:
+
+- **A runtime built from this ADR decodes an artifact compiled by the
+  pre-ADR-0049 compiler without modification.** That artifact has
+  `outputSchema` present on every tool (the old, unconditional default); the
+  new `decodeMcpProjection`'s per-tool `hasOutputSchema` branch takes the
+  "present" path uniformly across all tools, satisfies the new all-or-none
+  check, and validates every `outputSchema`'s shape exactly as before.
+- **A runtime built from before this ADR fails closed on an artifact compiled
+  by this ADR's default (`outputSchema` absent).** The old
+  `decodeMcpProjection` calls `exact(tool, ["name", "inputSchema",
+"outputSchema", ...])` unconditionally — `exactRuntimeArtifactKeys` requires
+  the tool's actual key set to match that list exactly, in both directions.
+  An `outputSchema`-absent tool fails that check and `decodeMcpProjection`
+  throws (`failRuntimeArtifact`) rather than silently mounting a
+  partially-understood catalogue.
+- **This skew is not a real deployment concern in practice.** The compiler
+  (`@questpie/compiler`) and the runtime (`@questpie/runtime`) are both
+  private workspaces bundled into the single public `questpie` package
+  (ADR-0042); an application always compiles with and decodes against the
+  exact same installed `questpie` version in the same build. There is no
+  published API boundary across which an old runtime could ever receive a
+  new compiler's artifact, or vice versa, and this ADR does not introduce
+  one. The two bullets above describe what would happen if that boundary
+  existed (e.g. a stale `.questpie/generated` directory surviving a partial
+  upgrade) — fail-closed, not a silent misread — not a supported
+  cross-version integration this ADR is adding.
 
 ## Measured effect on `fixtures/team-support-desk`
 
@@ -208,24 +282,31 @@ this ADR ships with (`tests/unit/mcp01-compiler-catalogue.test.ts`):
 
 | Configuration                                      | Tools array bytes | Bytes/tool (avg) | vs. today  |
 | -------------------------------------------------- | ----------------- | ---------------- | ---------- |
-| Today (`projections.mcp: true`, pre-ADR-0049)      | 91,704            | 7,642            | —          |
-| Default post-ADR-0049 (`projections.mcp: true`)    | 11,604            | 967              | **−87.3%** |
-| Opt-in (`projections.mcp: { outputSchema: true }`) | 88,245            | 7,354            | −3.8%      |
+| Today (`projections.mcp: true`, pre-ADR-0049)      | 91,704            | 7,642.0          | —          |
+| Default post-ADR-0049 (`projections.mcp: true`)    | 14,379            | 1,198.3          | **−84.3%** |
+| Opt-in (`projections.mcp: { outputSchema: true }`) | 91,020            | 7,585.0          | −0.7%      |
 
-The opt-in row is lower than "today" only because of the always-on
-`inputSchema` `$schema`/`uuid` trims (§ above); its `outputSchema` field is
-verified byte-identical, per tool, to today's pre-ADR-0049 `outputSchema`
-(diffed directly for `query:tickets.detail` during this ADR's construction;
-asserted structurally for every tool kind in the acceptance test).
+The opt-in row is lower than "today" only by the twelve omitted top-level
+`inputSchema.$schema` keys (12 × 56 bytes = 672 bytes; the measured gap is
+684 bytes, the remainder is incidental key-ordering/whitespace from
+re-serialization). Every opted-in tool's `outputSchema` is verified
+byte-for-byte identical — not merely structurally similar — to a golden
+fixture (`tests/unit/__fixtures__/mcp01-outputschema-golden.json`) captured
+directly from the pre-ADR-0049 compiler (commit `71d38a53a`) compiling this
+same fixture; the acceptance test
+(`tests/unit/mcp01-compiler-catalogue.test.ts`) deep-equals every one of the
+12 tools' `outputSchema` against that fixture, not just one representative
+tool.
 
 This is a smaller catalogue-wide percentage than the Autopilot research
-pass's 88.1% combined figure because that figure additionally assumed
-`uuid` trimming and `$schema` removal applied to a _retained_ `outputSchema`
-too (a variant this ADR does not build, to keep the opt-in path byte-
-identical to today — see above); on this fixture's default (`outputSchema`
-fully dropped) path alone, the reduction is 87.3%, consistent with the
-research's own "drop `outputSchema` entirely" row (84.2%) plus this
-fixture's own `inputSchema` `$schema`/`uuid` savings on top.
+pass's 88.1% combined figure, and smaller than this ADR's own earlier
+(reverted) draft figure, because that figure assumed dropping the `uuid`
+`pattern` as well — a change this ADR does not make (see "Uuid `pattern` is
+kept, not dropped" above). On this fixture's default (`outputSchema` fully
+dropped, `inputSchema` losing only its top-level `$schema`) path alone, the
+reduction is 84.3%, consistent with the research's own "drop `outputSchema`
+entirely" row (84.2%) plus this fixture's own top-level `$schema` saving on
+top.
 
 ## Acceptance
 
@@ -235,18 +316,21 @@ Ratification requires:
    documenting the exact measured baseline (91,704 bytes/12 tools) and
    asserting the default-mode catalogue stays under a ceiling proving the
    measured reduction (with headroom for fixture drift); a test that default
-   mode has no tool with `outputSchema` and no tool with `$schema` anywhere;
-   a test that `projections.mcp: { outputSchema: true }` restores
-   `outputSchema` and it is structurally byte-identical (`$schema`, full
-   `uuid` `format`+`pattern` pair, complete `oneOf` branch set) to what
-   ADR-0038 always produced; a test that every `format: "uuid"` field in
-   `inputSchema` carries no `pattern`; config validation tests for the new
-   `projections.mcp.outputSchema` shape (accepts `true`, rejects `false`,
-   rejects unknown sibling keys).
+   mode has no tool with `outputSchema` and no tool with a top-level
+   `inputSchema.$schema`, while a uuid field in `inputSchema` keeps both
+   `format: "uuid"` and its `pattern` (a regression guard against ever
+   silently narrowing/widening what MCP callers are told is valid input); a
+   test that `projections.mcp: { outputSchema: true }` restores
+   `outputSchema` and deep-equals it, per tool, against a golden fixture
+   captured from the pre-ADR-0049 compiler; config validation tests for the
+   `projections.mcp` shape (accepts `true` and `{ outputSchema: true }`,
+   rejects `{ outputSchema: false }`, rejects `{}` with the same accurate
+   message as the wrong-value case, rejects unknown sibling keys).
 2. `packages/runtime/src/application/mcp/artifact.ts`'s `decodeMcpProjection`
    accepting both an `outputSchema`-absent and an `outputSchema`-present tool
-   binding, covered by the same suite (`mcp01`) via `decodeMcpProjection`
-   round-tripping the compiled artifact in both configurations.
+   binding, and rejecting a catalogue that mixes the two, covered by the same
+   suite (`mcp01`) via `decodeMcpProjection` round-tripping the compiled
+   artifact in both configurations.
 3. The existing hostile/error-boundary suites
    (`tests/unit/mcp02-operation-adapter.test.ts`,
    `tests/unit/mcp02-runtime-ingress.test.ts`,
@@ -259,11 +343,19 @@ Ratification requires:
 
 ## Alternatives rejected
 
-- **Keep `outputSchema` on by default, only drop `$schema` and shorten
-  `uuid`.** Rejected as the sole lever: measured on this fixture, that alone
-  is a small single-digit-percent saving (`outputSchema` itself is where the
-  weight is); it does not solve the byte problem this decision exists to
-  solve.
+- **Keep `outputSchema` on by default, only drop `inputSchema`'s top-level
+  `$schema`.** Rejected as the sole lever: measured on this fixture, dropping
+  `$schema` alone saves about 2% (§ "Context"); `outputSchema` itself is
+  where the weight is, and this alone does not solve the byte problem this
+  decision exists to solve.
+- **Also drop the `pattern` on `format: "uuid"` fields.** Proposed in an
+  earlier draft of this ADR and reverted before acceptance — see "Uuid
+  `pattern` is kept, not dropped" above. `format` is annotation-only in JSON
+  Schema 2020-12 and this framework's uuid codec is stricter (lowercase-only)
+  than what RFC 4122's `format: "uuid"` keyword alone implies; dropping
+  `pattern` would have both broken ADR-0038's codec-exactness acceptance item
+  and let a client construct input the advertised schema accepted but the
+  real codec rejects.
 - **`$defs`/`$ref` de-duplication of the ~19 unique error-frame shapes,
   keeping `outputSchema` on by default.** A real, spec-legal, less
   destructive alternative (research pass: 61.6% saved on the Autopilot
@@ -280,12 +372,12 @@ Ratification requires:
   frozen "no per-Operation `mcp` member" clause for a posture (validation
   strictness) that is naturally application-wide; see "Why global, not
   per-Operation" above.
-- **Silently redefine `outputSchema`'s content when opted in (e.g. also
-  strip its `$schema`/`uuid` pattern).** Rejected: the opt-in exists
-  specifically for an application that wants today's exact validation
-  fidelity back; changing its content on top of gating its presence would
-  make "opt in for the old behavior" a misnomer and would need its own
-  separate acceptance evidence for a shape nobody asked for.
+- **Silently redefine `outputSchema`'s content when opted in (e.g. also strip
+  its top-level `$schema`).** Rejected: the opt-in exists specifically for an
+  application that wants today's exact validation fidelity back; changing its
+  content on top of gating its presence would make "opt in for the old
+  behavior" a misnomer and would need its own separate acceptance evidence
+  for a shape nobody asked for.
 
 ## Supersession
 
@@ -296,8 +388,12 @@ other ADR-0038 clause (tool naming, `inputSchema` argument shape, the
 Query/Mutation/Action call argument disjunction, the failure boundary, the
 catalogue's Policy-neutral, deterministic, `ttlMs: 0`/`cacheScope: "public"`
 nature, and the absence of per-Operation MCP authoring) is unchanged. It does
-not supersede ADR-0036 (canonical HTTP/OpenAPI projection) — OpenAPI's `uuid`
-schema and its `$schema` usage are untouched; the `uuid`/`$schema` trims in
-this ADR are applied only inside the MCP tool-assembly module
-(`packages/compiler/src/mcp/index.ts`), not the shared
-`projectOperationCodecSchema` codec projector OpenAPI also uses.
+not supersede ADR-0036 (canonical HTTP/OpenAPI projection) — OpenAPI's schema
+projection, `$schema` usage included, is untouched; this ADR's `inputSchema`
+change (omitting one top-level key) is applied only inside the MCP
+tool-assembly module (`packages/compiler/src/mcp/index.ts`) itself, after the
+shared `projectOperationCodecSchema` codec projector OpenAPI also uses has
+already run — that shared function's output is never modified by this ADR.
+It also does not affect ADR-0038's Acceptance item 2 ("codec-exact JSON
+Schema 2020-12 input"): `inputSchema` remains codec-exact underneath its one
+omitted top-level key.

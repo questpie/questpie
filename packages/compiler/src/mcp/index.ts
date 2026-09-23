@@ -39,9 +39,9 @@ export interface McpProjectionInput {
 	 * ADR-0049: `outputSchema` is omitted from every tool by default. Setting
 	 * this to `true` (application config `projections.mcp.outputSchema: true`)
 	 * restores the exact ADR-0038 `outputSchema` shape, byte-for-byte,
-	 * including its `$schema` and the full `uuid` `format`+`pattern` pair. It
-	 * is not affected by the default-mode `$schema`/`uuid` trimming applied to
-	 * `inputSchema` below.
+	 * including its top-level `$schema`. It is not affected by the
+	 * default-mode omission of `inputSchema`'s top-level `$schema` (see
+	 * `tool` below) — the two schemas are independent objects.
 	 */
 	readonly includeOutputSchema: boolean;
 }
@@ -79,30 +79,6 @@ function originFor(identity: string, origins: readonly Origin[]): JsonRecord {
 			identity,
 		}
 	);
-}
-
-/**
- * ADR-0049: the compact `inputSchema` drops the redundant `pattern` on a
- * `uuid`-formatted string (`format: "uuid"` alone is sufficient; the paired
- * regex duplicates it in every occurrence) everywhere it appears, however
- * deeply nested (arrays, objects, the embedded `context` schema, ...). It
- * never touches a `pattern` paired with any other `format`, and it is only
- * ever applied to `inputSchema` — the opt-in `outputSchema` keeps its
- * original `pattern` unmodified (see `McpProjectionInput.includeOutputSchema`).
- */
-function compactUuidSchema(node: unknown): unknown {
-	if (Array.isArray(node)) return node.map(compactUuidSchema);
-	if (node && typeof node === "object") {
-		const record = node as Record<string, unknown>;
-		const dropPattern = record.format === "uuid" && "pattern" in record;
-		const compacted: Record<string, unknown> = {};
-		for (const [key, value] of Object.entries(record)) {
-			if (dropPattern && key === "pattern") continue;
-			compacted[key] = compactUuidSchema(value);
-		}
-		return compacted;
-	}
-	return node;
 }
 
 function invalidToolName(
@@ -170,7 +146,12 @@ function tool(
 							: documentation.summary,
 					}
 				: {}),
-			inputSchema: compactUuidSchema({
+			// ADR-0049: no top-level `$schema` (an absent `$schema` is
+			// treated as 2020-12, the only dialect this compiler emits).
+			// Every codec-derived schema below `type`/`properties`/`required`
+			// is untouched — codec-exact, same as ADR-0038's original shape,
+			// including a `uuid` field's `format` and `pattern` together.
+			inputSchema: {
 				type: "object",
 				additionalProperties: false,
 				properties: Object.fromEntries(
@@ -179,7 +160,7 @@ function tool(
 					),
 				),
 				required: required.sort(compareAscii),
-			}) as JsonRecord,
+			},
 			...(includeOutputSchema
 				? {
 						outputSchema: projectMcpOutcomeSchema(

@@ -337,7 +337,7 @@ function configuration(value: unknown): ApplicationConfiguration {
 				const mcpConfigured = object(configured.mcp, "projections.mcp");
 				exactKeys(mcpConfigured, ["outputSchema"], "projections.mcp");
 				if (mcpConfigured.outputSchema !== true)
-					invalid("projections.mcp.outputSchema must equal true when present");
+					invalid("projections.mcp must be true or { outputSchema: true }");
 				mcp = { outputSchema: true as const };
 			}
 		}

@@ -8,6 +8,18 @@ import { compileApplication } from "@questpie/compiler";
 import { digest } from "../../packages/compiler/src/canonical";
 import { decodeMcpProjection } from "../../packages/runtime/src/application/mcp";
 
+// Captured once from the pre-ADR-0049 compiler (commit 71d38a53a, the
+// unconditional-`outputSchema` ADR-0038 shape) compiling this exact fixture
+// with `projections.mcp: true`. Keyed by Operation identity; each value is
+// that Operation's complete `outputSchema`, byte-for-byte, including its
+// `$schema` and every `uuid` field's `format`+`pattern` pair. ADR-0049's
+// opt-in (`projections.mcp: { outputSchema: true }`) must reproduce this
+// exactly — see the "restores outputSchema byte-identical" test below.
+const outputSchemaGoldenPath = resolve(
+	import.meta.dir,
+	"__fixtures__/mcp01-outputschema-golden.json",
+);
+
 setDefaultTimeout(90_000);
 
 const fixture = resolve(import.meta.dir, "../../fixtures/team-support-desk");
@@ -31,44 +43,23 @@ async function selectedFixture(
 }
 
 /**
- * ADR-0049: every `format: "uuid"` schema node, wherever it appears (nested
- * arbitrarily deep in objects/arrays), must carry no `pattern`. Walks the
- * whole tree instead of asserting on one known field path so a
- * newly-added uuid field anywhere in the schema is covered automatically.
+ * ADR-0049: `inputSchema` omits only its own top-level `$schema` key (MCP
+ * treats an absent `$schema` as 2020-12, the version this compiler always
+ * emits). This checks exactly that one key on the object the compiler
+ * assembles itself — it deliberately does not walk into `properties`,
+ * `examples`, or any other nested/user-authored data, because those can
+ * legitimately contain keys named `$schema` or `pattern` as ordinary domain
+ * data (an Operation's documented example payload, for instance), and a
+ * recursive walk would misreport or, worse, silently strip those instead of
+ * only ever touching the one key this ADR actually changes.
  */
-function assertNoRedundantUuidPattern(node: unknown, path: string): void {
-	if (Array.isArray(node)) {
-		node.forEach((item, index) =>
-			assertNoRedundantUuidPattern(item, `${path}[${index}]`),
-		);
-		return;
-	}
-	if (!node || typeof node !== "object") return;
-	const record = node as Record<string, unknown>;
-	if (record.format === "uuid")
-		expect(record, `${path} is a uuid schema node`).not.toHaveProperty(
-			"pattern",
-		);
-	for (const [key, value] of Object.entries(record))
-		assertNoRedundantUuidPattern(value, `${path}.${key}`);
-}
-
-/**
- * ADR-0049: no schema node anywhere in the tool tree carries `$schema` (the
- * JSON Schema dialect declaration is a fixed, repeated, non-per-tool fact).
- */
-function assertNoSchemaDialectDeclaration(node: unknown, path: string): void {
-	if (Array.isArray(node)) {
-		node.forEach((item, index) =>
-			assertNoSchemaDialectDeclaration(item, `${path}[${index}]`),
-		);
-		return;
-	}
-	if (!node || typeof node !== "object") return;
-	const record = node as Record<string, unknown>;
-	expect(record, `${path} has no $schema`).not.toHaveProperty("$schema");
-	for (const [key, value] of Object.entries(record))
-		assertNoSchemaDialectDeclaration(value, `${path}.${key}`);
+function assertNoTopLevelSchemaDialect(
+	inputSchema: Record<string, unknown>,
+	label: string,
+): void {
+	expect(inputSchema, `${label} has no top-level $schema`).not.toHaveProperty(
+		"$schema",
+	);
 }
 
 afterAll(async () => {
@@ -211,7 +202,7 @@ describe("MCP-01 compiler catalogue", () => {
 		expect(action.tool).not.toHaveProperty("outputSchema");
 	});
 
-	test("ADR-0049: default catalogue carries no $schema and no redundant uuid pattern", async () => {
+	test("ADR-0049: default catalogue's inputSchema drops only the top-level $schema", async () => {
 		const root = await selectedFixture("diet-default");
 		const compilation = await compileApplication({ applicationRoot: root });
 		const catalogue = JSON.parse(
@@ -221,41 +212,50 @@ describe("MCP-01 compiler catalogue", () => {
 		expect(catalogue.tools.length).toBeGreaterThan(0);
 		for (const { tool } of catalogue.tools) {
 			expect(tool).not.toHaveProperty("outputSchema");
-			assertNoSchemaDialectDeclaration(
-				tool.inputSchema,
-				`${tool.name}.inputSchema`,
-			);
-			assertNoRedundantUuidPattern(
+			assertNoTopLevelSchemaDialect(
 				tool.inputSchema,
 				`${tool.name}.inputSchema`,
 			);
 		}
-		// tickets.detail's `input.id` is a uuid — confirm the walk actually
-		// found a uuid node, not that it vacuously passed on an empty tree.
+		// tickets.detail's `input.id` is a uuid. `inputSchema` stays
+		// codec-exact apart from the omitted top-level `$schema`: a uuid
+		// field keeps BOTH `format: "uuid"` and its `pattern` — `format` is
+		// annotation-only in JSON Schema 2020-12 (it does not itself
+		// constrain validation) and the codec accepts only lowercase hex,
+		// which the RFC-4122 `format: "uuid"` keyword alone does not pin
+		// down (RFC 4122 permits uppercase). Dropping `pattern` here would
+		// have silently widened what MCP callers are told is valid input.
 		const query = catalogue.tools.find(
 			({ identity }: { identity: string }) =>
 				identity === "query:tickets.detail",
 		);
-		expect(query.tool.inputSchema.properties.input.properties.id).toMatchObject(
-			{ type: "string", format: "uuid" },
-		);
-		expect(
-			query.tool.inputSchema.properties.input.properties.id,
-		).not.toHaveProperty("pattern");
+		expect(query.tool.inputSchema.properties.input.properties.id).toEqual({
+			type: "string",
+			format: "uuid",
+			pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+		});
 	});
 
 	test("ADR-0049: measures the default catalogue's byte reduction against the pre-diet baseline", async () => {
 		// Baseline measured directly on this fixture before ADR-0049
 		// (`projections.mcp: true`, ADR-0038's unconditional `outputSchema`,
-		// `$schema` on every schema, full uuid format+pattern pairs): 12
-		// tools, 91,704 bytes for the compact-serialized `tools` array that
-		// lands in `tools/list`'s `result.tools`. See ADR-0049's "Measured
-		// effect" section for the reproduction. This test asserts the
-		// default (post-ADR-0049) catalogue stays under 20,000 bytes — well
-		// under half the baseline, proving the reduction, with headroom
-		// above the actually-measured 11,604 bytes for fixture drift.
+		// `$schema` on every schema): 12 tools, 91,704 bytes for the
+		// compact-serialized `tools` array that lands in `tools/list`'s
+		// `result.tools` (same bytes captured in
+		// `__fixtures__/mcp01-outputschema-golden.json`'s source run). See
+		// ADR-0049's "Measured effect" section for the reproduction.
+		//
+		// Default (post-ADR-0049, `outputSchema` off, `inputSchema` missing
+		// only its top-level `$schema`, uuid `pattern` retained), measured
+		// on this same fixture: 14,379 bytes (1,198.3 B/tool avg) — an 84.3%
+		// reduction. This test asserts the default catalogue stays under
+		// 25,000 bytes (comfortable headroom above the measured 14,379 for
+		// fixture drift) and under 30% of the baseline, which still proves
+		// the reduction is dominated by dropping `outputSchema`, not by the
+		// much smaller `$schema` omission alone (§ADR-0049 "Measured
+		// effect": dropping `$schema` alone saves ~2%, not ~84%).
 		const baselineBytes = 91_704;
-		const ceilingBytes = 20_000;
+		const ceilingBytes = 25_000;
 		const root = await selectedFixture("diet-size");
 		const compilation = await compileApplication({ applicationRoot: root });
 		const catalogue = JSON.parse(
@@ -268,10 +268,14 @@ describe("MCP-01 compiler catalogue", () => {
 		);
 
 		expect(toolsArrayBytes).toBeLessThan(ceilingBytes);
-		expect(toolsArrayBytes).toBeLessThan(baselineBytes * 0.2);
+		expect(toolsArrayBytes).toBeLessThan(baselineBytes * 0.3);
 	});
 
 	test("ADR-0049: projections.mcp.outputSchema restores outputSchema byte-identical to ADR-0038", async () => {
+		const golden: Record<string, unknown> = JSON.parse(
+			await readFile(outputSchemaGoldenPath, "utf8"),
+		);
+
 		const defaultRoot = await selectedFixture("diet-optin-default", true);
 		const optInRoot = await selectedFixture("diet-optin-restored", {
 			outputSchema: true,
@@ -318,53 +322,19 @@ describe("MCP-01 compiler catalogue", () => {
 			expect(tool).not.toHaveProperty("outputSchema");
 
 		expect(optInCatalogue.tools.length).toBe(defaultCatalogue.tools.length);
+		expect(Object.keys(golden).sort()).toEqual(
+			optInCatalogue.tools
+				.map(({ identity }: { identity: string }) => identity)
+				.sort(),
+		);
+		// The real proof: every opted-in tool's outputSchema deep-equals the
+		// exact bytes the pre-ADR-0049 compiler (commit 71d38a53a) produced
+		// for the same Operation — not just "has the right shape", but
+		// identical down to key order-independent structural equality
+		// (toEqual), including $schema and every uuid format+pattern pair.
 		for (const { identity, tool } of optInCatalogue.tools) {
 			expect(tool).toHaveProperty("outputSchema");
-			// Exactly ADR-0038's shape: $schema present, closed oneOf with a
-			// success frame plus one branch per declared/framework error.
-			expect(tool.outputSchema.$schema).toBe(
-				"https://json-schema.org/draft/2020-12/schema",
-			);
-			expect(tool.outputSchema.oneOf[0]).toMatchObject({
-				type: "object",
-				additionalProperties: false,
-				required: ["callId", "result"],
-			});
-			if (identity === "action:notification.sendTicketSummary")
-				expect(
-					tool.outputSchema.oneOf
-						.filter(
-							(frame: {
-								properties?: {
-									error?: { properties?: { code?: { const?: string } } };
-								};
-							}) =>
-								frame.properties?.error?.properties?.code?.const ===
-								"RESOURCE_LIMIT",
-						)
-						.map(
-							(frame: {
-								properties: {
-									error: { properties: { retryable: { const: boolean } } };
-								};
-							}) => frame.properties.error.properties.retryable.const,
-						)
-						.sort(),
-				).toEqual([false, true]);
-		}
-
-		// The opt-in path does not change inputSchema's ADR-0049 diet: it
-		// still has no $schema and no redundant uuid pattern. Only
-		// outputSchema's presence and content change between the two roots.
-		for (const { tool } of optInCatalogue.tools) {
-			assertNoSchemaDialectDeclaration(
-				tool.inputSchema,
-				`${tool.name}.inputSchema`,
-			);
-			assertNoRedundantUuidPattern(
-				tool.inputSchema,
-				`${tool.name}.inputSchema`,
-			);
+			expect(tool.outputSchema).toEqual(golden[identity]);
 		}
 	});
 
@@ -387,10 +357,18 @@ describe("MCP-01 compiler catalogue", () => {
 
 		await expect(
 			(await withProjections({ mcp: { outputSchema: false } }))(),
-		).rejects.toThrow(/projections\.mcp\.outputSchema/);
+		).rejects.toThrow(
+			/projections\.mcp must be true or \{ outputSchema: true \}/,
+		);
+		// The key omitted entirely (not just set to a wrong value) must fail
+		// with the same accurate message — not a "when present" phrasing
+		// that would be misleading for a key that isn't present at all.
+		await expect((await withProjections({ mcp: {} }))()).rejects.toThrow(
+			/projections\.mcp must be true or \{ outputSchema: true \}/,
+		);
 		await expect(
 			(await withProjections({ mcp: { outputSchema: true, extra: true } }))(),
-		).rejects.toThrow(/projections\.mcp/);
+		).rejects.toThrow(/projections\.mcp has unknown key extra/);
 		await expect(
 			(await withProjections({ mcp: { outputSchema: true } }))(),
 		).resolves.toBeTruthy();

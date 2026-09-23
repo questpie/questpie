@@ -79,6 +79,7 @@ export function decodeMcpProjection(
 	const identities = new Set<string>();
 	const names = new Set<string>();
 	let previousName: string | undefined;
+	let outputSchemaState: "present" | "absent" | undefined;
 	const tools = artifact.tools.map((raw, index) => {
 		const binding = artifactRecord(raw, `MCP tool ${index}`);
 		exact(binding, ["identity", "kind", "tool"], `MCP tool ${index}`);
@@ -94,8 +95,14 @@ export function decodeMcpProjection(
 			Object.hasOwn(tool, "title") || Object.hasOwn(tool, "description");
 		// ADR-0049: `outputSchema` is opt-in (`projections.mcp.outputSchema: true`)
 		// and absent by default, unlike `inputSchema`, which every tool always
-		// carries.
+		// carries. It is an application-wide posture, not a per-Operation one
+		// (ADR-0038/ADR-0049 forbid per-Operation MCP authoring), so every
+		// tool in one catalogue must agree: either all carry it or none do.
 		const hasOutputSchema = Object.hasOwn(tool, "outputSchema");
+		const state = hasOutputSchema ? "present" : "absent";
+		if (outputSchemaState === undefined) outputSchemaState = state;
+		else if (outputSchemaState !== state)
+			fail("MCP catalogue outputSchema presence is inconsistent");
 		exact(
 			tool,
 			[
