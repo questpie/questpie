@@ -74,10 +74,77 @@ export function toJsonSchema(schema: z.ZodTypeAny | undefined) {
 		// CRUD query schemas intentionally reuse the same bounded condition
 		// schemas across fields and logical levels. Preserve that sharing as
 		// `$defs`/`$ref`; inlining turns a one-field list schema into megabytes.
-		return z.toJSONSchema(compatible, { reused: "ref" });
+		return applyMcpSchemaDiet(z.toJSONSchema(compatible, { reused: "ref" }));
 	} catch {
 		return undefined;
 	}
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const WALK_LIST_KEYS = ["anyOf", "oneOf", "allOf", "prefixItems"] as const;
+const WALK_NODE_KEYS = [
+	"items",
+	"additionalProperties",
+	"not",
+	"if",
+	"then",
+	"else",
+] as const;
+const WALK_MAP_KEYS = ["properties", "$defs", "definitions"] as const;
+
+/**
+ * Strips wire noise the zod v4 / MCP SDK JSON Schema codecs emit on every
+ * tool schema, without touching example/default/const/enum payloads (those
+ * carry caller data, not schema structure, and must never be walked).
+ *
+ * - Removes the document-level `$schema` dialect pointer (informational only;
+ *   an absent `$schema` is universally treated as 2020-12).
+ * - Drops `additionalProperties: false` wherever it appears. The MCP SDK
+ *   validates tool arguments against the *original* zod schema at call time
+ *   (`McpServer#validateToolInput` in `zod-json-schema-compat.js`'s caller,
+ *   `mcp.js`), never against this projected JSON Schema, so removing the
+ *   annotation does not change what gets rejected.
+ * - Drops a `format: "uuid"` sibling only when a `pattern` also sits on the
+ *   same node: `pattern` is the only keyword of the pair 2020-12 validators
+ *   are required to enforce (`format` is annotation-only), so once `pattern`
+ *   is present `format` is redundant. When no `pattern` is present, `format`
+ *   is left alone — it is the only signal left.
+ */
+function walkSchemaNode(node: unknown): void {
+	if (!isPlainObject(node)) return;
+
+	if (node.format === "uuid" && typeof node.pattern === "string") {
+		delete node.format;
+	}
+	if (node.additionalProperties === false) {
+		delete node.additionalProperties;
+	}
+
+	for (const key of WALK_MAP_KEYS) {
+		const map = node[key];
+		if (isPlainObject(map)) {
+			for (const value of Object.values(map)) walkSchemaNode(value);
+		}
+	}
+	for (const key of WALK_LIST_KEYS) {
+		const list = node[key];
+		if (Array.isArray(list)) {
+			for (const item of list) walkSchemaNode(item);
+		}
+	}
+	for (const key of WALK_NODE_KEYS) {
+		walkSchemaNode(node[key]);
+	}
+}
+
+export function applyMcpSchemaDiet<T>(schema: T): T {
+	if (!isPlainObject(schema)) return schema;
+	delete schema.$schema;
+	walkSchemaNode(schema);
+	return schema;
 }
 
 export function toToolInputJsonSchema(

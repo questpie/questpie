@@ -1,5 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+	ListToolsRequestSchema,
+	type ListToolsResult,
+} from "@modelcontextprotocol/sdk/types.js";
 
 import { registerCrudTools } from "./crud-tools.js";
 import { registerCustomTools } from "./custom-tools.js";
@@ -21,6 +24,45 @@ import {
 	listWorkloadTools,
 	type WorkloadMcpBoundary,
 } from "./workload-boundary.js";
+import { applyMcpSchemaDiet } from "./zod-json-schema.js";
+
+/* eslint-disable no-underscore-dangle -- The MCP SDK's `McpServer#registerTool`
+ * installs its own `tools/list` handler internally (it converts each tool's
+ * raw zod `inputSchema`/`outputSchema` to JSON Schema at list time via a
+ * vendored `zod-json-schema-compat.js`), with no public hook to post-process
+ * the result. `Protocol#setRequestHandler` freely replaces a handler
+ * (`_requestHandlers` is a plain `Map`; only the SDK's own pre-registration
+ * `assertCanSetRequestHandler` check would reject a second install, and we
+ * never call that), so reaching into the already-installed handler to wrap
+ * it is the smallest surface that lets the diet apply without re-deriving
+ * every tool's schema ourselves. */
+function installSchemaDietListToolsHandler(server: McpServer): void {
+	const protocol = server.server as unknown as {
+		_requestHandlers: Map<
+			string,
+			(request: unknown, extra: unknown) => Promise<ListToolsResult>
+		>;
+	};
+	const defaultHandler = protocol._requestHandlers.get("tools/list");
+	if (!defaultHandler) return;
+	server.server.setRequestHandler(
+		ListToolsRequestSchema,
+		async (request, extra) => {
+			const result = await defaultHandler(request, extra);
+			return {
+				...result,
+				tools: result.tools.map((tool) => ({
+					...tool,
+					inputSchema: applyMcpSchemaDiet(tool.inputSchema),
+					...(tool.outputSchema
+						? { outputSchema: applyMcpSchemaDiet(tool.outputSchema) }
+						: {}),
+				})),
+			};
+		},
+	);
+}
+/* eslint-enable no-underscore-dangle */
 
 async function createServer(
 	app: QuestpieApp,
@@ -87,6 +129,8 @@ async function createServer(
 		server.server.setRequestHandler(ListToolsRequestSchema, () => ({
 			tools: [],
 		}));
+	} else {
+		installSchemaDietListToolsHandler(server);
 	}
 
 	return server;
