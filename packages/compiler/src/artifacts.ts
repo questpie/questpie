@@ -449,6 +449,9 @@ export async function createArtifacts(
 				httpContract: runtime.http as never,
 				documentationBytes: operationDocumentation.bytes,
 				documentationDigest: operationDocumentation.digest,
+				includeOutputSchema:
+					typeof input.configuration.projections.mcp === "object" &&
+					input.configuration.projections.mcp.outputSchema === true,
 				origins: (
 					originMap as Readonly<{
 						resources: readonly Readonly<{

@@ -558,7 +558,11 @@ stateless MCP `2026-07-28` Tools projection at `POST /_questpie/mcp`. Every
 `<kind>.<qualified-name>`. Tool arguments combine the existing input and
 Context codecs with framework invocation identities: Mutation requires
 `callId`, Action requires `effectKey`, and Query and Action accept optional
-`callId`. The closed output schema is the canonical Operation outcome universe.
+`callId`. Each tool's `inputSchema` is always present and codec-exact, apart
+from omitting its own top-level `$schema` (an absent `$schema` is 2020-12, the
+only dialect ever emitted). The closed output schema — the canonical Operation
+outcome universe — is opt-in and off by default; selecting
+`{ "projections": { "mcp": { "outputSchema": true } } }` restores it exactly.
 Discovery and listing are JSON; calls complete through one request-scoped SSE
 stream whose cancellation cancels the same Execution. The projection uses the
 existing credential, Context, Policy, codec, limit, error, nondisclosure,

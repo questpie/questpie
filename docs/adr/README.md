@@ -52,6 +52,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 44. [MCP and canonical HTTP credential challenge](./0046-mcp-and-canonical-http-credential-challenge.md)
 45. [Collection `delete` kernel operation](./0047-collection-delete-kernel-operation.md)
 46. [Compiler-owned database-level Collection and Field immutability](./0048-collection-database-immutability.md)
+47. [MCP `outputSchema` opt-in and schema diet](./0049-mcp-output-schema-opt-in.md)
 
 ## Proposed
 
@@ -163,6 +164,11 @@ projection explanation. It would print the existing canonical explanation
 artifact unchanged after complete checksum and cross-pin verification, without
 source evaluation, Runtime or database access, a CLI-owned envelope, or a
 broader Resource/operational explain surface.
+ADR-0049 narrowly supersedes ADR-0038's unconditional `outputSchema` clause:
+`outputSchema` becomes opt-in (`projections.mcp.outputSchema: true`) and is
+off by default, while `inputSchema` omits only its own top-level `$schema`
+and stays codec-exact (the `uuid` `pattern` is kept). It changes nothing else
+in ADR-0038 and does not touch ADR-0036's OpenAPI projection.
 ADR-0042 replaces the scoped React and OpenTelemetry package placement with
 exactly two public npm packages: `questpie` and
 `questpie-opentelemetry`. It deletes the old identities without aliases or

@@ -35,6 +35,15 @@ export interface McpProjectionInput {
 	readonly documentationBytes: string;
 	readonly documentationDigest: string;
 	readonly origins: readonly Origin[];
+	/**
+	 * ADR-0049: `outputSchema` is omitted from every tool by default. Setting
+	 * this to `true` (application config `projections.mcp.outputSchema: true`)
+	 * restores the exact ADR-0038 `outputSchema` shape, byte-for-byte,
+	 * including its top-level `$schema`. It is not affected by the
+	 * default-mode omission of `inputSchema`'s top-level `$schema` (see
+	 * `tool` below) — the two schemas are independent objects.
+	 */
+	readonly includeOutputSchema: boolean;
 }
 
 const protocolVersion = "2026-07-28";
@@ -97,6 +106,7 @@ function tool(
 	failures: readonly string[],
 	documentation: DocumentationEntry | undefined,
 	origin: JsonRecord,
+	includeOutputSchema: boolean,
 ) {
 	const kind = operationKind(operation.identity);
 	const name = `${kind}.${operationName(operation.identity)}`;
@@ -136,8 +146,12 @@ function tool(
 							: documentation.summary,
 					}
 				: {}),
+			// ADR-0049: no top-level `$schema` (an absent `$schema` is
+			// treated as 2020-12, the only dialect this compiler emits).
+			// Every codec-derived schema below `type`/`properties`/`required`
+			// is untouched — codec-exact, same as ADR-0038's original shape,
+			// including a `uuid` field's `format` and `pattern` together.
 			inputSchema: {
-				$schema: "https://json-schema.org/draft/2020-12/schema",
 				type: "object",
 				additionalProperties: false,
 				properties: Object.fromEntries(
@@ -147,7 +161,15 @@ function tool(
 				),
 				required: required.sort(compareAscii),
 			},
-			outputSchema: projectMcpOutcomeSchema(operation, failures, documentation),
+			...(includeOutputSchema
+				? {
+						outputSchema: projectMcpOutcomeSchema(
+							operation,
+							failures,
+							documentation,
+						),
+					}
+				: {}),
 			...(kind === "query" ? { annotations: { readOnlyHint: true } } : {}),
 		},
 	};
@@ -171,6 +193,7 @@ export function projectMcpProjection(input: McpProjectionInput) {
 					input.httpContract.failures,
 					documentation.get(operation.identity),
 					origin,
+					input.includeOutputSchema,
 				),
 			};
 		})
