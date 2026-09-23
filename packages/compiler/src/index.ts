@@ -318,19 +318,34 @@ function configuration(value: unknown): ApplicationConfiguration {
 			["{", "}", "[", "]", "!", "\\"].some((token) => pattern.includes(token))
 		)
 			invalid(`source.exclude contains unsupported pattern ${pattern}`);
-	let projections: Readonly<{ openapi?: true; mcp?: true }> | undefined;
+	let projections:
+		| Readonly<{
+				openapi?: true;
+				mcp?: true | Readonly<{ outputSchema: true }>;
+		  }>
+		| undefined;
 	if (root.projections !== undefined) {
 		const configured = object(root.projections, "projections");
 		exactKeys(configured, ["mcp", "openapi"], "projections");
 		if (configured.openapi !== undefined && configured.openapi !== true)
 			invalid("projections.openapi must equal true when present");
-		if (configured.mcp !== undefined && configured.mcp !== true)
-			invalid("projections.mcp must equal true when present");
-		if (configured.openapi === undefined && configured.mcp === undefined)
+		let mcp: true | Readonly<{ outputSchema: true }> | undefined;
+		if (configured.mcp !== undefined) {
+			if (configured.mcp === true) {
+				mcp = true;
+			} else {
+				const mcpConfigured = object(configured.mcp, "projections.mcp");
+				exactKeys(mcpConfigured, ["outputSchema"], "projections.mcp");
+				if (mcpConfigured.outputSchema !== true)
+					invalid("projections.mcp.outputSchema must equal true when present");
+				mcp = { outputSchema: true as const };
+			}
+		}
+		if (configured.openapi === undefined && mcp === undefined)
 			invalid("projections must select openapi or mcp");
 		projections = {
 			...(configured.openapi === true ? { openapi: true as const } : {}),
-			...(configured.mcp === true ? { mcp: true as const } : {}),
+			...(mcp !== undefined ? { mcp } : {}),
 		};
 	}
 

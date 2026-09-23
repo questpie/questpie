@@ -11,7 +11,10 @@ export interface ApplicationConfiguration {
 		physicalNames: Readonly<Record<string, string>>;
 	}>;
 	readonly source: Readonly<{ root: string; exclude: readonly string[] }>;
-	readonly projections?: Readonly<{ openapi?: true; mcp?: true }>;
+	readonly projections?: Readonly<{
+		openapi?: true;
+		mcp?: true | Readonly<{ outputSchema: true }>;
+	}>;
 	readonly packages: Readonly<
 		Record<string, Readonly<{ inventoryDigest: string }>>
 	>;

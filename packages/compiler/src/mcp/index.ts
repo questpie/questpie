@@ -35,6 +35,15 @@ export interface McpProjectionInput {
 	readonly documentationBytes: string;
 	readonly documentationDigest: string;
 	readonly origins: readonly Origin[];
+	/**
+	 * ADR-0049: `outputSchema` is omitted from every tool by default. Setting
+	 * this to `true` (application config `projections.mcp.outputSchema: true`)
+	 * restores the exact ADR-0038 `outputSchema` shape, byte-for-byte,
+	 * including its `$schema` and the full `uuid` `format`+`pattern` pair. It
+	 * is not affected by the default-mode `$schema`/`uuid` trimming applied to
+	 * `inputSchema` below.
+	 */
+	readonly includeOutputSchema: boolean;
 }
 
 const protocolVersion = "2026-07-28";
@@ -72,6 +81,30 @@ function originFor(identity: string, origins: readonly Origin[]): JsonRecord {
 	);
 }
 
+/**
+ * ADR-0049: the compact `inputSchema` drops the redundant `pattern` on a
+ * `uuid`-formatted string (`format: "uuid"` alone is sufficient; the paired
+ * regex duplicates it in every occurrence) everywhere it appears, however
+ * deeply nested (arrays, objects, the embedded `context` schema, ...). It
+ * never touches a `pattern` paired with any other `format`, and it is only
+ * ever applied to `inputSchema` — the opt-in `outputSchema` keeps its
+ * original `pattern` unmodified (see `McpProjectionInput.includeOutputSchema`).
+ */
+function compactUuidSchema(node: unknown): unknown {
+	if (Array.isArray(node)) return node.map(compactUuidSchema);
+	if (node && typeof node === "object") {
+		const record = node as Record<string, unknown>;
+		const dropPattern = record.format === "uuid" && "pattern" in record;
+		const compacted: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(record)) {
+			if (dropPattern && key === "pattern") continue;
+			compacted[key] = compactUuidSchema(value);
+		}
+		return compacted;
+	}
+	return node;
+}
+
 function invalidToolName(
 	identity: string,
 	name: string,
@@ -97,6 +130,7 @@ function tool(
 	failures: readonly string[],
 	documentation: DocumentationEntry | undefined,
 	origin: JsonRecord,
+	includeOutputSchema: boolean,
 ) {
 	const kind = operationKind(operation.identity);
 	const name = `${kind}.${operationName(operation.identity)}`;
@@ -136,8 +170,7 @@ function tool(
 							: documentation.summary,
 					}
 				: {}),
-			inputSchema: {
-				$schema: "https://json-schema.org/draft/2020-12/schema",
+			inputSchema: compactUuidSchema({
 				type: "object",
 				additionalProperties: false,
 				properties: Object.fromEntries(
@@ -146,8 +179,16 @@ function tool(
 					),
 				),
 				required: required.sort(compareAscii),
-			},
-			outputSchema: projectMcpOutcomeSchema(operation, failures, documentation),
+			}) as JsonRecord,
+			...(includeOutputSchema
+				? {
+						outputSchema: projectMcpOutcomeSchema(
+							operation,
+							failures,
+							documentation,
+						),
+					}
+				: {}),
 			...(kind === "query" ? { annotations: { readOnlyHint: true } } : {}),
 		},
 	};
@@ -171,6 +212,7 @@ export function projectMcpProjection(input: McpProjectionInput) {
 					input.httpContract.failures,
 					documentation.get(operation.identity),
 					origin,
+					input.includeOutputSchema,
 				),
 			};
 		})

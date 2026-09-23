@@ -92,12 +92,16 @@ export function decodeMcpProjection(
 		const tool = artifactRecord(binding.tool, `MCP tool ${index} contract`);
 		const hasDocumentation =
 			Object.hasOwn(tool, "title") || Object.hasOwn(tool, "description");
+		// ADR-0049: `outputSchema` is opt-in (`projections.mcp.outputSchema: true`)
+		// and absent by default, unlike `inputSchema`, which every tool always
+		// carries.
+		const hasOutputSchema = Object.hasOwn(tool, "outputSchema");
 		exact(
 			tool,
 			[
 				"name",
 				"inputSchema",
-				"outputSchema",
+				...(hasOutputSchema ? ["outputSchema"] : []),
 				...(hasDocumentation ? ["title", "description"] : []),
 				...(binding.kind === "query" ? ["annotations"] : []),
 			],
@@ -118,7 +122,8 @@ export function decodeMcpProjection(
 		)
 			fail("MCP tool contract is invalid");
 		artifactRecord(tool.inputSchema, `MCP tool ${index} input schema`);
-		artifactRecord(tool.outputSchema, `MCP tool ${index} output schema`);
+		if (hasOutputSchema)
+			artifactRecord(tool.outputSchema, `MCP tool ${index} output schema`);
 		if (
 			hasDocumentation &&
 			(typeof tool.title !== "string" ||
