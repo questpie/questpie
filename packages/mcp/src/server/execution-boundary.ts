@@ -86,13 +86,58 @@ interface ExecuteOptions<T> {
 export class McpPublicError extends Error {
 	readonly code: McpPublicErrorCode;
 	readonly correlationId: string;
+	/** Caller-safe text appended to the public message; see {@link mcpInvalidInputError}. */
+	readonly detail: string | undefined;
 
-	constructor(code: McpPublicErrorCode, correlationId: string = randomUUID()) {
-		super(`${publicMessage(code)} (${code}; correlationId=${correlationId})`);
+	constructor(
+		code: McpPublicErrorCode,
+		correlationId: string = randomUUID(),
+		detail?: string,
+	) {
+		super(
+			`${publicMessage(code, detail)} (${code}; correlationId=${correlationId})`,
+		);
 		this.name = "McpPublicError";
 		this.code = code;
 		this.correlationId = correlationId;
+		this.detail = detail;
 	}
+}
+
+const MAX_INPUT_ISSUES = 8;
+const MAX_ISSUE_PATH_SEGMENT_CHARS = 128;
+const MAX_ISSUE_MESSAGE_CHARS = 200;
+const MAX_INPUT_DETAIL_CHARS = 4096;
+
+/**
+ * The caller's own arguments failed the tool's input schema. Zod's own
+ * messages name only schema facts and the caller's keys, so the paths and
+ * messages go back to the caller — without them it can only guess which field
+ * to fix. Messages an app writes in `refine`/`superRefine`/`addIssue` are
+ * returned verbatim, exactly as the MCP SDK already returns them over HTTP;
+ * they must not carry server data. Only the input parse may use this: a
+ * ZodError thrown later, inside a handler, stays the opaque `invalid_input`.
+ */
+export function mcpInvalidInputError(
+	error: z.ZodError,
+	correlationId?: string,
+): McpPublicError {
+	const issues = error.issues.slice(0, MAX_INPUT_ISSUES).map((issue) => {
+		const path =
+			issue.path
+				.map((segment) =>
+					String(segment).slice(0, MAX_ISSUE_PATH_SEGMENT_CHARS),
+				)
+				.join(".") || "(root)";
+		return `${path}: ${issue.message.slice(0, MAX_ISSUE_MESSAGE_CHARS)}`;
+	});
+	const omitted = error.issues.length - issues.length;
+	if (omitted > 0) issues.push(`(${omitted} more)`);
+	return new McpPublicError(
+		"invalid_input",
+		correlationId,
+		`invalid input — ${issues.join("; ")}`.slice(0, MAX_INPUT_DETAIL_CHARS),
+	);
 }
 
 export class McpAccessDeniedError extends Error {
@@ -390,10 +435,9 @@ export function snapshotBoundedMcpValue(
 	return snapshot.value;
 }
 
-function publicMessage(code: McpPublicErrorCode): string {
-	return code === "access_denied"
-		? "MCP access denied"
-		: "MCP operation failed";
+function publicMessage(code: McpPublicErrorCode, detail?: string): string {
+	if (code === "access_denied") return "MCP access denied";
+	return detail ? `MCP operation failed: ${detail}` : "MCP operation failed";
 }
 
 function classifyError(error: unknown, correlationId: string): McpPublicError {
@@ -500,7 +544,9 @@ export function toMcpToolError(error: unknown): CallToolResult {
 			: classifyError(error, randomUUID());
 	return {
 		isError: true,
-		content: [{ type: "text", text: publicMessage(resolved.code) }],
+		content: [
+			{ type: "text", text: publicMessage(resolved.code, resolved.detail) },
+		],
 		_meta: {
 			[PUBLIC_ERROR_META_KEY]: {
 				code: resolved.code,

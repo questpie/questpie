@@ -1,5 +1,13 @@
 # @questpie/admin
 
+## 3.28.10
+
+### Patch Changes
+
+- Updated dependencies []:
+  - questpie@3.28.10
+  - @questpie/tanstack-query@3.28.10
+
 ## 3.28.9
 
 ### Patch Changes

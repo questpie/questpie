@@ -204,6 +204,77 @@ describe("programmatic workload custom-tool port", () => {
 		}
 	});
 
+	it("names each rejected input field but keeps a handler's own validation failure opaque", async () => {
+		const setup = await buildMockApp({
+			mcpTools: {
+				push: mcpTool("tasks.push", {
+					access: true,
+					scopes: false,
+					inputSchema: z
+						.object({
+							ops: z.array(
+								z.discriminatedUnion("op", [
+									z
+										.object({
+											op: z.literal("update"),
+											clientPath: z.string(),
+											revision: z.number().int().min(1),
+										})
+										.strict(),
+								]),
+							),
+						})
+						.strict(),
+					workload: { capabilities: ["tasks.read"] },
+				}).handler(async () => ({ content: [{ type: "text", text: "ok" }] })),
+				innerParse: mcpTool("tasks.inner-parse", {
+					access: true,
+					scopes: false,
+					workload: { capabilities: ["tasks.read"] },
+				}).handler(async () => {
+					z.object({ dsn: z.literal("never") }).parse({
+						dsn: "postgres://admin:password@db.local",
+					});
+					return { content: [{ type: "text", text: "unreachable" }] };
+				}),
+			},
+		});
+		const port = createWorkloadMcpToolPort(setup.app, {
+			envelope: "opaque",
+			authorizer: { authorize: async () => ({ context: "opaque" }) },
+			contextBinder: {
+				bind: async () => setup.app.createContext({ accessMode: "user" }),
+			},
+		});
+
+		try {
+			const rejected = await port.callCustomTool({
+				name: "tasks.push",
+				input: { ops: [{ op: "update", revision: 0, type: "update" }] },
+			});
+			expect(rejected.isError).toBe(true);
+			expect(errorCode(rejected)).toBe("invalid_input");
+			const text = (rejected.content as { text: string }[])[0]!.text;
+			expect(text).toStartWith("MCP operation failed: invalid input");
+			expect(text).toContain("ops.0.clientPath:");
+			expect(text).toContain("ops.0.revision:");
+			expect(text).toContain('"type"');
+
+			const inner = await port.callCustomTool({
+				name: "tasks.inner-parse",
+				input: {},
+			});
+			expect(errorCode(inner)).toBe("invalid_input");
+			expect(inner.content).toEqual([
+				{ type: "text", text: "MCP operation failed" },
+			]);
+			expect(JSON.stringify(inner)).not.toContain("dsn");
+			expect(JSON.stringify(inner)).not.toContain("password");
+		} finally {
+			await setup.cleanup();
+		}
+	});
+
 	it("shares concurrency by stable consumer key without cross-tenant interference", async () => {
 		let release!: () => void;
 		let markStarted!: () => void;

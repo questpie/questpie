@@ -1,5 +1,14 @@
 # @questpie/mcp
 
+## 3.28.10
+
+### Patch Changes
+
+- [#370](https://github.com/questpie/questpie/pull/370) [`0c64888`](https://github.com/questpie/questpie/commit/0c64888d92aecf761e5a7ba8b78271ef236e7a15) Thanks [@drepkovsky](https://github.com/drepkovsky)! - A custom tool call whose arguments fail the input schema now answers `invalid_input` with each rejected field's path and message (`MCP operation failed: invalid input — ops.0.clientPath: …`, at most eight issues, 4 KB) instead of the bare sentence. Workload callers (`createWorkloadMcpToolPort`) had no other way to learn which field to fix. Over HTTP/stdio the MCP SDK already reported most of these; failures only the real schema catches (transforms, dates, defaults the advertised schema relaxes) now carry the same detail. Messages written in `refine`/`superRefine` are returned as-is, so they must not contain server data. A ZodError thrown inside a handler stays opaque.
+
+- Updated dependencies []:
+  - questpie@3.28.10
+
 ## 3.28.9
 
 ### Patch Changes
