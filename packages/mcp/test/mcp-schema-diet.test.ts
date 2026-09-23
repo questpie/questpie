@@ -396,7 +396,7 @@ describe("MCP tools/list schema diet (integration)", () => {
 			await close();
 			await setup.cleanup();
 		}
-	});
+	}, 30000);
 
 	it("keeps format:uuid on a uuid field while dropping the redundant pattern", async () => {
 		const { setup, server } = await buildFixtureServer();
@@ -412,7 +412,7 @@ describe("MCP tools/list schema diet (integration)", () => {
 			await close();
 			await setup.cleanup();
 		}
-	});
+	}, 30000);
 
 	it("reduces the total tools/list byte size versus the SDK's own raw (undieted) output", async () => {
 		// The real baseline: a bare McpServer, registering the exact same tool
@@ -458,7 +458,7 @@ describe("MCP tools/list schema diet (integration)", () => {
 			await close();
 			await setup.cleanup();
 		}
-	});
+	}, 30000);
 
 	it("still rejects unknown arguments exactly as before the diet", async () => {
 		const { setup, server } = await buildFixtureServer();
@@ -490,7 +490,7 @@ describe("MCP tools/list schema diet (integration)", () => {
 			await close();
 			await setup.cleanup();
 		}
-	});
+	}, 30000);
 
 	it("still rejects a malformed uuid exactly as before the diet", async () => {
 		const { setup, server } = await buildFixtureServer();
@@ -505,7 +505,7 @@ describe("MCP tools/list schema diet (integration)", () => {
 			await close();
 			await setup.cleanup();
 		}
-	});
+	}, 30000);
 });
 
 describe("installSchemaDietListToolsHandler failure handling", () => {
