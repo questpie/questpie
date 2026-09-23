@@ -1,6 +1,6 @@
 # ADR-0049: MCP `outputSchema` becomes opt-in; drop `inputSchema`'s top-level `$schema` by default
 
-- Status: Proposed
+- Status: Accepted (owner, 2026-09-23)
 - Date: 2026-09-23
 - Owners: Product architecture, compiler, MCP projection
 - Ticket: owner-directed schema diet, 2026-09-23 — see

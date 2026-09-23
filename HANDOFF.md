@@ -76,6 +76,8 @@ entry, and all of `questpie-opentelemetry`, is byte-identical to the prior
 manifest. `bun run scripts/release.ts --dry-run` passes end to end. Nothing
 was pushed, tagged, or published; no npm registry write ran. ADR-0045
 through ADR-0048 were accepted by the owner on 2026-09-22; ADR-0039 (the beta.2 release slice) remains Proposed.
+ADR-0049 (MCP `outputSchema` opt-in, off by default; top-level `$schema` omitted
+from `inputSchema`) was accepted by the owner on 2026-09-23.
 
 ## Manual release continuation (after this work)
 
