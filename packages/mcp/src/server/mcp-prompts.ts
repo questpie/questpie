@@ -107,6 +107,24 @@ async function promptProviderAllows(
 	);
 }
 
+const MAX_INVALID_PARAMS_MESSAGE_CHARS = 512;
+
+/**
+ * A provider's own `McpError(ErrorCode.InvalidParams, …)` is the one error
+ * that reaches the client as itself: it states what was wrong with the
+ * caller's arguments, which the provider authored for the caller. Every other
+ * throw stays the boundary's opaque `internal`.
+ */
+function providerInvalidParams(error: unknown): McpError | undefined {
+	if (!(error instanceof McpError) || error.code !== ErrorCode.InvalidParams) {
+		return undefined;
+	}
+	const message = error.message
+		.replace(/^MCP error -?\d+: /, "")
+		.slice(0, MAX_INVALID_PARAMS_MESSAGE_CHARS);
+	return new McpError(ErrorCode.InvalidParams, message);
+}
+
 /**
  * Install `prompts/list` and `prompts/get` over the released providers. The
  * caller must declare the `prompts` capability on the server beforehand.
@@ -123,8 +141,13 @@ export function registerPromptProviders(
 
 	server.server.setRequestHandler(
 		ListPromptsRequestSchema,
-		(request, extra): Promise<ListPromptsResult> =>
-			scope.execution.execute({
+		(request, extra): Promise<ListPromptsResult> => {
+			// One page holds every prompt and no `nextCursor` is ever issued, so
+			// any cursor is one this server never gave out.
+			if (request.params?.cursor) {
+				throw new McpError(ErrorCode.InvalidParams, "Invalid cursor");
+			}
+			return scope.execution.execute({
 				operation: "prompts/list",
 				transport: scope.transport,
 				accessMode: scope.accessMode,
@@ -158,12 +181,14 @@ export function registerPromptProviders(
 					}
 					return { prompts };
 				},
-			}),
+			});
+		},
 	);
 
 	server.server.setRequestHandler(
 		GetPromptRequestSchema,
 		async (request, extra): Promise<GetPromptResult> => {
+			let invalidParams: McpError | undefined;
 			const rendered = await scope.execution.execute({
 				operation: "prompts/get",
 				transport: scope.transport,
@@ -176,14 +201,21 @@ export function registerPromptProviders(
 						if (!(await promptProviderAllows(scope, provider, control.ctx))) {
 							continue;
 						}
-						const result = await provider.config.get({
-							...control,
-							transport: scope.transport,
-							accessMode: scope.accessMode,
-							request: scope.request,
-							name: request.params.name,
-							arguments: { ...request.params.arguments },
-						});
+						let result: GetPromptResult | null | undefined;
+						try {
+							result = await provider.config.get({
+								...control,
+								transport: scope.transport,
+								accessMode: scope.accessMode,
+								request: scope.request,
+								name: request.params.name,
+								arguments: { ...request.params.arguments },
+							});
+						} catch (error) {
+							invalidParams = providerInvalidParams(error);
+							if (!invalidParams) throw error;
+							return null;
+						}
 						if (result === null || result === undefined) continue;
 						const parsed = GetPromptResultSchema.safeParse(result);
 						if (!parsed.success) {
@@ -194,6 +226,7 @@ export function registerPromptProviders(
 					return null;
 				},
 			});
+			if (invalidParams) throw invalidParams;
 			if (!rendered) {
 				// Same answer for an unknown name and a prompt this caller cannot
 				// read, so absence discloses nothing.

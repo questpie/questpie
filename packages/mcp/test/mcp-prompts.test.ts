@@ -306,6 +306,174 @@ describe("@questpie/mcp prompts", () => {
 		}
 	});
 
+	it("rejects a cursor, since prompts/list never issues one", async () => {
+		await withClient(setup.app, userCtx("alice"), async (client) => {
+			const error = await client.listPrompts({ cursor: "page-2" }).then(
+				() => undefined,
+				(caught: unknown) => caught,
+			);
+			expect(error).toBeInstanceOf(McpError);
+			expect((error as McpError).code).toBe(ErrorCode.InvalidParams);
+			expect((await client.listPrompts({})).prompts).toHaveLength(2);
+		});
+		expect(seenCalls).toEqual(["list:alice"]);
+	});
+
+	it("passes a provider's InvalidParams through and masks every other throw", async () => {
+		const strict = mcpPrompts("strict", {
+			access: true,
+			scopes: false,
+			list: () => [{ name: "needs-topic" }],
+			get: ({ name, arguments: args }) => {
+				if (name === "explodes") throw new Error("db password is hunter2");
+				if (name === "wrong-code") {
+					throw new McpError(ErrorCode.InternalError, "secret detail");
+				}
+				if (!args.topic) {
+					throw new McpError(ErrorCode.InvalidParams, "topic is required");
+				}
+				return {
+					messages: [
+						{ role: "user", content: { type: "text", text: args.topic } },
+					],
+				};
+			},
+		});
+		const app = await buildMockApp({ mcpPrompts: { strict } });
+		try {
+			await withClient(app.app, userCtx("alice"), async (client) => {
+				const invalid = await client.getPrompt({ name: "needs-topic" }).then(
+					() => undefined,
+					(caught: unknown) => caught,
+				);
+				expect(invalid).toBeInstanceOf(McpError);
+				expect((invalid as McpError).code).toBe(ErrorCode.InvalidParams);
+				// The SDK prefixes an McpError's text once on each side of the wire.
+				expect((invalid as McpError).message).toBe(
+					"MCP error -32602: MCP error -32602: topic is required",
+				);
+
+				for (const name of ["explodes", "wrong-code"]) {
+					const masked = await client.getPrompt({ name }).then(
+						() => undefined,
+						(caught: unknown) => caught,
+					);
+					expect((masked as McpError).code).toBe(ErrorCode.InternalError);
+					expect((masked as McpError).message).toContain("internal");
+					expect((masked as McpError).message).not.toContain("hunter2");
+					expect((masked as McpError).message).not.toContain("secret detail");
+				}
+
+				expect(
+					(
+						await client.getPrompt({
+							name: "needs-topic",
+							arguments: { topic: "release" },
+						})
+					).messages[0]?.content,
+				).toEqual({ type: "text", text: "release" });
+			});
+		} finally {
+			await app.cleanup();
+		}
+	});
+
+	it("lets the first released provider win a shared name in both list and get", async () => {
+		const render = (text: string) => ({
+			messages: [
+				{ role: "user" as const, content: { type: "text" as const, text } },
+			],
+		});
+		const first = mcpPrompts("first", {
+			access: true,
+			scopes: false,
+			list: () => [{ name: "shared", description: "from first" }],
+			get: ({ name }) => (name === "shared" ? render("first") : null),
+		});
+		const second = mcpPrompts("second", {
+			access: true,
+			scopes: false,
+			list: () => [
+				{ name: "shared", description: "from second" },
+				{ name: "only-second", description: "second only" },
+			],
+			get: ({ name }) =>
+				name === "shared" || name === "only-second"
+					? render(`second:${name}`)
+					: null,
+		});
+		const app = await buildMockApp({ mcpPrompts: { first, second } });
+		try {
+			await withClient(app.app, userCtx("alice"), async (client) => {
+				expect((await client.listPrompts()).prompts).toEqual([
+					{ name: "shared", description: "from first" },
+					{ name: "only-second", description: "second only" },
+				]);
+				expect(
+					(await client.getPrompt({ name: "shared" })).messages[0]?.content,
+				).toEqual({ type: "text", text: "first" });
+				expect(
+					(await client.getPrompt({ name: "only-second" })).messages[0]
+						?.content,
+				).toEqual({ type: "text", text: "second:only-second" });
+			});
+		} finally {
+			await app.cleanup();
+		}
+	});
+
+	it("keeps title, arguments and _meta through the bounded copy", async () => {
+		const described = mcpPrompts("described", {
+			access: true,
+			scopes: false,
+			list: () => [
+				{
+					name: "brief",
+					title: "Write a brief",
+					description: "Draft a brief",
+					arguments: [
+						{ name: "audience", description: "Who reads it", required: true },
+					],
+					_meta: { "example.com/origin": { id: "brief-1" } },
+				},
+			],
+			get: () => ({
+				description: "Draft a brief",
+				_meta: { "example.com/snapshot": "s-1" },
+				messages: [
+					{ role: "user", content: { type: "text", text: "Write it." } },
+					{ role: "assistant", content: { type: "text", text: "On it." } },
+				],
+			}),
+		});
+		const app = await buildMockApp({ mcpPrompts: { described } });
+		try {
+			await withClient(app.app, userCtx("alice"), async (client) => {
+				expect((await client.listPrompts()).prompts).toEqual([
+					{
+						name: "brief",
+						title: "Write a brief",
+						description: "Draft a brief",
+						arguments: [
+							{ name: "audience", description: "Who reads it", required: true },
+						],
+						_meta: { "example.com/origin": { id: "brief-1" } },
+					},
+				]);
+				expect(await client.getPrompt({ name: "brief" })).toEqual({
+					description: "Draft a brief",
+					_meta: { "example.com/snapshot": "s-1" },
+					messages: [
+						{ role: "user", content: { type: "text", text: "Write it." } },
+						{ role: "assistant", content: { type: "text", text: "On it." } },
+					],
+				});
+			});
+		} finally {
+			await app.cleanup();
+		}
+	});
+
 	it("never serves prompts to a remote workload", async () => {
 		const server = await createWorkloadMcpServer(setup.app, {
 			envelope: { opaque: true },

@@ -8,6 +8,8 @@ Add MCP prompts. `mcpPrompts(name, { access, scopes, list, get })` defines a pro
 - `get` returns `null` for a name the caller cannot use. The client receives the same `InvalidParams` "Prompt not found" error as for an unknown name.
 - The `prompts` capability is advertised in `initialize` only when at least one provider is released, without `listChanged`. Remote workload servers never serve prompts.
 - Both requests run inside the existing execution limits. A provider result the MCP schema rejects fails the request as `internal`.
+- `get` may throw `new McpError(ErrorCode.InvalidParams, message)` for missing or invalid arguments; the client receives it as `-32602` with that message. Any other throw stays the opaque `internal`.
+- `prompts/list` returns every prompt in one page and never issues `nextCursor`, so any non-empty `cursor` is rejected with `-32602`.
 - A provider's `scopes` join the advertised OAuth scope catalogue.
 
 Apps that use the MCP codegen plugin get the new `mcpPrompts` category on their next `questpie generate`.

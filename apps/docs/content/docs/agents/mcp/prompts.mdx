@@ -69,4 +69,10 @@ nothing.
   size, timeout and concurrency.
 - A provider that returns a prompt or result the MCP schema rejects fails the
   request as `internal`.
+- To reject the caller's arguments, throw
+  `new McpError(ErrorCode.InvalidParams, "topic is required")` from `get`. The
+  client receives `-32602` with that message. Any other throw becomes the
+  opaque `internal` error, so provider internals never leak.
+- `prompts/list` returns everything in one page and never issues a
+  `nextCursor`; a request carrying a `cursor` is rejected with `-32602`.
 - Remote workload servers never serve prompts.
