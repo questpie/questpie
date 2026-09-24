@@ -15,6 +15,7 @@ export type {
 	McpFieldTypes,
 	McpGlobals,
 	McpJobs,
+	McpMcpPrompts,
 	McpMcpTools,
 	McpRoutes,
 } from "./.generated/module.js";

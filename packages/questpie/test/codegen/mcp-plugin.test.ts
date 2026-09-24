@@ -32,13 +32,18 @@ describe("mcp codegen plugin", () => {
 			join(root, "mcp-tools", "report.ts"),
 			`import { mcpTool } from "@questpie/mcp";\nimport { z } from "zod";\n\nexport default mcpTool("generate-report", { access: true, scopes: false, inputSchema: z.object({}) }).handler(async () => ({ content: [{ type: "text", text: "ok" }] }));\n`,
 		);
+		await mkdir(join(root, "mcp-prompts"), { recursive: true });
+		await writeFile(
+			join(root, "mcp-prompts", "playbooks.ts"),
+			`import { mcpPrompts } from "@questpie/mcp";\n\nexport default mcpPrompts("playbooks", { access: true, scopes: false, list: () => [], get: () => null });\n`,
+		);
 	});
 
 	afterEach(async () => {
 		await rm(root, { recursive: true, force: true });
 	});
 
-	it("discovers config/mcp.ts and mcp-tools", async () => {
+	it("discovers config/mcp.ts, mcp-tools and mcp-prompts", async () => {
 		const graph = resolveTargetGraph([coreCodegenPlugin(), mcpPlugin()]);
 		const target = graph.get("server")!;
 		const options: DiscoverFilesOptions = {
@@ -50,6 +55,9 @@ describe("mcp codegen plugin", () => {
 
 		expect(discovered.singles.get("mcpConfig")?.configKey).toBe("mcp");
 		expect(discovered.categories.get("mcpTools")?.has("generateReport")).toBe(
+			true,
+		);
+		expect(discovered.categories.get("mcpPrompts")?.has("playbooks")).toBe(
 			true,
 		);
 	});

@@ -10,10 +10,12 @@ export {
 	type ResolvedMcpCatalog,
 	type ResolvedMcpCustomToolCatalogEntry,
 	type ResolvedMcpEntityCatalogEntry,
+	type ResolvedMcpPromptProviderCatalogEntry,
 	type ResolvedMcpRouteCatalogEntry,
 } from "../server/catalog.js";
 export { mcpConfig } from "../server/config.js";
 export { mcpTool } from "../server/mcp-tool.js";
+export { mcpPrompts } from "../server/mcp-prompts.js";
 export { mcpPlugin } from "../server/plugin.js";
 export {
 	defaultOperationScope,
@@ -38,6 +40,10 @@ export type {
 	McpHttpConfig,
 	McpRequiredScopes,
 	McpProgrammaticRequestOptions,
+	McpPromptGetArgs,
+	McpPromptHandlerArgs,
+	McpPromptProviderConfig,
+	McpPromptProviderDefinition,
 	McpProgrammaticTool,
 	McpProgrammaticToolResult,
 	McpPublicErrorCode,

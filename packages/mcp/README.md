@@ -94,6 +94,42 @@ export default mcpTool("publish-summary", {
 });
 ```
 
+## Prompts
+
+A prompt provider answers `prompts/list` and `prompts/get` per request, so the
+prompts a caller sees can depend on who they are. Clients such as Claude Code
+show them as slash commands. Prompts do not add to the `tools/list` catalogue.
+
+```ts
+// mcp-prompts/playbooks.ts
+import { mcpPrompts } from "@questpie/mcp";
+
+export default mcpPrompts("playbooks", {
+	access: ({ session }) => !!session,
+	scopes: "playbooks:read",
+	list: async ({ ctx }) =>
+		(await ctx.collections.playbooks.find({})).docs.map((doc) => ({
+			name: doc.slug,
+			description: doc.summary,
+		})),
+	get: async ({ ctx, name }) => {
+		const doc = await ctx.collections.playbooks.findOne({
+			where: { slug: name },
+		});
+		if (!doc) return null;
+		return {
+			messages: [{ role: "user", content: { type: "text", text: doc.body } }],
+		};
+	},
+});
+```
+
+`access` and `scopes` are required and gate the whole provider, exactly like a
+custom tool. `get` returns `null` for a name the caller cannot use; the client
+receives the same not-found error as for an unknown name. The server advertises
+the `prompts` capability only when at least one provider is released. Prompts
+are never served to remote workloads.
+
 ## Remote Workloads
 
 Remote workload execution uses a separate public factory.
@@ -201,12 +237,12 @@ output, credentials, authorization envelopes, or workload attribution.
 
 ## Exports
 
-| Entry Point                 | Purpose                              |
-| --------------------------- | ------------------------------------ |
-| `@questpie/mcp`             | Config, plugin, server, tool factory |
-| `@questpie/mcp/modules/mcp` | `mcpModule` for `modules.ts`         |
-| `@questpie/mcp/plugin`      | Codegen plugin export                |
-| `@questpie/mcp/stdio`       | Stdio server entry                   |
+| Entry Point                 | Purpose                                           |
+| --------------------------- | ------------------------------------------------- |
+| `@questpie/mcp`             | Config, plugin, server, tool and prompt factories |
+| `@questpie/mcp/modules/mcp` | `mcpModule` for `modules.ts`                      |
+| `@questpie/mcp/plugin`      | Codegen plugin export                             |
+| `@questpie/mcp/stdio`       | Stdio server entry                                |
 
 ## License
 

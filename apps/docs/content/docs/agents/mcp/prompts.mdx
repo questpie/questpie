@@ -1,0 +1,72 @@
+---
+title: Prompts
+description: mcpPrompts() answers prompts/list and prompts/get per request, so each caller sees the prompts they may use. Clients show them as slash commands, and they add nothing to the tools/list catalogue.
+kind: reference
+package: "@questpie/mcp"
+---
+
+`mcpPrompts(name, config)` returns a prompt provider. Put the file under
+`mcp-prompts/`, default-export it, and codegen registers it.
+
+| Field    | Type                                                | Required |
+| -------- | --------------------------------------------------- | -------- |
+| `access` | `McpAccessRule`                                     | yes      |
+| `scopes` | `string \| string[] \| false`                       | yes      |
+| `list`   | `(args) => Prompt[] \| Promise<Prompt[]>`           | yes      |
+| `get`    | `(args) => GetPromptResult \| null \| Promise<...>` | yes      |
+
+`Prompt` and `GetPromptResult` are the MCP SDK's own types.
+
+## Write one
+
+```ts title="src/questpie/server/mcp-prompts/playbooks.ts"
+import { mcpPrompts } from "@questpie/mcp";
+
+export default mcpPrompts("playbooks", {
+	access: ({ session }) => !!session,
+	scopes: "collections:playbooks:read",
+	list: async ({ ctx }) =>
+		(await ctx.collections.playbooks.find({})).docs.map((doc) => ({
+			name: doc.slug,
+			description: doc.summary,
+		})),
+	get: async ({ ctx, name }) => {
+		const doc = await ctx.collections.playbooks.findOne({
+			where: { slug: name },
+		});
+		if (!doc) return null;
+		return {
+			description: doc.summary,
+			messages: [{ role: "user", content: { type: "text", text: doc.body } }],
+		};
+	},
+});
+```
+
+`list` and `get` receive the caller's `ctx`, `transport`, `accessMode`,
+`request`, `signal`, `requestId` and `correlationId`. `get` also receives the
+requested `name` and the client's string `arguments`.
+
+## Authorization
+
+`access` and `scopes` gate the whole provider on every request, with the same
+rules a [custom tool](./custom-tools) uses. A caller the provider denies sees
+none of its prompts, and its `list` and `get` never run for that caller.
+
+Past that gate, `list` and `get` decide per row. Return `null` from `get` for a
+name the caller may not use. The client then receives the same `InvalidParams`
+"Prompt not found" error it gets for a name nobody has, so absence reveals
+nothing.
+
+## What the server does
+
+- The `prompts` capability is advertised in `initialize` only when at least one
+  provider is released. It carries no `listChanged`: lists are computed per
+  request over a stateless transport.
+- Providers run in release order. When two list the same name, the first wins,
+  and `prompts/get` asks providers in that same order.
+- Both requests run inside the [execution limits](./limits): input and output
+  size, timeout and concurrency.
+- A provider that returns a prompt or result the MCP schema rejects fails the
+  request as `internal`.
+- Remote workload servers never serve prompts.
