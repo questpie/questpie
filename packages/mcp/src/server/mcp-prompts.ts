@@ -66,9 +66,7 @@ export function mcpPrompts(
 		name,
 		config: Object.freeze({
 			...config,
-			scopes: Array.isArray(config.scopes)
-				? (Object.freeze([...config.scopes]) as unknown as string[])
-				: config.scopes,
+			scopes: Array.isArray(config.scopes) ? [...config.scopes] : config.scopes,
 		}),
 	});
 }
