@@ -2,68 +2,68 @@
 	"$comment": "Published package-size budget (npm pack --dry-run unpackedSize, so `files`/.npmignore are respected). Packages are DISCOVERED from packages/* — never hand-edit the list. Regenerate with `bun run scripts/size-budget.ts --update` after a build, and review the diff. Gate: unpackedSize >5% over budget fails CI. entryCount is informational only.",
 	"targets": {
 		"admin": {
-			"unpackedSize": 19977,
-			"entryCount": 2
+			"unpackedSize": 2718995,
+			"entryCount": 622
 		},
 		"crdt-yjs": {
-			"unpackedSize": 3123,
-			"entryCount": 2
+			"unpackedSize": 27188,
+			"entryCount": 10
 		},
 		"create-questpie": {
-			"unpackedSize": 228450,
-			"entryCount": 149
+			"unpackedSize": 260876,
+			"entryCount": 150
 		},
 		"elysia": {
-			"unpackedSize": 5099,
-			"entryCount": 2
+			"unpackedSize": 11359,
+			"entryCount": 6
 		},
 		"hono": {
-			"unpackedSize": 5079,
-			"entryCount": 2
+			"unpackedSize": 11692,
+			"entryCount": 6
 		},
 		"mcp": {
 			"unpackedSize": 173570,
 			"entryCount": 17
 		},
 		"next": {
-			"unpackedSize": 4937,
-			"entryCount": 2
+			"unpackedSize": 6028,
+			"entryCount": 4
 		},
 		"observability": {
-			"unpackedSize": 1830,
-			"entryCount": 1
-		},
-		"openapi": {
-			"unpackedSize": 4337,
-			"entryCount": 2
-		},
-		"questpie": {
-			"unpackedSize": 20501,
+			"unpackedSize": 11868,
 			"entryCount": 3
 		},
-		"sandbox": {
-			"unpackedSize": 153968,
+		"openapi": {
+			"unpackedSize": 66306,
 			"entryCount": 13
 		},
+		"questpie": {
+			"unpackedSize": 3995718,
+			"entryCount": 782
+		},
+		"sandbox": {
+			"unpackedSize": 245345,
+			"entryCount": 23
+		},
 		"tanstack-db": {
-			"unpackedSize": 3505,
-			"entryCount": 2
+			"unpackedSize": 19696,
+			"entryCount": 4
 		},
 		"tanstack-query": {
-			"unpackedSize": 7082,
-			"entryCount": 2
+			"unpackedSize": 36876,
+			"entryCount": 4
 		},
 		"testing": {
-			"unpackedSize": 1434,
-			"entryCount": 1
+			"unpackedSize": 56544,
+			"entryCount": 5
 		},
 		"vite-plugin-iconify": {
-			"unpackedSize": 3385,
-			"entryCount": 2
+			"unpackedSize": 18831,
+			"entryCount": 6
 		},
 		"workflows": {
-			"unpackedSize": 6274,
-			"entryCount": 2
+			"unpackedSize": 208407,
+			"entryCount": 30
 		}
 	}
 }
