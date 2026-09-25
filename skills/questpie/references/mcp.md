@@ -231,6 +231,46 @@ export default mcpTool("generate-report", {
 again during `tools/call`; `access: false` removes the tool from the released
 catalog.
 
+## Prompts
+
+Prompt providers live in `mcp-prompts/` and answer `prompts/list` and
+`prompts/get` per request, so each caller sees only the prompts they may use.
+Clients show them as slash commands, and they cost nothing in the `tools/list`
+catalog.
+
+```ts
+import { mcpPrompts } from "@questpie/mcp";
+
+export default mcpPrompts("playbooks", {
+	access: ({ session }) => !!session,
+	scopes: "collections:playbooks:read",
+	list: async ({ ctx }) =>
+		(await ctx.collections.playbooks.find({})).docs.map((doc) => ({
+			name: doc.slug,
+			description: doc.summary,
+		})),
+	get: async ({ ctx, name }) => {
+		const doc = await ctx.collections.playbooks.findOne({
+			where: { slug: name },
+		});
+		return doc
+			? {
+					messages: [
+						{ role: "user", content: { type: "text", text: doc.body } },
+					],
+				}
+			: null;
+	},
+});
+```
+
+`access` and `scopes` are required and re-checked on every request. Return
+`null` from `get` for a name the caller may not use: the client gets the same
+"Prompt not found" error as for an unknown name. There is no pagination, so a
+`cursor` is rejected. Throw `McpError(ErrorCode.InvalidParams, …)` for a bad
+argument; any other throw reaches the client as an opaque internal error.
+Workload servers never serve prompts.
+
 ## Programmatic Servers
 
 Use `createMcpServer(app, { transport: "http", request })` for programmatic HTTP setup. If no `ctx` is passed, the request is preserved through `app.createContext()`.
