@@ -1,5 +1,13 @@
 # @questpie/workflows
 
+## 3.29.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - questpie@3.29.0
+  - @questpie/admin@3.29.0
+
 ## 3.28.11
 
 ### Patch Changes
