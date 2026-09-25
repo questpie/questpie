@@ -17,6 +17,15 @@ export function mcpPlugin(): CodegenPlugin {
 						extractFromModules: true,
 						typeEmit: "standard",
 					},
+					mcpPrompts: {
+						dirs: ["mcp-prompts"],
+						prefix: "mcpPrompts",
+						factoryFunctions: ["mcpPrompts"],
+						registryKey: true,
+						includeInAppState: true,
+						extractFromModules: true,
+						typeEmit: "standard",
+					},
 				},
 				discover: {
 					mcpConfig: { pattern: "config/mcp.ts", configKey: "mcp" },

@@ -126,6 +126,7 @@ export type _ModuleViews = CodegenResolvedModulePropArr<typeof _modules, "views"
 export type _ModuleComponents = CodegenResolvedModulePropArr<typeof _modules, "components">;
 export type _ModuleBlocks = CodegenResolvedModulePropArr<typeof _modules, "blocks">;
 export type _ModuleMcpTools = CodegenResolvedModulePropArr<typeof _modules, "mcpTools">;
+export type _ModuleMcpPrompts = CodegenResolvedModulePropArr<typeof _modules, "mcpPrompts">;
 // Registry category extraction from modules
 export type _Registry_Collections = CodegenResolvedModulePropArr<typeof _modules, "collections">;
 export type _Registry_Channels = CodegenResolvedModulePropArr<typeof _modules, "channels">;
@@ -139,6 +140,7 @@ export type _Registry_Views = CodegenResolvedModulePropArr<typeof _modules, "vie
 export type _Registry_Components = CodegenResolvedModulePropArr<typeof _modules, "components">;
 export type _Registry_Blocks = CodegenResolvedModulePropArr<typeof _modules, "blocks">;
 export type _Registry_McpTools = CodegenResolvedModulePropArr<typeof _modules, "mcpTools">;
+export type _Registry_McpPrompts = CodegenResolvedModulePropArr<typeof _modules, "mcpPrompts">;
 
 // Recursive module property extraction (for fields contributed at each level)
 import type { ExtractModuleProp } from "questpie/types";
@@ -219,3 +221,6 @@ export type AppBlocks = Override<Override<Override<Override<Override<Override<Ov
 export type AppMcpTools = Override<_ModuleMcpTools, {
 	"barbershop.checkAvailability": typeof _mcpTool_barbershop_checkAvailability;
 }>;
+
+/** All mcpprompts in the app (modules + user, user overrides) */
+export type AppMcpPrompts = _ModuleMcpPrompts;

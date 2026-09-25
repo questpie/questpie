@@ -6,6 +6,7 @@ import {
 
 import { registerCrudTools } from "./crud-tools.js";
 import { registerCustomTools } from "./custom-tools.js";
+import { registerPromptProviders } from "./mcp-prompts.js";
 import {
 	createIsolatedMcpRelease,
 	createWorkloadMcpRelease,
@@ -142,6 +143,11 @@ async function createServer(
 				catalog.resources.routes.size > 0
 					? { resources: {} }
 					: {}),
+				// Prompts are never served to remote workloads. Lists are computed
+				// per request and this transport is stateless, so no listChanged.
+				...(!workload && catalog.promptProviders.size > 0
+					? { prompts: {} }
+					: {}),
 			},
 		},
 	);
@@ -149,6 +155,7 @@ async function createServer(
 	await registerRouteTools(server, scope, catalog);
 	registerSchemaResources(server, scope, catalog);
 	await registerCustomTools(server, scope, catalog);
+	registerPromptProviders(server, scope, catalog);
 	if (workload) {
 		server.server.setRequestHandler(ListToolsRequestSchema, (_request, extra) =>
 			listWorkloadTools(workload, release.execution, extra),

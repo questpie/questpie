@@ -1,5 +1,7 @@
 import type {
 	CallToolResult,
+	GetPromptResult,
+	Prompt,
 	ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext, RequestContext } from "questpie";
@@ -367,6 +369,57 @@ export interface McpToolDefinition<
 	) => CallToolResult | Promise<CallToolResult>;
 }
 
+/** Per-request arguments shared by a prompt provider's `list` and `get`. */
+export interface McpPromptHandlerArgs {
+	ctx: AppContext & Partial<RequestContext>;
+	transport: McpTransportKind;
+	accessMode: McpAccessMode;
+	request?: Request;
+	signal: AbortSignal;
+	requestId: string | number;
+	correlationId: string;
+}
+
+export interface McpPromptGetArgs extends McpPromptHandlerArgs {
+	/** The prompt name the client asked for, exactly as sent. */
+	name: string;
+	/** The client's string arguments; `{}` when the client sent none. */
+	arguments: Record<string, string>;
+}
+
+export interface McpPromptProviderConfig {
+	/**
+	 * Required explicit opt-in, evaluated per request against the same caller
+	 * context the tools get. A denied caller sees none of this provider's prompts
+	 * and a `prompts/get` of any of them answers not-found.
+	 */
+	access: McpAccessRule;
+	/**
+	 * Scopes an OAuth caller must hold (all required — AND), or `false` for an
+	 * explicit no-OAuth-scope policy. Required, like a custom tool's `scopes`.
+	 */
+	scopes: McpRequiredScopes;
+	/**
+	 * The prompts this caller can use right now. Runs on every `prompts/list`;
+	 * the list may differ per caller and per request.
+	 */
+	list: (args: McpPromptHandlerArgs) => Prompt[] | Promise<Prompt[]>;
+	/**
+	 * Render one prompt, or return `null` when this caller has no prompt of
+	 * that name. `null` is answered as not-found, the same as an unknown name,
+	 * so a prompt the caller cannot read is indistinguishable from none.
+	 */
+	get: (
+		args: McpPromptGetArgs,
+	) => GetPromptResult | null | Promise<GetPromptResult | null>;
+}
+
+export interface McpPromptProviderDefinition {
+	readonly __brand: "mcpPrompts";
+	readonly name: string;
+	readonly config: McpPromptProviderConfig;
+}
+
 declare module "questpie" {
 	interface AppStateConfig {
 		mcp?: McpConfig;
@@ -374,5 +427,6 @@ declare module "questpie" {
 
 	interface ModuleDefinition {
 		mcpTools?: Record<string, McpToolDefinition>;
+		mcpPrompts?: Record<string, McpPromptProviderDefinition>;
 	}
 }

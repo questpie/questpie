@@ -5,6 +5,7 @@ import {
 	type ScopeOperationKind,
 } from "questpie";
 
+import { isMcpPromptProvider } from "./mcp-prompts.js";
 import { isMcpTool } from "./mcp-tool.js";
 import {
 	operationRule,
@@ -15,6 +16,7 @@ import {
 } from "./policy.js";
 import type {
 	McpConfig,
+	McpPromptProviderDefinition,
 	McpRequiredScopes,
 	McpToolDefinition,
 	McpWorkloadRequirement,
@@ -48,11 +50,16 @@ export interface ResolvedMcpCustomToolCatalogEntry {
 	tool: McpToolDefinition;
 }
 
+export interface ResolvedMcpPromptProviderCatalogEntry {
+	provider: McpPromptProviderDefinition;
+}
+
 export interface ResolvedMcpCatalog {
 	collections: ReadonlyMap<string, ResolvedMcpEntityCatalogEntry>;
 	globals: ReadonlyMap<string, ResolvedMcpEntityCatalogEntry>;
 	routes: ReadonlyMap<string, ResolvedMcpRouteCatalogEntry>;
 	customTools: ReadonlyMap<string, ResolvedMcpCustomToolCatalogEntry>;
+	promptProviders: ReadonlyMap<string, ResolvedMcpPromptProviderCatalogEntry>;
 	resources: {
 		collections: ReadonlySet<string>;
 		globals: ReadonlySet<string>;
@@ -65,7 +72,10 @@ export interface ResolvedMcpCatalog {
 }
 
 type CatalogApp = Pick<Questpie<any>, "getCollections" | "getGlobals"> & {
-	state?: { mcpTools?: Record<string, unknown> } & Record<string, unknown>;
+	state?: {
+		mcpTools?: Record<string, unknown>;
+		mcpPrompts?: Record<string, unknown>;
+	} & Record<string, unknown>;
 	config?: Questpie<any>["config"];
 };
 
@@ -365,6 +375,31 @@ export function resolveMcpCatalog(
 		addRequiredScopes(oauthScopes, tool.config.scopes);
 	}
 
+	const promptProviders = new Map<
+		string,
+		ResolvedMcpPromptProviderCatalogEntry
+	>();
+	const configuredPromptProviders = (app.state?.mcpPrompts ?? {}) as Record<
+		string,
+		unknown
+	>;
+	for (const [key, candidate] of Object.entries(configuredPromptProviders)) {
+		if (
+			!isMcpPromptProvider(candidate) ||
+			candidate.config.access === undefined ||
+			candidate.config.access === false ||
+			candidate.config.scopes === undefined
+		) {
+			continue;
+		}
+		const name = candidate.name || key;
+		if (promptProviders.has(name)) {
+			throw new Error(`Duplicate MCP prompt provider name: ${name}`);
+		}
+		promptProviders.set(name, Object.freeze({ provider: candidate }));
+		addRequiredScopes(oauthScopes, candidate.config.scopes);
+	}
+
 	const resourceConfig = ownSection<McpConfig["resources"]>(
 		config,
 		"resources",
@@ -416,6 +451,7 @@ export function resolveMcpCatalog(
 		globals: readonlyMap(globals),
 		routes: readonlyMap(routes),
 		customTools: readonlyMap(customTools),
+		promptProviders: readonlyMap(promptProviders),
 		resources: Object.freeze({
 			collections: readonlySet(resourceCollections),
 			globals: readonlySet(resourceGlobals),

@@ -17,6 +17,7 @@ type _ModuleViewsKeyNames = (typeof _modules)[number] extends infer M ? M extend
 type _ModuleComponentsKeyNames = (typeof _modules)[number] extends infer M ? M extends { components: infer C } ? keyof C & string : never : never;
 type _ModuleBlocksKeyNames = (typeof _modules)[number] extends infer M ? M extends { blocks: infer C } ? keyof C & string : never : never;
 type _ModuleMcpToolsKeyNames = (typeof _modules)[number] extends infer M ? M extends { mcpTools: infer C } ? keyof C & string : never : never;
+type _ModuleMcpPromptsKeyNames = (typeof _modules)[number] extends infer M ? M extends { mcpPrompts: infer C } ? keyof C & string : never : never;
 
 declare global {
 	namespace Questpie {
@@ -31,5 +32,6 @@ declare global {
 		interface ComponentKeys extends Record<_ModuleComponentsKeyNames, unknown> {}
 		interface BlockKeys extends Record<_ModuleBlocksKeyNames, unknown> {}
 		interface McpToolKeys extends Record<_ModuleMcpToolsKeyNames, unknown> {}
+		interface McpPromptKeys extends Record<_ModuleMcpPromptsKeyNames, unknown> {}
 	}
 }

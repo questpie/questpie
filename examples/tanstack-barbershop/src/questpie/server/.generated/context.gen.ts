@@ -106,7 +106,7 @@ import _adminConfig from "../config/admin";
 import _mcpConfig from "../config/mcp";
 import _openapi from "../config/openapi";
 
-import type { AppCollections, AppChannels, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, AppEmailTemplates, _Registry_Collections, _Registry_Channels, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _Registry_McpTools, _AllModuleFields } from "./entities.gen";
+import type { AppCollections, AppChannels, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, AppEmailTemplates, _Registry_Collections, _Registry_Channels, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _Registry_Views, _Registry_Components, _Registry_Blocks, _Registry_McpTools, _Registry_McpPrompts, _AllModuleFields } from "./entities.gen";
 import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AuthorityActor, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Principal, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
 import type { Channels } from "questpie/channels";
 
@@ -318,6 +318,7 @@ declare global {
 			components: _Registry_Components;
 			blocks: _Registry_Blocks;
 			mcpTools: _Registry_McpTools;
+			mcpPrompts: _Registry_McpPrompts;
 		}
 	}
 }

@@ -36,6 +36,8 @@ export type McpFieldTypes = Record<never, never>;
 
 export type McpMcpTools = Record<never, never>;
 
+export type McpMcpPrompts = Record<never, never>;
+
 // ════════════════════════════════════════════════════════════
 // MODULE DEFINITION — static plain object
 // ════════════════════════════════════════════════════════════
@@ -49,6 +51,7 @@ export type McpModule = {
 	jobs: McpJobs;
 	fieldTypes: McpFieldTypes;
 	mcpTools: McpMcpTools;
+	mcpPrompts: McpMcpPrompts;
 	messages: Record<never, never>;
 	services: Record<never, never>;
 	emailTemplates: Record<never, never>;
@@ -76,6 +79,7 @@ const _module: McpModule = {
 	seeds: [] as const,
 	fieldTypes: {},
 	mcpTools: {},
+	mcpPrompts: {},
 	plugin: _plugin,
 };
 
