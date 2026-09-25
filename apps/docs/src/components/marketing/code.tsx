@@ -1,3 +1,6 @@
+"use client";
+
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- Code blocks scroll horizontally and need keyboard access. */
 /* The grammars from the kit's questpie-highlight.js, ported to return React nodes
  * instead of an HTML string.
  *
@@ -10,9 +13,16 @@
  * Rule order is load-bearing: the alternation is tried left to right, so a
  * keyword inside a string stays part of the string.
  */
-import type { ReactNode } from "react";
+import { useEffect, useId, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { createPortal } from "react-dom";
 
-type Lang = "bash" | "ts";
+type Lang = "bash" | "http" | "ts";
+
+export type CodeAnnotation = {
+	description: string;
+	match: string;
+};
 
 const KEYWORDS_TS =
 	"import|from|export|default|const|let|var|function|return|await|async|new|class|extends|implements|interface|type|enum|namespace|declare|if|else|for|while|do|switch|case|break|continue|try|catch|finally|throw|typeof|instanceof|keyof|in|of|as|satisfies|public|private|protected|readonly|static|abstract|get|set|yield|delete|void|null|undefined|true|false|this|super";
@@ -30,6 +40,10 @@ const GRAMMARS: Record<Lang, [role: string, pattern: string][]> = {
 		["number", "\\b\\d+\\b"],
 		["prop", "--?[A-Za-z][\\w-]*"],
 		["punct", "[|&;<>(){}$=]+"],
+	],
+	http: [
+		["keyword", "\\b(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\\b"],
+		["string", "\\/[A-Za-z0-9_/:.\\-]+"],
 	],
 	ts: [
 		["comment", "\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/"],
@@ -93,6 +107,74 @@ function tokenize(line: string, lang: Lang): ReactNode[] {
 	return out;
 }
 
+function annotatedLine(
+	line: string,
+	lineIndex: number,
+	lang: Lang,
+	annotations: readonly CodeAnnotation[],
+	activeKey: string | undefined,
+	tooltipId: string,
+	show: (
+		element: HTMLButtonElement,
+		annotation: CodeAnnotation,
+		key: string,
+	) => void,
+	hide: (key: string) => void,
+) {
+	const parts: ReactNode[] = [];
+	let cursor = 0;
+	let part = 0;
+
+	while (cursor < line.length) {
+		let next: { annotation: CodeAnnotation; at: number } | undefined;
+		for (const annotation of annotations) {
+			const at = line.indexOf(annotation.match, cursor);
+			if (at >= 0 && (!next || at < next.at)) next = { annotation, at };
+		}
+
+		if (!next) {
+			parts.push(
+				<span key={`text-${part++}`}>
+					{tokenize(line.slice(cursor), lang)}
+				</span>,
+			);
+			break;
+		}
+		if (next.at > cursor) {
+			parts.push(
+				<span key={`text-${part++}`}>
+					{tokenize(line.slice(cursor, next.at), lang)}
+				</span>,
+			);
+		}
+
+		const key = `${lineIndex}-${next.at}-${next.annotation.match}`;
+		parts.push(
+			<button
+				aria-describedby={activeKey === key ? tooltipId : undefined}
+				aria-label={`${next.annotation.match.replace(/:$/, "")}: ${next.annotation.description}`}
+				className="qp-code-annotation"
+				key={key}
+				onBlur={() => hide(key)}
+				onClick={(event) => show(event.currentTarget, next.annotation, key)}
+				onFocus={(event) => show(event.currentTarget, next.annotation, key)}
+				onMouseEnter={(event) =>
+					show(event.currentTarget, next.annotation, key)
+				}
+				onMouseLeave={(event) => {
+					if (document.activeElement !== event.currentTarget) hide(key);
+				}}
+				type="button"
+			>
+				{tokenize(next.annotation.match, lang)}
+			</button>,
+		);
+		cursor = next.at + next.annotation.match.length;
+	}
+
+	return parts;
+}
+
 /** "2,3" → highlight · "+4" → added · "-5" → removed */
 function parseMarks(spec: string): Record<string, string> {
 	const table: Record<string, string> = {};
@@ -114,12 +196,14 @@ function parseMarks(spec: string): Record<string, string> {
  * would render a second, empty line every time.
  */
 export function CodeSample({
+	annotations = [],
 	bare = false,
 	code,
 	lang = "ts",
 	mark = "",
 	numbers = false,
 }: {
+	annotations?: readonly CodeAnnotation[];
 	bare?: boolean;
 	code: string;
 	lang?: Lang;
@@ -127,24 +211,97 @@ export function CodeSample({
 	numbers?: boolean;
 }) {
 	const marks = parseMarks(mark);
+	const tooltipId = useId();
+	const [annotation, setAnnotation] = useState<{
+		description: string;
+		key: string;
+		style: CSSProperties;
+	}>();
+
+	useEffect(() => {
+		if (!annotation) return;
+		const hide = () => setAnnotation(undefined);
+		window.addEventListener("resize", hide);
+		window.addEventListener("scroll", hide, true);
+		return () => {
+			window.removeEventListener("resize", hide);
+			window.removeEventListener("scroll", hide, true);
+		};
+	}, [annotation]);
+
+	const showAnnotation = (
+		element: HTMLButtonElement,
+		item: CodeAnnotation,
+		key: string,
+	) => {
+		const rect = element.getBoundingClientRect();
+		const width = Math.min(288, window.innerWidth - 32);
+		const left = Math.min(
+			window.innerWidth - width / 2 - 16,
+			Math.max(width / 2 + 16, rect.left + rect.width / 2),
+		);
+		const above = rect.bottom + 112 > window.innerHeight;
+		setAnnotation({
+			description: item.description,
+			key,
+			style: {
+				left,
+				top: above ? rect.top - 10 : rect.bottom + 10,
+				transform: above ? "translate(-50%, -100%)" : "translateX(-50%)",
+				width,
+			},
+		});
+	};
+	const hideAnnotation = (key: string) => {
+		setAnnotation((current) => (current?.key === key ? undefined : current));
+	};
 
 	return (
-		<pre
-			className={bare ? "qp-code bare" : "qp-code"}
-			data-lang={lang}
-			data-numbers={numbers ? "" : undefined}
-		>
-			<code>
-				{code.split("\n").map((line, index) => (
+		<>
+			<pre
+				aria-label="Code sample"
+				className={bare ? "qp-code bare" : "qp-code"}
+				data-lang={lang}
+				data-numbers={numbers ? "" : undefined}
+				role="region"
+				tabIndex={0}
+			>
+				<code>
+					{code.split("\n").map((line, index) => (
+						<span
+							className="qp-line"
+							data-mark={marks[String(index + 1)]}
+							key={index}
+						>
+							{line
+								? annotatedLine(
+										line,
+										index,
+										lang,
+										annotations,
+										annotation?.key,
+										tooltipId,
+										showAnnotation,
+										hideAnnotation,
+									)
+								: "​"}
+						</span>
+					))}
+				</code>
+			</pre>
+			{annotation &&
+				typeof document !== "undefined" &&
+				createPortal(
 					<span
-						className="qp-line"
-						data-mark={marks[String(index + 1)]}
-						key={index}
+						className="qp-code-tooltip"
+						id={tooltipId}
+						role="tooltip"
+						style={annotation.style}
 					>
-						{line ? tokenize(line, lang) : "​"}
-					</span>
-				))}
-			</code>
-		</pre>
+						{annotation.description}
+					</span>,
+					document.body,
+				)}
+		</>
 	);
 }

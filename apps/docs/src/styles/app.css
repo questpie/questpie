@@ -8,6 +8,7 @@
 @import "@questpie/tokens/styles.css";
 @import "@questpie/tokens/tokens/mesh.css";
 @import "./marketing.css";
+@import "./works.css";
 
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";

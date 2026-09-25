@@ -1,154 +1,23 @@
-/* The Autopilot page, band for band from ui_kits/marketing/autopilot.html.
- *
- * Four bands: the approval that is the product, one list holding both kinds of
- * teammate, the three limits, and the ask.
- *
- * Everything that looks like a product screenshot here is live DOM. Nothing on
- * this page is interactive, though: the buttons inside the two devices render as
- * spans rather than <button>, so a keyboard user does not tab into an
- * illustration and press something that cannot respond.
- */
 import { type FormEvent, useState } from "react";
 
-import { CodeSample } from "./code";
+import { ProductMedia } from "./product-media";
 
-/* Confirmed by the owner. The form opens a mail composer rather than posting,
- * because the repo has no capture endpoint; when one exists, `submit` below is
- * the only thing that changes. The page this replaces held the address in React
- * state and dropped it on submit while showing a thank-you, so every lead was
- * lost silently. */
 const EARLY_ACCESS_EMAIL = "info@questpie.com";
 
-/* The kit wrote `orders.update(4412, { … })`. The documented accessor is
- * `collections.<name>.updateById({ id, data })` (docs/concepts/collections.mdx,
- * optimistic-concurrency.mdx) — and a proposal reads better against the row it
- * loaded than against the order number a human sees. */
-const PROPOSAL = `await collections.orders.updateById({
-  id: order.id,
-  data: {
-    status: "paid",
-    paidAt: new Date(),
-  },
-});`;
-
-const LIMITS = [
+const BOUNDARIES = [
 	{
-		body: "An agent reads the same permission table a person does. No side channel, no service account.",
-		title: "A role, not a key",
+		body: "An agent joins with a name and a role. It works through the same permissions as the people beside it.",
+		title: "A seat, not a master key",
 	},
 	{
-		body: "Anything that changes data comes to you first. You see what it read and what it would do.",
-		title: "Proposals, not writes",
+		body: "Choose which actions can run and which must stop for review. The proposal shows the intended change before it happens.",
+		title: "Approval where it matters",
 	},
 	{
-		body: "Every step is written in plain sentences, next to the work it belongs to.",
-		title: "A log you can read",
+		body: "Requests, decisions and results stay attached to the work, so the next person does not have to reconstruct the story.",
+		title: "A record people can follow",
 	},
 ];
-
-function ApprovalCard() {
-	return (
-		<div className="hero-card">
-			<div className="hero-card-head">
-				<span className="qp-eyebrow">Waiting on you</span>
-				<span className="count">order #4412</span>
-			</div>
-
-			<div className="row" style={{ alignItems: "flex-start" }}>
-				<span className="av agent">AI</span>
-				<div className="rb">
-					<span className="rt">Amount matches Stripe: 1 248,00 €</span>
-					<span className="rm">
-						agent Ada read the order and the charge. Difference 0,00 €.
-					</span>
-				</div>
-			</div>
-
-			<CodeSample code={PROPOSAL} mark="+4 +5" />
-
-			<div
-				style={{
-					alignItems: "center",
-					display: "flex",
-					/* .btn is nowrap, so on a phone the two of them plus the question
-					   ran off the card; they drop to a second line instead. */
-					flexWrap: "wrap",
-					gap: "var(--space-3)",
-					padding: "var(--space-2)",
-				}}
-			>
-				<div className="rb">
-					<span className="rt">Close the order?</span>
-					<span className="rm">
-						Marks it paid and sends one e-mail. Undo for 10 minutes.
-					</span>
-				</div>
-				<span className="btn g sm">Not yet</span>
-				<span className="btn p sm">Close order</span>
-			</div>
-		</div>
-	);
-}
-
-function SharedList() {
-	return (
-		<div
-			className="card"
-			style={{
-				borderRadius: "var(--radius-sheet)",
-				display: "flex",
-				flexDirection: "column",
-				gap: "var(--spacing-gap-rows)",
-			}}
-		>
-			<div className="row pin">
-				<div className="rb">
-					<span className="qp-eyebrow">From you</span>
-					<span className="rt" style={{ fontWeight: "var(--weight-semibold)" }}>
-						Send the November invoices by Friday, check the amounts in Stripe.
-					</span>
-				</div>
-			</div>
-			<div className="row" style={{ alignItems: "flex-start" }}>
-				<span className="av agent">AI</span>
-				<div className="rb">
-					<span className="rt">Preparing 14 invoices</span>
-					<span className="rm">agent Ada · role Accounting</span>
-					<span
-						style={{
-							alignItems: "center",
-							display: "flex",
-							gap: "var(--space-3)",
-							marginTop: "var(--space-3)",
-						}}
-					>
-						<span className="meter">
-							{/* 8 of 14 is 57%, so the bar stops 43% short */}
-							<span style={{ right: "43%" }} />
-						</span>
-						<span className="count">8/14</span>
-					</span>
-				</div>
-			</div>
-			<div className="row">
-				<span className="av i2">AB</span>
-				<div className="rb">
-					<span className="rt">Reply to the supplier e-mail</span>
-					<span className="rm">Anna B. · 2 h</span>
-				</div>
-				<span className="chip">Waiting on Anna</span>
-			</div>
-			<div className="row">
-				<span className="av agent">AI</span>
-				<div className="rb">
-					<span className="rt">Close order #4412</span>
-					<span className="rm">agent proposed · waits for your yes</span>
-				</div>
-				<span className="chip ok">Needs you</span>
-			</div>
-		</div>
-	);
-}
 
 function EarlyAccessForm() {
 	const [email, setEmail] = useState("");
@@ -161,36 +30,21 @@ function EarlyAccessForm() {
 	};
 
 	return (
-		<form
-			onSubmit={submit}
-			style={{
-				display: "flex",
-				flexWrap: "wrap",
-				gap: "var(--space-3)",
-				justifyContent: "center",
-				marginTop: "var(--space-8)",
-			}}
-		>
+		<form className="early-access-form" onSubmit={submit}>
+			<label className="sr-only" htmlFor="autopilot-email">
+				Work e-mail address
+			</label>
 			<input
-				aria-label="Your e-mail address"
+				autoComplete="email"
+				id="autopilot-email"
 				onChange={(event) => setEmail(event.target.value)}
 				placeholder="you@company.com"
-				style={{
-					background: "var(--surface-mid)",
-					border: "1px solid var(--input)",
-					borderRadius: "var(--radius-control)",
-					color: "var(--foreground)",
-					fontFamily: "var(--font-sans)",
-					fontSize: "var(--type-md)",
-					height: "var(--control-large)",
-					padding: "0 var(--spacing-input)",
-					width: 300,
-				}}
+				required
 				type="email"
 				value={email}
 			/>
 			<button className="btn p lg" type="submit">
-				Get early access
+				Request early access
 			</button>
 		</form>
 	);
@@ -199,93 +53,149 @@ function EarlyAccessForm() {
 export function AutopilotPageContent() {
 	return (
 		<>
-			<section className="band hero">
+			<section className="band hero autopilot-hero">
 				<div className="wrap split">
 					<div className="head">
-						<p className="qp-aside">the work, and who has it</p>
+						<p className="qp-aside">shared work for people and agents</p>
 						<h1 className="qp-display-xl">
-							Agents on the team. <em className="qp-hl">Same rules.</em>
+							Give agents real work.{" "}
+							<em className="qp-hl">Keep the last word.</em>
 						</h1>
 						<p className="qp-lead">
-							Autopilot holds the work: goals, tasks, messages. An agent picks
-							something up, asks when it is unsure, and hands back a proposal
-							you accept in one click.
+							Autopilot keeps goals, tasks, messages and agent work in one
+							place. Agents work through named roles, ask when context is
+							missing and bring sensitive changes back for approval.
 						</p>
-						<div
-							style={{
-								display: "flex",
-								flexWrap: "wrap",
-								gap: "var(--space-3)",
-								marginTop: "var(--space-4)",
-							}}
-						>
-							<a className="btn p lg" href="#cta">
-								Get early access
+						<div className="actions">
+							<a className="btn p lg" href="#access">
+								Request early access
 							</a>
-							<a className="btn s lg" href="/docs">
-								Read the docs
+							<a className="btn s lg" href="#workflow">
+								See the workflow
 							</a>
 						</div>
 						<p className="qp-eyebrow">
-							Free during the pilot · we set it up with you
+							Private beta · guided setup · built on QUESTPIE
 						</p>
 					</div>
 
-					<ApprovalCard />
+					<ProductMedia
+						alt="Autopilot moving a task from assignment to an approval-ready result"
+						description="A short product loop: assign work, watch the agent progress and review the result."
+						eyebrow="Product GIF · 12–18 seconds"
+						kind="video"
+						title="One task, from request to review"
+						variant="hero"
+					/>
+				</div>
+			</section>
+
+			<section className="band editorial-band" id="workflow">
+				<div className="wrap editorial-split">
+					<div className="head">
+						<p className="qp-aside">the work stays visible</p>
+						<h2 className="qp-display-m">
+							You see who has it and what happens next
+						</h2>
+						<p>
+							People and agents share the same work queue. Ownership, progress
+							and blockers are visible without opening a separate agent console.
+						</p>
+						<p>
+							When an agent needs context, the question stays with the task.
+							When it finishes, the result returns to the same place.
+						</p>
+					</div>
+					<ProductMedia
+						alt="Autopilot work queue showing tasks owned by people and agents"
+						description="Show a real mixed work queue with clear owners, status and one visible blocker."
+						eyebrow="Product screenshot · 1600 × 1100"
+						title="A shared queue, not a second inbox"
+					/>
 				</div>
 			</section>
 
 			<section className="band raised">
-				<div className="wrap split lean">
-					<div className="head">
-						<p className="qp-aside">one list, two kinds of teammate</p>
-						<h2 className="qp-display-m">People and agents, same table</h2>
-						<p>
-							They share the list, the roles and the log. The avatar says who
-							has a task; the chip says what it waits for.
-						</p>
-					</div>
-					<SharedList />
-				</div>
-			</section>
-
-			<section className="band">
 				<div className="wrap">
 					<div className="head">
-						<p className="qp-aside">where the limits are</p>
-						<h2 className="qp-display-m">The limits are the product</h2>
+						<p className="qp-aside">autonomy with explicit boundaries</p>
+						<h2 className="qp-display-m">Control is part of the workflow</h2>
+						<p>
+							The useful question is not whether an agent can act. It is who the
+							agent is, what it may do and where a person must decide.
+						</p>
 					</div>
-					<div
-						className="grid3"
-						style={{ gridAutoRows: "1fr", marginTop: "var(--space-10)" }}
-					>
-						{LIMITS.map((limit) => (
-							<div
-								className="card"
-								key={limit.title}
-								style={{ display: "flex", flexDirection: "column" }}
-							>
-								<h3>{limit.title}</h3>
-								<p>{limit.body}</p>
-							</div>
+					<div className="depth-list">
+						{BOUNDARIES.map((boundary, index) => (
+							<section key={boundary.title}>
+								<span className="qp-eyebrow">0{index + 1}</span>
+								<div>
+									<h3>{boundary.title}</h3>
+									<p>{boundary.body}</p>
+								</div>
+							</section>
 						))}
 					</div>
 				</div>
 			</section>
 
-			<section
-				className="band"
-				id="cta"
-				style={{ paddingBottom: "var(--space-16)" }}
-			>
+			<section className="band">
+				<div className="wrap product-story">
+					<div className="head">
+						<p className="qp-aside">a decision with the context beside it</p>
+						<h2 className="qp-display-m">
+							Review the change, not a vague summary
+						</h2>
+						<p>
+							A proposal should show what the agent used, what it plans to
+							change and what follows after approval. The reviewer gets a
+							decision, not another investigation.
+						</p>
+					</div>
+					<ProductMedia
+						alt="Autopilot approval view with source context and proposed changes"
+						description="Capture a real approval with its source context, proposed change and primary decision."
+						eyebrow="Product screenshot · 1920 × 1200"
+						title="The approval is the proof"
+						variant="wide"
+					/>
+				</div>
+			</section>
+
+			<section className="band raised">
+				<div className="wrap editorial-split">
+					<div className="head">
+						<p className="qp-aside">the handoff remains readable</p>
+						<h2 className="qp-display-m">
+							The next person can continue the work
+						</h2>
+						<p>
+							Autopilot keeps the request, agent activity, human decisions and
+							final result together. A teammate can understand what happened
+							without reading a raw model transcript.
+						</p>
+					</div>
+					<ProductMedia
+						alt="Autopilot activity history combining agent actions and human decisions"
+						description="Show the activity history after completion, with both agent and human actions visible."
+						eyebrow="Product screenshot · 1600 × 1100"
+						title="A history written for the team"
+					/>
+				</div>
+			</section>
+
+			<section className="band launch-band" id="access">
 				<div className="wrap">
 					<div className="cta-block">
 						<div className="head head-center">
-							<p className="qp-aside">we set it up with you</p>
-							<h2 className="qp-display-m">Give an agent a seat this month</h2>
+							<p className="qp-aside">start with one real workflow</p>
+							<h2 className="qp-display-m">
+								Bring the work you want off your plate
+							</h2>
 							<p>
-								Free during the pilot. Bring one job you would rather not do
-								again.
+								The private beta includes guided setup. Start with one recurring
+								job, the people responsible for it and the decisions that must
+								stay human.
 							</p>
 						</div>
 						<EarlyAccessForm />
