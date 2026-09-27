@@ -8344,6 +8344,54 @@ Search modes: `lexical` (FTS + trigram), `semantic` (pure vector similarity), `h
 
 For non-OpenAI providers, `createCustomEmbeddingProvider({ name, model, dimensions, generate })` wraps any embedding function.
 
+### Authorized evidence passages and document extraction
+
+Use `PostgresPassageSearchAdapter` from `questpie/adapters/postgres-passage-search`
+when retrieval needs passage locators and revision-pinned reads. Put
+`new PostgresPassageSearchAdapter()` on the runtime `search` key. Provision `vector`
+and `pg_trgm` before applying generated migrations; startup does not install extensions.
+
+Construct `PassageSearch` from `questpie/search` with the app, source registrations
+(`collection`, `tokenFields`, `projectionFields`, optional `where`) and a versioned
+`{ id, dimensions }` profile. Include every content and partition driver in the source
+token; projection fields must be readable to every row reader. Derive partition and
+source scope from trusted tenant context. Pass the caller's live CRUD context to
+`search` and `read`: source authorization runs before top-k and repeats on exact reads.
+The writer is a trusted backend API. Capture `writer.sourceToken` before extraction,
+then publish with `writer.replace` and that `expectedSourceToken`; a concurrent edit
+refuses replacement. Keep source token and manifest hash with citations.
+
+```ts
+import {
+	extractDocument,
+	EXTRACTION_PROFILE,
+	MAX_DOCUMENT_BYTES,
+} from "questpie/document-extraction";
+
+if (bytes.byteLength > MAX_DOCUMENT_BYTES)
+	throw new Error("Document exceeds extraction limit");
+const evidence = await extractDocument(
+	bytes,
+	"pdf",
+	"/opt/extraction/bin/python",
+);
+// Store EXTRACTION_PROFILE with the extraction configuration; change the passage
+// profile when extraction, chunking, dimensions or embedding model changes.
+```
+
+Install Python 3 and `pypdf==6.19.0` in the worker environment. Extraction supports
+PDF text layers, DOCX paragraphs/tables, PPTX slides/notes, XLSX sheets/cells and UTF-8
+text. Preserve each block's locator and `missingPages`; treat `no_text` and
+`unavailable` as explicit outcomes, retaining filename search and bounded retries.
+Run conversion outside the upload transaction. Its child process has resource limits
+and no application credentials, but is not an OS security sandbox. It performs no OCR.
+
+Supply embeddings from the application's admitted provider calls. Semantic passage
+search computes exact distance over the authorized partition; measure tenant skew and
+concurrency before claiming capacity. Bound index jobs and use `writer.pending` for
+durable reconciliation. Published snapshots need their own modeled authority and
+revision fence; this API serves live sources only.
+
 ## Email
 
 Transactional email with typed templates.
