@@ -409,6 +409,23 @@ describe("QUESTPIE CRDT owner policy", () => {
 			{ status: "draft" },
 			system,
 		);
+		const readable = await setup.app.collections.crdt_self_nodes.find(
+			{
+				where: {
+					id: child.id,
+					parent: {
+						is: { id: parent.id, parent: { is: { id: grandparent.id } } },
+					},
+				},
+			},
+			system,
+		);
+		expect(readable.docs.map((row) => row.id)).toEqual([child.id]);
+		const inaccessible = await setup.app.collections.crdt_self_nodes.find(
+			{ where: { id: unrelated.id, parent: { is: { status: "published" } } } },
+			createTestContext({ accessMode: "user", locale: "sk" }),
+		);
+		expect(inaccessible.docs).toEqual([]);
 		const evaluate = async (id: string, locale: string) => {
 			const owner = {
 				kind: "collection" as const,

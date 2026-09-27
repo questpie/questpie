@@ -646,11 +646,8 @@ function relationQueryTarget(
 	state: CollectionBuilderState,
 	options: BuildRelationWhereOptions,
 ): { table: PgTable; state: CollectionBuilderState } {
-	const depth = options.relationAliasDepth;
-	if (
-		depth === undefined ||
-		getTableName(options.parentTable) !== getTableName(baseTable)
-	) {
+	const depth = options.relationAliasDepth ?? 0;
+	if (getTableName(options.parentTable) !== getTableName(baseTable)) {
 		return { table: baseTable, state };
 	}
 
@@ -924,10 +921,7 @@ export function buildBelongsToExistsClause(
 			useI18n: false,
 			db: options.db,
 			failClosedAccess: options.failClosedAccess,
-			relationAliasDepth:
-				options.relationAliasDepth === undefined
-					? undefined
-					: options.relationAliasDepth + 1,
+			relationAliasDepth: (options.relationAliasDepth ?? 0) + 1,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -1020,10 +1014,7 @@ export function buildHasManyExistsClause(
 			useI18n: false,
 			db: options.db,
 			failClosedAccess: options.failClosedAccess,
-			relationAliasDepth:
-				options.relationAliasDepth === undefined
-					? undefined
-					: options.relationAliasDepth + 1,
+			relationAliasDepth: (options.relationAliasDepth ?? 0) + 1,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -1112,10 +1103,7 @@ export function buildManyToManyExistsClause(
 			useI18n: false,
 			db: options.db,
 			failClosedAccess: options.failClosedAccess,
-			relationAliasDepth:
-				options.relationAliasDepth === undefined
-					? undefined
-					: options.relationAliasDepth + 1,
+			relationAliasDepth: (options.relationAliasDepth ?? 0) + 1,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
