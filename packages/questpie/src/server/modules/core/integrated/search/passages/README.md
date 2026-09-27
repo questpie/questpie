@@ -1,0 +1,13 @@
+# Authorized live passages
+
+`PostgresPassageSearchAdapter` contributes document and passage tables to the normal migration schema. Provision PostgreSQL extensions `pg_trgm` and `vector` before applying those migrations. It does not execute privileged DDL during application startup.
+
+`PassageSearch` is a backend integration API. Its writer must never be exposed to an untrusted client. A trusted indexer reads canonical source content, derives its partition, extracts bounded evidence and publishes it with the token obtained before extraction. The writer locks the source and compares that token in the publication transaction. Configure every content, revision and partition driver in `tokenFields`; use a monotonically increasing source revision when an external dependency changes. `where` declares additional source eligibility and is applied to publication and reads.
+
+`projectionFields` documents the canonical fields from which the trusted indexer derives evidence. Registration rejects restricted or localized fields. This guard cannot infer the provenance of arbitrary strings supplied by an indexer: the indexer remains responsible for not copying secrets into titles, text, locators or metadata. Locators and metadata are returned to authorized row readers.
+
+Partitions constrain work; they do not grant access. Derive both indexing and query partitions from trusted tenant context, and include a canonical tenant predicate in the source read rule or query `where`. Search always applies the live source read rule and token equality before ranking and limiting. Exact reads repeat those checks and additionally require the manifest hash, so a previously cited passage never silently changes after extraction is replaced.
+
+Profiles isolate embedding dimensions, models, chunking and extractor versions. Change the profile id when any of these change. A new profile is invisible until it has been indexed. This API does not infer publication pointers or authorize published snapshots: integrations must separately model those sources and their revision fences before indexing anything beyond live documents.
+
+Semantic retrieval computes exact cosine distance within the authorized partition. This avoids post-filtered approximate-search underfill but has cost proportional to that partition's eligible vectors. Measure representative skew and concurrency before setting a capacity target. Bound source size, indexing batches, queue concurrency, model admission and query candidate counts in the integrating application. `pending` supports bounded durable reconciliation of missing, changed and retry-due documents.

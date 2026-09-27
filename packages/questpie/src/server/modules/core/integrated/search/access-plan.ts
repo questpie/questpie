@@ -1,4 +1,4 @@
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 
 import { buildWhereClause } from "#questpie/server/collection/crud/query-builders/where-builder.js";
@@ -114,6 +114,11 @@ function buildI18nPlan(
  */
 export function buildAuthorizedCandidateCondition(
 	accessFilters?: CollectionAccessFilter[],
+	target: { collection: SQLWrapper; recordId: SQLWrapper } = {
+		collection: questpieSearchTable.collectionName,
+		recordId: questpieSearchTable.recordId,
+	},
+	sourceCondition?: (filter: CollectionAccessFilter) => SQL,
 ): SQL | null {
 	if (!accessFilters) return null;
 
@@ -142,7 +147,7 @@ export function buildAuthorizedCandidateCondition(
 		}
 
 		const i18n = buildI18nPlan(filter, table);
-		const predicates: SQL[] = [];
+		const predicates: SQL[] = sourceCondition ? [sourceCondition(filter)] : [];
 		if (filter.accessWhere !== true) {
 			validateAccessPredicateNode(filter.accessWhere, filter.collection);
 			const accessWhere = buildWhereClause(filter.accessWhere, {
@@ -185,7 +190,7 @@ export function buildAuthorizedCandidateCondition(
 	return sql`EXISTS (
 		SELECT 1
 		FROM (${sql.join(candidates, sql` UNION ALL `)}) AS ${candidateAlias}
-		WHERE ${candidateAlias}.${CANDIDATE_COLLECTION_COLUMN} = ${questpieSearchTable.collectionName}
-			AND ${candidateAlias}.${CANDIDATE_RECORD_COLUMN} = ${questpieSearchTable.recordId}
+		WHERE ${candidateAlias}.${CANDIDATE_COLLECTION_COLUMN} = ${target.collection}
+			AND ${candidateAlias}.${CANDIDATE_RECORD_COLUMN} = ${target.recordId}
 	)`;
 }

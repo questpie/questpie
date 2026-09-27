@@ -8,3 +8,5 @@ export {
 	SearchServiceWrapper,
 } from "#questpie/server/modules/core/integrated/search/service.js";
 export * from "#questpie/server/modules/core/integrated/search/types.js";
+export * from "#questpie/server/modules/core/integrated/search/passages/types.js";
+export { PassageSearch } from "#questpie/server/modules/core/integrated/search/passages/service.js";
