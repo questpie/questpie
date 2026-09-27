@@ -60,12 +60,15 @@ export const searchPassages = pgTable(
 		ordinal: integer("ordinal").notNull(),
 		field: text("field").$type<"title" | "content">().notNull(),
 		text: text("text").notNull(),
+		normalizedText: text("normalized_text"),
 		locator: jsonb("locator")
 			.$type<Record<string, string | number>>()
 			.notNull(),
 		embedding: vector("embedding"),
 		fts: tsvector("fts")
-			.generatedAlwaysAs(sql`to_tsvector('simple', text)`)
+			.generatedAlwaysAs(
+				sql`to_tsvector('simple', coalesce(normalized_text, text))`,
+			)
 			.notNull(),
 	},
 	(t) => [

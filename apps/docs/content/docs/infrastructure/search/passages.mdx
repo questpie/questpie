@@ -1,0 +1,48 @@
+---
+title: Passage text matching
+description: Normalized lexical matching, bounded title typos, and migration of revision-pinned passage indexes.
+kind: guide
+package: questpie
+---
+
+`PassageSearch` from `questpie/search` matches normalized passage text while keeping
+the original text for citations. The writer and query path share NFKD normalization,
+lowercasing, combining-mark removal and whitespace normalization. This makes `uloha`
+match `Úloha` and `úloha` match `Uloha`, including decomposed Unicode input. It is not
+locale-specific transliteration or full Unicode case folding.
+
+The browser-safe `questpie/shared` entry point exports `normalizeSearchText`,
+`SEARCH_TEXT_NORMALIZATION` and `searchTextMatchRanges`. Match ranges use UTF-16
+offsets into the original text, including complete graphemes when normalization
+removes marks or expands compatibility characters.
+
+## Bounded title fallback
+
+Pass `typoTolerance: "bounded"` to opt in; the default is `"none"`. Lexical results
+prefer exact normalized title passages, then title prefixes, then matching content.
+Only when those results leave capacity does a title-only fallback run. It permits
+one adjacent transposition or one extra typed letter in one query term, with
+5 to 24 letters per eligible term and at most four terms per query. Queries containing
+numbers and UUID-shaped queries do not use fuzzy correction. Content-only search
+does not use it either.
+
+Primary and fallback candidates share the same authorization, partition, profile,
+metadata filters and per-document passage cap before the result limit. Fuzzy
+matches follow primary matches in the lexical arm. Hybrid mode combines the lexical
+and semantic arms using reciprocal-rank fusion; its final order is not a strict
+lexical priority order.
+
+## Upgrade an existing passage index
+
+Generate and review a migration with `questpie migrate:create`, then apply it with
+`questpie migrate` before deploying the new writer. The migration adds nullable
+`normalized_text` and changes the generated `fts` expression to
+`to_tsvector('simple', coalesce(normalized_text, text))`. PostgreSQL migration output
+must recreate the generated column and its `idx_search_passage_fts` GIN index.
+Do not substitute a schema push for a production migration.
+
+Include `SEARCH_TEXT_NORMALIZATION` in the consumer's passage profile id and
+reindex source documents with that new profile. Existing rows fall back to their
+original text until rewritten; they do not retroactively become accent-insensitive.
+A profile change prevents mixing old and new index generations, so plan the
+reindex and cutover together. Keep the source text and citation references intact.
