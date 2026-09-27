@@ -5,6 +5,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { buildWhereClause } from "#questpie/server/collection/crud/query-builders/where-builder.js";
 import { getColumn } from "#questpie/server/collection/crud/shared/index.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { normalizeSearchText } from "#questpie/shared/search-text.js";
 
 import { passageSource } from "./authority.js";
 import {
@@ -222,6 +223,7 @@ export class PassageWriter {
 						ordinal: start + offset,
 						field: block.field,
 						text: block.text,
+						normalizedText: normalizeSearchText(block.text),
 						locator: block.locator,
 						embedding: block.embedding ?? null,
 					})),

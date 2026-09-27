@@ -2,8 +2,10 @@ import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
 
 import { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
+import { normalizeSearchText } from "#questpie/shared/search-text.js";
 
 import { passageAuthority, passageSource } from "./authority.js";
+import { passageTerms, passageTypoQuery } from "./lexical.js";
 import { searchDocuments as d, searchPassages as p } from "./schema.js";
 import { PassageWriter, validatePassageVector } from "./store.js";
 import type {
@@ -113,12 +115,26 @@ export class PassageSearch<TConfig extends QuestpieConfig = QuestpieConfig> {
 		};
 		const mode = input.mode ?? "lexical";
 		const lexical = async () => {
-			const terms = input.query.match(/[\p{L}\p{N}_]+/gu)?.slice(0, 32) ?? [];
+			const terms = passageTerms(input.query);
 			if (!terms.length) return [];
 			const query = sql`to_tsquery('simple', ${terms.map((s) => `${s}:*`).join(" & ")})`;
-			return ranked(
+			const priority = sql`CASE WHEN ${p.field} = 'title' AND ${p.normalizedText} = ${normalizeSearchText(input.query)} THEN 3 WHEN ${p.field} = 'title' THEN 2 ELSE 1 END`;
+			const primary = await ranked(
 				sql`${p.fts} @@ ${query}`,
-				sql`ts_rank_cd(${p.fts}, ${query})`,
+				sql`${priority} + ts_rank_cd(${p.fts}, ${query}, 32)`,
+			);
+			if (
+				input.typoTolerance !== "bounded" ||
+				input.fields === "content" ||
+				primary.length >= limit
+			)
+				return primary;
+			const fuzzy = passageTypoQuery(input.query, terms);
+			if (!fuzzy) return primary;
+			const fuzzyQuery = sql`to_tsquery('simple', ${fuzzy})`;
+			return ranked(
+				sql`((${p.fts} @@ ${query}) OR (${p.field} = 'title' AND ${p.fts} @@ ${fuzzyQuery}))`,
+				sql`CASE WHEN ${p.fts} @@ ${query} THEN ${priority} + ts_rank_cd(${p.fts}, ${query}, 32) ELSE ts_rank_cd(${p.fts}, ${fuzzyQuery}, 32) END`,
 			);
 		};
 		const semantic = async () => {
@@ -143,8 +159,15 @@ export class PassageSearch<TConfig extends QuestpieConfig = QuestpieConfig> {
 					score: (old?.score ?? 0) + 1 / (60 + rank + 1),
 				});
 			}
+		const documentCounts = new Map<string, number>();
 		return [...hits.values()]
 			.sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+			.filter((hit) => {
+				const count = documentCounts.get(hit.documentId) ?? 0;
+				if (count >= perDocument) return false;
+				documentCounts.set(hit.documentId, count + 1);
+				return true;
+			})
 			.slice(0, limit);
 	}
 

@@ -90,6 +90,190 @@ describe.skipIf(!url)("Revision-pinned passages on PostgreSQL", () => {
 		return { row, input, token };
 	}
 
+	test("folds case and accents without changing source text", async () => {
+		const a = await indexed("accent", "Žltá zmluva o spolupráci");
+		await search.writer.replace({
+			...a.input,
+			blocks: [{ field: "title", text: a.input.title, locator: {} }],
+		});
+		for (const query of [
+			"zlta zmluva o spolupraci",
+			"ŽLTÁ ZMLUVA O SPOLUPRÁCI",
+			"Žltá zmluva o spolupráci".normalize("NFD"),
+		]) {
+			const hits = await search.search(
+				{ partition: "accent", query },
+				reader("accent"),
+			);
+			expect(hits.map((hit) => hit.recordId)).toEqual([a.row.id]);
+			expect(hits[0]!.text).toBe(a.input.title);
+		}
+		const b = await indexed("accent-reverse", "Uloha");
+		await search.writer.replace({
+			...b.input,
+			blocks: [{ field: "title", text: b.input.title, locator: {} }],
+		});
+		expect(
+			(
+				await search.search(
+					{ partition: "accent-reverse", query: "úloha" },
+					reader("accent-reverse"),
+				)
+			).map((hit) => hit.recordId),
+		).toEqual([b.row.id]);
+	});
+
+	test("bounded title typos follow exact hits and obey authority before limit", async () => {
+		const typo = await indexed("typo", "Projekt");
+		const exact = await indexed("typo", "Projket");
+		for (const entry of [typo, exact])
+			await search.writer.replace({
+				...entry.input,
+				blocks: [{ field: "title", text: entry.input.title, locator: {} }],
+			});
+		for (let i = 0; i < 4; i++) {
+			const hidden = await indexed("hidden-typo", "Projket", [1, 0, 0], "typo");
+			await search.writer.replace({
+				...hidden.input,
+				blocks: [{ field: "title", text: hidden.input.title, locator: {} }],
+			});
+		}
+		const query = {
+			partition: "typo",
+			query: "projket",
+			typoTolerance: "bounded" as const,
+			limit: 2,
+		};
+		expect(
+			(await search.search(query, reader("typo"))).map((hit) => hit.recordId),
+		).toEqual([exact.row.id, typo.row.id]);
+		expect(
+			(
+				await search.search({ ...query, typoTolerance: "none" }, reader("typo"))
+			).map((hit) => hit.recordId),
+		).toEqual([exact.row.id]);
+		const id = await indexed("typo-id", "RAG-12345");
+		await search.writer.replace({
+			...id.input,
+			blocks: [{ field: "title", text: id.input.title, locator: {} }],
+		});
+		expect(
+			await search.search(
+				{ partition: "typo-id", query: "RAG-13245", typoTolerance: "bounded" },
+				reader("typo-id"),
+			),
+		).toEqual([]);
+		const invoice = await indexed("typo-id", "INVOICE-12345 draft");
+		await search.writer.replace({
+			...invoice.input,
+			blocks: [{ field: "title", text: invoice.input.title, locator: {} }],
+		});
+		for (const query of [
+			"INVOICCE/12345",
+			"INVOICCE 12345",
+			"INVOICCE-12345 draft",
+		])
+			expect(
+				await search.search(
+					{ partition: "typo-id", query, typoTolerance: "bounded" },
+					reader("typo-id"),
+				),
+			).toEqual([]);
+	});
+
+	test("typo fallback shares the document cap with primary passages", async () => {
+		const mixed = await indexed("typo-cap", "Projket");
+		const other = await indexed("typo-cap", "Projekt report");
+		await search.writer.replace({
+			...mixed.input,
+			blocks: [
+				{ field: "title", text: "Projket", locator: {} },
+				{ field: "title", text: "Projekt", locator: {} },
+			],
+		});
+		await search.writer.replace({
+			...other.input,
+			blocks: [{ field: "title", text: other.input.title, locator: {} }],
+		});
+		const hits = await search.search(
+			{
+				partition: "typo-cap",
+				query: "projket",
+				typoTolerance: "bounded",
+				limit: 2,
+				maxPassagesPerDocument: 1,
+			},
+			reader("typo-cap"),
+		);
+		expect(hits.map((hit) => hit.recordId)).toEqual([
+			mixed.row.id,
+			other.row.id,
+		]);
+	});
+
+	test("hybrid fusion preserves the per-document passage cap", async () => {
+		const first = await indexed("hybrid-cap", "Needle");
+		const second = await indexed("hybrid-cap", "Needle other");
+		for (const entry of [first, second])
+			await search.writer.replace({
+				...entry.input,
+				blocks: [
+					{
+						field: "title",
+						text: entry.input.title,
+						locator: {},
+						embedding: [0, 1, 0],
+					},
+					{
+						field: "content",
+						text: "semantic evidence",
+						locator: {},
+						embedding: [1, 0, 0],
+					},
+				],
+			});
+		const hits = await search.search(
+			{
+				partition: "hybrid-cap",
+				query: "needle",
+				mode: "hybrid",
+				vector: [1, 0, 0],
+				limit: 4,
+				maxPassagesPerDocument: 1,
+			},
+			reader("hybrid-cap"),
+		);
+		expect(hits).toHaveLength(2);
+		expect(new Set(hits.map((hit) => hit.recordId)).size).toBe(2);
+	});
+
+	test("bounded typos change at most one query term", async () => {
+		const entry = await indexed("typo-budget", "Projekt report");
+		await search.writer.replace({
+			...entry.input,
+			blocks: [{ field: "title", text: entry.input.title, locator: {} }],
+		});
+		for (const query of ["projket report", "projekt repotr"])
+			expect(
+				(
+					await search.search(
+						{ partition: "typo-budget", query, typoTolerance: "bounded" },
+						reader("typo-budget"),
+					)
+				).map((hit) => hit.recordId),
+			).toEqual([entry.row.id]);
+		expect(
+			await search.search(
+				{
+					partition: "typo-budget",
+					query: "projket repotr",
+					typoTolerance: "bounded",
+				},
+				reader("typo-budget"),
+			),
+		).toEqual([]);
+	});
+
 	test("filters tenant and live authority before exact vector top-k", async () => {
 		for (let i = 0; i < 9; i++)
 			await indexed("forbidden", `hidden-${i}`, [1, 0, 0], "visible");

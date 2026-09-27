@@ -37,6 +37,7 @@ export type PassageQuery = {
 	mode?: "lexical" | "semantic" | "hybrid";
 	limit?: number;
 	maxPassagesPerDocument?: number;
+	typoTolerance?: "none" | "bounded";
 };
 export type PassageHit = {
 	id: string;
