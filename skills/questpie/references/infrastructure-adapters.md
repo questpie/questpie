@@ -403,6 +403,30 @@ The writer is a trusted backend API. Capture `writer.sourceToken` before extract
 then publish with `writer.replace` and that `expectedSourceToken`; a concurrent edit
 refuses replacement. Keep source token and manifest hash with citations.
 
+For accent-insensitive matching, use the shared normalization in both indexes and
+queries; `PassageSearch` and its writer already do this. Keep source text intact and
+use original-text ranges for highlights:
+
+```ts
+import {
+	normalizeSearchText,
+	SEARCH_TEXT_NORMALIZATION,
+	searchTextMatchRanges,
+} from "questpie/shared";
+
+const profile = { id: `my-passages-v2:${SEARCH_TEXT_NORMALIZATION}`, dimensions: 768 };
+const normalized = normalizeSearchText("Žltá zmluva"); // "zlta zmluva"
+const ranges = searchTextMatchRanges("Žltá zmluva", ["zlta"]); // [{ start: 0, end: 4 }]
+```
+
+When upgrading an existing passage index, generate and apply the migration for
+`normalized_text` and the changed generated `fts` column/GIN index, then rebuild under
+the new profile. Completion requires both directions of accent equivalence and
+original-text highlighting to pass on the rebuilt index. Opt into
+`typoTolerance: "bounded"` for title-only fallback: one transposition or extra typed
+letter in one eligible term, below primary lexical hits. Numeric queries skip it.
+Hybrid fusion preserves document caps but does not promise lexical-first ordering.
+
 ```ts
 import {
 	extractDocument,
