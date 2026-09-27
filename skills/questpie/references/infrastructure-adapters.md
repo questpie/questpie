@@ -414,7 +414,10 @@ import {
 	searchTextMatchRanges,
 } from "questpie/shared";
 
-const profile = { id: `my-passages-v2:${SEARCH_TEXT_NORMALIZATION}`, dimensions: 768 };
+const profile = {
+	id: `my-passages-v2:${SEARCH_TEXT_NORMALIZATION}`,
+	dimensions: 768,
+};
 const normalized = normalizeSearchText("Žltá zmluva"); // "zlta zmluva"
 const ranges = searchTextMatchRanges("Žltá zmluva", ["zlta"]); // [{ start: 0, end: 4 }]
 ```
