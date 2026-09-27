@@ -1,5 +1,12 @@
 # @questpie/next
 
+## 3.30.0
+
+### Patch Changes
+
+- Updated dependencies [[`4fc9241`](https://github.com/questpie/questpie/commit/4fc92415c9a749b923471a98f56ed928159074dc)]:
+  - questpie@3.30.0
+
 ## 3.29.0
 
 ### Patch Changes
