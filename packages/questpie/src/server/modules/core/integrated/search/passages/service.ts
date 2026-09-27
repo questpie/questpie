@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
 
-import type { Questpie } from "#questpie/server/config/questpie.js";
+import { Questpie } from "#questpie/server/config/questpie.js";
 import type { QuestpieConfig } from "#questpie/server/config/types.js";
 
 import { passageAuthority, passageSource } from "./authority.js";
@@ -38,8 +38,9 @@ export class PassageSearch<TConfig extends QuestpieConfig = QuestpieConfig> {
 		private sources: PassageSource[],
 		readonly profile: PassageProfile,
 	) {
-		// Generated app facades expose all public members but intentionally omit private implementation state.
-		this.app = app as unknown as Questpie<any>;
+		if (!(app instanceof Questpie))
+			throw new Error("PassageSearch requires a QUESTPIE app instance");
+		this.app = app;
 		if (
 			!profile.id ||
 			!Number.isInteger(profile.dimensions) ||

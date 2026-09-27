@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 
+import type { Collection } from "#questpie/server/collection/builder/index.js";
+import type { AnyCollectionState } from "#questpie/server/collection/builder/types.js";
 import {
 	executeAccessRule,
 	mergeFieldAccessRules,
@@ -13,7 +15,11 @@ import { searchDocuments } from "./schema.js";
 import type { PassageContext, PassageSource } from "./types.js";
 
 export function passageSource(app: Questpie<any>, source: PassageSource) {
-	const collection = app.getCollections()[source.collection] as any;
+	const collections: Record<
+		string,
+		Collection<AnyCollectionState>
+	> = app.getCollections();
+	const collection = collections[source.collection];
 	if (
 		!collection ||
 		!source.tokenFields.length ||
@@ -21,7 +27,9 @@ export function passageSource(app: Questpie<any>, source: PassageSource) {
 	)
 		throw new Error("Invalid passage source");
 	const fieldAccess = mergeFieldAccessRules(
-		collection.state.access?.fields,
+		collection.state.access?.fields as Parameters<
+			typeof mergeFieldAccessRules
+		>[0],
 		collection.state.fieldDefinitions,
 	);
 	for (const name of source.projectionFields) {
