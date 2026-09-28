@@ -1611,8 +1611,11 @@ export interface CRUD<
 	 * Server-only: callers must wrap the aggregate command in `withTransaction`.
 	 *
 	 * Takes `FOR NO KEY UPDATE`: it serializes every writer of these rows
-	 * (other `lockMany` calls and CRUD updates and deletes), but does not block
-	 * foreign-key inserts of child rows that reference them.
+	 * (other `lockMany` calls and CRUD updates and deletes), but no longer
+	 * blocks foreign-key inserts of child rows that reference them. A caller
+	 * that then hard-deletes a locked row or changes one of its key columns
+	 * (primary key or a unique column) in the same transaction is upgraded to
+	 * `FOR UPDATE` by Postgres at that point, and waits for such inserts then.
 	 */
 	lockMany(params: LockManyParams<TId>, context?: CRUDContext): Promise<TId[]>;
 

@@ -43,6 +43,7 @@ import {
 	validateFieldsWriteAccess,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/index.js";
+import { rowLockForUpdate } from "#questpie/server/collection/crud/shared/row-lock.js";
 import type {
 	Columns,
 	CRUDContext,
@@ -1077,7 +1078,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						.select()
 						.from(this.table)
 						.where(eq(getColumn(this.table, "id")!, existing.id))
-						.for("no key update");
+						.for(rowLockForUpdate(this.table, data));
 					if (!locked) {
 						throw ApiError.notFound("Global", this.state.name);
 					}
@@ -1290,7 +1291,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					.select()
 					.from(this.table)
 					.where(eq(getColumn(this.table, "id")!, parentId))
-					.for("no key update");
+					.for(rowLockForUpdate(this.table, nonLocalized));
 				if (!lockedExisting) {
 					throw ApiError.notFound("Global record", "");
 				}
