@@ -1609,6 +1609,10 @@ export interface CRUD<
 	/**
 	 * Lock a bounded set of accessible rows for the active transaction.
 	 * Server-only: callers must wrap the aggregate command in `withTransaction`.
+	 *
+	 * Takes `FOR NO KEY UPDATE`: it serializes every writer of these rows
+	 * (other `lockMany` calls and CRUD updates and deletes), but does not block
+	 * foreign-key inserts of child rows that reference them.
 	 */
 	lockMany(params: LockManyParams<TId>, context?: CRUDContext): Promise<TId[]>;
 

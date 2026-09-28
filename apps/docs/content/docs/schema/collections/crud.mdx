@@ -129,6 +129,11 @@ await withTransaction(db, async (tx) => {
 });
 ```
 
+The lock is `FOR NO KEY UPDATE`, the same lock collection updates take. It
+serializes every writer of those rows, but inserting a child row whose foreign
+key points at a locked row does not wait for it. A hard delete takes the
+stronger `FOR UPDATE`, which does make such inserts wait.
+
 It takes at most 100 ids, deduplicates them, and locks in id order. It applies
 read access in the locking query, and returns only the ids you may see. A
 missing id and one you may not read look the same on purpose. The context must

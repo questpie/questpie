@@ -85,6 +85,29 @@ const postgresJunctionRows = collection("postgres_junction_rows")
 			operation === "create" ? pauseJunctionWrite?.(data) : undefined,
 	});
 
+let pauseParentDelete:
+	| ((data: Record<string, unknown>) => Promise<void>)
+	| undefined;
+
+const postgresFkParents = collection("postgres_fk_parents")
+	.fields(({ f }) => ({ name: f.text().required() }))
+	.options({ optimisticConcurrency: true })
+	.hooks({
+		beforeDelete: ({ data }) => pauseParentDelete?.(data),
+	});
+
+const postgresFkSoftParents = collection("postgres_fk_soft_parents")
+	.fields(({ f }) => ({ name: f.text().required() }))
+	.options({ softDelete: true });
+
+const postgresFkChildren = collection("postgres_fk_children").fields(
+	({ f }) => ({
+		name: f.text().required(),
+		parent: f.relation("postgres_fk_parents"),
+		softParent: f.relation("postgres_fk_soft_parents"),
+	}),
+);
+
 function deferred() {
 	let resolve!: () => void;
 	const promise = new Promise<void>((done) => {
@@ -101,6 +124,7 @@ describe.skipIf(!runPostgresContract)(
 	"transaction-scoped locks on supported PostgreSQL",
 	() => {
 		let setup: Awaited<ReturnType<typeof buildMockApp>>;
+		let rawFkPool: pg.Pool | undefined;
 		const systemContext = createTestContext();
 
 		beforeAll(async () => {
@@ -127,6 +151,9 @@ describe.skipIf(!runPostgresContract)(
 						postgres_junction_parents: postgresJunctionParents,
 						postgres_junction_tags: postgresJunctionTags,
 						postgres_junction_rows: postgresJunctionRows,
+						postgres_fk_parents: postgresFkParents,
+						postgres_fk_soft_parents: postgresFkSoftParents,
+						postgres_fk_children: postgresFkChildren,
 					},
 				},
 				{
@@ -135,10 +162,38 @@ describe.skipIf(!runPostgresContract)(
 				},
 			);
 			await runTestDbMigrations(setup.app);
+
+			// Collection relations are application-level; this table carries real
+			// database foreign keys to the same parents.
+			rawFkPool = new pg.Pool({ connectionString: databaseUrl });
+			const idTypes = await rawFkPool.query<{ table: string; type: string }>(
+				`select attrelid::regclass::text as table,
+					format_type(atttypid, atttypmod) as type
+				from pg_attribute
+				where attname = 'id'
+					and attrelid in (
+						'postgres_fk_parents'::regclass,
+						'postgres_fk_soft_parents'::regclass
+					)`,
+			);
+			const idType = (table: string) =>
+				idTypes.rows.find((row) => row.table === table)!.type;
+			await rawFkPool.query(
+				`create table postgres_fk_raw_children (
+					parent_id ${idType("postgres_fk_parents")}
+						references postgres_fk_parents (id),
+					soft_parent_id ${idType("postgres_fk_soft_parents")}
+						references postgres_fk_soft_parents (id)
+				)`,
+			);
 		});
 
 		afterAll(async () => {
 			if (!setup) return;
+			if (rawFkPool) {
+				await rawFkPool.query("drop table if exists postgres_fk_raw_children");
+				await rawFkPool.end();
+			}
 			await setup.app.migrations.down();
 			await setup.cleanup();
 		});
@@ -515,6 +570,206 @@ describe.skipIf(!runPostgresContract)(
 				message: "Cannot purge record while retained references exist",
 			});
 			pauseJunctionWrite = undefined;
+		});
+
+		/**
+		 * Holds `hold` open in its own transaction and reports whether
+		 * `insertChild` completed within the window or was still waiting.
+		 */
+		async function insertWhileParentHeld(
+			hold: (tx: any) => Promise<unknown>,
+			insertChild: () => Promise<unknown>,
+		) {
+			const held = deferred();
+			const release = deferred();
+			const holder = withTransaction(setup.app.db, async (tx) => {
+				await hold(tx);
+				held.resolve();
+				await release.promise;
+			});
+			await held.promise;
+			const insert = insertChild();
+			const outcome = await Promise.race([
+				insert.then(() => "inserted" as const),
+				new Promise<"waiting">((resolve) =>
+					setTimeout(() => resolve("waiting"), 1_000),
+				),
+			]);
+			release.resolve();
+			await holder;
+			await insert;
+			return outcome;
+		}
+
+		it("does not block foreign-key child inserts while a parent row is written", async () => {
+			const parent = await setup.app.collections.postgres_fk_parents.create(
+				{ name: "Counter" },
+				systemContext,
+			);
+			const softParent =
+				await setup.app.collections.postgres_fk_soft_parents.create(
+					{ name: "Soft" },
+					systemContext,
+				);
+			const insertChild = (name: string, data: Record<string, unknown>) => () =>
+				Promise.all([
+					setup.app.collections.postgres_fk_children.create(
+						{ name, ...data },
+						systemContext,
+					),
+					rawFkPool!.query(
+						"insert into postgres_fk_raw_children (parent_id, soft_parent_id) values ($1, $2)",
+						[data.parent ?? null, data.softParent ?? null],
+					),
+				]);
+
+			expect(
+				await insertWhileParentHeld(
+					(tx) =>
+						setup.app.collections.postgres_fk_parents.lockMany(
+							{ ids: [parent.id] },
+							{ ...systemContext, db: tx },
+						),
+					insertChild("During lockMany", { parent: parent.id }),
+				),
+			).toBe("inserted");
+
+			expect(
+				await insertWhileParentHeld(
+					(tx) =>
+						setup.app.collections.postgres_fk_parents.updateById(
+							{
+								id: parent.id,
+								expectedRevision: parent.revision,
+								data: { name: "Counter 2" },
+							},
+							{ ...systemContext, db: tx },
+						),
+					insertChild("During update", { parent: parent.id }),
+				),
+			).toBe("inserted");
+
+			expect(
+				await insertWhileParentHeld(
+					(tx) =>
+						setup.app.collections.postgres_fk_soft_parents.deleteById(
+							{ id: softParent.id },
+							{ ...systemContext, db: tx },
+						),
+					insertChild("During soft delete", { softParent: softParent.id }),
+				),
+			).toBe("inserted");
+		});
+
+		it("still serializes concurrent revision-checked updates of one row", async () => {
+			const parent = await setup.app.collections.postgres_fk_parents.create(
+				{ name: "Contended" },
+				systemContext,
+			);
+			const firstWritten = deferred();
+			const releaseFirst = deferred();
+			const first = withTransaction(setup.app.db, async (tx) => {
+				await setup.app.collections.postgres_fk_parents.updateById(
+					{
+						id: parent.id,
+						expectedRevision: parent.revision,
+						data: { name: "First" },
+					},
+					{ ...systemContext, db: tx },
+				);
+				firstWritten.resolve();
+				await releaseFirst.promise;
+			});
+			await firstWritten.promise;
+
+			let secondSettled = false;
+			const second = setup.app.collections.postgres_fk_parents
+				.updateById(
+					{
+						id: parent.id,
+						expectedRevision: parent.revision,
+						data: { name: "Second" },
+					},
+					systemContext,
+				)
+				.finally(() => {
+					secondSettled = true;
+				});
+			const secondOutcome = second.then(
+				() => ({ error: undefined }),
+				(error: unknown) => ({ error }),
+			);
+			await waitForAttempt();
+			expect(secondSettled).toBe(false);
+			releaseFirst.resolve();
+			await first;
+
+			expect((await secondOutcome).error).toMatchObject({ code: "CONFLICT" });
+			const current = await setup.app.collections.postgres_fk_parents.findOne(
+				{ where: { id: parent.id } },
+				systemContext,
+			);
+			expect(current).toMatchObject({
+				name: "First",
+				revision: parent.revision + 1,
+			});
+		});
+
+		it("makes a child insert wait for a hard delete of its parent", async () => {
+			const parent = await setup.app.collections.postgres_fk_parents.create(
+				{ name: "Doomed" },
+				systemContext,
+			);
+			const deleteLocked = deferred();
+			const releaseDelete = deferred();
+			pauseParentDelete = async (data) => {
+				if (data.id !== parent.id) return;
+				deleteLocked.resolve();
+				await releaseDelete.promise;
+			};
+			const hardDelete = setup.app.collections.postgres_fk_parents.deleteById(
+				{ id: parent.id, expectedRevision: parent.revision },
+				systemContext,
+			);
+			await deleteLocked.promise;
+
+			let childSettled = false;
+			const child = setup.app.collections.postgres_fk_children
+				.create({ name: "Orphan?", parent: parent.id }, systemContext)
+				.finally(() => {
+					childSettled = true;
+				});
+			const childOutcome = child.then(
+				() => ({ error: undefined }),
+				(error: unknown) => ({ error }),
+			);
+			let rawChildSettled = false;
+			const rawChildOutcome = rawFkPool!
+				.query("insert into postgres_fk_raw_children (parent_id) values ($1)", [
+					parent.id,
+				])
+				.finally(() => {
+					rawChildSettled = true;
+				})
+				.then(
+					() => ({ error: undefined }),
+					(error: unknown) => ({ error }),
+				);
+			await waitForAttempt();
+			expect(childSettled).toBe(false);
+			expect(rawChildSettled).toBe(false);
+			releaseDelete.resolve();
+			await hardDelete;
+			pauseParentDelete = undefined;
+
+			expect((await childOutcome).error).toBeDefined();
+			expect((await rawChildOutcome).error).toMatchObject({ code: "23503" });
+			expect(
+				await setup.app.collections.postgres_fk_children.count(
+					{ where: { parent: parent.id } },
+					systemContext,
+				),
+			).toBe(0);
 		});
 
 		it("lets only one concurrent storage-cleanup drainer claim an intent", async () => {

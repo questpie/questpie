@@ -195,7 +195,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 			.select()
 			.from(this.table)
 			.where(eq((this.table as any).id, recordId))
-			.for("update");
+			.for("no key update");
 		if (!lockedOwner) {
 			throw new Error("Global owner disappeared before CRDT activation");
 		}
@@ -1077,7 +1077,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 						.select()
 						.from(this.table)
 						.where(eq(getColumn(this.table, "id")!, existing.id))
-						.for("update");
+						.for("no key update");
 					if (!locked) {
 						throw ApiError.notFound("Global", this.state.name);
 					}
@@ -1290,7 +1290,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					.select()
 					.from(this.table)
 					.where(eq(getColumn(this.table, "id")!, parentId))
-					.for("update");
+					.for("no key update");
 				if (!lockedExisting) {
 					throw ApiError.notFound("Global record", "");
 				}
@@ -1531,7 +1531,7 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					.select()
 					.from(this.table)
 					.where(eq(getColumn(this.table, "id")!, current.id))
-					.for("update");
+					.for("no key update");
 				if (!existing) {
 					throw ApiError.notFound("Global", this.state.name);
 				}
