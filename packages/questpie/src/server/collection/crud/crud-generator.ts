@@ -115,6 +115,10 @@ import {
 	splitLocalizedFields,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/index.js";
+import {
+	type RowLockStrength,
+	rowLockForUpdate,
+} from "#questpie/server/collection/crud/shared/row-lock.js";
 import type {
 	Columns,
 	CRUD,
@@ -547,7 +551,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					.from(this.table)
 					.where(and(...whereClauses))
 					.orderBy(asc(idColumn))
-					.for("update");
+					.for("no key update");
 
 			return lockedRows.map(({ id }) => id);
 		};
@@ -1983,7 +1987,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 									.select()
 									.from(this.table)
 									.where(eq(getColumn(this.table, "id")!, insertedRecord.id))
-									.for("update");
+									.for("no key update");
 								if (!lockedOwner) {
 									throw new Error(
 										"Created owner disappeared before CRDT activation",
@@ -2040,8 +2044,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 * id — without this step, two parallel conditional writes (claims,
 	 * optimistic-version checks, state transitions) could both "win" (TOCTOU).
 	 *
-	 * 1. `SELECT id … WHERE id IN (candidates) ORDER BY id FOR UPDATE` locks
-	 *    surviving candidate rows in deterministic order. Competing writers on
+	 * 1. `SELECT id … WHERE id IN (candidates) ORDER BY id FOR <lock>` locks
+	 *    surviving candidate rows in deterministic order (see `RowLockStrength`). Competing writers on
 	 *    the same rows serialize on these locks, so the recheck below cannot be
 	 *    invalidated before our transaction commits. Rows deleted by a
 	 *    committed competitor are simply absent.
@@ -2065,6 +2069,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		includeDeleted?: boolean;
 		/** Stage the candidate pre-SELECT was evaluated at. */
 		stage?: string;
+		/** `FOR UPDATE` for deletes, `rowLockForUpdate` for updates. */
+		lock: RowLockStrength;
 	}): Promise<Array<string | number>> {
 		const { tx, txContext, candidateIds, where } = args;
 		if (candidateIds.length === 0) return [];
@@ -2075,7 +2081,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			.from(this.table)
 			.where(inArray(idColumn, candidateIds))
 			.orderBy(asc(idColumn))
-			.for("update");
+			.for(args.lock);
 		const lockedIds = lockedRows.map((row) => row.id);
 
 		if (lockedIds.length === 0 || !where || isIdOnlyWhere(where)) {
@@ -2394,6 +2400,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					sourceState: this.state,
 					sourceTable: this.table,
 				});
+				const rowLock = rowLockForUpdate(this.table, data);
 				const claimedIds = await this.claimRecords({
 					tx,
 					txContext,
@@ -2401,6 +2408,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					where: isBatch ? (params as { where: Where }).where : undefined,
 					includeDeleted: true,
 					stage: this.workflowConfig?.initialStage,
+					lock: rowLock,
 				});
 				if (claimedIds.length === 0) {
 					if (isBatch) {
@@ -2430,7 +2438,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					.select()
 					.from(this.table)
 					.where(inArray(getColumn(this.table, "id")!, claimedIds))
-					.for("update");
+					.for(rowLock);
 				await this.enforceUpdateAuthority(lockedRows, txContext, data);
 				if (isBatch) {
 					this.assertExpectedRevisions(
@@ -2660,6 +2668,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// predicate at write time. Rows that no longer match (lost a
 				// concurrent claim, vanished, ...) are excluded from every
 				// mutation below.
+				const rowLock = rowLockForUpdate(
+					this.table,
+					regularFields,
+					nestedRelations,
+				);
 				const recordIds = await this.claimRecords({
 					tx,
 					txContext,
@@ -2667,6 +2680,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					where: isBatch ? (params as { where: Where }).where : undefined,
 					includeDeleted: true,
 					stage: this.workflowConfig?.initialStage,
+					lock: rowLock,
 				});
 
 				if (recordIds.length === 0) {
@@ -2692,7 +2706,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					.select()
 					.from(this.table)
 					.where(inArray(getColumn(this.table, "id")!, recordIds))
-					.for("update");
+					.for(rowLock);
 				await this.enforceUpdateAuthority(
 					lockedRecords,
 					txContext,
@@ -2900,7 +2914,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.select()
 						.from(this.table)
 						.where(eq(getColumn(this.table, "id")!, restored.id))
-						.for("update");
+						.for("no key update");
 					if (!lockedOwner) {
 						throw new Error(
 							"Restored owner disappeared before CRDT lifecycle restore",
@@ -3065,6 +3079,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						tx,
 						txContext,
 						candidateIds: [id],
+						lock: "update",
 					});
 					if (claimed.length === 0 || !existing) {
 						throw ApiError.notFound("Record", id);
@@ -3454,7 +3469,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.select()
 						.from(this.table)
 						.where(eq(getColumn(this.table, "id")!, id))
-						.for("update");
+						.for(rowLockForUpdate(this.table, { deletedAt: null }));
 
 					if (!locked) {
 						if (
@@ -3573,7 +3588,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.from(this.table)
 						.where(inArray(getColumn(this.table, "id")!, ids))
 						.orderBy(asc(getColumn(this.table, "id")!))
-						.for("update");
+						.for(
+							rowLockForUpdate(
+								this.table,
+								...params.updates.map((update) => update.data),
+							),
+						);
 					const expectedById = new Map(
 						params.updates.map((update) => [
 							update.id,
@@ -3707,6 +3727,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					where: params.where,
 					includeDeleted: false,
 					stage: normalized.stage,
+					lock: "update",
 				});
 				if (winnerIdList.length === 0) {
 					if (
@@ -4301,7 +4322,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					.select()
 					.from(this.table)
 					.where(eq(getColumn(this.table, "id")!, options.id))
-					.for("update");
+					.for(rowLockForUpdate(this.table, nonLocalized));
 				if (!lockedExisting) {
 					throw ApiError.notFound("Record", options.id);
 				}
@@ -4450,7 +4471,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					.from(this.table)
 					.where(eq(getColumn(this.table, "id")!, id))
 					.limit(1)
-					.for("update");
+					.for("no key update");
 				const existing = existingRows[0];
 
 				if (!existing) {
