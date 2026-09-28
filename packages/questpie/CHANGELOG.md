@@ -1,5 +1,11 @@
 # questpie
 
+## 3.32.0
+
+### Minor Changes
+
+- [#380](https://github.com/questpie/questpie/pull/380) [`e4c6c08`](https://github.com/questpie/questpie/commit/e4c6c08331886cba014f8c890e93814d53271696) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Collection and global updates that do not touch a key column (primary key or unique column) now lock the row `FOR NO KEY UPDATE` instead of `FOR UPDATE`, so inserting a child row that references it no longer waits for the update to commit; concurrent writers of the same row still wait for each other. `lockMany` also takes `FOR NO KEY UPDATE` and no longer keeps out foreign-key child inserts. Deletes, soft deletes included, are unchanged and still lock `FOR UPDATE`.
+
 ## 3.31.0
 
 ### Minor Changes
