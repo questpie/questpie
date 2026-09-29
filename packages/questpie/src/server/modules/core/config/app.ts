@@ -19,6 +19,7 @@ import type {
 	GlobalGlobalHookContext,
 } from "#questpie/server/config/global-hooks-types.js";
 import type { Locale } from "#questpie/server/config/types.js";
+import { isCollectionChangeCaptureEnabled } from "#questpie/server/modules/core/integrated/realtime/admission.js";
 import type {
 	RealtimeChangeEvent,
 	RealtimeChangePayload,
@@ -145,6 +146,10 @@ interface AppRealtimeSurface {
 	config?: { realtime?: { changeCapture?: boolean } };
 }
 
+interface AppCollectionConfigSurface {
+	getCollectionConfig?: (name: string) => unknown;
+}
+
 /**
  * Whether this application records mutations to the realtime outbox.
  *
@@ -159,6 +164,25 @@ function isRealtimeCaptureEnabled(app: unknown): boolean {
 		(app as AppRealtimeSurface | undefined)?.config?.realtime?.changeCapture !==
 		false
 	);
+}
+
+/**
+ * Whether this collection records its mutations to the realtime outbox. A
+ * collection opts out with `.options({ realtime: { changeCapture: false } })`;
+ * admission refuses every topic that would need its events.
+ */
+function isCollectionRealtimeCaptureEnabled(
+	ctx: GlobalCollectionHookContext,
+): boolean {
+	if (!isRealtimeCaptureEnabled(ctx.app)) return false;
+	const app = ctx.app as AppCollectionConfigSurface | undefined;
+	let definition: unknown;
+	try {
+		definition = app?.getCollectionConfig?.(ctx.collection);
+	} catch {
+		return true;
+	}
+	return isCollectionChangeCaptureEnabled(definition);
 }
 
 function shouldCaptureRealtimeChange(
@@ -193,7 +217,7 @@ function publishRealtimeAfterCommit(
  */
 const realtimeHook = {
 	afterChange: async (ctx: GlobalCollectionHookContext) => {
-		if (!isRealtimeCaptureEnabled(ctx.app)) return;
+		if (!isCollectionRealtimeCaptureEnabled(ctx)) return;
 		const realtime = ctx.realtime;
 		if (!realtime) return;
 		if (!shouldCaptureRealtimeChange(ctx)) return;
@@ -218,7 +242,7 @@ const realtimeHook = {
 		}
 	},
 	afterDelete: async (ctx: GlobalCollectionHookContext) => {
-		if (!isRealtimeCaptureEnabled(ctx.app)) return;
+		if (!isCollectionRealtimeCaptureEnabled(ctx)) return;
 		const realtime = ctx.realtime;
 		if (!realtime) return;
 		if (!shouldCaptureRealtimeChange(ctx)) return;
@@ -243,7 +267,7 @@ const realtimeHook = {
 		}
 	},
 	afterPurge: async (ctx: GlobalCollectionHookContext) => {
-		if (!isRealtimeCaptureEnabled(ctx.app)) return;
+		if (!isCollectionRealtimeCaptureEnabled(ctx)) return;
 		const realtime = ctx.realtime;
 		if (!realtime) return;
 

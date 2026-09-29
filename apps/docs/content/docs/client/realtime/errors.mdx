@@ -43,19 +43,20 @@ The error carries these fields.
 It never carries your `where`, the session, a token, or any row. What you see
 here is safe to log.
 
-## The five reasons
+## The six reasons
 
 `details.reason` tells you which rule you hit.
 
-| Reason                         | What you did                                       | Fix                                  |
-| ------------------------------ | -------------------------------------------------- | ------------------------------------ |
-| `query_limit`                  | `limit` above the cap, 100 by default              | Ask for fewer rows, or raise the cap |
-| `relation_depth`               | `with` nested deeper than 3                        | Flatten the relation tree            |
-| `snapshot_bytes`               | A delta bootstrap serialized too large             | Narrow the `where`, or use snapshots |
-| `row_live_queries_disabled`    | The app set `realtime: { rowLiveQueries: false }`  | Read once, or use a channel          |
-| `collection_realtime_disabled` | The collection set `.options({ realtime: false })` | Read once, or use a channel          |
+| Reason                               | What you did                                                                                                                                 | Fix                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `query_limit`                        | `limit` above the cap, 100 by default                                                                                                        | Ask for fewer rows, or raise the cap |
+| `relation_depth`                     | `with` nested deeper than 3                                                                                                                  | Flatten the relation tree            |
+| `snapshot_bytes`                     | A delta bootstrap serialized too large                                                                                                       | Narrow the `where`, or use snapshots |
+| `row_live_queries_disabled`          | The app set `realtime: { rowLiveQueries: false }`                                                                                            | Read once, or use a channel          |
+| `collection_realtime_disabled`       | The collection set `.options({ realtime: false })`                                                                                           | Read once, or use a channel          |
+| `collection_change_capture_disabled` | The topic needs a collection that set `.options({ realtime: { changeCapture: false } })`, directly or through `with`, `where` or read access | Read once, or use a channel          |
 
-The first three are yours to fix in the query. The last two are server policy,
+The first three are yours to fix in the query. The last three are server policy,
 so no query change gets past them. Reach for a normal `find()` or a typed
 [channel](/docs/client/channels) instead.
 

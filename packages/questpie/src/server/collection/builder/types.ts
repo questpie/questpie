@@ -119,9 +119,16 @@ export interface UploadOptions {
  */
 export interface CollectionOptions {
 	/**
-	 * Realtime sharing policy. Stable principals share only across the same
-	 * server scope, locale, stage, and access mode. Return the same deterministic
-	 * key to explicitly share equivalent output across principals.
+	 * Realtime policy for this collection.
+	 *
+	 * - `false` refuses direct subscriptions to the collection. Its mutations are
+	 *   still captured, so it keeps working as a relation or access dependency of
+	 *   other topics.
+	 * - `accessCacheKey`: stable principals share only across the same server
+	 *   scope, locale, stage, and access mode. Return the same deterministic key
+	 *   to explicitly share equivalent output across principals.
+	 * - `changeCapture: false` stops writing this collection's mutations to
+	 *   `questpie_realtime_log` (see below).
 	 */
 	realtime?:
 		| false
@@ -129,6 +136,33 @@ export interface CollectionOptions {
 				accessCacheKey?: (
 					context: AppContext,
 				) => string | null | undefined | Promise<string | null | undefined>;
+				/**
+				 * Records this collection's mutations to the realtime outbox. The
+				 * per-collection counterpart of the app-wide
+				 * `RealtimeConfig.changeCapture`; either one set to `false` turns
+				 * capture off for the collection.
+				 *
+				 * Turn it off for high-churn rows nothing watches live (heartbeats,
+				 * idempotency ledgers): every mutation otherwise costs one outbox row,
+				 * retained `retentionDays`, whether or not anything is subscribed.
+				 *
+				 * What is given up for this collection:
+				 * - **Live queries.** No change event is ever produced, so any topic
+				 *   that would need one is refused at admission with
+				 *   `collection_change_capture_disabled`: a direct topic on the
+				 *   collection, and a topic on another resource whose requested
+				 *   relations, WHERE, or access predicate reach it. A topic that
+				 *   connected and then silently stopped updating would otherwise
+				 *   keep serving rows the viewer has lost access to.
+				 * - **`txid` correlation.** A mutation that touches only this
+				 *   collection returns no transaction id (`getTxid()` is `undefined`).
+				 *
+				 * CRDT canonical projection keeps writing outbox rows regardless; its
+				 * commit protocol requires exactly one row per commit.
+				 *
+				 * @default true
+				 */
+				changeCapture?: boolean;
 		  };
 	/**
 	 * Postgres schema name to place this collection's tables in.

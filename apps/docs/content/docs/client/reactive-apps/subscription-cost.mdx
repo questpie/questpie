@@ -103,7 +103,16 @@ both misconfigured; no scheduler key can fix it.
 ## Turning it off
 
 `.options({ realtime: false })` on a collection rejects live subscriptions to it
-with `collection_realtime_disabled`. Normal CRUD is unaffected.
+with `collection_realtime_disabled`. Normal CRUD is unaffected, and its writes
+are still captured, so it keeps refreshing topics that reach it through a
+relation or an access rule.
+
+`.options({ realtime: { changeCapture: false } })` goes further: the
+collection's writes no longer go to the realtime log at all, which is what you
+want for heartbeat or ledger rows nobody watches. With no change events to
+serve, every topic that would need them is refused with
+`collection_change_capture_disabled`, including topics on other collections
+whose `with`, `where` or read access reaches this one.
 
 `realtime: { rowLiveQueries: false }` in the server config does the same for
 every collection and global, with `row_live_queries_disabled`. Channels and

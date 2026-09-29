@@ -11,7 +11,7 @@ import {
 } from "../../src/exports/index.js";
 import { realtimeSubscribe } from "../../src/server/adapters/routes/realtime.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
-import { createTestContext } from "../utils/test-context";
+import { createMockSession, createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
 /**
@@ -285,4 +285,223 @@ describe("realtime change capture switch", () => {
 			await response.body?.cancel();
 		}, 30_000);
 	});
+});
+
+/**
+ * One app, four collections:
+ * - `heartbeats` opts out of capture and nothing else references it;
+ * - `categories` opts out and is a `with` relation of `products`;
+ * - `memberships` opts out and is reachable only through `documents`' read
+ *   access predicate;
+ * - `products` / `documents` capture as usual.
+ */
+async function buildPerCollectionApp() {
+	const client = await PGlite.create({ extensions: { pg_trgm } });
+	await client.exec("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+	const probe = instrumentPglite(client);
+
+	const uncaptured = { realtime: { changeCapture: false } } as const;
+	const heartbeats = collection("heartbeats")
+		.fields(({ f }) => ({ worker: f.text().required() }))
+		.options(uncaptured)
+		.access({ read: true });
+	const categories = collection("categories")
+		.fields(({ f }) => ({ name: f.text().required() }))
+		.options(uncaptured)
+		.access({ read: true });
+	const products = collection("products")
+		.fields(({ f }) => ({
+			name: f.text().required(),
+			category: f.relation("categories").relationName("category"),
+		}))
+		.access({ read: true });
+	const memberships = collection("memberships")
+		.fields(({ f }) => ({
+			userId: f.text().required(),
+			document: f.relation("documents").required().relationName("document"),
+		}))
+		.options(uncaptured)
+		.access({ read: true });
+	const documents = collection("documents")
+		.fields(({ f }) => ({
+			title: f.text().required(),
+			memberships: f.relation("memberships").hasMany({
+				foreignKey: "document",
+				relationName: "document",
+			}),
+		}))
+		.access({
+			read: ({ session }) => ({
+				memberships: { some: { userId: session?.user.id } },
+			}),
+		});
+
+	const setup = await buildMockApp(
+		{
+			collections: { heartbeats, categories, products, memberships, documents },
+		},
+		{ db: { pglite: client } },
+	);
+	await runTestDbMigrations(setup.app);
+
+	return {
+		app: setup.app,
+		probe,
+		ctx: createTestContext(setup.app),
+		cleanup: async () => {
+			await setup.cleanup();
+			await client.close();
+		},
+	};
+}
+
+describe("per-collection realtime.changeCapture: false", () => {
+	let active: Awaited<ReturnType<typeof buildPerCollectionApp>> | undefined;
+
+	afterEach(async () => {
+		await active?.cleanup();
+		active = undefined;
+	}, 30_000);
+
+	const subscribeAs = (userId: string, topics: unknown[]) =>
+		realtimeSubscribe(
+			active!.app,
+			subscribeRequest(topics),
+			{},
+			{
+				appContext: createTestContext({
+					db: active!.app.db,
+					session: createMockSession({ id: userId }) as any,
+					accessMode: "user",
+				}),
+			},
+		);
+
+	it("writes no outbox row for the opted-out collection, and still does for others", async () => {
+		active = await buildPerCollectionApp();
+		active.probe.reset();
+
+		const beat = await active.app.collections.heartbeats.create(
+			{ worker: "w1" },
+			active.ctx,
+		);
+		await active.app.collections.heartbeats.update(
+			{ where: { id: beat.id }, data: { worker: "w2" } },
+			active.ctx,
+		);
+		await active.app.collections.heartbeats.delete(
+			{ where: { id: beat.id } },
+			active.ctx,
+		);
+		await flushEventLoopTurns();
+
+		expect(active.probe.realtime()).toEqual([]);
+		expect(active.probe.statements.length).toBeGreaterThan(0);
+		expect(getTxid(beat)).toBeUndefined();
+
+		const product = await active.app.collections.products.create(
+			{ name: "Phone" },
+			active.ctx,
+		);
+		const rows = await active.app.db.select().from(questpieRealtimeLogTable);
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ resource: "products" });
+		expect(getTxid(product)).toBe(rows[0]?.txid as string);
+	}, 30_000);
+
+	it("refuses a direct subscription with collection_change_capture_disabled", async () => {
+		active = await buildPerCollectionApp();
+
+		const response = await realtimeSubscribe(
+			active.app,
+			subscribeRequest([
+				{ id: "beats", resourceType: "collection", resource: "heartbeats" },
+			]),
+			{},
+			undefined,
+			{ accessMode: "user" },
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			errors: [
+				{
+					code: "REALTIME_TOPIC_REJECTED",
+					topicId: "beats",
+					resource: "heartbeats",
+					retryable: false,
+					details: { reason: "collection_change_capture_disabled" },
+				},
+			],
+		});
+		expect(active.app.realtime.listeners.size).toBe(0);
+	}, 30_000);
+
+	it("refuses a topic whose requested relation reaches the opted-out collection", async () => {
+		active = await buildPerCollectionApp();
+
+		const response = await realtimeSubscribe(
+			active.app,
+			subscribeRequest([
+				{
+					id: "products-with-category",
+					resourceType: "collection",
+					resource: "products",
+					with: { category: true },
+				},
+			]),
+			{},
+			undefined,
+			{ accessMode: "user" },
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			errors: [
+				{
+					topicId: "products-with-category",
+					resource: "products",
+					details: { reason: "collection_change_capture_disabled" },
+				},
+			],
+		});
+	}, 30_000);
+
+	it("refuses a topic whose read access predicate reaches the opted-out collection", async () => {
+		active = await buildPerCollectionApp();
+
+		const response = await subscribeAs("alice", [
+			{ id: "documents", resourceType: "collection", resource: "documents" },
+		]);
+
+		// Admitted, a membership revocation would never wake this topic and the
+		// viewer would keep a document they can no longer read.
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			errors: [
+				{
+					topicId: "documents",
+					details: { reason: "collection_change_capture_disabled" },
+				},
+			],
+		});
+		expect(active.app.realtime.listeners.size).toBe(0);
+	}, 30_000);
+
+	it("admits a topic that does not depend on an opted-out collection", async () => {
+		active = await buildPerCollectionApp();
+
+		const response = await realtimeSubscribe(
+			active.app,
+			subscribeRequest([
+				{ id: "products", resourceType: "collection", resource: "products" },
+			]),
+			{},
+			undefined,
+			{ accessMode: "user" },
+		);
+
+		expect(response.status).toBe(200);
+		await response.body?.cancel();
+	}, 30_000);
 });

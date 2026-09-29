@@ -7,6 +7,7 @@ import {
 	RealtimeAdmissionRegistry,
 	admitRealtimeTopic,
 	admitRealtimeTopicPolicy,
+	isCollectionChangeCaptureEnabled,
 	realtimeAdmissionBucket,
 	realtimeSlotTtlMs,
 	resolveRealtimeAdmissionConfig,
@@ -337,6 +338,12 @@ describe("realtime admission", () => {
 			accepted: false,
 			reason: "collection_realtime_disabled",
 		});
+		expect(
+			admitRealtimeTopicPolicy(topic, { collectionChangeCapture: false }),
+		).toMatchObject({
+			accepted: false,
+			reason: "collection_change_capture_disabled",
+		});
 		expect(admitRealtimeTopicPolicy(topic, {})).toEqual({
 			accepted: true,
 			topic,
@@ -391,5 +398,25 @@ describe("realtime admission", () => {
 				admitRealtimeTopicPolicy(topic, { changeCapture: true }),
 			).toMatchObject({ accepted: true });
 		}
+	});
+});
+
+describe("isCollectionChangeCaptureEnabled", () => {
+	const definition = (realtime: unknown) => ({
+		state: { options: { realtime } },
+	});
+
+	it("captures unless the collection sets changeCapture: false", () => {
+		expect(isCollectionChangeCaptureEnabled(undefined)).toBe(true);
+		expect(isCollectionChangeCaptureEnabled(definition(undefined))).toBe(true);
+		// `realtime: false` refuses direct topics only; the collection keeps
+		// feeding relation and access dependencies, so it must still capture.
+		expect(isCollectionChangeCaptureEnabled(definition(false))).toBe(true);
+		expect(
+			isCollectionChangeCaptureEnabled(definition({ changeCapture: true })),
+		).toBe(true);
+		expect(
+			isCollectionChangeCaptureEnabled(definition({ changeCapture: false })),
+		).toBe(false);
 	});
 });
