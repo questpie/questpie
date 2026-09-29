@@ -20,6 +20,12 @@ export type RealtimeTopicRejectionReason =
 	| "change_capture_disabled"
 	| "row_live_queries_disabled"
 	| "collection_realtime_disabled"
+	/**
+	 * The topic needs change events from a collection whose own capture is off
+	 * (`.options({ realtime: { changeCapture: false } })`), directly or as a
+	 * relation, WHERE, or access dependency.
+	 */
+	| "collection_change_capture_disabled"
 	| "connection_limit"
 	| "subscription_limit"
 	| "access"
@@ -35,6 +41,7 @@ const REALTIME_TOPIC_REJECTION_REASONS = new Set<string>([
 	"change_capture_disabled",
 	"row_live_queries_disabled",
 	"collection_realtime_disabled",
+	"collection_change_capture_disabled",
 	"connection_limit",
 	"subscription_limit",
 	"access",

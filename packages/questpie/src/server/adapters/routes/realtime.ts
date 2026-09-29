@@ -29,6 +29,7 @@ import {
 	createConcurrencyLimiter,
 	DEFAULT_REALTIME_KEEP_ALIVE_INTERVAL_MS,
 	getRealtimeAdmissionRegistry,
+	isCollectionChangeCaptureEnabled,
 	type RealtimeAdmissionLease,
 	RealtimeTopicAdmissionError,
 	realtimeAdmissionBucket,
@@ -175,6 +176,10 @@ function enforceRealtimeTopicPolicy(
 		collectionRealtime:
 			topic.resourceType === "collection"
 				? definition?.state?.options?.realtime !== false
+				: undefined,
+		collectionChangeCapture:
+			topic.resourceType === "collection"
+				? isCollectionChangeCaptureEnabled(definition)
 				: undefined,
 	});
 	if (!result.accepted) {
@@ -479,7 +484,10 @@ async function evaluateTopicAccess(
 	topic: ValidatedTopic,
 	context: RealtimeRequestContext,
 ): Promise<ValidatedTopic> {
-	if (context.accessMode === "system") return topic;
+	if (context.accessMode === "system") {
+		enforceDependencyChangeCapture(app, topic);
+		return topic;
+	}
 	const rule = topic.definition.state.access?.read ?? app.defaultAccess?.read;
 	const result = await executeAccessRule(rule, {
 		app,
@@ -516,11 +524,63 @@ async function evaluateTopicAccess(
 			reason: "Global access rules must admit the topic explicitly",
 		});
 	}
-	return {
+	const admitted = {
 		...topic,
 		accessWhere: result,
 		where: mergeAccessWhere(topic.requestedWhere, result),
 	};
+	enforceDependencyChangeCapture(app, admitted);
+	return admitted;
+}
+
+const uncapturedCollectionsByApp = new WeakMap<object, ReadonlySet<string>>();
+
+function uncapturedCollections(app: Questpie<any>): ReadonlySet<string> {
+	let names = uncapturedCollectionsByApp.get(app);
+	if (!names) {
+		names = new Set(
+			Object.entries(app.getCollections() as Record<string, unknown>)
+				.filter(
+					([, definition]) => !isCollectionChangeCaptureEnabled(definition),
+				)
+				.map(([name]) => name),
+		);
+		uncapturedCollectionsByApp.set(app, names);
+	}
+	return names;
+}
+
+/**
+ * Refuses a topic that would need change events from a collection whose
+ * capture is off. Runs on the access-merged WHERE, because a collection reached
+ * only through the read predicate (a membership table) is what wakes the topic
+ * when access is revoked; without its events the viewer keeps the rows.
+ */
+function enforceDependencyChangeCapture(
+	app: Questpie<any>,
+	topic: ValidatedTopic,
+): void {
+	const uncaptured = uncapturedCollections(app);
+	if (uncaptured.size === 0) return;
+	const dependencies =
+		topic.type === "collection"
+			? [
+					...app._resolveCollectionDependencies(topic.resource, topic.with),
+					...app._resolveCollectionDependencies(topic.resource, topic.where),
+				]
+			: [
+					...app._resolveGlobalDependencies(topic.resource, topic.with)
+						.collections,
+				];
+	const blocked = dependencies.find((name) => uncaptured.has(name));
+	if (blocked === undefined) return;
+	throw new RealtimeTopicAdmissionError(
+		realtimeTopicRejectedPayload(topic, {
+			accepted: false,
+			message: `Realtime change capture is disabled for collection "${blocked}", which this topic depends on`,
+			reason: "collection_change_capture_disabled",
+		}),
+	);
 }
 
 function stableValue(value: unknown): unknown {
@@ -1350,6 +1410,15 @@ export async function realtimeSubscribe(
 				await evaluateTopicAccess(app, topic, topicContext),
 			);
 		} catch (error) {
+			if (error instanceof RealtimeTopicAdmissionError) {
+				observeTopicRejection(error);
+				topicErrors.push({
+					id: topic.id,
+					message: error.message,
+					rejection: error.payload,
+				});
+				continue;
+			}
 			observeAdmission("access");
 			topicErrors.push({
 				id: topic.id,

@@ -231,6 +231,22 @@ export function admitRealtimeTopic<TTopic extends AdmissionTopic>(
 	return { accepted: true, topic: { ...topic, limit } };
 }
 
+/**
+ * Whether a collection definition records its mutations to the realtime outbox
+ * (`.options({ realtime: { changeCapture: false } })` opts out). The app-wide
+ * `RealtimeConfig.changeCapture` is checked separately by callers.
+ */
+export function isCollectionChangeCaptureEnabled(definition: unknown): boolean {
+	const realtime = (
+		definition as { state?: { options?: { realtime?: unknown } } } | undefined
+	)?.state?.options?.realtime;
+	return !(
+		realtime &&
+		typeof realtime === "object" &&
+		(realtime as { changeCapture?: unknown }).changeCapture === false
+	);
+}
+
 /** Authoritative server policy for one topic, checked strongest switch first. */
 export function admitRealtimeTopicPolicy<TTopic extends AdmissionTopic>(
 	topic: TTopic,
@@ -238,6 +254,7 @@ export function admitRealtimeTopicPolicy<TTopic extends AdmissionTopic>(
 		changeCapture?: boolean;
 		rowLiveQueries?: boolean;
 		collectionRealtime?: boolean;
+		collectionChangeCapture?: boolean;
 	},
 ): TopicAdmissionResult<TTopic> {
 	// Capture off means there is no outbox to serve from, so it outranks the
@@ -266,6 +283,16 @@ export function admitRealtimeTopicPolicy<TTopic extends AdmissionTopic>(
 			accepted: false,
 			message: "Direct realtime subscriptions are disabled for this collection",
 			reason: "collection_realtime_disabled",
+		};
+	}
+	if (
+		topic.resourceType === "collection" &&
+		policy.collectionChangeCapture === false
+	) {
+		return {
+			accepted: false,
+			message: `Realtime change capture is disabled for collection "${topic.resource}"`,
+			reason: "collection_change_capture_disabled",
 		};
 	}
 	return { accepted: true, topic: { ...topic } };

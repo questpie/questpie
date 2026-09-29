@@ -6553,6 +6553,15 @@ that `@questpie/tanstack-db` matches optimistic writes against. Typed channels,
 channel presence, and CRDT document sync are unaffected; CRDT canonical
 projection still writes its own outbox row per commit.
 
+`.options({ realtime: { changeCapture: false } })` is the same switch for one
+collection, for high-churn rows nothing watches live (heartbeats, idempotency
+ledgers). Its mutations write no outbox row and return no `txid`. Because such
+a collection never produces a change event, admission refuses every topic that
+would need one with `collection_change_capture_disabled`: a direct topic, and a
+topic on another resource whose `with`, `where`, or read access predicate
+reaches it. `realtime: false` is different: it refuses only direct topics and
+keeps capturing, so the collection still invalidates its dependents.
+
 A public collection with `accessCacheKey: () => "public:v1"` can compute one
 authorized query per refresh per server instance and fan the bytes out to
 100,000 equivalent subscribers. The key is a proof that field access, relations,
