@@ -3,7 +3,8 @@
 	"compilerOptions": {
 		"incremental": true,
 		"target": "ES2022",
-		"module": "ES2022",
+		"module": "ESNext",
+		"resolveJsonModule": true,
 		"moduleResolution": "bundler",
 		"jsx": "react-jsx",
 		"esModuleInterop": true,

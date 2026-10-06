@@ -42,13 +42,18 @@ adapter down.
 
 The two options land differently per adapter.
 
-| Option      | pg-boss                                 | BullMQ                            |
-| ----------- | --------------------------------------- | --------------------------------- |
-| `teamSize`  | Ignored. pg-boss 12 has no such option. | Becomes the worker `concurrency`. |
-| `batchSize` | Jobs fetched per poll.                  | Ignored.                          |
+| Option      | pg-boss                                  | BullMQ                            |
+| ----------- | ---------------------------------------- | --------------------------------- |
+| `teamSize`  | Concurrent polling workers per job name. | Becomes the worker `concurrency`. |
+| `batchSize` | Jobs fetched per poll.                   | Ignored.                          |
 
-QUESTPIE runs a fetched pg-boss batch one job at a time. To get more throughput
-there, run more worker processes.
+QUESTPIE runs each fetched pg-boss batch one job at a time. `teamSize` maps to
+pg-boss `localConcurrency`, so independent workers consume batches concurrently
+for each job name. More worker processes add another layer of concurrency.
+Use positive integers; omitted options keep the broker defaults of one worker
+and one job per batch. Outcomes are settled per job after the batch
+finishes, so one failed item retries independently without an earlier batch
+completing its next attempt. The pg-boss adapter requires pg-boss 12.21.0 or newer.
 
 <Callout type="info" title="Shutdown is handled by default">
 	Set `gracefulShutdown: false` to opt out. `shutdownSignals` changes which
