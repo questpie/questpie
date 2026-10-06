@@ -1,5 +1,21 @@
 # questpie
 
+## 3.34.0
+
+### Minor Changes
+
+- [#385](https://github.com/questpie/questpie/pull/385) [`492b0e8`](https://github.com/questpie/questpie/commit/492b0e8bd3a39439cb150038c9ae887611b44e02) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Honor queue listener `teamSize` with pg-boss's `localConcurrency` option, allowing multiple workers to execute jobs while an earlier handler is still running. Preserve the default worker count and per-job failure handling.
+
+  Existing `teamSize` values now take effect per job name after upgrading; a listener configured with `teamSize: 5` starts five workers instead of one. Use positive integers. Undefined listener options are omitted so the broker can apply its defaults.
+
+  Use pg-boss per-job batch results to prevent an older batch from completing a retry already running on another worker. The pg-boss peer floor is now 12.21.0, which provides both `localConcurrency` and `perJobResults`.
+
+  Adapter construction rejects an incompatible installed pg-boss version before starting the database pool or accepting jobs, rather than silently completing handler failures if `perJobResults` is unavailable.
+
+- [#385](https://github.com/questpie/questpie/pull/385) [`492b0e8`](https://github.com/questpie/questpie/commit/492b0e8bd3a39439cb150038c9ae887611b44e02) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Require the security-fixed Nodemailer 10.0.9 API for the optional SMTP adapter. Generated project templates request the corrected Nodemailer and pg-boss peers.
+
+  When running SMTP on Node.js, upgrade to Node.js 20+ and Nodemailer 10.0.9+. Nodemailer 9.x no longer satisfies the optional peer. The core Node.js 18+ requirement is unchanged for applications that do not use SMTP. Nodemailer now includes its own TypeScript declarations, so the framework no longer installs the separate `@types/nodemailer` development dependency.
+
 ## 3.33.0
 
 ### Minor Changes
