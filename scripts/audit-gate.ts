@@ -8,6 +8,13 @@
  */
 
 const KNOWN = new Map<string, string>([
+	// WHOL-853: no patched braces release exists (GHSA-vfj7-8cjw-p6xm).
+	// Reached through Changesets/glob tooling and the shadcn CLI; admin consumes
+	// shadcn CSS at build time, not its CLI JavaScript in runtime request paths.
+	[
+		"GHSA-vfj7-8cjw-p6xm",
+		"WHOL-853: adopt upstream braces fix or replace the tooling glob chain",
+	],
 	// esbuild RCE via missing binary integrity check on the *Deno* module's
 	// NPM_CONFIG_REGISTRY download path — unused here (Bun/Node monorepo, no Deno
 	// install). Fixed in esbuild 0.28.1, but a global override is blocked by

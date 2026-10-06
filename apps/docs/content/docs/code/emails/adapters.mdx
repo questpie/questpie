@@ -42,6 +42,10 @@ filename and content type, never dumped.
 
 ## SMTP
 
+Install `nodemailer@^10.0.9`. SMTP requires Node.js 20+ when running on Node;
+Nodemailer 9.x is no longer a supported peer. Nodemailer includes its own
+TypeScript declarations.
+
 Sends over SMTP with nodemailer. `transport` goes straight to
 `nodemailer.createTransport`, so it takes an options object, a transport
 instance, or a connection URL.

@@ -86,19 +86,24 @@ for your instance count. It is one config key and it moves no `live()` call.
 	reach for one.
 </Callout>
 
-## Workers scale by process, not by option
+## Workers scale within a process and across processes
 
 `app.queue.listen()` takes `teamSize` and `batchSize`. Which one does anything
 depends on the adapter. QUESTPIE ships no default queue adapter, so that choice
 is already yours.
 
-| Option      | pg-boss                                 | BullMQ                             |
-| ----------- | --------------------------------------- | ---------------------------------- |
-| `teamSize`  | Ignored. pg-boss 12 has no such option. | Worker `concurrency`, per job name |
-| `batchSize` | Jobs fetched per poll                   | Ignored                            |
+| Option      | pg-boss                                  | BullMQ                             |
+| ----------- | ---------------------------------------- | ---------------------------------- |
+| `teamSize`  | Concurrent polling workers per job name. | Worker `concurrency`, per job name |
+| `batchSize` | Jobs fetched per poll                    | Ignored                            |
 
-QUESTPIE runs a fetched pg-boss batch one job at a time. So on pg-boss, more
-throughput means more worker processes. There is no knob for it.
+QUESTPIE runs each fetched pg-boss batch one job at a time. `teamSize` maps to
+pg-boss `localConcurrency`: independent workers consume batches concurrently
+for each job name. More worker processes add another layer of concurrency.
+Use positive integers; omitted options keep the broker defaults of one worker
+and one job per batch. Outcomes are settled per job after the batch
+finishes, so one failed item retries independently without an earlier batch
+completing its next attempt. The pg-boss adapter requires pg-boss 12.21.0 or newer.
 
 ### `singletonKey` needs a queue policy
 

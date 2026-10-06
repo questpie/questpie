@@ -2,9 +2,11 @@ import { sql } from "drizzle-orm";
 import {
 	fromDrizzle,
 	type ConstructorOptions,
+	type JobResult,
 	PgBoss,
 	type SendOptions,
 } from "pg-boss";
+import pgBossPackage from "pg-boss/package.json" with { type: "json" };
 
 import type {
 	QueueAdapter,
@@ -48,6 +50,13 @@ export class PgBossAdapter implements QueueAdapter {
 	public readonly transactionalPublishing: boolean;
 
 	constructor(options: PgBossAdapterOptions) {
+		const { version } = pgBossPackage;
+		const supported = /^12\.(\d+)\.\d+(?:\+[a-zA-Z\d.-]+)?$/.exec(version);
+		if (!supported || Number(supported[1]) < 21) {
+			throw new Error(
+				`QUESTPIE queue workers require pg-boss ^12.21.0; installed ${version}`,
+			);
+		}
 		const { useApplicationTransaction = true, ...pgBossOptions } = options;
 		this.transactionalPublishing = useApplicationTransaction;
 		this.boss = new PgBoss(pgBossOptions);
@@ -241,23 +250,26 @@ export class PgBossAdapter implements QueueAdapter {
 		options?: QueueListenOptions,
 	): Promise<void> {
 		await this.start();
+		const { teamSize, batchSize } = options ?? {};
 
 		for (const jobName of Object.keys(handlers)) {
 			await this.ensureQueue(jobName);
 			const handler = handlers[jobName];
 			if (!handler) continue;
 
-			// pg-boss v10+ always passes an array to work() callbacks, regardless
-			// of batchSize. Iterating jobs serially keeps the existing teamSize/
-			// batchSize semantics (one batch per worker callback). Per-item
-			// failures are reported to pg-boss via boss.fail(jobName, id, …) so
-			// they retry independently while siblings in the same batch still
-			// complete.
+			// Settle per-job results after the batch returns, so an older batch
+			// cannot complete a failed job whose retry another worker has claimed.
 			await this.boss.work(
 				jobName,
-				{ ...options, includeMetadata: true } as any,
+				{
+					...(batchSize !== undefined ? { batchSize } : {}),
+					...(teamSize !== undefined ? { localConcurrency: teamSize } : {}),
+					includeMetadata: true,
+					perJobResults: true,
+				} as any,
 				async (jobs: any) => {
 					const arr: any[] = Array.isArray(jobs) ? jobs : jobs ? [jobs] : [];
+					const results: JobResult[] = [];
 					for (const j of arr) {
 						try {
 							await handler({
@@ -265,6 +277,7 @@ export class PgBossAdapter implements QueueAdapter {
 								...decodeQueueDispatchEnvelope(j.data, String(j.id)),
 								...finalAttemptMetadata(j),
 							});
+							results.push({ id: String(j.id), status: "completed" });
 						} catch (error) {
 							const err =
 								error instanceof Error
@@ -272,23 +285,14 @@ export class PgBossAdapter implements QueueAdapter {
 									: new Error(
 											typeof error === "string" ? error : String(error),
 										);
-							try {
-								await this.boss.fail(jobName, String(j.id), {
-									message: err.message,
-									stack: err.stack,
-								});
-							} catch (failError) {
-								// If reporting the failure itself fails, surface the
-								// original handler error so pg-boss's own timeout/retry
-								// path can take over.
-								console.error(
-									`[questpie:pg-boss] failed to mark job ${j.id} as failed`,
-									failError,
-								);
-								throw err;
-							}
+							results.push({
+								id: String(j.id),
+								status: "failed",
+								output: { message: err.message, stack: err.stack },
+							});
 						}
 					}
+					return results;
 				},
 			);
 		}

@@ -5,10 +5,11 @@
  */
 
 import type { AppConfig } from "#questpie";
-import { env } from "#questpie/env.client.vite";
 import { createAdminAuthClient } from "@questpie/admin/client";
 
+import { getAppUrl } from "./app-url";
+
 export const authClient = createAdminAuthClient<AppConfig>({
-	baseURL: typeof window !== "undefined" ? window.location.origin : env.APP_URL,
+	baseURL: getAppUrl(),
 	basePath: "/api/auth",
 });

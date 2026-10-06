@@ -204,6 +204,11 @@ jobs:
       - name: Start Postgres, Redis, and Soketi
         run: docker compose -f packages/questpie/test/fixtures/soketi/compose.yml up -d --wait
 
+      - name: Verify PostgreSQL queue concurrency
+        run: bun test packages/questpie/test/integration/queue-concurrency-postgres.test.ts packages/questpie/test/integration/queue-retry-concurrency-postgres.test.ts
+        env:
+          QUESTPIE_QUEUE_POSTGRES_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
+
       - name: Run PostgreSQL txid ordering acceptance
         working-directory: packages/questpie
         run: |

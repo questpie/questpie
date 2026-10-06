@@ -40,7 +40,7 @@ export default defineConfig({
 		sourcemap: false,
 	},
 	shims: true,
-	external: ["bun"],
+	external: ["bun", "pg-boss/package.json"],
 	// One output file per source file. The internal type modules above are
 	// published subpaths, so they need a stable path in dist.
 	unbundle: true,

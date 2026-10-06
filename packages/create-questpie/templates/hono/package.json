@@ -33,9 +33,9 @@
 		"better-auth": "^1.7.4",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"hono": "^4.12.25",
-		"nodemailer": "^7.0.12",
+		"nodemailer": "^10.0.9",
 		"pg": "^8.13.1",
-		"pg-boss": "^12.5.4",
+		"pg-boss": "^12.21.0",
 		"questpie": "latest",
 		"zod": "^4.2.1"
 	},

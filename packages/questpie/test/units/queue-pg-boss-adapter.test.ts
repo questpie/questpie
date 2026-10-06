@@ -8,7 +8,7 @@
  * every job before reaching user code.
  *
  * The fix iterates the array, dispatches each item to the registered
- * handler, and reports per-item failures via `boss.fail(jobName, id, …)`
+ * handler, and returns per-item results for settlement after the batch
  * so siblings in the same batch can still complete.
  */
 
@@ -109,6 +109,42 @@ function makeAdapter() {
 }
 
 describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
+	it("maps teamSize to local concurrency while retaining batch size", async () => {
+		const { adapter, fake } = makeAdapter();
+		await adapter.listen(
+			{ delivery: async () => {} },
+			{ teamSize: 2, batchSize: 3 },
+		);
+		expect(fake.workOptions.get("delivery")).toEqual({
+			localConcurrency: 2,
+			batchSize: 3,
+			includeMetadata: true,
+			perJobResults: true,
+		});
+	});
+
+	it("leaves the broker's worker-count default when teamSize is omitted", async () => {
+		const { adapter, fake } = makeAdapter();
+		await adapter.listen({ delivery: async () => {} });
+		expect(fake.workOptions.get("delivery")).toEqual({
+			includeMetadata: true,
+			perJobResults: true,
+		});
+	});
+
+	it("omits undefined batchSize supplied by QueueService", async () => {
+		const { adapter, fake } = makeAdapter();
+		await adapter.listen(
+			{ delivery: async () => {} },
+			{ teamSize: 2, batchSize: undefined },
+		);
+		expect(fake.workOptions.get("delivery")).toStrictEqual({
+			localConcurrency: 2,
+			includeMetadata: true,
+			perJobResults: true,
+		});
+	});
+
 	it("publishes through the supplied Drizzle transaction with stable dispatch metadata", async () => {
 		const { adapter, fake } = makeAdapter();
 		const dispatchId = "0e79a7d5-da2f-55e7-ae4c-3e95c5633071";
@@ -363,7 +399,7 @@ describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
 		});
 	});
 
-	it("reports per-item handler failures via boss.fail and keeps processing siblings", async () => {
+	it("returns independent per-job outcomes after processing all siblings", async () => {
 		const { adapter, fake } = makeAdapter();
 
 		const seen: string[] = [];
@@ -378,7 +414,7 @@ describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
 
 		const callback = fake.workCallbacks.get("echo")!;
 
-		await callback([
+		const results = await callback([
 			{ id: "ok-1", data: { value: "one" } },
 			{ id: "bad-2", data: { value: "boom" } },
 			{ id: "ok-3", data: { value: "three" } },
@@ -386,14 +422,20 @@ describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
 
 		// Siblings of the failing job still completed.
 		expect(seen).toEqual(["ok-1", "ok-3"]);
-		// The failing job was reported to pg-boss for retry — siblings were not.
-		expect(fake.failCalls).toHaveLength(1);
-		const failed = fake.failCalls[0]!;
-		expect(failed.name).toBe("echo");
-		expect(failed.id).toBe("bad-2");
-		expect((failed.data as { message: string }).message).toBe(
-			"handler exploded on bad-2",
-		);
+		// No retry is made available while the batch callback is still active.
+		expect(fake.failCalls).toEqual([]);
+		expect(results).toEqual([
+			{ id: "ok-1", status: "completed" },
+			{
+				id: "bad-2",
+				status: "failed",
+				output: {
+					message: "handler exploded on bad-2",
+					stack: expect.any(String),
+				},
+			},
+			{ id: "ok-3", status: "completed" },
+		]);
 	});
 
 	it("reports terminal-attempt metadata from long-running pg-boss work", async () => {
