@@ -28,6 +28,10 @@ filenames, and the HTML only when you ask. It never sends.
 
 ## SMTP
 
+Install `nodemailer@^10.0.9`. SMTP requires Node.js 20+ when running on Node;
+Nodemailer 9.x is no longer a supported peer. Nodemailer includes its own
+TypeScript declarations.
+
 ```ts
 import { SmtpAdapter } from "questpie/adapters/smtp";
 

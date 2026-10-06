@@ -11,6 +11,10 @@ with Scalar docs and a typed client you can consume from any frontend.
 - [Bun](https://bun.sh) v1.3+
 - [Docker](https://docker.com) (for local PostgreSQL)
 
+The starter installs Nodemailer 10.0.9+ even when console mail is selected.
+When running or installing on Node.js, use Node.js 20+ to satisfy its engine
+requirement; Bun remains the default runtime.
+
 ### Setup
 
 ```bash

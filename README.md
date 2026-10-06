@@ -52,6 +52,10 @@ QUESTPIE derives them automatically from your backend schema.
 - [Bun](https://bun.sh) 1.0+ (recommended) or Node.js 18+
 - PostgreSQL 15+
 
+Optional adapters have their own runtime requirements. SMTP requires Nodemailer
+10.0.9+ and Node.js 20+ when running on Node; Nodemailer 9.x is no longer a
+supported peer. The core package without SMTP retains its Node.js 18+ requirement.
+
 ### Installation
 
 ```bash

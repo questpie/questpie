@@ -480,12 +480,13 @@ describe("MCP tools/list schema diet (integration)", () => {
 			// touches this call-time path, which always validates against the
 			// original (`.strict()`) zod schema.
 			expect(result.isError).toBe(true);
-			// Specifically the zod "unrecognized_keys" issue for the strict
-			// `data` object, not merely some error — proves the *reason* is
-			// unchanged, not just that some rejection happened.
+			// SDK 1.31 formats Zod issues as a message and path. Check the
+			// strict-schema rejection reason, unknown key and nested location.
 			const text = JSON.stringify(result.content);
-			expect(text).toContain("unrecognized_keys");
+			expect(text).toContain("MCP error -32602");
+			expect(text).toContain("Unrecognized key");
 			expect(text).toContain("notAField");
+			expect(text).toContain("at data");
 		} finally {
 			await close();
 			await setup.cleanup();
