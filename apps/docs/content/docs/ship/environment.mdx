@@ -83,6 +83,19 @@ config, so the config cannot import back. It imports `./env` directly instead.
 	Browser code imports the generated client module instead.
 </Callout>
 
+### TanStack Start import protection
+
+TanStack Start treats `*.client.*` modules as browser-only. Put the shared
+`clientEnv` definition in `env-schema.ts`, import that schema from `env.ts`,
+and keep `env.client.ts` as `export { default } from "./env-schema";` so codegen
+still discovers it. The schema must contain only public variables.
+
+Code shared between SSR and the browser must also avoid importing the generated
+`env.client.vite.ts` module on the server. For an API client's base URL, use
+`createIsomorphicFn()` with a server branch reading `env.APP_URL` and a client
+branch reading `window.location.origin`. The TanStack compiler removes the
+opposite branch and its unused imports. Keep import protection enabled.
+
 ## Boot fails, not the first request
 
 `env()` validates the moment `env.ts` is evaluated. The generated index imports

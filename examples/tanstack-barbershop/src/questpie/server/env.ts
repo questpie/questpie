@@ -10,7 +10,7 @@
 import { env } from "questpie/env";
 import { z } from "zod";
 
-import client from "./env.client";
+import client from "./env-schema";
 
 export default env({
 	client,
