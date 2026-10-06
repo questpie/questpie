@@ -1,5 +1,14 @@
 # @questpie/mcp
 
+## 3.34.0
+
+### Patch Changes
+
+- [#385](https://github.com/questpie/questpie/pull/385) [`492b0e8`](https://github.com/questpie/questpie/commit/492b0e8bd3a39439cb150038c9ae887611b44e02) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Update the MCP SDK dependency floor to 1.31.0, including the security-fixed OAuth client credential issuer binding. QUESTPIE consumes the SDK server APIs and does not implement an SDK OAuth client provider.
+
+- Updated dependencies [[`492b0e8`](https://github.com/questpie/questpie/commit/492b0e8bd3a39439cb150038c9ae887611b44e02), [`492b0e8`](https://github.com/questpie/questpie/commit/492b0e8bd3a39439cb150038c9ae887611b44e02)]:
+  - questpie@3.34.0
+
 ## 3.33.0
 
 ### Patch Changes
