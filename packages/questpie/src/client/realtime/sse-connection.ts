@@ -22,6 +22,7 @@ type TopologyResource = {
 type ControlSession = {
 	sessionId: string;
 	token: string;
+	abort: AbortController;
 };
 
 class DispatchedRealtimeControlError extends Error {
@@ -271,7 +272,7 @@ export class SseConnectionManager {
 			this.abortController?.abort();
 			return;
 		}
-		if (this.controlSession) {
+		if (this.controlSession && !this.controlSession.abort.signal.aborted) {
 			void this.flushDesiredTopology();
 			return;
 		}
@@ -298,6 +299,7 @@ export class SseConnectionManager {
 		this.connecting = true;
 		this.controlSession = null;
 		this.controlOperation = Promise.resolve();
+		this.flushPromise = null;
 		this.desiredRevision = 0;
 		this.flushedGeneration = [...this.resources.values()].some(
 			(resource) => resource.kind === "crdt",
@@ -305,7 +307,8 @@ export class SseConnectionManager {
 			? this.topologyGeneration - 1
 			: this.topologyGeneration;
 		this.watchdogTriggered = false;
-		this.abortController = new AbortController();
+		const abort = new AbortController();
+		this.abortController = abort;
 		try {
 			const authHeaders = await this.options.getAuthHeaders?.();
 			const topology = this.openTopology();
@@ -317,7 +320,7 @@ export class SseConnectionManager {
 					headers: { "Content-Type": "application/json", ...authHeaders },
 					body: JSON.stringify(topology),
 					credentials: this.options.withCredentials ? "include" : "omit",
-					signal: this.abortController.signal,
+					signal: abort.signal,
 				},
 			);
 			if (!response.ok) {
@@ -343,7 +346,7 @@ export class SseConnectionManager {
 				throw new TerminalSseError("Realtime response has no body");
 			}
 			this.armWatchdog();
-			await this.readStream(response.body);
+			await this.readStream(response.body, abort);
 			throw new Error("Realtime stream closed");
 		} catch (error) {
 			const normalized = normalizedError(error);
@@ -416,17 +419,24 @@ export class SseConnectionManager {
 
 	private flushDesiredTopology(): Promise<void> {
 		if (this.flushPromise) return this.flushPromise;
-		this.flushPromise = (async () => {
+		const session = this.controlSession;
+		if (!session) return Promise.resolve();
+		const isCurrent = () =>
+			this.controlSession === session &&
+			!session.abort.signal.aborted &&
+			this.hasDemand();
+		const flush = (async () => {
 			await Promise.resolve();
 			while (this.flushedGeneration < this.topologyGeneration) {
 				const generation = this.topologyGeneration;
-				const session = this.controlSession;
-				if (!session) return;
+				if (!isCurrent()) return;
 				const topology = this.desiredTopology();
 				const operation = this.controlOperation
 					.catch(() => {})
 					.then(async () => {
+						if (!isCurrent()) return;
 						const authHeaders = await this.options.getAuthHeaders?.();
+						if (!isCurrent()) return;
 						const response = await this.options.fetcher(
 							`${this.options.baseUrl}/realtime`,
 							{
@@ -443,10 +453,12 @@ export class SseConnectionManager {
 								credentials: this.options.withCredentials ? "include" : "omit",
 							},
 						);
+						if (!isCurrent()) return;
 						if (!response.ok) {
 							const payload = (await response.json().catch(() => null)) as {
 								error?: unknown;
 							} | null;
+							if (!isCurrent()) return;
 							if (isExpiredControlSession(response.status, payload?.error)) {
 								throw new Error(`Realtime control failed: ${response.status}`);
 							}
@@ -466,31 +478,36 @@ export class SseConnectionManager {
 					});
 				this.controlOperation = operation;
 				await operation;
-				if (this.controlSession !== session) return;
+				if (!isCurrent()) return;
 				this.flushedGeneration = generation;
 			}
 		})()
 			.catch((error) => {
+				if (!isCurrent()) return;
 				const normalized = normalizedError(error);
 				if (normalized instanceof TerminalSseError) {
 					this.reconnectPending = false;
 					try {
 						this.notifyAll(normalized);
 					} finally {
-						this.abortController?.abort();
+						session.abort.abort();
 					}
 					return;
 				}
 				this.reconnectPending = true;
-				this.abortController?.abort();
+				session.abort.abort();
 			})
 			.finally(() => {
-				this.flushPromise = null;
+				if (this.flushPromise === flush) this.flushPromise = null;
 			});
-		return this.flushPromise;
+		this.flushPromise = flush;
+		return flush;
 	}
 
-	private async readStream(body: ReadableStream<Uint8Array>): Promise<void> {
+	private async readStream(
+		body: ReadableStream<Uint8Array>,
+		abort: AbortController,
+	): Promise<void> {
 		const reader = body.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";
@@ -504,7 +521,7 @@ export class SseConnectionManager {
 				buffer = blocks.pop() ?? "";
 				for (const block of blocks) {
 					const event = this.parseEvent(block);
-					if (event) this.handleEvent(event);
+					if (event) this.handleEvent(event, abort);
 				}
 			}
 		} finally {
@@ -525,7 +542,7 @@ export class SseConnectionManager {
 		return ping ? { type: "ping", data: "" } : null;
 	}
 
-	private handleEvent(event: RealtimeSseEvent): void {
+	private handleEvent(event: RealtimeSseEvent, abort: AbortController): void {
 		if (event.type === "session") {
 			try {
 				const session = JSON.parse(event.data) as {
@@ -550,6 +567,7 @@ export class SseConnectionManager {
 				this.controlSession = {
 					sessionId: session.sessionId,
 					token: session.token,
+					abort,
 				};
 				this.controlSessionCrdtHold = this.connectingCrdtHold;
 				for (const waiter of this.sessionWaiters) {
