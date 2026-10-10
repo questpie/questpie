@@ -88,10 +88,15 @@ you are building the media library itself. The field type has its own page,
 
 ## Deleting
 
-On a collection without soft delete, deleting a row deletes its stored object
-after the transaction commits. With soft delete on, the object stays, because
-the row can come back. `purgeById` is what finally queues the object for
-cleanup. Replacing a row's `key` queues the old object too.
+On a collection without soft delete, deleting a row records a cleanup intent
+in the same transaction and attempts to delete its stored object after commit.
+If storage is unavailable, the recurring `storage-cleanup` job retries the
+durable intent. A successful row delete does not confirm that the bytes are
+gone. Cleanup preserves keys still referenced by any upload collection.
+
+With soft delete on, the object stays, because the row can come back.
+`purgeById` finally queues the object for cleanup. Replacing a row's `key`
+queues the old object too.
 
 ## Next
 
