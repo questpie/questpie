@@ -1,5 +1,11 @@
 # questpie
 
+## 3.34.1
+
+### Patch Changes
+
+- [#387](https://github.com/questpie/questpie/pull/387) [`6089b60`](https://github.com/questpie/questpie/commit/6089b60c5ef8ca94fd928bfd18ca3f7c65370f0f) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Keep realtime control requests bound to their SSE session. Skip topology submissions after teardown and ignore late responses from an old session so they cannot abort or notify a replacement connection. New sessions flush independently of pending old control requests.
+
 ## 3.34.0
 
 ### Minor Changes
