@@ -15,6 +15,7 @@ declare global {
 	namespace Questpie {
 		interface CollectionKeys { articles: unknown; categories: unknown; user: unknown }
 		interface GlobalKeys { siteSettings: unknown }
+		interface JobKeys { articleCount: unknown }
 		interface ServiceKeys { analytics: unknown; reporting: unknown }
 	}
 }

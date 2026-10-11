@@ -17,6 +17,9 @@ import { adminUser as _coll_user } from "../collections/admin-user";
 // ── Globals ────────────────────────────────────────────────
 import { siteSettings as _glob_siteSettings } from "../globals/site-settings";
 
+// ── Jobs ───────────────────────────────────────────────────
+import _job_articleCount from "../jobs/article-count";
+
 // ── Services ───────────────────────────────────────────────
 import _svc_analytics from "../services/analytics";
 import _svc_reporting from "../services/reporting";
@@ -71,7 +74,9 @@ export type AppGlobals = Override<_ModuleGlobals, {
 }>;
 
 /** All jobs in the app (modules + user, user overrides) */
-export type AppJobs = _ModuleJobs;
+export type AppJobs = Override<_ModuleJobs, {
+	articleCount: Omit<typeof _job_articleCount, "handler"> & { handler: (args: unknown) => Promise<unknown> };
+}>;
 
 /** All routes in the app (modules + user, user overrides) */
 export type AppRoutes = _ModuleRoutes;

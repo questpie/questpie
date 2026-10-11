@@ -688,8 +688,12 @@ describe("generateTemplate — collections", () => {
 		// Module collections stay mapped — they come from `typeof _modules`, not
 		// from the user job path, so they never re-enter the empty window.
 		expect(code).toContain(
-			"type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {",
+			"type _JobHandlerCollectionsAPI = { [K in keyof _HandlerModuleCollections]: CollectionAPI<_HandlerModuleCollections[K], _JobHandlerCollections> } & {",
 		);
+		expect(code).toContain(
+			'type _HandlerModuleCollections = Omit<_ModuleCollections, "posts">;',
+		);
+		expect(code).toContain("type _CollectionsAPI = _JobHandlerCollectionsAPI;");
 		// Local collections must be explicit members. This assertion is the whole
 		// point of the test — see the comment above it.
 		expect(code).toContain(

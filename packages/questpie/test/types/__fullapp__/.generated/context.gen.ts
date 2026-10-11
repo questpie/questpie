@@ -16,6 +16,9 @@ import { adminUser as _coll_user } from "../collections/admin-user";
 // ── Globals ────────────────────────────────────────────────
 import { siteSettings as _glob_siteSettings } from "../globals/site-settings";
 
+// ── Jobs ───────────────────────────────────────────────────
+import _job_articleCount from "../jobs/article-count";
+
 // ── Services ───────────────────────────────────────────────
 import _svc_analytics from "../services/analytics";
 import _svc_reporting from "../services/reporting";
@@ -26,7 +29,7 @@ import _authConfig from "../config/auth";
 
 import type { AppCollections, AppChannels, AppGlobals, AppJobs, _ModuleCollections, _AppDefaultServices, _AppServicesSeam, _AppTopLevelServices, _AppCustomServiceNamespaces, _Registry_Collections, _Registry_Channels, _Registry_Globals, _Registry_Jobs, _Registry_Routes, _Registry_Services, _Registry_Emails, _Registry_FieldTypes, _AllModuleFields } from "./entities.gen";
 import type { AnyCollectionOrBuilder, AnyGlobalOrBuilder, AuthorityActor, CollectionAPI, CrdtClientAPI, CrdtRegistryFromApp, CrdtServerAPI, DrizzleClientFromQuestpieConfig, InferContextExtensionsFromAppConfig, InferSessionFromAuthConfig, MailerService, Principal, Questpie, QuestpieConfig, QueueClient, QueueJobType, ServiceInstancesInNamespace, TablesFromConfig, z } from "questpie/types";
-import type { ChannelsService } from "questpie/channels";
+import type { Channels } from "questpie/channels";
 
 type _MPSubModules<M> = M extends { modules: infer S extends readonly any[] } ? S : readonly [];
 type _MPConfigValue<M, K extends string> = M extends { config: infer C } ? (C extends Record<K, infer V> ? V : {}) : {};
@@ -37,19 +40,22 @@ type _AppAuthConfig = _MPConfigSub<typeof _modules, "auth"> & typeof _authConfig
 type _AppSessionAuthConfig = _AppAuthConfig;
 type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>> | null;
 
-type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = _ModuleCollections & {
+type _HandlerModuleCollections = Omit<_ModuleCollections, "articles" | "categories" | "user">;
+type _JobHandlerCollections = _HandlerModuleCollections & {
 	articles: typeof _coll_articles;
 	categories: typeof _coll_categories;
 	user: typeof _coll_user;
 };
-type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {
+type _JobHandlerCollectionsAPI = { [K in keyof _HandlerModuleCollections]: CollectionAPI<_HandlerModuleCollections[K], _JobHandlerCollections> } & {
 	articles: CollectionAPI<typeof _coll_articles, _JobHandlerCollections>;
 	categories: CollectionAPI<typeof _coll_categories, _JobHandlerCollections>;
 	user: CollectionAPI<typeof _coll_user, _JobHandlerCollections>;
 };
+type _CollectionsAPI = _JobHandlerCollectionsAPI;
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
-type _ExecutionContextJobs = {};
+type _ExecutionContextJobs = {
+	articleCount: _ExecutionContextJob<typeof _job_articleCount>;
+};
 type _ExecutionContextServiceDefinitions = {
 	analytics: typeof _svc_analytics;
 	reporting: typeof _svc_reporting;
@@ -95,7 +101,7 @@ type _AppInfraRecord = {
 	realtime: _AppQuestpie["realtime"];
 	executor: _AppQuestpie["executor"];
 	observability: _AppQuestpie["observability"];
-	channels: ChannelsService<AppChannels>;
+	channels: Channels<AppChannels>;
 	crdt: AppCrdtServer;
 
 	// Entity APIs
@@ -130,7 +136,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
-			channels: ChannelsService<AppChannels>;
+			channels: Channels<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;
@@ -158,7 +164,7 @@ declare global {
 			logger: _AppQuestpie["logger"];
 			search: _AppQuestpie["search"];
 			realtime: _AppQuestpie["realtime"];
-			channels: ChannelsService<AppChannels>;
+			channels: Channels<AppChannels>;
 
 			// Entity APIs
 			collections: _JobHandlerCollectionsAPI;

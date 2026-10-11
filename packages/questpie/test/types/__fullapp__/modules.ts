@@ -1,3 +1,4 @@
+import { collection } from "#questpie/server/collection/builder/collection-builder.js";
 import starterModule from "#questpie/server/modules/starter/.generated/module.js";
 /**
  * Full-app gate fixture — pulled modules.
@@ -95,4 +96,15 @@ export const adminModule: AdminModule = {
 	},
 };
 
-export default [adminModule, reportingModule] as const;
+const shadowedArticles = collection("articles").fields(({ f }) => ({
+	title: f.number().required(),
+}));
+type ShadowModule = {
+	name: "shadowed-articles";
+	collections: { articles: typeof shadowedArticles };
+};
+const shadowModule: ShadowModule = {
+	name: "shadowed-articles",
+	collections: { articles: shadowedArticles },
+};
+export default [adminModule, reportingModule, shadowModule] as const;

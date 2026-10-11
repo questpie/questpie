@@ -72,8 +72,8 @@ type _AppAuthConfig = _MPConfigSub<typeof _modules, "auth"> & typeof _authConfig
 type _AppSessionAuthConfig = _AppAuthConfig;
 type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>> | null;
 
-type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = _ModuleCollections & {
+type _HandlerModuleCollections = Omit<_ModuleCollections, "announcements" | "cities" | "cityMembers" | "contacts" | "documents" | "news" | "pages" | "submissions">;
+type _JobHandlerCollections = _HandlerModuleCollections & {
 	announcements: typeof _coll_announcements;
 	cities: typeof _coll_cities;
 	cityMembers: typeof _coll_cityMembers;
@@ -83,7 +83,7 @@ type _JobHandlerCollections = _ModuleCollections & {
 	pages: typeof _coll_pages;
 	submissions: typeof _coll_submissions;
 };
-type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {
+type _JobHandlerCollectionsAPI = { [K in keyof _HandlerModuleCollections]: CollectionAPI<_HandlerModuleCollections[K], _JobHandlerCollections> } & {
 	announcements: CollectionAPI<typeof _coll_announcements, _JobHandlerCollections>;
 	cities: CollectionAPI<typeof _coll_cities, _JobHandlerCollections>;
 	cityMembers: CollectionAPI<typeof _coll_cityMembers, _JobHandlerCollections>;
@@ -93,6 +93,7 @@ type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAP
 	pages: CollectionAPI<typeof _coll_pages, _JobHandlerCollections>;
 	submissions: CollectionAPI<typeof _coll_submissions, _JobHandlerCollections>;
 };
+type _CollectionsAPI = _JobHandlerCollectionsAPI;
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {};
 type _ExecutionContextServiceDefinitions = {};
