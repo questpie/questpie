@@ -1,5 +1,11 @@
 # questpie
 
+## 3.34.2
+
+### Patch Changes
+
+- [#389](https://github.com/questpie/questpie/pull/389) [`9b36b8b`](https://github.com/questpie/questpie/commit/9b36b8b1741354c718f96fee66d13f754494d022) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Share generated service/job collection API types while retaining explicit local members for result-returning jobs. Local collection overrides now replace module definitions in both contexts.
+
 ## 3.34.1
 
 ### Patch Changes
