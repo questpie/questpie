@@ -441,6 +441,8 @@ Inside `packages/questpie`:
 ### Testing
 
 - Test runner: **Bun's built-in test runner** (`bun test`).
+- Agent iteration: run lint and the affected package's type contracts plus the smallest relevant tests. Bound local verification to five minutes and coordinate the host-wide heavy-work slot when provided by the application harness; a busy slot or timeout is incomplete proof.
+- The existing CI runs the full test, build, codegen-freshness and type-budget suites before merge. Push Task branches after meaningful targeted proof, then wait for checks on the current candidate. Do not substitute an old green run or test-count quota. Avoid launching the whole monorepo suite from each concurrent agent.
 - Tests live in `packages/questpie/test/` organized by feature:
   - `test/collection/` — CRUD, hooks, relations, uploads, field access, localization.
   - `test/fields/` — Field builder, reactive fields, type inference.

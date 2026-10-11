@@ -65,8 +65,8 @@ type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>
 
 export type AppRouteKeys = "rpc/planning/capacitySummary" | "rpc/planning/receiveMaterials" | "rpc/planning/startProduction";
 
-type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = _ModuleCollections & {
+type _HandlerModuleCollections = Omit<_ModuleCollections, "inventoryMovements" | "machines" | "materials" | "operations" | "productionOrders" | "toyMaterials" | "toys">;
+type _JobHandlerCollections = _HandlerModuleCollections & {
 	inventoryMovements: typeof _coll_inventoryMovements;
 	machines: typeof _coll_machines;
 	materials: typeof _coll_materials;
@@ -75,7 +75,7 @@ type _JobHandlerCollections = _ModuleCollections & {
 	toyMaterials: typeof _coll_toyMaterials;
 	toys: typeof _coll_toys;
 };
-type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {
+type _JobHandlerCollectionsAPI = { [K in keyof _HandlerModuleCollections]: CollectionAPI<_HandlerModuleCollections[K], _JobHandlerCollections> } & {
 	inventoryMovements: CollectionAPI<typeof _coll_inventoryMovements, _JobHandlerCollections>;
 	machines: CollectionAPI<typeof _coll_machines, _JobHandlerCollections>;
 	materials: CollectionAPI<typeof _coll_materials, _JobHandlerCollections>;
@@ -84,6 +84,7 @@ type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAP
 	toyMaterials: CollectionAPI<typeof _coll_toyMaterials, _JobHandlerCollections>;
 	toys: CollectionAPI<typeof _coll_toys, _JobHandlerCollections>;
 };
+type _CollectionsAPI = _JobHandlerCollectionsAPI;
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {
 	recalculateMaterialPlan: _ExecutionContextJob<typeof _job_recalculateMaterialPlan>;

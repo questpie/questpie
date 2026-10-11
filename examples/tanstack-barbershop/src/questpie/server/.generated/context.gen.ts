@@ -121,8 +121,8 @@ type _AppSession = NonNullable<InferSessionFromAuthConfig<_AppSessionAuthConfig>
 
 export type AppRouteKeys = "createBooking" | "getActiveBarbers" | "getAvailableTimeSlots" | "getRevenueStats";
 
-type _CollectionsAPI = { [K in keyof AppCollections]: CollectionAPI<AppCollections[K], AppCollections> };
-type _JobHandlerCollections = _ModuleCollections & {
+type _HandlerModuleCollections = Omit<_ModuleCollections, "appointments" | "barber_services" | "barbers" | "blog_posts" | "pages" | "reviews" | "services">;
+type _JobHandlerCollections = _HandlerModuleCollections & {
 	appointments: typeof _coll_appointments;
 	barber_services: typeof _coll_barber_services;
 	barbers: typeof _coll_barbers;
@@ -131,7 +131,7 @@ type _JobHandlerCollections = _ModuleCollections & {
 	reviews: typeof _coll_reviews;
 	services: typeof _coll_services;
 };
-type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAPI<_ModuleCollections[K], _JobHandlerCollections> } & {
+type _JobHandlerCollectionsAPI = { [K in keyof _HandlerModuleCollections]: CollectionAPI<_HandlerModuleCollections[K], _JobHandlerCollections> } & {
 	appointments: CollectionAPI<typeof _coll_appointments, _JobHandlerCollections>;
 	barber_services: CollectionAPI<typeof _coll_barber_services, _JobHandlerCollections>;
 	barbers: CollectionAPI<typeof _coll_barbers, _JobHandlerCollections>;
@@ -140,6 +140,7 @@ type _JobHandlerCollectionsAPI = { [K in keyof _ModuleCollections]: CollectionAP
 	reviews: CollectionAPI<typeof _coll_reviews, _JobHandlerCollections>;
 	services: CollectionAPI<typeof _coll_services, _JobHandlerCollections>;
 };
+type _CollectionsAPI = _JobHandlerCollectionsAPI;
 type _ExecutionContextJob<T> = T extends { name: infer TName extends string; schema: z.ZodSchema<infer TPayload> } ? QueueJobType<TPayload, TName> : never;
 type _ExecutionContextJobs = {
 	notifyBlogSubscribers: _ExecutionContextJob<typeof _job_notifyBlogSubscribers>;

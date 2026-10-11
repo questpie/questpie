@@ -273,6 +273,14 @@ jobs:
       - name: Dist types gate
         run: bun run scripts/check-dist-types.ts
 
+      # QFM-18: measure consumer declarations, with negative contracts at every size.
+      # Fixed compiler + instantiation ratio avoid noisy runner wall-clock thresholds.
+      - name: Shared handler collection type budget
+        run: |
+          export QUESTPIE_CONTEXT_CONSUMER="$RUNNER_TEMP/questpie-context-consumer"
+          bun -e 'import {mkdirSync,writeFileSync,symlinkSync} from "node:fs"; import {resolve} from "node:path"; const root=process.env.QUESTPIE_CONTEXT_CONSUMER; mkdirSync(root,{recursive:true}); const pkg=await Bun.file("packages/questpie/package.json").json(); pkg.exports=pkg.publishConfig.exports; writeFileSync(root+"/package.json",JSON.stringify(pkg)); symlinkSync(resolve("packages/questpie/dist"),root+"/dist");'
+          bun scripts/context-type-budget.ts "$QUESTPIE_CONTEXT_CONSUMER"
+
       # What npm would actually publish (`npm pack --dry-run`, so `files` and
       # .npmignore are honoured) vs the committed budget. Fails on >5% AND
       # >1 KB growth in any package's unpacked size — both conditions, because a

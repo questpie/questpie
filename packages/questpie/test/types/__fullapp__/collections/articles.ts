@@ -21,6 +21,14 @@ export const articles = collection("articles")
 			.label("Status")
 			.required()
 			.default("draft"),
-	}));
+	}))
+	.hooks({
+		beforeChange: [
+			async ({ data, queue }) => {
+				void queue;
+				void data;
+			},
+		],
+	});
 
 export default articles;
