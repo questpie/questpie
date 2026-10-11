@@ -11,11 +11,11 @@ required text, select literals, relations, populated results and five negative a
 The first complete run passed in 70.3 seconds under the shared host admission guard:
 
 | Collections | Baseline instantiations | Shared instantiations | Baseline check | Shared check |
-| --- | ---: | ---: | ---: | ---: |
-| 10 | 516,063 | 102,967 | 3.08 s | 0.56 s |
-| 50 | 1,348,463 | 149,207 | 9.02 s | 0.92 s |
-| 100 | 2,388,963 | 207,007 | 14.41 s | 1.72 s |
-| 150 | 3,429,463 | 264,807 | 21.27 s | 1.69 s |
+| ----------- | ----------------------: | --------------------: | -------------: | -----------: |
+| 10          |                 516,063 |               102,967 |         3.08 s |       0.56 s |
+| 50          |               1,348,463 |               149,207 |         9.02 s |       0.92 s |
+| 100         |               2,388,963 |               207,007 |        14.41 s |       1.72 s |
+| 150         |               3,429,463 |               264,807 |        21.27 s |       1.69 s |
 
 These are isolated declaration-contract measurements, not whole-application speedups.
 A later repetition failed its per-case deadline while unrelated legacy compilers ran on the
