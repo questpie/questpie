@@ -4,11 +4,9 @@ import { AutopilotPageContent } from "@/components/marketing/autopilot";
 import { MarketingChrome } from "@/components/marketing/chrome";
 import { generateLinks, generateMeta, siteConfig } from "@/lib/seo";
 
-const TITLE = "Autopilot: agents on the team";
-/* The description this replaces promised "Q4 2026 early access". Nothing in the
- * repo dates the pilot, so the page says what it can stand behind instead. */
+const TITLE = "Autopilot: give agents real work, keep the last word";
 const DESCRIPTION =
-	"Autopilot holds the work: goals, tasks, messages. An agent picks something up, asks when it is unsure, and hands back a proposal you accept in one click.";
+	"Autopilot keeps goals, tasks, messages and agent work in one place, with named roles, visible progress and human approval where it matters.";
 
 export const Route = createFileRoute("/autopilot")({
 	component: AutopilotPage,

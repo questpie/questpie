@@ -4,9 +4,9 @@ import { MarketingChrome } from "@/components/marketing/chrome";
 import { FrameworkPage } from "@/components/marketing/framework";
 import { generateLinks, generateMeta, siteConfig } from "@/lib/seo";
 
-const TITLE = "Framework: one schema, everything else derived";
+const TITLE = "Framework: model the application, keep its parts aligned";
 const DESCRIPTION =
-	"QUESTPIE derives the typed API, the admin, the jobs and the client from one definition. In your codebase, on your servers.";
+	"QUESTPIE turns collections into a PostgreSQL schema, typed REST API and typed client, then gives routes, hooks and jobs the same application context.";
 
 export const Route = createFileRoute("/framework")({
 	component: Framework,

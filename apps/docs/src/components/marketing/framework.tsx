@@ -1,86 +1,221 @@
-/* The framework page, band for band from ui_kits/marketing/framework.html.
- *
- * Every code sample here was checked against the repo rather than copied, and
- * most of them moved. The kit invented a fluent job builder, called the client's
- * method `list` on a collection accessor that does not exist, and offered an
- * install pair where one command has no such flag. A framework page that does
- * not compile is worse than no framework page: the first thing a reader does is
- * paste it.
- */
 import questpiePackage from "../../../../../packages/questpie/package.json";
 import { CodeSample } from "./code";
+import { HeroCodeRotator } from "./hero-code-rotator";
+import { SnippetExplorer } from "./snippet-explorer";
 
 const GITHUB_URL = "https://github.com/questpie/questpie";
 
-/* Verified against docs/getting-started/index.mdx (import path, .title) and
- * docs/concepts/collections.mdx, which chains .label() before .required(). */
-const SCHEMA = `import { collection } from "#questpie/factories";
+const MODEL = `import { collection } from "#questpie/factories";
 
-export const news = collection("news")
+export const posts = collection("posts")
   .fields(({ f }) => ({
-    title: f.text(255).label("Title").required(),
-    content: f.richText(),
-    isPublished: f.boolean().default(false),
+    title: f.text(255).required(),
+    published: f.boolean().default(false),
+    author: f.relation("user").required(),
   }))
-  .title(({ f }) => f.title);`;
+  .access({ read: true });`;
 
-/* The kit listed four routes under a note claiming five. GET /:id was the one
- * missing; docs/client/sdk.mdx maps every method to its verb and path. */
-const REST = `GET    /api/news
-GET    /api/news/:id
-POST   /api/news
-PATCH  /api/news/:id
-DELETE /api/news/:id`;
-
-/* Was `client.news.list(...)` returning `{ data }`. The accessor is namespaced
- * under .collections, the method is find(), and sdk.mdx has a callout about the
- * envelope: "Read your rows off result.docs, never result itself." */
-const CLIENT = `const { docs } = await client.collections.news.find({
-  where: { isPublished: true },
-  limit: 10,
-});`;
-
-/* The kit wrote `job("digest").every("1d").run(...)`. There is no such builder:
- * job() takes a definition object, and recurring work is options.cron. */
-const JOB = `export default job({
-  name: "digest",
-  options: { cron: "0 8 * * *" },
-  handler: async ({ collections, email }) => {
-    await email.send(await buildDigest(collections.news));
-  },
-});`;
-
-/* `bun add questpie drizzle-orm@beta zod` + `questpie generate --watch` was the
- * kit's pair. generate takes -c, --dry-run and --verbose — there is no --watch,
- * that command is `questpie dev`. The documented start is the scaffolder, which
- * installs dependencies and runs codegen for you. */
-const START = `bunx create-questpie my-app
-bun run dev`;
-
-const ADMIN_TICKS = [
-	"List with your labels and search",
-	"Editor with the right control per field",
-	"Versions, drafts and publish state",
-];
-
-const APP_PARTS = [
+const HERO_SNIPPETS = [
 	{
-		body: "Typed handlers receive the same collections, database and services.",
+		annotations: [
+			{
+				description:
+					"Declares the fields that drive storage, validation and generated types.",
+				match: ".fields",
+			},
+			{
+				description:
+					"Makes the field mandatory across writes, generated APIs and clients.",
+				match: ".required",
+			},
+			{
+				description: "Keeps authorization next to the model it protects.",
+				match: ".access",
+			},
+		],
+		code: MODEL,
+		description:
+			"Fields, relations and access rules become the shared contract for the database, API and client.",
+		file: "collections/posts.ts",
+		key: "model",
+		label: "Model",
+		mark: "4,5,6",
+	},
+	{
+		annotations: [
+			{
+				description: "Validates the request before the handler runs.",
+				match: ".schema",
+			},
+			{
+				description:
+					"Uses the same access boundary as the rest of the application.",
+				match: ".access",
+			},
+			{
+				description:
+					"Receives typed input and collections through the application context.",
+				match: ".handler",
+			},
+		],
+		code: `export default route()
+  .post()
+  .schema(z.object({ title: z.string() }))
+  .access(({ session }) => !!session?.user)
+  .handler(async ({ input, collections }) => {
+    const post = await collections.posts.create(input);
+    return { id: post.id };
+  });`,
+		description:
+			"Validated input and typed collections meet inside a route that is discovered from its file.",
+		file: "routes/create-post.ts",
+		key: "route",
+		label: "Route",
+		mark: "3,4,5,6,7",
+	},
+	{
+		annotations: [
+			{
+				description: "Validates the payload before the job is accepted.",
+				match: "schema:",
+			},
+			{
+				description: "Injects typed services when the background job runs.",
+				match: "handler:",
+			},
+			{
+				description:
+					"Uses the configured mail service without rebuilding the integration.",
+				match: "email.send",
+			},
+		],
+		code: `export default job({
+  name: "daily-digest",
+  schema: z.object({ recipient: z.email() }),
+  handler: async ({ payload, email }) =>
+    email.send({
+      to: payload.recipient,
+      subject: "Daily digest",
+    }),
+});`,
+		description:
+			"Background work receives a validated payload and the same typed services as the request path.",
+		file: "jobs/daily-digest.ts",
+		key: "job",
+		label: "Job",
+		mark: "3,4,5,6,7",
+	},
+] as const;
+
+const REST = `GET    /api/posts
+GET    /api/posts/:id
+POST   /api/posts
+PATCH  /api/posts/:id
+DELETE /api/posts/:id`;
+
+const CLIENT = `const { docs } = await client.collections.posts.find({
+  where: { published: true },
+  with: { author: true },
+});`;
+
+const APPLICATION_PARTS = [
+	{
+		body: "Write type-safe endpoints beside the model. Handlers receive the application context and validated input.",
+		code: `export default route()
+  .post()
+  .schema(z.object({ period: z.enum(["day", "week"]) }))
+  .handler(async ({ input, collections }) => {
+    const total = await collections.posts.count({});
+    return { period: input.period, total };
+  });`,
+		file: "routes/post-stats.ts",
+		key: "routes",
 		title: "Routes",
 	},
 	{
-		body: "Run work now, later or on a schedule. Keep retries in one place.",
+		body: "React to collection changes without importing the generated app back into the files it discovers.",
+		code: `.hooks({
+  afterChange: async ({ data, operation, queue }) => {
+    if (operation !== "create") return;
+    await queue.notifyPost.publish({ postId: data.id });
+  },
+});`,
+		file: "collections/posts.ts",
+		key: "hooks",
+		title: "Hooks",
+	},
+	{
+		body: "Run work now, later or on a schedule with typed payloads and the same collections and services.",
+		code: `export default job({
+  name: "daily-digest",
+  schema: z.object({}),
+  handler: async ({ email }) => {
+    await email.send({
+      to: "team@example.com",
+      subject: "Daily digest",
+      html: "<p>The latest posts are ready.</p>",
+    });
+  },
+  options: { cron: "0 8 * * *" },
+});`,
+		file: "jobs/daily-digest.ts",
+		key: "jobs",
 		title: "Jobs",
 	},
 	{
-		body: "Give hooks, routes and jobs one typed dependency.",
+		body: "Give routes, hooks and jobs one typed dependency instead of rebuilding integrations in every handler.",
+		code: `export default service({
+  create: () => ({
+    readingTime(content: string) {
+      const words = content.trim().split(/\\s+/).length;
+      return Math.max(1, Math.ceil(words / 200));
+    },
+  }),
+});`,
+		file: "services/editorial.ts",
+		key: "services",
 		title: "Services",
 	},
+] as const;
+
+const PRODUCT_SURFACES = [
 	{
-		body: "Add realtime, search, storage, mail and queues when you need them.",
-		title: "Infrastructure",
+		body: "Generate collection forms, list views and authentication-aware navigation from field metadata.",
+		code: `import { adminModule } from "@questpie/admin/modules/admin";
+
+export default [adminModule] as const;`,
+		file: "server/modules.ts",
+		key: "admin",
+		title: "Admin",
 	},
-];
+	{
+		body: "Publish the machine-readable schema and a Scalar reference UI from the same application contract.",
+		code: `import { openApiModule } from "@questpie/openapi";
+
+export default [openApiModule] as const;
+
+// /api/openapi.json
+// /api/docs`,
+		file: "server/modules.ts",
+		key: "openapi",
+		title: "OpenAPI",
+	},
+	{
+		body: "Expose approved collection operations and routes as agent tools under the access rules already in the app.",
+		code: `import { adminModule } from "@questpie/admin/modules/admin";
+import { mcpModule } from "@questpie/mcp/modules/mcp";
+
+export default [adminModule, mcpModule] as const;
+
+// OAuth-gated endpoint: /api/mcp`,
+		file: "server/modules.ts",
+		key: "mcp",
+		title: "MCP",
+	},
+] as const;
+
+const START = `bunx create-questpie my-app
+bun run dev`;
 
 export function FrameworkPage() {
 	return (
@@ -88,17 +223,19 @@ export function FrameworkPage() {
 			<section className="band hero">
 				<div className="wrap split">
 					<div className="head">
-						<p className="qp-aside">describe the data once</p>
+						<p className="qp-aside">the backend contract in TypeScript</p>
 						<h1 className="qp-display-xl">
-							One schema. <em className="qp-hl">Everything else follows.</em>
+							Model the application.{" "}
+							<em className="qp-hl">Keep its parts aligned.</em>
 						</h1>
 						<p className="qp-lead">
-							QUESTPIE derives the typed API, the admin, the jobs and the client
-							from one definition. In your codebase, on your servers.
+							QUESTPIE turns collections into a PostgreSQL schema, typed REST
+							API and typed client. Then it gives your routes, hooks and jobs
+							the same application context.
 						</p>
 						<div className="actions">
-							<a className="btn p lg" href="/docs">
-								Read the docs
+							<a className="btn p lg" href="/docs/learn/first-app">
+								Create your first app
 							</a>
 							<a
 								className="btn o lg"
@@ -106,142 +243,82 @@ export function FrameworkPage() {
 								rel="noreferrer"
 								target="_blank"
 							>
-								Star on GitHub
+								View on GitHub
 							</a>
 						</div>
-						{/* Bun 1.3+ and Postgres 15+ are the prerequisites the getting-started
-						    page states; the kit said "Bun or Node 18+", which the template
-						    does not target. */}
 						<p className="qp-eyebrow">
-							MIT · v{questpiePackage.version} · Bun 1.3+ · Postgres 15+
+							MIT · v{questpiePackage.version} · Bun 1.3+ · PostgreSQL 15+
 						</p>
 					</div>
 
-					<div className="hero-card">
-						<div className="hero-card-head">
-							<span className="qp-eyebrow">collections/news.ts</span>
-							<span className="count">source of truth</span>
-						</div>
-						<CodeSample bare code={SCHEMA} mark="4,5" numbers />
-					</div>
+					<HeroCodeRotator items={HERO_SNIPPETS} />
 				</div>
 			</section>
 
-			<section className="band raised">
+			<section className="band editorial-band">
 				<div className="wrap">
 					<div className="head">
-						<p className="qp-aside">derived, not written</p>
-						<h2 className="qp-display-m">Four things you stop maintaining</h2>
+						<p className="qp-aside">a contract you can inspect</p>
+						<h2 className="qp-display-m">The useful output is already typed</h2>
+						<p>
+							The model is not a separate schema language. It stays in the same
+							TypeScript project as the code that uses it.
+						</p>
 					</div>
-					<div
-						className="grid2"
-						style={{ gridAutoRows: "1fr", marginTop: "var(--space-8)" }}
-					>
-						<div className="card stack">
-							<p className="qp-eyebrow">Typed REST</p>
-							<CodeSample bare code={REST} lang="bash" />
-							<p className="card-note">
-								Five routes per collection, typed end to end.
-							</p>
-						</div>
-						<div className="card stack">
-							<p className="qp-eyebrow">Client</p>
+
+					<div className="code-contract">
+						<section>
+							<p className="qp-eyebrow">Five REST endpoints per collection</p>
+							<CodeSample bare code={REST} lang="http" />
+						</section>
+						<section>
+							<p className="qp-eyebrow">A client shaped by your model</p>
 							<CodeSample bare code={CLIENT} />
-							<p className="card-note">
-								Method names come from your collection names. No SDK to keep in
-								step.
-							</p>
-						</div>
-						<div className="card stack">
-							<p className="qp-eyebrow">Admin</p>
-							<div className="ticks">
-								{ADMIN_TICKS.map((tick) => (
-									<span key={tick}>
-										<i />
-										{tick}
-									</span>
-								))}
-							</div>
-							<p className="card-note">
-								No layout file: the schema is the layout.{" "}
-								<a href="/docs/admin">See the admin →</a>
-							</p>
-						</div>
-						<div className="card stack">
-							<p className="qp-eyebrow">Jobs</p>
-							<CodeSample bare code={JOB} />
-							{/* The kit promised "a run log". There is no built-in one — the
-							    audit log is opt-in through logAuditEntry(). The cron schedule
-							    is declarative and real, so it takes the third slot. */}
-							<p className="card-note">
-								Queue, retries and a cron schedule, from one file convention.
-							</p>
-						</div>
+						</section>
 					</div>
 				</div>
 			</section>
-
-			<section className="band">
-				<div className="wrap split lean">
-					<div className="head">
-						<p className="qp-aside">one source of truth</p>
-						<h2 className="qp-display-m">Change the model once</h2>
-						<p>
-							The same model types your database, API, admin and client. You do
-							not copy a field or its rules into four files.
-						</p>
-					</div>
-					<div className="derivation-flow">
-						<div className="derivation-source">
-							<span className="qp-eyebrow">Your model</span>
-							<strong>Fields, access, hooks</strong>
-						</div>
-						<span aria-hidden="true" className="flow-arrow">
-							→
-						</span>
-						<div className="derivation-outputs" role="list">
-							{["Database", "Typed API", "Admin", "Client"].map((part) => (
-								<span key={part} role="listitem">
-									{part}
-								</span>
-							))}
-						</div>
-					</div>
-				</div>
-			</section>
-
-			<hr className="rule" />
 
 			<section className="band raised">
 				<div className="wrap">
 					<div className="head">
-						<p className="qp-aside">the model is only the start</p>
-						<h2 className="qp-display-m">
-							Write the parts that make the app yours
-						</h2>
+						<p className="qp-aside">the framework does not stop at CRUD</p>
+						<h2 className="qp-display-m">Your application logic has a home</h2>
 						<p>
-							QUESTPIE handles the repeated work. Your code holds the decisions.
+							File convention removes wiring. Typed context keeps the pieces
+							connected without making them depend on one another.
 						</p>
 					</div>
-					<div className="feature-list" role="list">
-						{APP_PARTS.map((part) => (
-							<div className="feature-item" key={part.title} role="listitem">
-								<h3>{part.title}</h3>
-								<p>{part.body}</p>
-							</div>
-						))}
-					</div>
+					<SnippetExplorer items={APPLICATION_PARTS} />
 				</div>
 			</section>
 
 			<section className="band">
-				<div className="wrap split">
+				<div className="wrap">
+					<div className="head">
+						<p className="qp-aside">interfaces are modules, not assumptions</p>
+						<h2 className="qp-display-m">Add the surface your users need</h2>
+						<p>
+							The core owns the model and HTTP contract. Admin, OpenAPI and MCP
+							read that contract through explicit modules.
+						</p>
+						<p>
+							Run Hono or Elysia as a headless backend. Use TanStack Start or
+							Next.js when the application needs the generated admin.
+						</p>
+					</div>
+					<SnippetExplorer compact items={PRODUCT_SURFACES} />
+				</div>
+			</section>
+
+			<section className="band raised">
+				<div className="wrap editorial-split">
 					<div className="head">
 						<p className="qp-aside">your application stays yours</p>
-						<h2 className="qp-display-m">Run it where you choose</h2>
+						<h2 className="qp-display-m">Choose every runtime boundary</h2>
 						<p>
-							QUESTPIE ships as open-source packages. Your code runs on your
-							server. Your data stays in PostgreSQL.
+							The packages are open source. The application stays in your
+							repository, runs on your server and stores data in PostgreSQL.
 						</p>
 					</div>
 					<div className="ownership-list" role="list">
@@ -255,30 +332,27 @@ export function FrameworkPage() {
 						</div>
 						<div role="listitem">
 							<span className="qp-eyebrow">Runtime</span>
-							<strong>TanStack, Next, Hono or Elysia</strong>
+							<strong>TanStack, Next.js, Hono or Elysia</strong>
 						</div>
 					</div>
 				</div>
 			</section>
 
-			<section className="band" style={{ paddingBottom: "var(--space-16)" }}>
-				<div className="wrap split">
+			<section className="band launch-band">
+				<div className="wrap launch-split">
 					<div className="head">
-						<p className="qp-aside">two commands</p>
-						<h2 className="qp-display-m">Build the first app</h2>
-						{/* "Adapter" is this product's word for a pluggable backend — email,
-						    kv, queue, storage. The thing you pick here is the runtime, and
-						    all four templates ship in create-questpie. */}
+						<p className="qp-aside">from empty directory to typed backend</p>
+						<h2 className="qp-display-l">Build the first application</h2>
 						<p>
-							Pick your runtime: TanStack Start, Next, Hono or Elysia. The
-							generator writes your typed app.
+							Pick a runtime. The generator installs the project, runs codegen
+							and shows the next steps.
 						</p>
 						<div className="actions">
 							<a className="btn p lg" href="/docs/learn/first-app">
 								Create your first app
 							</a>
 							<a className="btn g lg" href="/docs/learn">
-								See how QUESTPIE works
+								Understand the model
 							</a>
 						</div>
 					</div>
