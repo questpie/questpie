@@ -27,6 +27,7 @@ import type {
 	ValidationBuilderOptions,
 	ValidationSchemas,
 } from "#questpie/server/collection/builder/validation-helpers.js";
+import { OUTPUT_ONLY_AFTER_READ } from "#questpie/server/collection/crud/shared/relation-aggregate.js";
 import { isInTransaction } from "#questpie/server/collection/crud/shared/transaction.js";
 import { ApiError } from "#questpie/server/errors/base.js";
 import {
@@ -1032,6 +1033,8 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				wakeStorageCleanup(app, logger);
 			});
 		};
+
+		OUTPUT_ONLY_AFTER_READ.add(uploadAfterReadHook);
 
 		// Merge existing afterRead hooks with upload hook
 		const existingAfterRead = this.state.hooks?.afterRead;

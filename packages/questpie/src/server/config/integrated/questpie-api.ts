@@ -92,12 +92,23 @@ type CollectionCRUD<
 		ExtractIdType<TSelect>,
 		CollectionOptionsOf<TCollection>
 	>,
-	"find" | "findOne" | "count" | "purgeById"
+	"find" | "findRows" | "findOne" | "count" | "purgeById"
 > & {
 	find<TQuery extends FindOptions<TCollection, TApp>>(
 		options?: TQuery,
 		context?: CRUDContext,
 	): Promise<FindResult<TSelect, TRelations, TQuery>>;
+
+	findRows<
+		TQuery extends FindOptions<TCollection, TApp> & {
+			limit: number;
+			offset?: never;
+			groupBy?: never;
+		},
+	>(
+		options: TQuery,
+		context?: CRUDContext,
+	): Promise<ApplyQuery<TSelect, TRelations, TQuery>[]>;
 
 	findOne<TQuery extends FindOneOptions<TCollection, TApp>>(
 		options?: TQuery,

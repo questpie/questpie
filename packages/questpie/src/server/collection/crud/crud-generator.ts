@@ -5,13 +5,17 @@ import { isDeepStrictEqual } from "node:util";
 import {
 	and,
 	asc,
+	avg,
 	type Column,
 	count,
 	desc,
 	eq,
 	inArray,
+	max,
+	min,
 	type SQL,
 	sql,
+	sum,
 } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 
@@ -115,6 +119,11 @@ import {
 	splitLocalizedFields,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/index.js";
+import {
+	OUTPUT_ONLY_AFTER_READ,
+	RELATION_AGGREGATE,
+	type RelationAggregate,
+} from "#questpie/server/collection/crud/shared/relation-aggregate.js";
 import {
 	type RowLockStrength,
 	rowLockForUpdate,
@@ -422,6 +431,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	generate(): CRUD {
 		const find = this.wrapWithAppContext("find", this.createFind());
 		const findOne = this.wrapWithAppContext("findOne", this.createFindOne());
+		const findRows = this.wrapWithAppContext("findRows", this.createFindRows());
 		const updateMany = this.wrapWithAppContext(
 			"updateMany",
 			this.createUpdateMany(),
@@ -443,6 +453,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const crud: CRUD = {
 			find: find as CRUD["find"],
 			findOne,
+			findRows: findRows as CRUD["findRows"],
 			count: this.wrapWithAppContext("count", this.createCount()),
 			lockMany: this.wrapWithAppContext("lockMany", this.createLockMany()),
 			create: this.wrapWithAppContext("create", this.createCreate()),
@@ -483,6 +494,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		crud["~internalState"] = this.state;
 		crud["~internalRelatedTable"] = this.table;
 		crud["~internalI18nTable"] = this.i18nTable;
+		Object.defineProperty(crud, RELATION_AGGREGATE, {
+			value: this.wrapWithAppContext(
+				"read",
+				(
+					options: FindManyOptions,
+					context: CRUDContext,
+					aggregate: RelationAggregate,
+				) => this._executeFind(options, context, "aggregate", { aggregate }),
+			),
+		});
 
 		// Fail loud on unknown method access (e.g. typos in untyped glue code)
 		return guardCrudMethods(crud, this.state.name);
@@ -666,24 +687,92 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	/**
+	 * SELECT for a hasMany relation aggregate executed by this (target) collection.
+	 * A `_count` only depends on which rows the read pipeline admits. A value
+	 * aggregate also exposes field content, so it refuses every per-row rule
+	 * the SQL cannot honour: field read rules and afterRead transforms.
+	 */
+	private buildAggregateSelect(
+		aggregate: RelationAggregate,
+		context: CRUDContext,
+	): Record<string, any> {
+		const fieldAccess = this.getFieldAccessRules();
+		const assertReadable = (field: string) => {
+			if (context.accessMode === "system") return;
+			const read = fieldAccess?.[field]?.read;
+			if (read === false) {
+				throw ApiError.forbidden({
+					operation: "read",
+					resource: this.state.name,
+					reason: "Aggregate field is not readable",
+				});
+			}
+			if (typeof read === "function") {
+				throw ApiError.badRequest(
+					"Relation aggregates do not support dynamic field read rules",
+				);
+			}
+		};
+
+		const groupColumn = getColumn(this.table, aggregate.field);
+		if (!groupColumn) {
+			throw ApiError.badRequest("Unknown aggregate relation key");
+		}
+		assertReadable(aggregate.field);
+		const select: Record<string, any> = { [aggregate.field]: groupColumn };
+		if (aggregate.count || aggregate.values?._count) {
+			select._count = count().as("_count");
+		}
+
+		const hasCollectionAfterRead = [this.state.hooks?.afterRead]
+			.flat()
+			.some((hook) => hook && !OUTPUT_ONLY_AFTER_READ.has(hook));
+		const operations = { _sum: sum, _avg: avg, _min: min, _max: max };
+		for (const [kind, operation] of Object.entries(operations)) {
+			const fields = aggregate.values?.[kind as keyof typeof operations];
+			for (const [field, enabled] of Object.entries(fields ?? {})) {
+				// Own columns only: an inherited key such as `constructor` is not a field.
+				if (!enabled || !Object.hasOwn(this.table, field)) continue;
+				const column = getColumn(this.table, field);
+				if (!column) continue;
+				assertReadable(field);
+				if (
+					hasCollectionAfterRead ||
+					this.state.fieldDefinitions?.[field]?._state.hooks?.afterRead
+				) {
+					throw ApiError.badRequest(
+						"Relation value aggregates do not support afterRead hooks",
+					);
+				}
+				select[`${kind}_${field}`] = operation(column).as(`${kind}_${field}`);
+			}
+		}
+		return select;
+	}
+
+	/**
 	 * Internal find execution - shared logic for find and findOne
 	 * Reduces code duplication between the two methods
 	 *
 	 * @param options - Query options (FindManyOptions or FindOneOptions)
 	 * @param context - CRUD context
-	 * @param mode - 'many' for paginated results, 'one' for single result
+	 * @param mode - 'many' for paginated results, 'one' for single result,
+	 *   'rows' for a bounded row list without a total, 'aggregate' for a
+	 *   hasMany relation aggregate grouped by the foreign key
 	 */
 	private async _executeFind<T>(
 		options: FindManyOptions | FindOneOptionsBase,
 		context: CRUDContext,
-		mode: "many" | "one",
+		mode: "many" | "one" | "rows" | "aggregate",
 		findOptions?: {
+			rowsLimit?: number;
+			aggregate?: RelationAggregate;
 			skipFieldFiltering?: boolean;
 			skipOutputHooks?: boolean;
 			skipReadLifecycle?: boolean;
 			onAccessEvaluated?: (access: boolean | AccessWhere) => void;
 		},
-	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T | null> {
+	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T[] | T | null> {
 		// Normalize context FIRST to ensure locale defaults are applied.
 		// `locale`/`localeFallback` are declared on the options as well as the
 		// context (crud/types.ts) and documented as "override locale for this
@@ -777,12 +866,27 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				const mergedWhere = this.mergeWhere(options.where, accessWhere);
+				if (
+					mode === "rows" &&
+					((options as FindManyOptions).offset !== undefined ||
+						(options as FindManyOptions).groupBy !== undefined)
+				) {
+					throw ApiError.badRequest(
+						"findRows forbids offset/groupBy after read hooks",
+					);
+				}
 				const includeDeleted = options.includeDeleted === true;
 				const readStage = this.getReadStage(options, normalized);
 				const useStageVersions =
 					!!this.workflowConfig &&
 					!!readStage &&
 					readStage !== this.workflowConfig.initialStage;
+				const aggregate = findOptions?.aggregate;
+				if (aggregate && useStageVersions) {
+					throw ApiError.badRequest(
+						"Relation aggregates are not supported for workflow stage reads",
+					);
+				}
 				const groupByOptions =
 					mode === "many"
 						? this.normalizeGroupBy((options as FindManyOptions).groupBy)
@@ -898,15 +1002,17 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					: null;
 
 				// Build SELECT object with aliased i18n tables
-				const selectObj = this.buildSelectObject(
-					options.columns ?? (options as { select?: Columns }).select,
-					options.extras,
-					normalized,
-					i18nCurrentTable,
-					i18nFallbackTable,
-					readTable,
-					useStageVersions,
-				);
+				const selectObj = aggregate
+					? this.buildAggregateSelect(aggregate, normalized)
+					: this.buildSelectObject(
+							options.columns ?? (options as { select?: Columns }).select,
+							options.extras,
+							normalized,
+							i18nCurrentTable,
+							i18nFallbackTable,
+							readTable,
+							useStageVersions,
+						);
 
 				// Start building query
 				let query: any;
@@ -1037,8 +1143,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}
 				}
 
-				// Search filter by _title (for relation pickers, etc.) - only for 'many' mode
-				if (mode === "many" && (options as FindManyOptions).search) {
+				// Search filter by _title (for relation pickers, etc.) - row lists only
+				if (
+					(mode === "many" || mode === "rows") &&
+					(options as FindManyOptions).search
+				) {
 					const searchTerm = (options as FindManyOptions).search;
 					// Get the title expression using aliased tables
 					let titleExpr: unknown = null;
@@ -1086,6 +1195,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				let groupRows: Array<{ value: unknown; count: number }> | undefined;
 				let totalGroups: number | undefined;
+				if (aggregate) {
+					const column = getColumn(readTable, aggregate.field)!;
+					whereClauses.push(inArray(column, aggregate.parentIds));
+					return (await query
+						.where(and(...whereClauses))
+						.groupBy(column)) as T[];
+				}
 
 				if (groupByOptions) {
 					const column = getColumn(readTable, groupByOptions.field);
@@ -1211,6 +1327,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// LIMIT - for 'one' mode always 1, for 'many' use options
 				if (mode === "one") {
 					query = query.limit(1);
+				} else if (mode === "rows") {
+					query = query.limit(findOptions!.rowsLimit!);
 				} else {
 					const manyOptions = options as FindManyOptions;
 					if (!groupByOptions && manyOptions.limit !== undefined) {
@@ -1281,6 +1399,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				if (mode === "one") {
 					return (rows[0] as T) || null;
 				}
+				if (mode === "rows") return rows as T[];
 
 				// Construct paginated result for 'many' mode
 				const manyOptions = options as FindManyOptions;
@@ -1342,6 +1461,32 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			return this._executeFind(options, context, "many") as Promise<
 				PaginatedResult<any> | GroupedPaginatedResult<any>
 			>;
+		};
+	}
+
+	private createFindRows() {
+		return async (
+			options: FindManyOptions,
+			context: CRUDContext = {},
+		): Promise<any[]> => {
+			// The bound is captured before any awaited hook, so neither a hook nor
+			// the caller mutating `options` mid-read can lift the SQL LIMIT.
+			const rowsLimit = options?.limit;
+			if (
+				!options ||
+				!Number.isInteger(rowsLimit) ||
+				rowsLimit! < 1 ||
+				rowsLimit! > 100 ||
+				options.offset !== undefined ||
+				options.groupBy !== undefined
+			) {
+				throw ApiError.badRequest(
+					"findRows requires limit 1–100 and forbids offset/groupBy",
+				);
+			}
+			return this._executeFind(options, context, "rows", {
+				rowsLimit,
+			}) as Promise<any[]>;
 		};
 	}
 
