@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, avg, count, eq, inArray, max, min, sql, sum } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
@@ -43,6 +43,10 @@ import {
 	validateFieldsWriteAccess,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/index.js";
+import {
+	type AggregateCRUD,
+	RELATION_AGGREGATE,
+} from "#questpie/server/collection/crud/shared/relation-aggregate.js";
 import { rowLockForUpdate } from "#questpie/server/collection/crud/shared/row-lock.js";
 import type {
 	Columns,
@@ -2171,7 +2175,6 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 		context: CRUDContext,
 	) {
 		if (!rows.length || !withConfig || !this.app) return;
-		const db = this.getDb(context);
 
 		for (const [relationName, relationOptions] of Object.entries(withConfig)) {
 			if (!relationOptions) continue;
@@ -2248,83 +2251,16 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 					typeof relationOptions === "object" ? relationOptions : {};
 
 				if (nestedOptions._count || nestedOptions._aggregate) {
-					const relatedTable = relatedCrud["~internalRelatedTable"];
-					const foreignKeyCol = relatedTable[foreignKeyField];
-
-					const selectClause: Record<string, any> = {
-						[foreignKeyField]: foreignKeyCol,
-					};
-
-					if (nestedOptions._count) {
-						selectClause._count = count().as("_count");
-					}
-
-					if (nestedOptions._aggregate) {
-						const agg = nestedOptions._aggregate;
-						if (agg._count) {
-							selectClause._count = count().as("_count");
-						}
-						if (agg._sum) {
-							for (const [field, enabled] of Object.entries(agg._sum)) {
-								if (enabled && relatedTable[field]) {
-									selectClause[`_sum_${field}`] = sum(relatedTable[field]).as(
-										`_sum_${field}`,
-									);
-								}
-							}
-						}
-						if (agg._avg) {
-							for (const [field, enabled] of Object.entries(agg._avg)) {
-								if (enabled && relatedTable[field]) {
-									selectClause[`_avg_${field}`] = avg(relatedTable[field]).as(
-										`_avg_${field}`,
-									);
-								}
-							}
-						}
-						if (agg._min) {
-							for (const [field, enabled] of Object.entries(agg._min)) {
-								if (enabled && relatedTable[field]) {
-									selectClause[`_min_${field}`] = min(relatedTable[field]).as(
-										`_min_${field}`,
-									);
-								}
-							}
-						}
-						if (agg._max) {
-							for (const [field, enabled] of Object.entries(agg._max)) {
-								if (enabled && relatedTable[field]) {
-									selectClause[`_max_${field}`] = max(relatedTable[field]).as(
-										`_max_${field}`,
-									);
-								}
-							}
-						}
-					}
-
-					const whereConditions = [
-						inArray(foreignKeyCol, Array.from(parentIds)),
-					];
-
-					if (nestedOptions.where) {
-						const additionalWhere = this.buildWhereClauseInternal(
-							nestedOptions.where,
-							false,
-							relatedTable,
-							context,
-							relatedCrud["~internalState"],
-							relatedCrud["~internalI18nTable"],
-						);
-						if (additionalWhere) {
-							whereConditions.push(additionalWhere);
-						}
-					}
-
-					const aggregateResults = await db
-						.select(selectClause)
-						.from(relatedTable)
-						.where(and(...whereConditions))
-						.groupBy(foreignKeyCol);
+					// The target collection owns the aggregate's authorization and
+					// SQL, exactly as it does for a collection parent.
+					const aggregateResults = await (
+						relatedCrud as unknown as AggregateCRUD
+					)[RELATION_AGGREGATE](nestedOptions, context, {
+						field: foreignKeyField,
+						parentIds: Array.from(parentIds),
+						count: nestedOptions._count,
+						values: nestedOptions._aggregate,
+					});
 
 					const aggregateMap = new Map();
 					for (const result of aggregateResults) {

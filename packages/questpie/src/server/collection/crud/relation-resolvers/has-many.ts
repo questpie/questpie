@@ -5,11 +5,13 @@
  * pointing back to this collection.
  */
 
-import { and, avg, count, inArray, max, min, type SQL, sum } from "drizzle-orm";
-
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import type { buildWhereClause as BuildWhereClauseFn } from "#questpie/server/collection/crud/query-builders/where-builder.js";
 import type { resolveFieldKey as ResolveFieldKeyFn } from "#questpie/server/collection/crud/shared/field-resolver.js";
+import {
+	type AggregateCRUD,
+	RELATION_AGGREGATE,
+} from "#questpie/server/collection/crud/shared/relation-aggregate.js";
 import type {
 	CRUD,
 	CRUDContext,
@@ -147,10 +149,7 @@ export async function resolveHasManyWithAggregation(
 		relatedCrud,
 		nestedOptions,
 		context,
-		db,
 		resolveFieldKey,
-		buildWhereClause,
-		app,
 	} = options;
 
 	if (rows.length === 0) return;
@@ -179,89 +178,17 @@ export async function resolveHasManyWithAggregation(
 
 	if (parentIds.size === 0) return;
 
-	const relatedTable = relatedCrud["~internalRelatedTable"];
-	const foreignKeyCol = relatedTable[foreignKeyField];
-
-	// Build select clause with aggregations
-	const selectClause: Record<string, any> = {
-		[foreignKeyField]: foreignKeyCol,
-	};
-
-	if (nestedOptions._count) {
-		selectClause._count = count().as("_count");
-	}
-
-	if (nestedOptions._aggregate) {
-		const agg = nestedOptions._aggregate;
-		if (agg._count) {
-			selectClause._count = count().as("_count");
-		}
-		if (agg._sum) {
-			for (const [field, enabled] of Object.entries(agg._sum)) {
-				if (enabled && relatedTable[field]) {
-					selectClause[`_sum_${field}`] = sum(relatedTable[field]).as(
-						`_sum_${field}`,
-					);
-				}
-			}
-		}
-		if (agg._avg) {
-			for (const [field, enabled] of Object.entries(agg._avg)) {
-				if (enabled && relatedTable[field]) {
-					selectClause[`_avg_${field}`] = avg(relatedTable[field]).as(
-						`_avg_${field}`,
-					);
-				}
-			}
-		}
-		if (agg._min) {
-			for (const [field, enabled] of Object.entries(agg._min)) {
-				if (enabled && relatedTable[field]) {
-					selectClause[`_min_${field}`] = min(relatedTable[field]).as(
-						`_min_${field}`,
-					);
-				}
-			}
-		}
-		if (agg._max) {
-			for (const [field, enabled] of Object.entries(agg._max)) {
-				if (enabled && relatedTable[field]) {
-					selectClause[`_max_${field}`] = max(relatedTable[field]).as(
-						`_max_${field}`,
-					);
-				}
-			}
-		}
-	}
-
-	// Build where conditions
-	const whereConditions: SQL[] = [
-		inArray(foreignKeyCol, Array.from(parentIds)),
-	];
-
-	if (nestedOptions.where) {
-		// Note: For relation resolvers, we don't use i18n fallback (useI18n: false)
-		const additionalWhere = buildWhereClause(nestedOptions.where, {
-			table: relatedTable,
-			state: relatedCrud["~internalState"],
-			i18nCurrentTable: relatedCrud["~internalI18nTable"],
-			i18nFallbackTable: null,
-			context,
-			app,
-			useI18n: false,
-			db,
-		});
-		if (additionalWhere) {
-			whereConditions.push(additionalWhere);
-		}
-	}
-
-	// Execute aggregation query
-	const aggregateResults = await db
-		.select(selectClause)
-		.from(relatedTable)
-		.where(and(...whereConditions))
-		.groupBy(foreignKeyCol);
+	// The target collection runs the aggregate through its own read pipeline
+	// (access rule, where, soft delete, transaction) and intersects the parent
+	// ids in SQL; this resolver only groups the result back onto the parents.
+	const aggregateResults = await (relatedCrud as unknown as AggregateCRUD)[
+		RELATION_AGGREGATE
+	](nestedOptions, context, {
+		field: foreignKeyField,
+		parentIds: Array.from(parentIds),
+		count: nestedOptions._count,
+		values: nestedOptions._aggregate,
+	});
 
 	// Build lookup map with aggregation results
 	const aggregateMap = new Map<any, Record<string, any>>();

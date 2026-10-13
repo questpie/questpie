@@ -1586,6 +1586,18 @@ export interface CRUD<
 		context?: CRUDContext,
 	): Promise<FindResult<TSelect, TRelations, TQuery>>;
 
+	/** Backend-only rows without a total; bounded to 1–100 and no offset/groupBy. */
+	findRows<
+		TQuery extends FindManyOptions<TSelect, TRelations> & {
+			limit: number;
+			offset?: never;
+			groupBy?: never;
+		},
+	>(
+		options: TQuery,
+		context?: CRUDContext,
+	): Promise<ApplyQuery<TSelect, TRelations, TQuery>[]>;
+
 	/**
 	 * Find single record matching query
 	 * Returns type-safe result based on columns and with options
