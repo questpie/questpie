@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import {
 	boolean,
 	customType,
@@ -30,6 +30,37 @@ const jsonbSafe = customType<{ data: unknown; driverData: unknown }>({
 	toDriver: (value) => new JsonDriverValue(value),
 	fromDriver: (value) => value,
 });
+
+type DispatchColumns<TKey extends string> = Record<TKey, SQLWrapper>;
+
+/**
+ * Rows whose broker execution state reconciliation still owns. The index
+ * predicate and the reconcile query share this text, constants inlined, so
+ * PostgreSQL can prove the partial index applies under any plan mode.
+ */
+export function queueDispatchReconcilePredicate(
+	table: DispatchColumns<"secretPayload" | "status" | "adapterJobId">,
+): SQL {
+	return sql`${table.secretPayload} = true AND ${table.status} = 'accepted' AND ${table.adapterJobId} IS NOT NULL`;
+}
+
+/**
+ * Rows retention may delete once old enough: terminal rows, and accepted rows
+ * of non-secret jobs, where the adapter owns execution and the row is only the
+ * idempotency receipt. Shared with the prune query for the same reason.
+ */
+export function queueDispatchPrunablePredicate(
+	table: DispatchColumns<"secretPayload" | "status">,
+): SQL {
+	return sql`(${table.status} IN ('completed', 'failed') OR (${table.status} = 'accepted' AND ${table.secretPayload} = false))`;
+}
+
+/** Time a prunable row was handed off or reached its terminal state. */
+export function queueDispatchFinishedAt(
+	table: DispatchColumns<"completedAt" | "failedAt" | "acceptedAt">,
+): SQL {
+	return sql`COALESCE(${table.completedAt}, ${table.failedAt}, ${table.acceptedAt})`;
+}
 
 /**
  * Internal durable handoff for queue backends that cannot join the current
@@ -93,5 +124,11 @@ export const questpieQueueDispatchTable = pgTable(
 			table.availableAt,
 			table.leasedUntil,
 		),
+		index("idx_queue_dispatch_reconcile")
+			.on(table.createdAt, table.dispatchId)
+			.where(queueDispatchReconcilePredicate(table)),
+		index("idx_queue_dispatch_prune")
+			.on(queueDispatchFinishedAt(table))
+			.where(queueDispatchPrunablePredicate(table)),
 	],
 );

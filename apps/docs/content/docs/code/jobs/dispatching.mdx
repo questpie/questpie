@@ -96,6 +96,11 @@ into a stable `dispatchId`. Publish twice with the same key and you get the same
 not overwrite them. So put a version marker in the key when the work changes
 shape and has to dispatch again.
 
+The ledger honours a key for 7 days after the dispatch is handed to the adapter
+(or, for a secret payload, after it completes or fails). Finished ledger rows
+older than that are deleted, and a later publish with the same key is a new
+dispatch with the same `dispatchId`.
+
 Outside a transaction and without a key, `publish()` mints a random UUID and
 goes straight to the adapter. With a key, it goes through the dispatch ledger so
 repeated calls resolve to one logical run. Inside a transaction the routing
