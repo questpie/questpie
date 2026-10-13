@@ -1,5 +1,12 @@
 # @questpie/mcp
 
+## 3.35.0
+
+### Patch Changes
+
+- Updated dependencies [[`9693590`](https://github.com/questpie/questpie/commit/9693590e435eeacf4acb88d0510536ccbe1a3065)]:
+  - questpie@3.35.0
+
 ## 3.34.2
 
 ### Patch Changes
