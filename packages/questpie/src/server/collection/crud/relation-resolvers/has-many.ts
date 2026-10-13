@@ -8,10 +8,7 @@
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import type { buildWhereClause as BuildWhereClauseFn } from "#questpie/server/collection/crud/query-builders/where-builder.js";
 import type { resolveFieldKey as ResolveFieldKeyFn } from "#questpie/server/collection/crud/shared/field-resolver.js";
-import {
-	type AggregateCRUD,
-	RELATION_AGGREGATE,
-} from "#questpie/server/collection/crud/shared/relation-aggregate.js";
+import { relationAggregateOf } from "#questpie/server/collection/crud/shared/relation-aggregate.js";
 import type {
 	CRUD,
 	CRUDContext,
@@ -181,14 +178,16 @@ export async function resolveHasManyWithAggregation(
 	// The target collection runs the aggregate through its own read pipeline
 	// (access rule, where, soft delete, transaction) and intersects the parent
 	// ids in SQL; this resolver only groups the result back onto the parents.
-	const aggregateResults = await (relatedCrud as unknown as AggregateCRUD)[
-		RELATION_AGGREGATE
-	](nestedOptions, context, {
-		field: foreignKeyField,
-		parentIds: Array.from(parentIds),
-		count: nestedOptions._count,
-		values: nestedOptions._aggregate,
-	});
+	const aggregateResults = await relationAggregateOf(relatedCrud)(
+		nestedOptions,
+		context,
+		{
+			field: foreignKeyField,
+			parentIds: Array.from(parentIds),
+			count: nestedOptions._count,
+			values: nestedOptions._aggregate,
+		},
+	);
 
 	// Build lookup map with aggregation results
 	const aggregateMap = new Map<any, Record<string, any>>();

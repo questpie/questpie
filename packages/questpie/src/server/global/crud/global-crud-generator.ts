@@ -43,10 +43,7 @@ import {
 	validateFieldsWriteAccess,
 	withTransaction,
 } from "#questpie/server/collection/crud/shared/index.js";
-import {
-	type AggregateCRUD,
-	RELATION_AGGREGATE,
-} from "#questpie/server/collection/crud/shared/relation-aggregate.js";
+import { relationAggregateOf } from "#questpie/server/collection/crud/shared/relation-aggregate.js";
 import { rowLockForUpdate } from "#questpie/server/collection/crud/shared/row-lock.js";
 import type {
 	Columns,
@@ -2253,14 +2250,16 @@ export class GlobalCRUDGenerator<TState extends GlobalBuilderState> {
 				if (nestedOptions._count || nestedOptions._aggregate) {
 					// The target collection owns the aggregate's authorization and
 					// SQL, exactly as it does for a collection parent.
-					const aggregateResults = await (
-						relatedCrud as unknown as AggregateCRUD
-					)[RELATION_AGGREGATE](nestedOptions, context, {
-						field: foreignKeyField,
-						parentIds: Array.from(parentIds),
-						count: nestedOptions._count,
-						values: nestedOptions._aggregate,
-					});
+					const aggregateResults = await relationAggregateOf(relatedCrud)(
+						nestedOptions,
+						context,
+						{
+							field: foreignKeyField,
+							parentIds: Array.from(parentIds),
+							count: nestedOptions._count,
+							values: nestedOptions._aggregate,
+						},
+					);
 
 					const aggregateMap = new Map();
 					for (const result of aggregateResults) {

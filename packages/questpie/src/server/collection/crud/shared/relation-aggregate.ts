@@ -19,13 +19,29 @@ export type RelationAggregate = {
 	values?: RelationAggregation;
 };
 
-export type AggregateCRUD = {
-	[RELATION_AGGREGATE]: (
-		options: FindManyOptions,
-		context: CRUDContext,
-		aggregate: RelationAggregate,
-	) => Promise<Record<string, any>[]>;
-};
+type RelationAggregateRead = (
+	options: FindManyOptions,
+	context: CRUDContext,
+	aggregate: RelationAggregate,
+) => Promise<Record<string, any>[]>;
+
+/**
+ * The target collection's aggregate entry. Fails loudly for a relation
+ * target that was not produced by the CRUD generator, rather than falling
+ * back to an unauthorized read.
+ */
+export function relationAggregateOf(targetCrud: object): RelationAggregateRead {
+	const read: RelationAggregateRead | undefined = Reflect.get(
+		targetCrud,
+		RELATION_AGGREGATE,
+	);
+	if (typeof read !== "function") {
+		throw new TypeError(
+			"Relation target does not support authorized aggregates",
+		);
+	}
+	return read;
+}
 
 /**
  * afterRead hooks that only add derived output and never alter a stored field.
