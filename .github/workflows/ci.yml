@@ -220,6 +220,7 @@ jobs:
           bun test test/integration/realtime-txid-postgres.test.ts
           bun test test/integration/realtime-drain-cursor-postgres.test.ts
           bun test test/integration/ordered-channel-ledger-postgres.test.ts
+          bun test test/integration/realtime-pg-notify-reconnect-postgres.test.ts
         env:
           QUESTPIE_MIGRATIONS_SILENT: "1"
           QUESTPIE_REALTIME_TXID_DATABASE_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime

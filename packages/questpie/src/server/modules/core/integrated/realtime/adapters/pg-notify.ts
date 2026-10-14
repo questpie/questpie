@@ -110,7 +110,14 @@ class PgNotifyDriver {
 		const client = await this.ensureListenerClient();
 		this.assertRunning();
 		this.attachListenerLifecycle(client);
-		await this.ensureListenerConnected(client);
+		try {
+			await this.ensureListenerConnected(client);
+		} catch (error) {
+			// A node-postgres Client whose connect() failed can never connect again;
+			// reusing it makes the next LISTEN wait forever.
+			this.discardOwnedListenerClient(client);
+			throw error;
+		}
 		this.assertRunning();
 		await client.query(`LISTEN ${this.channel}`);
 		if (this.stopping) {
@@ -235,7 +242,13 @@ class PgNotifyDriver {
 		const run = async () => {
 			if (this.stopping) throw new Error("pg-notify driver is stopping");
 			const client = await this.ensurePublisherClient();
-			await this.ensurePublisherConnected(client);
+			try {
+				await this.ensurePublisherConnected(client);
+			} catch (error) {
+				// A failed client cannot connect again; the next publish creates one.
+				this.discardOwnedPublisherClient(client);
+				throw error;
+			}
 			if (this.stopping) throw new Error("pg-notify driver is stopping");
 			await client.query("select pg_notify($1, $2)", [this.channel, payload]);
 		};
@@ -357,9 +370,29 @@ class PgNotifyDriver {
 		}
 
 		this.publisherConnected = false;
-		this.detachPublisherLifecycle(client);
-		if (this.ownsPublisherClient) this.publisherClient = null;
+		if (this.ownsPublisherClient) {
+			// Like the listener: node-postgres emits a second error when the socket
+			// closes after a fatal server message, so the handlers stay attached
+			// and the identity guard turns that one into a no-op.
+			this.discardOwnedPublisherClient(client);
+		} else {
+			this.detachPublisherLifecycle(client);
+		}
 		this.reportError("publisher", error);
+	}
+
+	private discardOwnedListenerClient(client: Client): void {
+		if (!this.ownsListenerClient || client !== this.listenerClient) return;
+		this.listenerClient = null;
+		this.listenerConnected = false;
+		void client.end().catch(() => {});
+	}
+
+	private discardOwnedPublisherClient(client: Client): void {
+		if (!this.ownsPublisherClient || client !== this.publisherClient) return;
+		this.publisherClient = null;
+		this.publisherConnected = false;
+		void client.end().catch(() => {});
 	}
 
 	private scheduleReconnect(): void {
