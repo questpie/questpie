@@ -6,6 +6,25 @@ import { createJobContext, createMockStores } from "./helpers.js";
 const handler = wfResumeJob.handler;
 
 describe("wf-resume job", () => {
+	it("requires an atomic claim before changing a resumable step", async () => {
+		const { ctx, stores, queue } = createJobContext({
+			instanceId: "inst-1",
+			stepName: "nap",
+		});
+		stores.steps.set("step-1", {
+			id: "step-1",
+			instanceId: "inst-1",
+			name: "nap",
+			status: "sleeping",
+		});
+		delete ctx.collections.wf_step.updateMany;
+		await expect(handler(ctx)).rejects.toThrow(
+			"requires claim-checked collection updateMany",
+		);
+		expect(stores.steps.get("step-1").status).toBe("sleeping");
+		expect(queue["questpie-wf-execute"].calls).toHaveLength(0);
+	});
+
 	it("marks a sleeping step as completed and re-queues execute", async () => {
 		const stores = createMockStores();
 		const { ctx, queue } = createJobContext(

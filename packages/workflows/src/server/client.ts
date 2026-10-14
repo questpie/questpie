@@ -76,6 +76,10 @@ export interface CollectionCrud<
 		params: { id: string; data: Record<string, unknown> },
 		context?: SystemAccessContext,
 	): Promise<TDocument>;
+	updateMany?(
+		params: { where: Record<string, unknown>; data: Record<string, unknown> },
+		context?: SystemAccessContext,
+	): Promise<TDocument[]>;
 	deleteById?(
 		params: { id: string },
 		context?: SystemAccessContext,

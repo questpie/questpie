@@ -19,6 +19,7 @@ const wfResumeSchema = z.object({
 	stepName: z.string(),
 	/** Optional result to store on the step (e.g., matched event data). */
 	result: z.unknown().optional(),
+	timeout: z.boolean().optional(),
 });
 
 export const wfResumeJob = job({
@@ -58,17 +59,32 @@ export const wfResumeJob = job({
 		}
 
 		// Mark step as completed
-		await stepsCrud.updateById(
+		if (typeof stepsCrud.updateMany !== "function") {
+			throw new Error(
+				"Workflow resume requires claim-checked collection updateMany.",
+			);
+		}
+		const completed = await stepsCrud.updateMany(
 			{
-				id: step.id,
+				where: {
+					id: step.id,
+					status: { in: ["sleeping", "waiting"] },
+					...(payload.timeout
+						? {
+								type: "waitForEvent",
+								scheduledAt: { lte: new Date() },
+							}
+						: {}),
+				},
 				data: {
 					status: "completed",
-					result: payload.result ?? null,
+					result: payload.timeout ? null : (payload.result ?? null),
 					completedAt: new Date(),
 				},
 			},
 			{ accessMode: "system" },
 		);
+		if (completed.length === 0) return;
 
 		// Load instance to get workflow name
 		const instance = await instancesCrud.findOne(

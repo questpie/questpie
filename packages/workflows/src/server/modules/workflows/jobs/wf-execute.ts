@@ -111,7 +111,9 @@ export const wfExecuteJob = job({
 			logger,
 		);
 
-		let sleepResume: { stepName: string; resumeAt: Date } | undefined;
+		let scheduledResume:
+			| { stepName: string; resumeAt: Date; timeout: boolean }
+			| undefined;
 		try {
 			// Bridge collection CRUD to StepPersistence
 			const persistence: StepPersistence = {
@@ -391,10 +393,15 @@ export const wfExecuteJob = job({
 					{ where: { instanceId: payload.instanceId, name: result.stepName } },
 					{ accessMode: "system" },
 				);
-				if (step?.status === "sleeping" && step.scheduledAt) {
-					sleepResume = {
+				if (
+					step?.scheduledAt &&
+					(step.status === "sleeping" ||
+						(step.status === "waiting" && step.type === "waitForEvent"))
+				) {
+					scheduledResume = {
 						stepName: result.stepName,
 						resumeAt: new Date(step.scheduledAt),
+						timeout: step.type === "waitForEvent",
 					};
 				}
 			}
@@ -472,12 +479,16 @@ export const wfExecuteJob = job({
 			heartbeat.stop();
 			await releaseWorkflowExecutionLock(ctx, instancesCrud, executionLock);
 		}
-		if (sleepResume) {
+		if (scheduledResume) {
 			await resumeQueue.publish(
-				{ instanceId: payload.instanceId, stepName: sleepResume.stepName },
 				{
-					startAfter: sleepResume.resumeAt,
-					singletonKey: `${payload.instanceId}:${sleepResume.stepName}`,
+					instanceId: payload.instanceId,
+					stepName: scheduledResume.stepName,
+					...(scheduledResume.timeout ? { timeout: true } : {}),
+				},
+				{
+					startAfter: scheduledResume.resumeAt,
+					singletonKey: `${payload.instanceId}:${scheduledResume.stepName}${scheduledResume.timeout ? ":timeout" : ""}`,
 				},
 			);
 		}
