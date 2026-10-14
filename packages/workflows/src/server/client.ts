@@ -76,7 +76,7 @@ export interface CollectionCrud<
 		params: { id: string; data: Record<string, unknown> },
 		context?: SystemAccessContext,
 	): Promise<TDocument>;
-	updateMany(
+	updateMany?(
 		params: { where: Record<string, unknown>; data: Record<string, unknown> },
 		context?: SystemAccessContext,
 	): Promise<TDocument[]>;
