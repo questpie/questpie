@@ -1,5 +1,13 @@
 # @questpie/sandbox
 
+## 3.35.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - questpie@3.35.2
+  - @questpie/mcp@3.35.2
+
 ## 3.35.1
 
 ### Patch Changes

@@ -1,5 +1,21 @@
 # @questpie/workflows
 
+## 3.35.2
+
+### Patch Changes
+
+- [#397](https://github.com/questpie/questpie/pull/397) [`3d4c525`](https://github.com/questpie/questpie/commit/3d4c525f18d76f50cd762efcdf441b7e4830f70b) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Return the existing instance when simultaneous triggers race on the same idempotency key. Both the workflow client and HTTP trigger route now share the same duplicate-handling path, and unrelated creation failures still propagate.
+
+- [#395](https://github.com/questpie/questpie/pull/395) [`1a0960d`](https://github.com/questpie/questpie/commit/1a0960d1ca038bfe2efb8a3333c51d7b92292a38) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Schedule durable resume jobs at the deadline of sleep and sleepUntil steps. Sleeping workflows now resume on time without waiting for the five-minute maintenance sweep, which remains a recovery fallback.
+
+- [#398](https://github.com/questpie/questpie/pull/398) [`c137174`](https://github.com/questpie/questpie/commit/c1371743a1db07043723ba9198b445a2d0d5b2bf) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Deny workflow routes unless the application supplies an access rule. A Better Auth role named admin no longer grants workflow access implicitly, including fallback operations omitted from a per-operation configuration. Applications that use these routes must configure `workflowsRuntime.access` (or legacy `config/workflows.ts` access) with their own authorization function. Existing operation overrides remain supported.
+
+- [#396](https://github.com/questpie/questpie/pull/396) [`d9a5f76`](https://github.com/questpie/questpie/commit/d9a5f76ea84da13f667b24bd41ebc5bf554b5a6a) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Schedule waitForEvent deadlines and resume with null when no event arrives. An event that completes the wait invalidates its pending timeout, and competing event/timeout deliveries claim the waiting step atomically so the winner's result cannot be overwritten. Maintenance recovers missing deadline jobs.
+
+- Updated dependencies []:
+  - questpie@3.35.2
+  - @questpie/admin@3.35.2
+
 ## 3.35.1
 
 ### Patch Changes

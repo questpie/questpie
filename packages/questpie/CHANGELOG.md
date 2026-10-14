@@ -1,5 +1,7 @@
 # questpie
 
+## 3.35.2
+
 ## 3.35.1
 
 ### Patch Changes
