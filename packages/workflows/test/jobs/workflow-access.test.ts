@@ -5,13 +5,13 @@ import { evaluateRouteAccess } from "questpie";
 import triggerWorkflow from "../../src/server/modules/workflows/routes/trigger-workflow.js";
 
 describe("workflow route access", () => {
-	it("defaults to admin session access", async () => {
+	it("denies by default even for an admin session", async () => {
 		await expect(
 			evaluateRouteAccess(triggerWorkflow.access, {
 				session: { user: { role: "admin" } },
 				app: { state: {} },
 			}),
-		).resolves.toBe(true);
+		).resolves.toBe(false);
 
 		await expect(
 			evaluateRouteAccess(triggerWorkflow.access, {

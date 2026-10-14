@@ -1,10 +1,12 @@
 import pg from "pg";
+import type { ModuleDefinition } from "questpie";
 
 import { PgBossAdapter } from "../../../questpie/src/server/modules/core/integrated/queue/adapters/pg-boss.js";
 import { buildMockApp } from "../../../questpie/test/utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../../../questpie/test/utils/test-db.js";
 import { createDisposablePostgres } from "../../../testing/src/disposable-postgres.js";
 import type { QueuePublishOptions } from "../../src/server/client.js";
+import type { WorkflowsConfigInput } from "../../src/server/config.js";
 import { wfEventCollection } from "../../src/server/modules/workflows/collections/wf-event.js";
 import { wfInstanceCollection } from "../../src/server/modules/workflows/collections/wf-instance.js";
 import { wfLogCollection } from "../../src/server/modules/workflows/collections/wf-log.js";
@@ -18,6 +20,10 @@ export const systemContext = { accessMode: "system" } as const;
 
 export async function createPostgresWorkflowHarness(
 	workflows: Record<string, WorkflowDefinition>,
+	options: {
+		routes?: ModuleDefinition["routes"];
+		config?: WorkflowsConfigInput;
+	} = {},
 ) {
 	const database = await createDisposablePostgres({ adminUrl: databaseUrl! });
 	const pool = new pg.Pool({ connectionString: database.url });
@@ -25,6 +31,8 @@ export async function createPostgresWorkflowHarness(
 	await pool.end();
 	const setup = await buildMockApp(
 		{
+			routes: options.routes,
+			config: { workflows: options.config },
 			collections: {
 				wf_instance: wfInstanceCollection,
 				wf_step: wfStepCollection,
@@ -78,6 +86,7 @@ export async function createPostgresWorkflowHarness(
 	await adapter.ensureQueue("questpie-wf-resume");
 	return {
 		...context,
+		runtimeApp: setup.app,
 		adapter,
 		async drain(batchSize = 20) {
 			return adapter.runOnce(handlers, { batchSize });

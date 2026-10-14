@@ -33,7 +33,7 @@ export interface WorkflowsConfigInput {
 	 * Access control for workflow routes. A single rule applies to every route;
 	 * an object can override specific operations.
 	 *
-	 * Default: logged-in admin user (`session.user.role === "admin"`).
+	 * Default: deny. Supply an application access rule to enable workflow routes.
 	 */
 	access?: WorkflowAccessRule | WorkflowsAccessConfig;
 	/**
@@ -98,10 +98,6 @@ export function resolveWorkflowsConfig(
 	return state?.workflowsRuntime ?? state?.config?.workflows;
 }
 
-export function defaultWorkflowAccess(ctx: RouteAccessContext): boolean {
-	const session = (ctx as { session?: unknown }).session as
-		| { user?: { role?: string | null } | null }
-		| null
-		| undefined;
-	return session?.user?.role === "admin";
+export function defaultWorkflowAccess(_ctx?: RouteAccessContext): boolean {
+	return false;
 }
