@@ -1,4 +1,4 @@
-import type { RouteAccessRule } from "questpie";
+import type { RouteAccessContext, RouteAccessRule } from "questpie";
 
 export type WorkflowAccessOperation =
 	| "trigger"
@@ -98,6 +98,6 @@ export function resolveWorkflowsConfig(
 	return state?.workflowsRuntime ?? state?.config?.workflows;
 }
 
-export function defaultWorkflowAccess(): boolean {
+export function defaultWorkflowAccess(_ctx?: RouteAccessContext): boolean {
 	return false;
 }
