@@ -48,7 +48,12 @@ export async function createPostgresWorkflowHarness(
 	const context = {
 		app: { state: { workflows } },
 		db: setup.app.db,
-		collections: setup.app.collections,
+		collections: {
+			wf_instance: setup.app.collections.wf_instance,
+			wf_step: setup.app.collections.wf_step,
+			wf_event: setup.app.collections.wf_event,
+			wf_log: setup.app.collections.wf_log,
+		},
 		queue: {
 			"questpie-wf-execute": publisher("questpie-wf-execute"),
 			"questpie-wf-resume": publisher("questpie-wf-resume"),
@@ -72,8 +77,8 @@ export async function createPostgresWorkflowHarness(
 	return {
 		...context,
 		adapter,
-		async drain() {
-			return adapter.runOnce(handlers, { batchSize: 20 });
+		async drain(batchSize = 20) {
+			return adapter.runOnce(handlers, { batchSize });
 		},
 		async cleanup() {
 			try {

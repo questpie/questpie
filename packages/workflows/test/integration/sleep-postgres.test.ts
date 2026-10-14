@@ -130,11 +130,33 @@ describe.skipIf(!databaseUrl)("scheduled workflow sleep on PostgreSQL", () => {
 				await Bun.sleep(Math.max(0, deadlines[0] - Date.now()) + 20);
 				// The sweep observes a still-sleeping step while a due timer is queued.
 				await wfMaintenanceJob.handler({ ...harness, payload: {} });
+				let waitingReads = 0;
+				let releaseReads!: () => void;
+				const bothRead = new Promise<void>((resolve) => {
+					releaseReads = resolve;
+				});
+				const findStep = harness.collections.wf_step.findOne.bind(
+					harness.collections.wf_step,
+				);
+				if (!dropTimer) {
+					harness.collections.wf_step.findOne = async (
+						...args: Parameters<typeof findStep>
+					) => {
+						const row = await findStep(...args);
+						if (row?.status === "sleeping") {
+							waitingReads++;
+							if (waitingReads >= 2) releaseReads();
+							await bothRead;
+						}
+						return row;
+					};
+				}
 				await waitFor(async () => {
-					await Promise.all([harness.drain(), harness.drain()]);
+					await Promise.all([harness.drain(1), harness.drain(1)]);
 					return effects === 1;
 				});
 				await harness.drain();
+				if (!dropTimer) expect(waitingReads).toBeGreaterThanOrEqual(2);
 				expect(effects).toBe(1);
 			} finally {
 				await harness.cleanup();
