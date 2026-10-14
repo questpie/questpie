@@ -385,6 +385,22 @@ export const wfExecuteJob = job({
 				engineCtx,
 			);
 
+			if (result.status === "suspended" && result.resumeAt) {
+				const step = await stepsCrud.findOne(
+					{ where: { instanceId: payload.instanceId, name: result.stepName } },
+					{ accessMode: "system" },
+				);
+				if (step?.status === "sleeping") {
+					await resumeQueue.publish(
+						{ instanceId: payload.instanceId, stepName: result.stepName },
+						{
+							startAfter: result.resumeAt,
+							singletonKey: `${payload.instanceId}:${result.stepName}`,
+						},
+					);
+				}
+			}
+
 			// If a child workflow completed, check if it has a parent to resume
 			if (result.status === "completed") {
 				const instance = await instancesCrud.findOne(

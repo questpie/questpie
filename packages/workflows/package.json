@@ -94,6 +94,7 @@
 		"@types/react-dom": "^19.2.0",
 		"bun-types": "latest",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
+		"pg": "8.22.0",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
 		"tsdown": "^0.18.3"
