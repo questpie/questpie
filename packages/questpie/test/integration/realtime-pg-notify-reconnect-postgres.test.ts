@@ -507,5 +507,106 @@ describe.skipIf(!runPostgresContract)(
 			// Let any late lifecycle event surface as an unhandled error.
 			await sleep(100);
 		});
+
+		it("leaves a caller-supplied client without health checks or timeouts", async () => {
+			const channel = `qp_reconnect_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+			const url = new URL(databaseUrl!);
+			url.pathname = `/${database}`;
+			const callerClient = new pg.Client({ connectionString: url.toString() });
+			await callerClient.connect();
+			const callerQueries: string[] = [];
+			const query = pg.Client.prototype.query;
+			const querySpy = spyOn(pg.Client.prototype, "query").mockImplementation(
+				function (this: pg.Client, ...args: any[]) {
+					if (this !== callerClient) return (query as any).apply(this, args);
+					const text: string =
+						typeof args[0] === "string" ? args[0] : args[0]?.text;
+					callerQueries.push(text);
+					// Slower than connectionTimeoutMs: the caller's client is not cut off.
+					if (text.startsWith("select pg_notify")) {
+						return sleep(300).then(() => (query as any).apply(this, args));
+					}
+					return (query as any).apply(this, args);
+				} as any,
+			);
+			const wakes: ChangeWake[] = [];
+			try {
+				broker = new PgNotifyChangeBroker({
+					channel,
+					client: callerClient,
+					connectionTimeoutMs: 100,
+					healthCheckIntervalMs: 100,
+				});
+				await broker.start({
+					onWake: (wake) => wakes.push(wake),
+					onError: () => {},
+				});
+				await sleep(500);
+				expect(callerQueries.filter((text) => text === "select 1")).toEqual([]);
+
+				await broker.publish(wake(1));
+				await broker.publish(wake(2));
+				await waitForWake(wakes, 2);
+				expect(
+					callerQueries.filter((text) => text.startsWith("select pg_notify")),
+				).toHaveLength(2);
+			} finally {
+				querySpy.mockRestore();
+				await broker?.stop();
+				broker = undefined;
+				await callerClient.end();
+			}
+		});
+
+		it("gives the publisher a fresh session after a publish went unanswered", async () => {
+			const proxyPort = await useProxy();
+			const { channel, applicationName, wakes } = await startBroker({
+				proxyPort,
+			});
+			await broker!.publish(wake(1));
+			await waitForWake(wakes, 1);
+			const listenerPids = await backendPids(
+				applicationName,
+				`LISTEN ${channel}%`,
+			);
+
+			proxy!.blackhole();
+			await expect(
+				withinRecoveryTimeout(
+					"publish on a silent peer",
+					broker!.publish(wake(2)),
+				),
+			).rejects.toThrow(/timed out/);
+			proxy!.restore();
+
+			// Wakes are hints: only one published after LISTEN is back must arrive.
+			await waitForNewListener(applicationName, channel, listenerPids);
+			await withinRecoveryTimeout(
+				"publish after the silent peer",
+				waitForPublish(3),
+			);
+			await waitForWake(wakes, 3);
+		});
+
+		it("destroys sockets whose close is never acknowledged", async () => {
+			const proxyPort = await useProxy();
+			const { wakes } = await startBroker({ proxyPort });
+			await broker!.publish(wake(1));
+			await waitForWake(wakes, 1);
+			const internals = broker as unknown as {
+				listenerClient: pg.Client;
+				publisherClient: pg.Client;
+			};
+			const sockets = [
+				internals.listenerClient.connection.stream,
+				internals.publisherClient.connection.stream,
+			] as net.Socket[];
+
+			// The publisher is idle, so its close waits only for the peer.
+			proxy!.blackhole();
+			await withinRecoveryTimeout("stop() on a silent peer", broker!.stop());
+			broker = undefined;
+			for (const socket of sockets) expect(socket.destroyed).toBe(true);
+		});
 	},
 );

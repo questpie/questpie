@@ -19,12 +19,13 @@ export type PgNotifyChangeBrokerOptions = {
 	reconnectInitialDelayMs?: number;
 	reconnectMaxDelayMs?: number;
 	/**
-	 * Bound on connecting an owned client and on every round trip (LISTEN,
-	 * UNLISTEN, health check, publish, close). `connection.connectionTimeoutMillis`
-	 * still overrides the connect part.
+	 * Bound on connecting a client the broker creates and on its round trips
+	 * (LISTEN, UNLISTEN, health check, publish, close). Caller-supplied clients
+	 * are never timed out. `connection.connectionTimeoutMillis` still overrides
+	 * the connect part.
 	 */
 	connectionTimeoutMs?: number;
-	/** How often the LISTEN connection proves it still reaches the server. */
+	/** How often a LISTEN connection the broker created proves it still works. */
 	healthCheckIntervalMs?: number;
 };
 
@@ -45,6 +46,7 @@ async function withTimeout<T>(
 	promise: Promise<T>,
 	timeoutMs: number,
 	label: string,
+	options: { unref?: boolean } = {},
 ): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
@@ -55,6 +57,7 @@ async function withTimeout<T>(
 					() => reject(new Error(`pg-notify ${label} timed out`)),
 					timeoutMs,
 				);
+				if (options.unref) timer.unref?.();
 			}),
 		]);
 	} finally {
@@ -86,6 +89,9 @@ class PgNotifyDriver {
 	private reconnectAttempt = 0;
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private healthCheckTimer: ReturnType<typeof setTimeout> | null = null;
+	// Bumped per established LISTEN session, so a health check that started
+	// before a stop()/start() can never tear down the session after it.
+	private listenerGeneration = 0;
 	private readonly connectionTimeoutMs: number;
 	private readonly healthCheckIntervalMs: number;
 	private stopping = false;
@@ -107,6 +113,14 @@ class PgNotifyDriver {
 		this.reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? 30_000;
 		this.connectionTimeoutMs = options.connectionTimeoutMs ?? 10_000;
 		this.healthCheckIntervalMs = options.healthCheckIntervalMs ?? 30_000;
+		for (const [name, value] of [
+			["connectionTimeoutMs", this.connectionTimeoutMs],
+			["healthCheckIntervalMs", this.healthCheckIntervalMs],
+		] as const) {
+			if (!Number.isFinite(value) || value <= 0) {
+				throw new Error(`pg-notify ${name} must be a positive number`);
+			}
+		}
 
 		if (!/^[a-zA-Z0-9_]+$/.test(this.channel)) {
 			throw new Error(`Invalid pg notify channel name: "${this.channel}"`);
@@ -150,7 +164,7 @@ class PgNotifyDriver {
 		try {
 			await this.ensureListenerConnected(client);
 			this.assertRunning();
-			await this.roundTrip(client, `LISTEN ${this.channel}`, "LISTEN");
+			await this.listenerRoundTrip(client, `LISTEN ${this.channel}`);
 		} catch (error) {
 			// A node-postgres Client whose connect() failed can never connect again,
 			// and a session that refused LISTEN (a standby after failover) stays
@@ -160,7 +174,7 @@ class PgNotifyDriver {
 		}
 		if (this.stopping) {
 			try {
-				await this.roundTrip(client, `UNLISTEN ${this.channel}`, "UNLISTEN");
+				await this.listenerRoundTrip(client, `UNLISTEN ${this.channel}`);
 			} catch {
 				// The central stop path still closes owned clients.
 			}
@@ -181,7 +195,8 @@ class PgNotifyDriver {
 		client.on("notification", this.notificationHandler);
 		this.started = true;
 		this.reconnectAttempt = 0;
-		this.scheduleHealthCheck(client);
+		this.listenerGeneration += 1;
+		if (this.ownsListenerClient) this.scheduleHealthCheck(client);
 		this.emitState("connected");
 	}
 
@@ -225,10 +240,9 @@ class PgNotifyDriver {
 
 		if (listenerClient && wasStarted) {
 			try {
-				await this.roundTrip(
+				await this.listenerRoundTrip(
 					listenerClient,
 					`UNLISTEN ${this.channel}`,
-					"UNLISTEN",
 				);
 			} catch {
 				// Ignore UNLISTEN failures during shutdown.
@@ -306,14 +320,15 @@ class PgNotifyDriver {
 			}
 			if (this.stopping) throw new Error("pg-notify driver is stopping");
 			try {
-				await withTimeout(
-					client.query("select pg_notify($1, $2)", [this.channel, payload]),
-					this.connectionTimeoutMs,
-					"publish",
+				await this.roundTrip(
+					client,
+					this.ownsPublisherClient,
+					"select pg_notify($1, $2)",
+					[this.channel, payload],
 				);
 			} catch (error) {
 				// A failed or unanswered publish gets a fresh session next time.
-				if (this.publisherConnected) this.discardOwnedPublisherClient(client);
+				this.discardOwnedPublisherClient(client);
 				throw error;
 			}
 		};
@@ -416,8 +431,7 @@ class PgNotifyDriver {
 			// event before the old client fully closes. Keep its handlers attached
 			// so those follow-up errors cannot become unhandled process errors; the
 			// identity guard makes them no-ops after the replacement client is set.
-			this.listenerClient = null;
-			void this.closeClient(client);
+			this.discardOwnedListenerClient(client);
 		} else {
 			this.detachListenerLifecycle(client);
 		}
@@ -451,24 +465,41 @@ class PgNotifyDriver {
 		if (!this.ownsListenerClient || client !== this.listenerClient) return;
 		this.listenerClient = null;
 		this.listenerConnected = false;
-		void this.closeClient(client);
+		void this.closeClient(client, { background: true });
 	}
 
 	private discardOwnedPublisherClient(client: Client): void {
 		if (!this.ownsPublisherClient || client !== this.publisherClient) return;
 		this.publisherClient = null;
 		this.publisherConnected = false;
-		void this.closeClient(client);
+		void this.closeClient(client, { background: true });
 	}
 
-	private roundTrip(client: Client, sql: string, label: string) {
-		return withTimeout(client.query(sql), this.connectionTimeoutMs, label);
+	/** Owned clients are bounded; a caller-supplied client keeps its own policy. */
+	private async roundTrip(
+		client: Client,
+		owned: boolean,
+		sql: string,
+		values?: unknown[],
+	): Promise<void> {
+		const query = client.query(sql, values);
+		if (owned) await withTimeout(query, this.connectionTimeoutMs, sql);
+		else await query;
 	}
 
-	/** End a client; a peer that never acknowledges gets its socket destroyed. */
-	private async closeClient(client: Client): Promise<void> {
+	private listenerRoundTrip(client: Client, sql: string): Promise<void> {
+		return this.roundTrip(client, this.ownsListenerClient, sql);
+	}
+
+	/** End an owned client; a peer that never acknowledges gets its socket destroyed. */
+	private async closeClient(
+		client: Client,
+		options: { background?: boolean } = {},
+	): Promise<void> {
 		try {
-			await withTimeout(client.end(), this.connectionTimeoutMs, "close");
+			await withTimeout(client.end(), this.connectionTimeoutMs, "close", {
+				unref: options.background,
+			});
 		} catch {
 			client.connection.stream.destroy();
 		}
@@ -479,9 +510,10 @@ class PgNotifyDriver {
 	// reveals it.
 	private scheduleHealthCheck(client: Client): void {
 		this.clearHealthCheck();
+		const generation = this.listenerGeneration;
 		this.healthCheckTimer = setTimeout(() => {
 			this.healthCheckTimer = null;
-			void this.checkListenerHealth(client);
+			void this.checkListenerHealth(client, generation);
 		}, this.healthCheckIntervalMs);
 		this.healthCheckTimer.unref?.();
 	}
@@ -492,17 +524,29 @@ class PgNotifyDriver {
 		this.healthCheckTimer = null;
 	}
 
-	private async checkListenerHealth(client: Client): Promise<void> {
-		if (this.stopping || client !== this.listenerClient || !this.started) {
-			return;
-		}
+	private isCurrentListener(client: Client, generation: number): boolean {
+		return (
+			!this.stopping &&
+			this.started &&
+			client === this.listenerClient &&
+			generation === this.listenerGeneration
+		);
+	}
+
+	private async checkListenerHealth(
+		client: Client,
+		generation: number,
+	): Promise<void> {
+		if (!this.isCurrentListener(client, generation)) return;
 		try {
-			await this.roundTrip(client, "select 1", "health check");
+			await this.listenerRoundTrip(client, "select 1");
 		} catch (error) {
-			this.handleListenerDisconnect(client, error);
+			if (this.isCurrentListener(client, generation)) {
+				this.handleListenerDisconnect(client, error);
+			}
 			return;
 		}
-		if (!this.stopping && client === this.listenerClient && this.started) {
+		if (this.isCurrentListener(client, generation)) {
 			this.scheduleHealthCheck(client);
 		}
 	}
