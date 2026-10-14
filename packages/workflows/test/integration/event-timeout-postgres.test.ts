@@ -13,8 +13,12 @@ import {
 } from "./postgres-helpers.js";
 
 describe.skipIf(!databaseUrl)("workflow event deadlines on PostgreSQL", () => {
-	for (const eventFirst of [false, true]) {
-		test(`5-second wait resolves once (${eventFirst ? "event wins" : "timeout wins"})`, async () => {
+	for (const { eventFirst, dropTimer } of [
+		{ eventFirst: false, dropTimer: false },
+		{ eventFirst: true, dropTimer: false },
+		{ eventFirst: false, dropTimer: true },
+	]) {
+		test(`5-second wait resolves once (${eventFirst ? "event wins" : dropTimer ? "maintenance recovery" : "timeout wins"})`, async () => {
 			const results: unknown[] = [];
 			const definition: WorkflowDefinition = {
 				name: "event-deadline",
@@ -34,6 +38,16 @@ describe.skipIf(!databaseUrl)("workflow event deadlines on PostgreSQL", () => {
 			const harness = await createPostgresWorkflowHarness({
 				"event-deadline": definition,
 			});
+			if (dropTimer) {
+				const publish = harness.queue["questpie-wf-resume"].publish;
+				harness.queue["questpie-wf-resume"].publish = async (
+					payload,
+					options,
+				) => {
+					if (options?.startAfter) return;
+					return publish(payload, options);
+				};
+			}
 			const client = createWorkflowClient(
 				{ "event-deadline": definition },
 				{
@@ -55,6 +69,8 @@ describe.skipIf(!databaseUrl)("workflow event deadlines on PostgreSQL", () => {
 				if (eventFirst)
 					await client.sendEvent("ready", { value: "delivered" }, { id: 1 });
 				await waitFor(async () => {
+					if (dropTimer && Date.now() >= deadline)
+						await wfMaintenanceJob.handler({ ...harness, payload: {} });
 					await harness.drain();
 					if (!eventFirst && Date.now() < deadline)
 						expect(results).toHaveLength(0);
