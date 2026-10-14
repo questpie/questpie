@@ -84,6 +84,20 @@ export function createMockCrud(
 			Object.assign(record, params.data);
 			return record;
 		},
+		async updateMany(params, _context) {
+			const updated = [];
+			for (const record of store.values()) {
+				if (
+					Object.entries(params.where).every(([key, value]) =>
+						matchesWhere(record, key, value),
+					)
+				) {
+					Object.assign(record, params.data);
+					updated.push(record);
+				}
+			}
+			return updated;
+		},
 		async deleteById(params: any, _context?: any) {
 			store.delete(params.id);
 		},

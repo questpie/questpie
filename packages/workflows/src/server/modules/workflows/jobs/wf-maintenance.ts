@@ -64,15 +64,31 @@ export const wfMaintenanceJob = job({
 			{ accessMode: "system" },
 		);
 
+		const expiredWaits = await stepsCrud.find(
+			{
+				where: {
+					type: "waitForEvent",
+					status: "waiting",
+					scheduledAt: { lte: now },
+				},
+				limit: 100,
+			},
+			{ accessMode: "system" },
+		);
+
 		let resumedCount = 0;
-		for (const step of sleepingSteps.docs) {
+		for (const step of [...sleepingSteps.docs, ...expiredWaits.docs]) {
+			const timeout = step.type === "waitForEvent";
 			try {
 				await resumeQueue.publish(
 					{
 						instanceId: step.instanceId,
 						stepName: step.name,
+						...(timeout ? { timeout: true } : {}),
 					},
-					{ singletonKey: `${step.instanceId}:${step.name}` },
+					{
+						singletonKey: `${step.instanceId}:${step.name}${timeout ? ":timeout" : ""}`,
+					},
 				);
 				resumedCount++;
 			} catch (err) {
