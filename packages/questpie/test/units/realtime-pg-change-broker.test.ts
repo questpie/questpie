@@ -307,4 +307,15 @@ describe("pg-notify change broker", () => {
 			),
 		).toHaveLength(1);
 	});
+
+	test("rejects non-positive connection timeouts and health check intervals", () => {
+		for (const value of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+			expect(
+				() => new PgNotifyChangeBroker({ connectionTimeoutMs: value }),
+			).toThrow("connectionTimeoutMs must be a positive number");
+			expect(
+				() => new PgNotifyChangeBroker({ healthCheckIntervalMs: value }),
+			).toThrow("healthCheckIntervalMs must be a positive number");
+		}
+	});
 });
