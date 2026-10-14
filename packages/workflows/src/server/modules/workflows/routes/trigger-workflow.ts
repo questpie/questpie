@@ -1,6 +1,7 @@
 import { route } from "questpie";
 import { z } from "zod";
 
+import { createWorkflowClient } from "../../../client.js";
 import { workflowRouteAccess } from "./_access.js";
 import {
 	getCollections,
@@ -19,70 +20,14 @@ export default route()
 		}),
 	)
 	.handler(async ({ input, ...ctx }) => {
-		const workflows = getWorkflowDefinitions(ctx);
-		const definition = workflows[input.name];
-
-		if (!definition) {
-			throw new Error(`Unknown workflow: "${input.name}"`);
-		}
-
-		const { instances } = getCollections(ctx);
-		const executeQueue = getQueue(ctx, "questpie-wf-execute");
-
-		// Validate workflow input against schema
-		const validated = definition.schema.parse(input.input);
-
-		// Check idempotency
-		if (input.idempotencyKey) {
-			const existing = await instances.findOne(
-				{
-					where: {
-						name: input.name,
-						idempotencyKey: input.idempotencyKey,
-					},
-				},
-				{ accessMode: "system" },
-			);
-			if (existing) {
-				return { instanceId: existing.id, existing: true };
-			}
-		}
-
-		// Calculate timeout
-		let timeoutAt: Date | undefined;
-		if (definition.timeout) {
-			const { parseDuration } = await import("../../../engine/duration.js");
-			timeoutAt = new Date(Date.now() + parseDuration(definition.timeout));
-		}
-
-		// Create instance
-		const instance = await instances.create(
-			{
-				name: input.name,
-				status: "pending",
-				input: validated,
-				output: null,
-				error: null,
-				attempt: 0,
-				parentInstanceId: null,
-				parentStepName: null,
-				idempotencyKey: input.idempotencyKey ?? null,
-				timeoutAt: timeoutAt ?? null,
-				startedAt: null,
-				suspendedAt: null,
-				completedAt: null,
-			},
-			{ accessMode: "system" },
-		);
-
-		// Queue execution
-		await executeQueue.publish(
-			{
-				instanceId: instance.id,
-				workflowName: input.name,
-			},
-			{ singletonKey: instance.id },
-		);
-
-		return { instanceId: instance.id, existing: false };
+		const { instances, steps, events } = getCollections(ctx);
+		const client = createWorkflowClient(getWorkflowDefinitions(ctx), {
+			instances,
+			steps,
+			events,
+			publishExecute: getQueue(ctx, "questpie-wf-execute"),
+		});
+		return client.trigger(input.name, input.input, {
+			idempotencyKey: input.idempotencyKey,
+		});
 	});
