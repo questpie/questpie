@@ -209,6 +209,11 @@ jobs:
         env:
           QUESTPIE_QUEUE_POSTGRES_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
 
+      - name: Verify PostgreSQL workflow contracts
+        run: bun test packages/workflows/test/integration/
+        env:
+          QUESTPIE_WORKFLOWS_POSTGRES_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
+
       - name: Run PostgreSQL txid ordering acceptance
         working-directory: packages/questpie
         run: |

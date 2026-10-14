@@ -111,6 +111,7 @@ export const wfExecuteJob = job({
 			logger,
 		);
 
+		let sleepResume: { stepName: string; resumeAt: Date } | undefined;
 		try {
 			// Bridge collection CRUD to StepPersistence
 			const persistence: StepPersistence = {
@@ -385,6 +386,19 @@ export const wfExecuteJob = job({
 				engineCtx,
 			);
 
+			if (result.status === "suspended" && result.resumeAt) {
+				const step = await stepsCrud.findOne(
+					{ where: { instanceId: payload.instanceId, name: result.stepName } },
+					{ accessMode: "system" },
+				);
+				if (step?.status === "sleeping" && step.scheduledAt) {
+					sleepResume = {
+						stepName: result.stepName,
+						resumeAt: new Date(step.scheduledAt),
+					};
+				}
+			}
+
 			// If a child workflow completed, check if it has a parent to resume
 			if (result.status === "completed") {
 				const instance = await instancesCrud.findOne(
@@ -457,6 +471,15 @@ export const wfExecuteJob = job({
 		} finally {
 			heartbeat.stop();
 			await releaseWorkflowExecutionLock(ctx, instancesCrud, executionLock);
+		}
+		if (sleepResume) {
+			await resumeQueue.publish(
+				{ instanceId: payload.instanceId, stepName: sleepResume.stepName },
+				{
+					startAfter: sleepResume.resumeAt,
+					singletonKey: `${payload.instanceId}:${sleepResume.stepName}`,
+				},
+			);
 		}
 	},
 });
