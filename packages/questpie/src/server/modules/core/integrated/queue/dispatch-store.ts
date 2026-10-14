@@ -16,7 +16,12 @@ import {
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 
 import type { QueueAdapter } from "./adapter.js";
-import { questpieQueueDispatchTable } from "./dispatch-table.js";
+import {
+	queueDispatchFinishedAt,
+	queueDispatchPrunablePredicate,
+	queueDispatchReconcilePredicate,
+	questpieQueueDispatchTable,
+} from "./dispatch-table.js";
 import type { QueueWrappedSecretKey } from "./secret-payload.js";
 import type {
 	PublishOptions,
@@ -32,6 +37,16 @@ const MAX_IDEMPOTENCY_KEY_LENGTH = 512;
 const MAX_RETRY_DELAY_SECONDS = 3_600;
 const SAFE_ADAPTER_PUBLICATION_ERROR = "Adapter publication failed";
 const DEFAULT_EXECUTION_LEASE_MS = 60_000;
+const DEFAULT_PRUNE_BATCH_SIZE = 500;
+const DEFAULT_PRUNE_MAX_BATCHES = 20;
+
+/**
+ * How long an idempotency receipt is honoured after hand-off: a finished
+ * dispatch row older than this is deleted, and its key enqueues again.
+ * Matches pg-boss's default deletion of its own finished jobs, so a longer
+ * receipt would have no broker job left to protect.
+ */
+export const QUEUE_DISPATCH_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 
 type QueueDatabase = AnyDrizzleClient;
 
@@ -397,11 +412,7 @@ export async function reconcileQueueDispatchExecutions(options: {
 		DEFAULT_BATCH_SIZE,
 		1_000,
 	);
-	const eligible = and(
-		eq(questpieQueueDispatchTable.secretPayload, true),
-		eq(questpieQueueDispatchTable.status, "accepted"),
-		isNotNull(questpieQueueDispatchTable.adapterJobId),
-	);
+	const eligible = queueDispatchReconcilePredicate(questpieQueueDispatchTable);
 	const [highWater] = await options.db
 		.select({
 			createdAt: questpieQueueDispatchTable.createdAt,
@@ -504,6 +515,86 @@ export async function reconcileQueueDispatchExecutions(options: {
 		if (records.length < batchSize) break;
 	}
 	return { inspected, terminal };
+}
+
+/**
+ * Delete finished dispatch rows older than the retention window, oldest first.
+ *
+ * Each statement removes at most `batchSize` rows chosen by a LIMITed
+ * subselect over `idx_queue_dispatch_prune`; a run stops after `maxBatches`
+ * statements so a backlog is worked off across runs. Pending rows, rows with a
+ * live relay lease or execution claim, and accepted secret-payload rows
+ * (owned by reconciliation) are never deleted.
+ */
+export async function pruneQueueDispatches(
+	db: QueueDatabase,
+	options: {
+		retentionMs?: number;
+		batchSize?: number;
+		maxBatches?: number;
+		now?: Date;
+	} = {},
+): Promise<{ deleted: number; batches: number }> {
+	const retentionMs = boundedInteger(
+		options.retentionMs,
+		QUEUE_DISPATCH_RETENTION_MS,
+		Number.MAX_SAFE_INTEGER,
+	);
+	const batchSize = boundedInteger(
+		options.batchSize,
+		DEFAULT_PRUNE_BATCH_SIZE,
+		1_000,
+	);
+	const maxBatches = boundedInteger(
+		options.maxBatches,
+		DEFAULT_PRUNE_MAX_BATCHES,
+		100,
+	);
+	const currentTime = options.now ?? sql`CURRENT_TIMESTAMP`;
+	const cutoff = options.now
+		? sql`${new Date(options.now.getTime() - retentionMs).toISOString()}::timestamptz`
+		: sql`CURRENT_TIMESTAMP - (${retentionMs} * interval '1 millisecond')`;
+	const prunable = queueDispatchPrunablePredicate(questpieQueueDispatchTable);
+	const finishedAt = queueDispatchFinishedAt(questpieQueueDispatchTable);
+
+	let deleted = 0;
+	let batches = 0;
+	while (batches < maxBatches) {
+		const expired = db
+			.select({ dispatchId: questpieQueueDispatchTable.dispatchId })
+			.from(questpieQueueDispatchTable)
+			.where(
+				and(
+					prunable,
+					sql`${finishedAt} < ${cutoff}`,
+					or(
+						isNull(questpieQueueDispatchTable.leasedUntil),
+						lt(questpieQueueDispatchTable.leasedUntil, currentTime),
+					),
+					or(
+						isNull(questpieQueueDispatchTable.executionClaimedUntil),
+						lt(questpieQueueDispatchTable.executionClaimedUntil, currentTime),
+					),
+				),
+			)
+			.orderBy(sql`${finishedAt} ASC`)
+			.limit(batchSize);
+		// ARRAY(subselect) is an InitPlan: evaluated once per statement, so the
+		// LIMIT bounds the delete whatever join the planner would otherwise pick.
+		const removed = await db
+			.delete(questpieQueueDispatchTable)
+			.where(
+				and(
+					sql`${questpieQueueDispatchTable.dispatchId} = ANY(ARRAY(${expired}))`,
+					prunable,
+				),
+			)
+			.returning({ dispatchId: questpieQueueDispatchTable.dispatchId });
+		batches += 1;
+		deleted += removed.length;
+		if (removed.length < batchSize) break;
+	}
+	return { deleted, batches };
 }
 
 function boundedInteger(

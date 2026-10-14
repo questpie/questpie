@@ -22,6 +22,7 @@ import {
 	drainQueueDispatches,
 	enqueueQueueDispatch,
 	getQueueDispatchReceipt,
+	pruneQueueDispatches,
 	reconcileQueueDispatchExecutions,
 	releaseQueueDispatchExecution,
 	renewQueueDispatchExecution,
@@ -62,6 +63,9 @@ export interface QueueClientRuntimeOptions {
 	logger?: QueueLogger;
 	secret?: string;
 }
+
+/** Minimum spacing between retention prunes of one queue client. */
+const DISPATCH_PRUNE_INTERVAL_MS = 5 * 60_000;
 
 const defaultLogger: QueueLogger = {
 	info: (msg, ...args) => console.log(msg, ...args),
@@ -148,6 +152,7 @@ export function createQueueClient<
 	let signalCleanup: (() => void) | undefined;
 	let shutdownInProgress = false;
 	let relayTimer: ReturnType<typeof setInterval> | undefined;
+	let lastPruneAt = 0;
 	let activeDrain: Promise<QueueDrainResult> | undefined;
 	const transactionsWithScheduledDrain = new WeakSet<object>();
 
@@ -398,7 +403,10 @@ export function createQueueClient<
 		}
 	};
 
-	const drain = (options?: QueueDrainOptions): Promise<QueueDrainResult> => {
+	const drain = (
+		options?: QueueDrainOptions,
+		relayTick = false,
+	): Promise<QueueDrainResult> => {
 		if (activeDrain) return activeDrain;
 		activeDrain = (async () => {
 			await ensureStarted();
@@ -444,6 +452,19 @@ export function createQueueClient<
 				batchSize,
 			});
 			total.terminal += reconciliation.terminal;
+			// Retention rides the relay tick only, so a publish never waits on it,
+			// and a failed prune never fails the drain it follows.
+			if (relayTick && Date.now() - lastPruneAt >= DISPATCH_PRUNE_INTERVAL_MS) {
+				lastPruneAt = Date.now();
+				try {
+					await pruneQueueDispatches(db);
+				} catch (error) {
+					logger.warn(
+						"[QUESTPIE Queue] Dispatch retention prune failed",
+						error,
+					);
+				}
+			}
 			return total;
 		})().finally(() => {
 			activeDrain = undefined;
@@ -454,7 +475,7 @@ export function createQueueClient<
 	const startRelayTimer = () => {
 		if (relayTimer) return;
 		relayTimer = setInterval(() => {
-			void drain({ maxBatches: 10 }).catch((error) => {
+			void drain({ maxBatches: 10 }, true).catch((error) => {
 				logger.warn("[QUESTPIE Queue] Dispatch recovery tick failed", error);
 			});
 		}, 5_000);
@@ -592,7 +613,7 @@ export function createQueueClient<
 				await drain();
 			}
 		},
-		drain,
+		drain: (options?: QueueDrainOptions) => drain(options),
 		getReceipt: async (dispatchId: string) => {
 			const db = runtimeOptions.getDatabase?.();
 			if (!db) {

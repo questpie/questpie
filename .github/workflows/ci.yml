@@ -225,6 +225,7 @@ jobs:
         run: |
           bun test test/collection/transaction-locks-postgres.test.ts
           bun test test/collection/read-execution-postgres.test.ts
+          bun test test/integration/queue-dispatch-plan-postgres.test.ts
         env:
           QUESTPIE_MIGRATIONS_SILENT: "1"
           QUESTPIE_TRANSACTION_LOCK_DATABASE_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime

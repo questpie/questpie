@@ -99,6 +99,26 @@ describe("Queue secret dispatch schema upgrade", () => {
 		expect(migration).not.toContain("DROP TABLE");
 	});
 
+	test("adds the reconcile and retention indexes to the existing ledger", async () => {
+		const previous = await generateDrizzleJson(
+			{ questpie_queue_dispatch: legacyQueueDispatchTable },
+			"00000000-0000-0000-0000-000000000001",
+		);
+		const current = await generateDrizzleJson(
+			{ questpie_queue_dispatch: questpieQueueDispatchTable },
+			"00000000-0000-0000-0000-000000000002",
+		);
+		const migration = (await generateMigration(previous, current)).join("\n");
+
+		expect(migration).toContain(
+			`CREATE INDEX "idx_queue_dispatch_reconcile" ON "questpie_queue_dispatch" ("created_at","dispatch_id") WHERE "secret_payload" = true AND "status" = 'accepted' AND "adapter_job_id" IS NOT NULL;`,
+		);
+		expect(migration).toContain(
+			`CREATE INDEX "idx_queue_dispatch_prune" ON "questpie_queue_dispatch" (COALESCE("completed_at", "failed_at", "accepted_at")) WHERE ("status" IN ('completed', 'failed') OR ("status" = 'accepted' AND "secret_payload" = false));`,
+		);
+		expect(migration).not.toContain("DROP INDEX");
+	});
+
 	test.skipIf(!process.env.QUESTPIE_QUEUE_SECRET_POSTGRES_URL)(
 		"applies the additive upgrade to a populated legacy PostgreSQL table",
 		async () => {
