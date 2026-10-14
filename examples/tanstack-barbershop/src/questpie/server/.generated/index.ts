@@ -74,6 +74,7 @@ import _mig_20260805T165255_realtimeDrainCursorIndex from "../migrations/2026080
 import _mig_20260805T180812_realtimeSettlementRetention from "../migrations/20260805T180812_realtime-settlement-retention";
 import _mig_20260806T151905_removeRealtimeHead from "../migrations/20260806T151905_remove-realtime-head";
 import _mig_20260915T042709_realtimeIdempotency1 from "../migrations/20260915T042709_realtime-idempotency-1";
+import _mig_20261013T205203_queueDispatchRetention from "../migrations/20261013T205203_queue-dispatch-retention";
 
 // ── Seeds ──────────────────────────────────────────────────
 import _seed_blogPosts from "../seeds/blog-posts";
