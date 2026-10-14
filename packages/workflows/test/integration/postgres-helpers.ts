@@ -32,7 +32,9 @@ export async function createPostgresWorkflowHarness(
 				wf_log: wfLogCollection,
 			},
 		},
-		{ db: { url: database.url } },
+		{
+			db: { url: database.url, pool: { max: 30, connectionTimeoutMs: 5_000 } },
+		},
 	);
 	await runTestDbMigrations(setup.app);
 	const adapter = new PgBossAdapter({

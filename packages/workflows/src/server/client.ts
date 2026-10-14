@@ -15,7 +15,12 @@
  * ```
  */
 
-import type { PublishOptions } from "questpie";
+import {
+	ApiError,
+	getCurrentTransaction,
+	parseDatabaseError,
+	type PublishOptions,
+} from "questpie";
 
 import { parseDuration } from "./engine/duration.js";
 import type { EventPersistence, ResumeWaiterFn } from "./engine/events.js";
@@ -224,7 +229,7 @@ export function createWorkflowClient<
 			const validated = def.schema.parse(input);
 
 			// Check idempotency
-			if (options?.idempotencyKey) {
+			if (options?.idempotencyKey !== undefined) {
 				const existing = await deps.instances.findOne(
 					{
 						where: {
@@ -254,24 +259,48 @@ export function createWorkflowClient<
 			}
 
 			// Create instance
-			const instance = await deps.instances.create(
-				{
-					name,
-					status: "pending",
-					input: validated,
-					output: null,
-					error: null,
-					attempt: 0,
-					parentInstanceId: options?.parentInstanceId ?? null,
-					parentStepName: options?.parentStepName ?? null,
-					idempotencyKey: options?.idempotencyKey ?? null,
-					timeoutAt: timeoutAt ?? null,
-					startedAt: null,
-					suspendedAt: null,
-					completedAt: null,
-				},
-				{ accessMode: "system" },
-			);
+			let instance: WorkflowInstance;
+			try {
+				const createInstance = () =>
+					deps.instances.create(
+						{
+							name,
+							status: "pending",
+							input: validated,
+							output: null,
+							error: null,
+							attempt: 0,
+							parentInstanceId: options?.parentInstanceId ?? null,
+							parentStepName: options?.parentStepName ?? null,
+							idempotencyKey: options?.idempotencyKey ?? null,
+							timeoutAt: timeoutAt ?? null,
+							startedAt: null,
+							suspendedAt: null,
+							completedAt: null,
+						},
+						{ accessMode: "system" },
+					);
+				const transaction = getCurrentTransaction();
+				instance =
+					options?.idempotencyKey !== undefined && transaction
+						? await transaction.transaction(createInstance)
+						: await createInstance();
+			} catch (error) {
+				const conflict =
+					error instanceof ApiError ? error : parseDatabaseError(error);
+				if (
+					options?.idempotencyKey !== undefined &&
+					conflict?.code === "CONFLICT" &&
+					conflict.context?.db?.constraint === "idx_wfi_idempotency"
+				) {
+					const existing = await deps.instances.findOne(
+						{ where: { name, idempotencyKey: options.idempotencyKey } },
+						{ accessMode: "system" },
+					);
+					if (existing) return { instanceId: existing.id, existing: true };
+				}
+				throw error;
+			}
 
 			// Publish execute job
 			await deps.publishExecute.publish(
