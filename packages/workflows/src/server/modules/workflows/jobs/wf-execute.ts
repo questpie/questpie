@@ -111,6 +111,7 @@ export const wfExecuteJob = job({
 			logger,
 		);
 
+		let sleepResume: { stepName: string; resumeAt: Date } | undefined;
 		try {
 			// Bridge collection CRUD to StepPersistence
 			const persistence: StepPersistence = {
@@ -390,14 +391,11 @@ export const wfExecuteJob = job({
 					{ where: { instanceId: payload.instanceId, name: result.stepName } },
 					{ accessMode: "system" },
 				);
-				if (step?.status === "sleeping") {
-					await resumeQueue.publish(
-						{ instanceId: payload.instanceId, stepName: result.stepName },
-						{
-							startAfter: result.resumeAt,
-							singletonKey: `${payload.instanceId}:${result.stepName}`,
-						},
-					);
+				if (step?.status === "sleeping" && step.scheduledAt) {
+					sleepResume = {
+						stepName: result.stepName,
+						resumeAt: new Date(step.scheduledAt),
+					};
 				}
 			}
 
@@ -473,6 +471,15 @@ export const wfExecuteJob = job({
 		} finally {
 			heartbeat.stop();
 			await releaseWorkflowExecutionLock(ctx, instancesCrud, executionLock);
+		}
+		if (sleepResume) {
+			await resumeQueue.publish(
+				{ instanceId: payload.instanceId, stepName: sleepResume.stepName },
+				{
+					startAfter: sleepResume.resumeAt,
+					singletonKey: `${payload.instanceId}:${sleepResume.stepName}`,
+				},
+			);
 		}
 	},
 });
