@@ -59,6 +59,11 @@ export const wfResumeJob = job({
 		}
 
 		// Mark step as completed
+		if (typeof stepsCrud.updateMany !== "function") {
+			throw new Error(
+				"Workflow resume requires claim-checked collection updateMany.",
+			);
+		}
 		const completed = await stepsCrud.updateMany(
 			{
 				where: {
