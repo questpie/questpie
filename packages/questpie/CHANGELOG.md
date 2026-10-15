@@ -1,5 +1,13 @@
 # questpie
 
+## 3.35.4
+
+### Patch Changes
+
+- [#402](https://github.com/questpie/questpie/pull/402) [`9afe00e`](https://github.com/questpie/questpie/commit/9afe00e59ae153876fd25817fc5a769011aa4101) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Avoid assembling full collection CRUD hook contexts when a local lifecycle phase has no callbacks. Service resolution and namespace projection keep their original order and context, including request-service initialization and disposal. Unused phases no longer materialize lazy tables. Actual local callbacks, global hooks, field hooks and transaction effects retain their existing behavior.
+
+- [#402](https://github.com/questpie/questpie/pull/402) [`43e7fa9`](https://github.com/questpie/questpie/commit/43e7fa91caf696051b59d93b995755ffa32bd5d8) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Read registered collection and global definitions when discovering relation locks and retained references. Avoid generating every collection's CRUD API for metadata-only scans while preserving source-table locks, target key-share locks and purge validation.
+
 ## 3.35.3
 
 ### Patch Changes
