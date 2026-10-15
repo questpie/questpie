@@ -4774,13 +4774,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 * Execute hooks (supports arrays)
 	 * Delegates to shared executeHooks utility
 	 */
-	private async executeHooks(
+	private executeHooks(
 		hooks: any | any[] | undefined,
 		params: Omit<CreateHookContextParams, "app">,
-	) {
+	): Promise<void> {
 		if (!hooks || (Array.isArray(hooks) && hooks.length === 0)) {
 			extractHookServices({ ...params, app: this.app });
-			return;
+			return Promise.resolve();
 		}
 		return executeHooks(hooks, this.createHookContext(params));
 	}

@@ -231,4 +231,48 @@ describe("unused local CRUD hook contexts (QFM-29)", () => {
 		);
 		expect(observations).toEqual([decoration]);
 	});
+	it("stops later row hooks when the first afterRead context fails synchronously", async () => {
+		let reading = false;
+		let callbacks = 0;
+		const observed = collection("error_order_hook_probes")
+			.fields(({ f }) => ({ title: f.text().required() }))
+			.hooks({
+				beforeOperation: ({ operation }) => {
+					if (operation === "read") reading = true;
+				},
+				afterRead: ({ operation }) => {
+					if (operation === "read") callbacks++;
+				},
+			});
+		setup = await buildMockApp({ collections: { observed } });
+		await runTestDbMigrations(setup.app);
+		const app = setup.app;
+		const context = { accessMode: "system" as const };
+		await app.collections.observed.create({ title: "First" }, context);
+		await app.collections.observed.create({ title: "Second" }, context);
+		const descriptor = Object.getOwnPropertyDescriptor(app, "tables");
+		const tables = app.tables;
+		const failure = new Error("First afterRead context failed");
+		let thrown = false;
+		Object.defineProperty(app, "tables", {
+			configurable: true,
+			get: () => {
+				if (reading && !thrown) {
+					thrown = true;
+					throw failure;
+				}
+				return tables;
+			},
+		});
+		try {
+			await expect(
+				app.collections.observed.find({ limit: 10 }, context),
+			).rejects.toBe(failure);
+			expect(thrown).toBe(true);
+			expect(callbacks).toBe(0);
+		} finally {
+			if (descriptor) Object.defineProperty(app, "tables", descriptor);
+			else Reflect.deleteProperty(app, "tables");
+		}
+	});
 });
