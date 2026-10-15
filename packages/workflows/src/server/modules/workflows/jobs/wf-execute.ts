@@ -23,6 +23,7 @@ import type {
 	StepPersistence,
 	TriggerChildFn,
 } from "../../../engine/step-context.js";
+import { findWaitingSteps } from "../../../engine/waiting-steps.js";
 import {
 	asMatchCriteria,
 	getCollections,
@@ -207,23 +208,8 @@ export const wfExecuteJob = job({
 						}
 						return null;
 					},
-					async findWaitingSteps(eventName, _matchData) {
-						const result = await stepsCrud.find(
-							{
-								where: {
-									type: "waitForEvent",
-									status: "waiting",
-									eventName,
-								},
-								limit: 1000,
-							},
-							{ accessMode: "system" },
-						);
-						return result.docs.map((s) => ({
-							instanceId: s.instanceId,
-							stepName: s.name,
-							matchCriteria: asMatchCriteria(s.matchCriteria),
-						}));
+					findWaitingSteps(eventName, matchData) {
+						return findWaitingSteps(stepsCrud, eventName, matchData);
 					},
 					async markEventConsumed(eventId) {
 						const ev = await eventsCrud.findOne(

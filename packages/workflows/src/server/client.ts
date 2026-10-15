@@ -25,6 +25,7 @@ import {
 import { parseDuration } from "./engine/duration.js";
 import type { EventPersistence, ResumeWaiterFn } from "./engine/events.js";
 import { dispatchEvent } from "./engine/events.js";
+import { findWaitingSteps } from "./engine/waiting-steps.js";
 import type {
 	WorkflowDefinition,
 	WorkflowEventRecord,
@@ -476,28 +477,8 @@ export function createWorkflowClient<
 					// Not needed for sendEvent dispatch
 					return null;
 				},
-				async findWaitingSteps(eventName, _matchData) {
-					const result = await deps.steps.find(
-						{
-							where: {
-								type: "waitForEvent",
-								status: "waiting",
-								eventName,
-							},
-							limit: 1000,
-						},
-						{ accessMode: "system" },
-					);
-					return result.docs.map((s) => ({
-						instanceId: s.instanceId,
-						stepName: s.name,
-						matchCriteria:
-							typeof s.matchCriteria === "object" &&
-							s.matchCriteria !== null &&
-							!Array.isArray(s.matchCriteria)
-								? (s.matchCriteria as Record<string, unknown>)
-								: null,
-					}));
+				findWaitingSteps(eventName, matchData) {
+					return findWaitingSteps(deps.steps, eventName, matchData);
 				},
 				async markEventConsumed(eventId) {
 					// Increment consumed count — best-effort
