@@ -105,8 +105,10 @@ import {
 	rethrowFatalGlobalHookError,
 } from "#questpie/server/collection/crud/shared/global-hooks.js";
 import {
+	type CreateHookContextParams,
 	createHookContext,
 	executeHooks,
+	extractHookServices,
 	getCurrentTransaction,
 	getTransactionTxid,
 	getDb,
@@ -811,15 +813,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			async () => {
 				if (!findOptions?.skipReadLifecycle) {
 					// Execute beforeOperation hook
-					await this.executeHooks(
-						this.state.hooks?.beforeOperation,
-						this.createHookContext({
-							data: options,
-							operation: "read",
-							context: normalized,
-							db,
-						}),
-					);
+					await this.executeHooks(this.state.hooks?.beforeOperation, {
+						data: options,
+						operation: "read",
+						context: normalized,
+						db,
+					});
 				}
 
 				// Enforce access control. Upload relations populate through the
@@ -854,15 +853,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Execute beforeRead hooks (read doesn't modify data)
 				if (this.state.hooks?.beforeRead && !findOptions?.skipReadLifecycle) {
-					await this.executeHooks(
-						this.state.hooks.beforeRead,
-						this.createHookContext({
-							data: options,
-							operation: "read",
-							context: normalized,
-							db,
-						}),
-					);
+					await this.executeHooks(this.state.hooks.beforeRead, {
+						data: options,
+						operation: "read",
+						context: normalized,
+						db,
+					});
 				}
 
 				const mergedWhere = this.mergeWhere(options.where, accessWhere);
@@ -1382,15 +1378,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				if (this.state.hooks?.afterRead && !findOptions?.skipOutputHooks) {
 					await Promise.all(
 						rows.map((row: any) =>
-							this.executeHooks(
-								this.state.hooks.afterRead,
-								this.createHookContext({
-									data: row,
-									operation: "read",
-									context: normalized,
-									db,
-								}),
-							),
+							this.executeHooks(this.state.hooks.afterRead, {
+								data: row,
+								operation: "read",
+								context: normalized,
+								db,
+							}),
 						),
 					);
 				}
@@ -1885,26 +1878,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					// Enforce access control
 					await this.enforceCreateAuthority(normalized, input);
 
-					await this.executeHooks(
-						this.state.hooks?.beforeOperation,
-						this.createHookContext({
-							data: input,
-							operation: "create",
-							context: normalized,
-							db,
-						}),
-					);
+					await this.executeHooks(this.state.hooks?.beforeOperation, {
+						data: input,
+						operation: "create",
+						context: normalized,
+						db,
+					});
 
 					// Execute beforeValidate hook (transform input before validation)
-					await this.executeHooks(
-						this.state.hooks?.beforeValidate,
-						this.createHookContext({
-							data: input,
-							operation: "create",
-							context: normalized,
-							db,
-						}),
-					);
+					await this.executeHooks(this.state.hooks?.beforeValidate, {
+						data: input,
+						operation: "create",
+						context: normalized,
+						db,
+					});
 
 					// Separate nested relation operations from regular fields BEFORE validation
 					// This prevents the validation schema from stripping relation fields
@@ -2165,15 +2152,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					// Execute afterRead hook (transform output)
 					await this.runFieldOutputHooks(record, "create", normalized, db);
 
-					await this.executeHooks(
-						this.state.hooks?.afterRead,
-						this.createHookContext({
-							data: record,
-							operation: "create",
-							context: normalized,
-							db,
-						}),
-					);
+					await this.executeHooks(this.state.hooks?.afterRead, {
+						data: record,
+						operation: "create",
+						context: normalized,
+						db,
+					});
 					await this.filterFieldsForRead(record, normalized);
 					return record;
 				},
@@ -2410,16 +2394,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 			await this.runFieldOutputHooks(updated, "update", context, db, original);
 
-			await this.executeHooks(
-				this.state.hooks?.afterRead,
-				this.createHookContext({
-					data: updated,
-					original,
-					operation: "update",
-					context,
-					db,
-				}),
-			);
+			await this.executeHooks(this.state.hooks?.afterRead, {
+				data: updated,
+				original,
+				operation: "update",
+				context,
+				db,
+			});
 			await this.filterFieldsForRead(updated, context);
 		}
 	}
@@ -2666,29 +2647,23 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				)
 			: undefined;
 
-		await this.executeHooks(
-			this.state.hooks?.beforeOperation,
-			this.createHookContext({
-				data,
-				operation: "update",
-				context: normalized,
-				db,
-			}),
-		);
+		await this.executeHooks(this.state.hooks?.beforeOperation, {
+			data,
+			operation: "update",
+			context: normalized,
+			db,
+		});
 
 		// 3. Process each record (beforeValidate)
 		for (const existing of records) {
 			// Execute beforeValidate hook (transform input before validation)
-			await this.executeHooks(
-				this.state.hooks?.beforeValidate,
-				this.createHookContext({
-					data,
-					original: existing,
-					operation: "update",
-					context: normalized,
-					db,
-				}),
-			);
+			await this.executeHooks(this.state.hooks?.beforeValidate, {
+				data,
+				original: existing,
+				operation: "update",
+				context: normalized,
+				db,
+			});
 		}
 
 		// Separate nested relation operations from regular fields BEFORE validation
@@ -3124,15 +3099,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				hookContext: CRUDContext,
 				hookDb: any,
 			) => {
-				await this.executeHooks(
-					this.state.hooks?.beforeOperation,
-					this.createHookContext({
-						data: params,
-						operation: "delete",
-						context: hookContext,
-						db: hookDb,
-					}),
-				);
+				await this.executeHooks(this.state.hooks?.beforeOperation, {
+					data: params,
+					operation: "delete",
+					context: hookContext,
+					db: hookDb,
+				});
 				await this.executeCollectionHooksWithGlobal(
 					"beforeDelete",
 					this.state.hooks?.beforeDelete,
@@ -3334,16 +3306,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			);
 
 			// Execute afterRead hook (transform output)
-			await this.executeHooks(
-				this.state.hooks?.afterRead,
-				this.createHookContext({
-					data: existing,
-					original: existing,
-					operation: "delete",
-					context: normalized,
-					db,
-				}),
-			);
+			await this.executeHooks(this.state.hooks?.afterRead, {
+				data: existing,
+				original: existing,
+				operation: "delete",
+				context: normalized,
+				db,
+			});
 			await this.filterFieldsForRead(existing, normalized);
 
 			return result;
@@ -3436,15 +3405,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					this.assertExpectedRevision(params as { expectedRevision?: number }, [
 						locked,
 					]);
-					await this.executeHooks(
-						this.state.hooks?.beforeOperation,
-						this.createHookContext({
-							data: params,
-							operation: "purge",
-							context: txContext,
-							db: tx,
-						}),
-					);
+					await this.executeHooks(this.state.hooks?.beforeOperation, {
+						data: params,
+						operation: "purge",
+						context: txContext,
+						db: tx,
+					});
 
 					const preimageResult = await findPreimage();
 					if (!preimageResult) {
@@ -4808,11 +4774,15 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 * Execute hooks (supports arrays)
 	 * Delegates to shared executeHooks utility
 	 */
-	private async executeHooks(
+	private executeHooks(
 		hooks: any | any[] | undefined,
-		ctx: HookContext<any, any, any>,
-	) {
-		return executeHooks(hooks, ctx);
+		params: Omit<CreateHookContextParams, "app">,
+	): Promise<void> {
+		if (!hooks || (Array.isArray(hooks) && hooks.length === 0)) {
+			extractHookServices({ ...params, app: this.app });
+			return Promise.resolve();
+		}
+		return executeHooks(hooks, this.createHookContext(params));
 	}
 
 	/**
@@ -4870,10 +4840,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				collectionKey,
 				ctx,
 			);
-			await this.executeHooks(collectionHooks, ctx);
+			await executeHooks(collectionHooks, ctx);
 		} else {
 			// Collection-specific first, then global after*
-			await this.executeHooks(collectionHooks, ctx);
+			await executeHooks(collectionHooks, ctx);
 			await executeGlobalCollectionHooks(
 				globalEntries,
 				hookName,

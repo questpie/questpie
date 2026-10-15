@@ -69,6 +69,20 @@ export interface CreateHookContextParams {
 	};
 }
 
+/** Extract services at the original lifecycle point, leaving lazy tables unmaterialized. */
+export function extractHookServices(
+	params: CreateHookContextParams,
+	normalized = normalizeContext(params.context),
+) {
+	return extractAppServices(params.app, {
+		db: params.db,
+		session: normalized.session,
+		principal: normalized.principal,
+		actor: normalized.actor,
+		accessMode: normalized.accessMode,
+	});
+}
+
 /**
  * Create hook context with full app access
  *
@@ -79,13 +93,7 @@ export function createHookContext(
 	params: CreateHookContextParams,
 ): HookContext<any, any, any> {
 	const normalized = normalizeContext(params.context);
-	const services = extractAppServices(params.app, {
-		db: params.db,
-		session: normalized.session,
-		principal: normalized.principal,
-		actor: normalized.actor,
-		accessMode: normalized.accessMode,
-	});
+	const services = extractHookServices(params, normalized);
 
 	const ctx: HookContext<any, any, any> = {
 		...services,

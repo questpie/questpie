@@ -13,7 +13,6 @@ import {
 	getColumn,
 	resolveFieldKey,
 } from "#questpie/server/collection/crud/shared/field-resolver.js";
-import type { CRUD } from "#questpie/server/collection/crud/types.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import { rowsOf } from "#questpie/server/db/driver-result.js";
 import { ApiError } from "#questpie/server/errors/base.js";
@@ -38,9 +37,9 @@ type ApplicationReference = {
 	};
 };
 
-type RelationSourceCrud = {
-	"~internalRelatedTable"?: PgTable;
-	"~internalState"?: {
+type RelationSourceDefinition = {
+	table?: PgTable;
+	state?: {
 		name: string;
 		relations?: Record<string, RelationConfig>;
 	};
@@ -127,12 +126,12 @@ async function loadPhysicalForeignKeys(
 
 function pushScalarReference(
 	references: ApplicationReference[],
-	sourceCrud: RelationSourceCrud,
+	sourceDefinition: RelationSourceDefinition,
 	relation: RelationConfig,
 	configuredFieldOverride?: string,
 ): boolean {
-	const sourceState = sourceCrud["~internalState"] as CollectionBuilderState;
-	const sourceTable = sourceCrud["~internalRelatedTable"] as PgTable;
+	const sourceState = sourceDefinition.state as CollectionBuilderState;
+	const sourceTable = sourceDefinition.table as PgTable;
 	const configuredField =
 		configuredFieldOverride ?? relation.fields?.[0] ?? relation.field;
 	if (
@@ -174,12 +173,12 @@ function collectApplicationReferences(
 	let unsupported = false;
 
 	const sources = [
-		...Object.entries(app.collections),
-		...Object.entries(app.globals),
-	] as Array<[string, RelationSourceCrud]>;
-	for (const [sourceCollection, sourceCrud] of sources) {
-		const sourceState = sourceCrud["~internalState"] as CollectionBuilderState;
-		if (!sourceState || !sourceCrud["~internalRelatedTable"]) {
+		...Object.entries(app.getCollections()),
+		...Object.entries(app.getGlobals()),
+	] as Array<[string, RelationSourceDefinition]>;
+	for (const [sourceCollection, sourceDefinition] of sources) {
+		const sourceState = sourceDefinition.state as CollectionBuilderState;
+		if (!sourceState || !sourceDefinition.table) {
 			unsupported = true;
 			continue;
 		}
@@ -194,7 +193,7 @@ function collectApplicationReferences(
 					) {
 						continue;
 					}
-					const sourceTable = sourceCrud["~internalRelatedTable"] as PgTable;
+					const sourceTable = sourceDefinition.table as PgTable;
 					const sourceColumn = getColumn(sourceTable, target.idField);
 					const typeColumn = getColumn(sourceTable, target.typeField);
 					if (!sourceColumn || !typeColumn) {
@@ -216,11 +215,9 @@ function collectApplicationReferences(
 			}
 
 			if (relation.collection === targetCollection && relation.type === "one") {
-				if (!pushScalarReference(references, sourceCrud, relation)) {
+				if (!pushScalarReference(references, sourceDefinition, relation)) {
 					unsupported = true;
-					unsupportedTables.push(
-						sourceCrud["~internalRelatedTable"] as PgTable,
-					);
+					unsupportedTables.push(sourceDefinition.table as PgTable);
 				}
 				continue;
 			}
@@ -230,33 +227,32 @@ function collectApplicationReferences(
 				relation.type === "many" &&
 				!relation.fields
 			) {
-				const relatedCrud = app.collections[relation.collection] as
-					| CRUD
+				const relatedDefinition = app.getCollections()[relation.collection] as
+					| RelationSourceDefinition
 					| undefined;
-				const relatedState = relatedCrud?.["~internalState"] as
+				const relatedState = relatedDefinition?.state as
 					| CollectionBuilderState
 					| undefined;
 				const reverse = relation.relationName
 					? relatedState?.relations?.[relation.relationName]
 					: undefined;
 				if (
-					!relatedCrud ||
+					!relatedDefinition ||
 					!(
 						(relation.foreignKey &&
 							pushScalarReference(
 								references,
-								relatedCrud,
+								relatedDefinition,
 								relation,
 								relation.foreignKey,
 							)) ||
-						(reverse && pushScalarReference(references, relatedCrud, reverse))
+						(reverse &&
+							pushScalarReference(references, relatedDefinition, reverse))
 					)
 				) {
 					unsupported = true;
-					if (relatedCrud) {
-						unsupportedTables.push(
-							relatedCrud["~internalRelatedTable"] as PgTable,
-						);
+					if (relatedDefinition) {
+						unsupportedTables.push(relatedDefinition.table as PgTable);
 					}
 				}
 				continue;
@@ -270,15 +266,17 @@ function collectApplicationReferences(
 				continue;
 			}
 
-			const junctionCrud = relation.through
-				? (app.collections[relation.through] as CRUD | undefined)
+			const junctionDefinition = relation.through
+				? (app.getCollections()[relation.through] as
+						| RelationSourceDefinition
+						| undefined)
 				: undefined;
-			if (!junctionCrud) {
+			if (!junctionDefinition) {
 				unsupported = true;
 				continue;
 			}
 
-			const junctionTable = junctionCrud["~internalRelatedTable"] as PgTable;
+			const junctionTable = junctionDefinition.table as PgTable;
 			const junctionReferences: Array<{
 				field: string | undefined;
 				targetKey: string;
@@ -379,8 +377,8 @@ export async function preparePurgeRelations(options: {
 	i18nTable: PgTable | null;
 }): Promise<PreparedPurgeRelations> {
 	const { tx, app, targetTable, i18nTable } = options;
-	const targetCollection = Object.entries(app.collections).find(
-		([, crud]) => crud["~internalRelatedTable"] === targetTable,
+	const targetCollection = Object.entries(app.getCollections()).find(
+		([, definition]) => definition.table === targetTable,
 	)?.[0];
 	if (!targetCollection) throw relationConflict();
 	const targetIdentity = tableIdentity(targetTable);
@@ -539,16 +537,16 @@ function isManyToManyJunctionTable(
 	app: Questpie<any>,
 	sourceTable: PgTable,
 ): boolean {
-	for (const sourceCrud of Object.values(
-		app.collections,
-	) as RelationSourceCrud[]) {
-		const relations = sourceCrud["~internalState"]?.relations ?? {};
+	for (const sourceDefinition of Object.values(
+		app.getCollections(),
+	) as RelationSourceDefinition[]) {
+		const relations = sourceDefinition.state?.relations ?? {};
 		for (const relation of Object.values(relations)) {
 			if (relation.type !== "manyToMany" || !relation.through) continue;
-			const junctionCrud = app.collections[relation.through] as
-				| RelationSourceCrud
+			const junctionDefinition = app.getCollections()[relation.through] as
+				| RelationSourceDefinition
 				| undefined;
-			if (junctionCrud?.["~internalRelatedTable"] === sourceTable) return true;
+			if (junctionDefinition?.table === sourceTable) return true;
 		}
 	}
 	return false;
@@ -654,17 +652,17 @@ export async function lockRelationTargetsForWrite(options: {
 		});
 	}
 
-	for (const [sourceCollection, sourceCrud] of Object.entries(
-		app.collections,
-	) as Array<[string, RelationSourceCrud]>) {
+	for (const [sourceCollection, sourceDefinition] of Object.entries(
+		app.getCollections(),
+	) as Array<[string, RelationSourceDefinition]>) {
 		for (const relation of Object.values(
-			sourceCrud["~internalState"]?.relations ?? {},
+			sourceDefinition.state?.relations ?? {},
 		)) {
 			if (relation.type !== "manyToMany" || !relation.through) continue;
-			const junctionCrud = app.collections[relation.through] as
-				| RelationSourceCrud
+			const junctionDefinition = app.getCollections()[relation.through] as
+				| RelationSourceDefinition
 				| undefined;
-			if (junctionCrud?.["~internalRelatedTable"] !== sourceTable) continue;
+			if (junctionDefinition?.table !== sourceTable) continue;
 
 			if (relation.sourceField && Object.hasOwn(values, relation.sourceField)) {
 				const value = values[relation.sourceField];
@@ -699,12 +697,8 @@ export async function lockRelationTargetsForWrite(options: {
 		}
 	> = [];
 	for (const target of targets) {
-		const targetCrud =
-			(app.collections[target.collection] as RelationSourceCrud | undefined) ??
-			(app.globals[target.collection] as RelationSourceCrud | undefined);
-		const targetTable = targetCrud?.["~internalRelatedTable"] as
-			| PgTable
-			| undefined;
+		const targetTable = (app.getCollections()[target.collection]?.table ??
+			app.getGlobals()[target.collection]?.table) as PgTable | undefined;
 		const targetColumn = targetTable
 			? getColumn(targetTable, target.key)
 			: undefined;
