@@ -75,6 +75,38 @@ export function getMatchHashesForDispatch(
 	return hashes;
 }
 
+/**
+ * Enumerate hashes of contained object criteria, including nested subsets.
+ * A bounded fallback preserves containment for wide/deep events without an
+ * exponential allocation. Null tells persistence to use the name/status index.
+ */
+export function getContainmentMatchHashes(
+	matchData: Record<string, unknown> | null | undefined,
+): string[] | null {
+	const candidates = subsets(matchData ?? {}, 0);
+	return candidates ? [...new Set(candidates.map(computeMatchHash))] : null;
+}
+
+function subsets(
+	object: Record<string, unknown>,
+	depth: number,
+): Record<string, unknown>[] | null {
+	if (depth > 16) return null;
+	let candidates: Record<string, unknown>[] = [{}];
+	for (const [key, value] of Object.entries(object)) {
+		const values =
+			typeof value === "object" && value !== null && !Array.isArray(value)
+				? subsets(value as Record<string, unknown>, depth + 1)
+				: [value];
+		if (!values || candidates.length * (values.length + 1) > 256) return null;
+		candidates = candidates.flatMap((candidate) => [
+			candidate,
+			...values.map((part) => ({ ...candidate, [key]: part })),
+		]);
+	}
+	return candidates;
+}
+
 // ============================================================================
 // Internal Helpers
 // ============================================================================

@@ -13,8 +13,16 @@ import type { WorkflowDefinition } from "../../src/server/workflow/types.js";
 // ── Mock helpers ────────────────────────────────────────────
 
 function matchesWhere(record: any, key: string, value: any): boolean {
+	if (key === "OR" && Array.isArray(value)) {
+		return value.some((clause: Record<string, unknown>) =>
+			Object.entries(clause).every(([nestedKey, nestedValue]) =>
+				matchesWhere(record, nestedKey, nestedValue),
+			),
+		);
+	}
 	if (value && typeof value === "object" && !Array.isArray(value)) {
 		// Handle operator-style queries: { in: [...] }, { lte: ... }, etc.
+		if ("isNull" in value) return (record[key] == null) === value.isNull;
 		if ("in" in value) {
 			return (value.in as any[]).includes(record[key]);
 		}

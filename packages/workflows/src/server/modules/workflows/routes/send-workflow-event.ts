@@ -2,8 +2,9 @@ import { route } from "questpie";
 import { z } from "zod";
 
 import type { EventPersistence } from "../../../engine/events.js";
+import { findWaitingSteps } from "../../../engine/waiting-steps.js";
 import { workflowRouteAccess } from "./_access.js";
-import { asMatchCriteria, getCollections, getQueue } from "./_helpers.js";
+import { getCollections, getQueue } from "./_helpers.js";
 
 export default route()
 	.post()
@@ -41,23 +42,8 @@ export default route()
 			async findMatchingEvent() {
 				return null; // Not needed for forward dispatch
 			},
-			async findWaitingSteps(eventName: string) {
-				const result = await steps.find(
-					{
-						where: {
-							type: "waitForEvent",
-							status: "waiting",
-							eventName,
-						},
-						limit: 1000,
-					},
-					{ accessMode: "system" },
-				);
-				return result.docs.map((s) => ({
-					instanceId: s.instanceId,
-					stepName: s.name,
-					matchCriteria: asMatchCriteria(s.matchCriteria),
-				}));
+			findWaitingSteps(eventName, matchData) {
+				return findWaitingSteps(steps, eventName, matchData);
 			},
 			async markEventConsumed() {
 				// Not needed for forward dispatch
