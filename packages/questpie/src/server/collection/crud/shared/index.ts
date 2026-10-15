@@ -43,6 +43,7 @@ export {
 	type CreateHookContextParams,
 	createHookContext,
 	executeHooks,
+	extractHookServices,
 } from "./hooks.js";
 export { isJsonbBackedField, normalizeJsonbInput } from "./jsonb-input.js";
 export {
