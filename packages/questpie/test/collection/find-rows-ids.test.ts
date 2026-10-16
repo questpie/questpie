@@ -154,16 +154,14 @@ describe("findRows finite primary-key acquisition", () => {
 				deletedAt: new Date(),
 			},
 		]);
-		await setup.app.db
-			.insert(table)
-			.values(
-				Array.from({ length: 100 }, (_, i) => ({
-					id: `key-${i}`,
-					company: "own",
-					name: `Key${String(i).padStart(3, "0")}`,
-					visible: true,
-				})),
-			);
+		await setup.app.db.insert(table).values(
+			Array.from({ length: 100 }, (_, i) => ({
+				id: `key-${i}`,
+				company: "own",
+				name: `Key${String(i).padStart(3, "0")}`,
+				visible: true,
+			})),
+		);
 		await setup.app.db.insert(owners.build().table).values([
 			{ id: "owner-own", company: "own" },
 			{ id: "owner-foreign", company: "foreign" },
@@ -405,14 +403,12 @@ describe("findRows finite primary-key acquisition", () => {
 	});
 	it("uses the explicit transaction before conflicting ambient context, with normal read hooks", async () => {
 		await withTransaction(setup.app.db, async (tx: any) => {
-			await tx
-				.insert(rows.build().table)
-				.values({
-					id: "uncommitted",
-					company: "own",
-					name: "Pending",
-					visible: true,
-				});
+			await tx.insert(rows.build().table).values({
+				id: "uncommitted",
+				company: "own",
+				name: "Pending",
+				visible: true,
+			});
 			const explicit = await runWithContext(
 				{ db: setup.app.db, accessMode: "system" },
 				() => read({ ids: ["uncommitted"], limit: 1 }, { ...system, db: tx }),
