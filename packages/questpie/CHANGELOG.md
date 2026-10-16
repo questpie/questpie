@@ -1,5 +1,11 @@
 # questpie
 
+## 3.35.7
+
+### Patch Changes
+
+- [#408](https://github.com/questpie/questpie/pull/408) [`a2d381a`](https://github.com/questpie/questpie/commit/a2d381ae5f6a0c987e983e04fa8f5f4cf5acd134) Thanks [@questpie-autopilot](https://github.com/apps/questpie-autopilot)! - Add backend `findRows({ ids, limit, where })` for finite primary-key acquisition through per-key LATERAL reads while retaining normal access, full decoded rows, hooks and transaction context. Apply global ordering and limit after the complete authorized key set, and fail explicitly for unsupported localized/versioned/projected/populated reads.
+
 ## 3.35.6
 
 ### Patch Changes
