@@ -1342,8 +1342,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				while (finiteKeysAlias === getTableName(readTable))
 					finiteKeysAlias += "_";
 				let finiteKeyColumn = "__questpie_requested_id";
-				while (finiteSelect && Object.hasOwn(finiteSelect, finiteKeyColumn))
-					finiteKeyColumn += "_";
+				if (finiteSelect) {
+					while (Object.hasOwn(finiteSelect, finiteKeyColumn))
+						finiteKeyColumn += "_";
+				}
 				if (finiteIds !== undefined)
 					whereClauses.push(
 						eq(
@@ -1370,7 +1372,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					const keys = sql`(VALUES ${values}) AS ${sql.identifier(finiteKeysAlias)} (${sql.identifier(finiteKeyColumn)})`;
 					const row = query.limit(1).as("__questpie_finite_row");
 					query = db.select().from(keys).crossJoinLateral(row);
-					orderTable = row as unknown as PgTable;
+					orderTable = row;
 				}
 
 				// ORDER BY

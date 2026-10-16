@@ -198,7 +198,7 @@ const actors = await collections.actors.findRows(
 );
 ```
 
-`ids` is available only on `findRows`. It snapshots and deduplicates the supplied keys before any awaited hook. The input array must contain at most100 string or finite numeric keys; the normal required `limit` remains1–100. Each key is acquired through a primary-key equality with the final caller/access predicates, soft-delete filter and search condition inside a per-key `LATERAL` read with `LIMIT1`. Global ordering and the requested row limit apply to the complete authorized set afterward, so an inaccessible input prefix cannot displace later accessible keys. Input order has no implied result-order contract.
+`ids` is available only on `findRows`. It snapshots and deduplicates the supplied keys before any awaited hook. The input array must contain at most100 string or finite numeric keys; the normal required `limit` remains1-100. Each key is acquired through a primary-key equality with the final caller/access predicates, soft-delete filter and search condition inside a per-key `LATERAL` read with `LIMIT1`. Global ordering and the requested row limit apply to the complete authorized set afterward, so an inaccessible input prefix cannot displace later accessible keys. Input order has no implied result-order contract.
 
 The read keeps the ordinary access decision, field filtering, field output hooks, `afterRead`, and database context priority. Complete field values retain their Drizzle decoders, including Date/JSON/null values and `_title`. Missing, filtered and foreign keys are omitted. Empty keys run the ordinary access/before-read lifecycle and return no rows without a SQL query. An access denial still fails. Hooks cannot widen the frozen keys or SQL limit.
 
