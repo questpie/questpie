@@ -32,3 +32,23 @@ type _findKeepsTotal = Expect<Equal<Awaited<typeof page>["totalDocs"], number>>;
 type _findKeepsDocs = Expect<
 	Equal<Awaited<typeof page>["docs"][number]["title"], string>
 >;
+
+const keyed = crud.findRows({
+	ids: ["a", "b"] as const,
+	limit: 1,
+	where: { title: "allowed" },
+	orderBy: { title: "asc" },
+});
+type _keyedKeepsRow = Expect<
+	Equal<Awaited<typeof keyed>[number]["title"], string>
+>;
+// @ts-expect-error primary key type follows the collection
+void crud.findRows({ ids: [1], limit: 1 });
+// @ts-expect-error ids mode does not support projections
+void crud.findRows({ ids: ["a"], limit: 1, columns: { title: true } });
+// @ts-expect-error ids mode does not support populated relations
+void crud.findRows({ ids: ["a"], limit: 1, with: {} });
+// @ts-expect-error finite acquisition is findRows only
+void crud.find({ ids: ["a"], limit: 1 });
+// @ts-expect-error finite acquisition is findRows only
+void crud.findOne({ ids: ["a"] });

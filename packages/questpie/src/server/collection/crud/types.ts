@@ -840,6 +840,27 @@ export type FindManyOptions<
 	TRelations = any,
 > = FindManyOptionsBase<TFields, TRelations>;
 
+/** Backend-only rows; finite primary-key acquisition supports full plain base rows. */
+export type FindRowsOptions<
+	TFields = any,
+	TRelations = any,
+	TId = ExtractIdType<TFields>,
+> = FindManyOptions<TFields, TRelations> & {
+	limit: number;
+	offset?: never;
+	groupBy?: never;
+} & (
+		| { ids?: never }
+		| {
+				/** At most100 primary keys, snapshotted before hooks; duplicates are read once. */
+				ids: readonly TId[];
+				columns?: never;
+				select?: never;
+				extras?: never;
+				with?: never;
+		  }
+	);
+
 /** Shared base props for collection-aware find — avoids Omit on FindManyOptionsBase which would eagerly instantiate Where<TFields,TRelations> */
 type FindOptionsShared<TSelect, TRelations> = {
 	columns?: Columns<TSelect>;
@@ -1581,19 +1602,13 @@ export interface CRUD<
 	 * Find many records (paginated)
 	 * Returns type-safe result based on columns and with options
 	 */
-	find<TQuery extends FindManyOptions<TSelect, TRelations>>(
+	find<TQuery extends FindManyOptions<TSelect, TRelations> & { ids?: never }>(
 		options?: TQuery,
 		context?: CRUDContext,
 	): Promise<FindResult<TSelect, TRelations, TQuery>>;
 
 	/** Backend-only rows without a total; bounded to 1–100 and no offset/groupBy. */
-	findRows<
-		TQuery extends FindManyOptions<TSelect, TRelations> & {
-			limit: number;
-			offset?: never;
-			groupBy?: never;
-		},
-	>(
+	findRows<TQuery extends FindRowsOptions<TSelect, TRelations, TId>>(
 		options: TQuery,
 		context?: CRUDContext,
 	): Promise<ApplyQuery<TSelect, TRelations, TQuery>[]>;
@@ -1602,7 +1617,9 @@ export interface CRUD<
 	 * Find single record matching query
 	 * Returns type-safe result based on columns and with options
 	 */
-	findOne<TQuery extends FindOneOptionsBase<TSelect, TRelations>>(
+	findOne<
+		TQuery extends FindOneOptionsBase<TSelect, TRelations> & { ids?: never },
+	>(
 		options?: TQuery,
 		context?: CRUDContext,
 	): Promise<ApplyQuery<TSelect, TRelations, TQuery> | null>;
