@@ -121,6 +121,7 @@ second broker is created. Without a broker, cross-process convergence uses that
 configured interval. Setting `pollIntervalMs: 0` gives up recovery from a lost
 notice. Unsubscribe or service shutdown prevents new callbacks and pending
 reruns; an already running callback may finish.
+New invalidation subscriptions are rejected once service destruction begins.
 
 Callback failures reach `onError` without stopping other subscribers. Reads
 still need their ordinary authorization checks. This is a backend signal, not

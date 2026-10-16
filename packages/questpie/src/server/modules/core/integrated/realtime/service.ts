@@ -141,6 +141,7 @@ export class RealtimeService {
 	private clientTransport?: ClientTransport;
 	private listeners = new Set<ListenerEntry>();
 	private invalidationListeners = new Set<InvalidationEntry>();
+	private invalidationClosed = false;
 	private directCollectionListeners = new Map<string, Set<ListenerEntry>>();
 	private directCollectionRouters = new Map<
 		string,
@@ -1025,11 +1026,15 @@ export class RealtimeService {
 	 * is synchronous, then startup/reconnect and existing reconciliation close
 	 * missed-notice windows. No per-subscriber polling is created (QFM-30).
 	 * Unsubscribe drops pending work; an already running callback may finish.
+	 * Registration is rejected once service destruction begins.
 	 */
 	subscribeInvalidation(
 		listener: RealtimeInvalidationListener,
 		errorListener?: RealtimeErrorListener,
 	): () => void {
+		if (this.invalidationClosed) {
+			throw new Error("Realtime invalidation subscriptions are closed");
+		}
 		let active = true;
 		let running = false;
 		let pending = false;
@@ -1478,6 +1483,7 @@ export class RealtimeService {
 	}
 
 	async destroy(): Promise<void> {
+		this.invalidationClosed = true;
 		for (const entry of this.invalidationListeners) entry.close();
 		await this.topologyCoordinator.stop();
 		await this.channelPresenceRegistry.destroy();

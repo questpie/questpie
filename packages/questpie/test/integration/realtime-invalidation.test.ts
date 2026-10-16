@@ -202,4 +202,44 @@ describe("backend realtime invalidation", () => {
 		expect(calls).toBe(stopped);
 		expect(broker.stops).toBe(1);
 	});
+
+	it("closes subscription admission during destroy and drops a busy reader's pending rerun", async () => {
+		const broker = new Broker();
+		realtime = new RealtimeService(emptyDb as never, {
+			changeBroker: broker,
+			pollIntervalMs: 0,
+			retentionDays: 0,
+		});
+		const held = deferred();
+		let calls = 0;
+		let shutdown: Promise<void> | undefined;
+		try {
+			realtime.subscribeInvalidation(async () => {
+				calls++;
+				await held.promise;
+			});
+			await flush();
+			broker.wake();
+			await flush();
+			expect(calls).toBe(1);
+			shutdown = realtime.destroy();
+			expect(() =>
+				realtime.subscribeInvalidation(() => {
+					calls++;
+				}),
+			).toThrow("Realtime invalidation subscriptions are closed");
+			await shutdown;
+			held.resolve();
+			await flush();
+			expect(calls).toBe(1);
+			expect(() =>
+				realtime.subscribeInvalidation(() => {
+					calls++;
+				}),
+			).toThrow("Realtime invalidation subscriptions are closed");
+		} finally {
+			held.resolve();
+			await shutdown;
+		}
+	});
 });
