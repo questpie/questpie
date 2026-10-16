@@ -1003,6 +1003,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 		const uploadAfterDeleteHook = async ({
 			data,
 			app,
+			db,
 			logger,
 			onAfterCommit,
 		}: any) => {
@@ -1011,12 +1012,16 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 				return;
 			}
 
+			await enqueueStorageCleanup(db, data.key);
 			await deleteStorageObjectAfterCommit({
 				app,
 				key: data.key,
 				logger,
 				onAfterCommit,
 				message: "Failed to delete upload file from storage",
+			});
+			onAfterCommit?.(async () => {
+				wakeStorageCleanup(app, logger);
 			});
 		};
 		const uploadAfterPurgeHook = async ({
