@@ -181,3 +181,25 @@ The same operations reach you through the
 
 **[Access control](/docs/schema/access-control)** is what `accessMode: "user"`
 turns on, including rules that return a `where` and filter instead of denying.
+
+### Finite primary-key rows
+
+Backend code can supply up to100 primary keys to `findRows`:
+
+```ts
+const actors = await collections.actors.findRows(
+	{
+		ids: actorIds,
+		where: { company: companyId },
+		orderBy: { id: "asc" },
+		limit: 100,
+	},
+	context,
+);
+```
+
+`ids` is available only on `findRows`. It snapshots and deduplicates the supplied keys before any awaited hook. The input array must contain at most100 string or finite numeric keys; the normal required `limit` remains1–100. Each key is acquired through a primary-key equality with the final caller/access predicates, soft-delete filter and search condition inside a per-key `LATERAL` read with `LIMIT1`. Global ordering and the requested row limit apply to the complete authorized set afterward, so an inaccessible input prefix cannot displace later accessible keys. Input order has no implied result-order contract.
+
+The read keeps the ordinary access decision, field filtering, field output hooks, `afterRead`, and database context priority. Complete field values retain their Drizzle decoders, including Date/JSON/null values and `_title`. Missing, filtered and foreign keys are omitted. Empty keys run the ordinary access/before-read lifecycle and return no rows without a SQL query. An access denial still fails. Hooks cannot widen the frozen keys or SQL limit.
+
+The initial finite-key mode supports full plain base/current rows only. It explicitly rejects localized collections, non-base version stages, SQL virtual/computed projections, `columns`/`select`, `extras`, and populated `with` relations. Offset and grouping remain forbidden, including when introduced by a read hook. Unsupported reads fail instead of falling back to a broad acquisition query. Ordinary `findRows` without `ids` keeps its existing features. This bounds owner-row primary-key acquisition, not all SQL work in the operation. Caller/access RAW or relation predicates still run inside each lateral read and may perform additional work on related tables; hooks can also issue queries. Physical PostgreSQL plans, all scan nodes and table-growth cohorts must be measured for the actual schema/workload.

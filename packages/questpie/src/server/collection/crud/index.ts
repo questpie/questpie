@@ -15,6 +15,7 @@ export type {
 	Extras,
 	ExtractIdType,
 	FindManyOptions,
+	FindRowsOptions,
 	FindManyOptionsBase,
 	FindOneOptions,
 	FindOneOptionsBase,

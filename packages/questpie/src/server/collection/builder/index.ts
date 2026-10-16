@@ -11,6 +11,7 @@ export type {
 	DeleteParams,
 	Extras,
 	FindManyOptions,
+	FindRowsOptions,
 	FindOneOptions,
 	LockManyParams,
 	OrderBy,

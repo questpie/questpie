@@ -6,11 +6,13 @@ import {
 	and,
 	asc,
 	avg,
-	type Column,
+	Column,
 	count,
 	desc,
 	eq,
+	getTableName,
 	inArray,
+	is,
 	max,
 	min,
 	type SQL,
@@ -138,6 +140,7 @@ import type {
 	DeleteParams,
 	Extras,
 	FindManyOptions,
+	FindRowsOptions,
 	FindOneOptionsBase,
 	GroupedPaginatedResult,
 	GroupByOptions,
@@ -768,6 +771,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		mode: "many" | "one" | "rows" | "aggregate",
 		findOptions?: {
 			rowsLimit?: number;
+			finiteIds?: readonly (string | number)[];
 			aggregate?: RelationAggregate;
 			skipFieldFiltering?: boolean;
 			skipOutputHooks?: boolean;
@@ -775,6 +779,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			onAccessEvaluated?: (access: boolean | AccessWhere) => void;
 		},
 	): Promise<PaginatedResult<T> | GroupedPaginatedResult<T> | T[] | T | null> {
+		if (mode !== "rows" && "ids" in options)
+			throw ApiError.badRequest("ids is supported only by findRows");
 		// Normalize context FIRST to ensure locale defaults are applied.
 		// `locale`/`localeFallback` are declared on the options as well as the
 		// context (crud/types.ts) and documented as "override locale for this
@@ -877,6 +883,22 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					!!this.workflowConfig &&
 					!!readStage &&
 					readStage !== this.workflowConfig.initialStage;
+				const finiteIds = findOptions?.finiteIds;
+				if (
+					finiteIds !== undefined &&
+					(useStageVersions ||
+						!!this.i18nTable ||
+						!!this.i18nVersionsTable ||
+						options.columns !== undefined ||
+						(options as { select?: unknown }).select !== undefined ||
+						options.extras !== undefined ||
+						options.with !== undefined ||
+						Object.keys(this.state.virtuals ?? {}).length > 0)
+				) {
+					throw ApiError.badRequest(
+						"findRows ids supports full plain base rows only; versions, localization, columns/select, extras, with and SQL virtuals are unsupported",
+					);
+				}
 				const aggregate = findOptions?.aggregate;
 				if (aggregate && useStageVersions) {
 					throw ApiError.badRequest(
@@ -1010,6 +1032,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							useStageVersions,
 						);
 
+				// Aliases are per output key: _title can reuse id/title's physical
+				// column, while the derived row still needs unambiguous field names.
+				const finiteSelect =
+					finiteIds === undefined
+						? undefined
+						: Object.fromEntries(
+								Object.entries(selectObj).map(([key, column]) => {
+									if (!is(column, Column))
+										throw ApiError.badRequest(
+											"findRows ids does not support SQL/computed projections",
+										);
+									return [key, sql`${column}`.mapWith(column).as(key)];
+								}),
+							);
 				// Start building query
 				let query: any;
 				if (useStageVersions) {
@@ -1032,7 +1068,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							),
 						);
 				} else {
-					query = db.select(selectObj).from(readTable);
+					query = db.select(finiteSelect ?? selectObj).from(readTable);
 				}
 
 				// Add i18n joins if locale provided and localized fields exist
@@ -1300,8 +1336,41 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}
 				}
 
+				// The primary-key restriction AND every finalized predicate are
+				// evaluated within each per-key row before its LIMIT1.
+				let finiteKeysAlias = "__questpie_finite_keys";
+				while (finiteKeysAlias === getTableName(readTable))
+					finiteKeysAlias += "_";
+				let finiteKeyColumn = "__questpie_requested_id";
+				while (finiteSelect && Object.hasOwn(finiteSelect, finiteKeyColumn))
+					finiteKeyColumn += "_";
+				if (finiteIds !== undefined)
+					whereClauses.push(
+						eq(
+							getColumn(readTable, "id")!,
+							sql`${sql.identifier(finiteKeysAlias)}.${sql.identifier(finiteKeyColumn)}`,
+						),
+					);
 				if (whereClauses.length > 0) {
 					query = query.where(and(...whereClauses));
+				}
+
+				let orderTable = readTable;
+				if (finiteIds !== undefined) {
+					const idColumn = getColumn(readTable, "id")!;
+					const values = finiteIds.length
+						? sql.join(
+								finiteIds.map(
+									(id) =>
+										sql`(${sql.param(id, idColumn)}::${sql.raw(idColumn.getSQLType())})`,
+								),
+								sql`, `,
+							)
+						: sql`(NULL::${sql.raw(idColumn.getSQLType())})`;
+					const keys = sql`(VALUES ${values}) AS ${sql.identifier(finiteKeysAlias)} (${sql.identifier(finiteKeyColumn)})`;
+					const row = query.limit(1).as("__questpie_finite_row");
+					query = db.select().from(keys).crossJoinLateral(row);
+					orderTable = row as unknown as PgTable;
 				}
 
 				// ORDER BY
@@ -1313,7 +1382,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						useI18n,
 						i18nCurrentTable,
 						i18nFallbackTable,
-						readTable,
+						orderTable,
 					);
 					if (orderClauses.length > 0) {
 						query = query.orderBy(...orderClauses);
@@ -1336,7 +1405,11 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				// Execute query
-				let rows = await query;
+				let rows = finiteIds?.length === 0 ? [] : await query;
+				if (finiteIds !== undefined)
+					rows = rows.map(
+						(row: Record<string, unknown>) => row.__questpie_finite_row,
+					);
 
 				// Application-side i18n merge: replace prefixed columns with final values
 				// Handles both flat localized fields and nested localized JSONB fields (via _localized column)
@@ -1459,7 +1532,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 	private createFindRows() {
 		return async (
-			options: FindManyOptions,
+			options: FindRowsOptions<any, any, string | number>,
 			context: CRUDContext = {},
 		): Promise<any[]> => {
 			// The bound is captured before any awaited hook, so neither a hook nor
@@ -1477,8 +1550,31 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					"findRows requires limit 1–100 and forbids offset/groupBy",
 				);
 			}
+			const suppliedIds = options.ids;
+			let finiteIds: readonly (string | number)[] | undefined;
+			if (suppliedIds !== undefined) {
+				if (!Array.isArray(suppliedIds) || suppliedIds.length > 100)
+					throw ApiError.badRequest(
+						"findRows ids requires at most100 string or finite numeric primary keys",
+					);
+				// Spread captures holes as undefined and isolates caller/hook mutation.
+				const captured = [...suppliedIds];
+				if (
+					captured.length > 100 ||
+					captured.some(
+						(id) =>
+							typeof id !== "string" &&
+							(typeof id !== "number" || !Number.isFinite(id)),
+					)
+				)
+					throw ApiError.badRequest(
+						"findRows ids requires at most100 string or finite numeric primary keys",
+					);
+				finiteIds = Object.freeze([...new Set(captured)]);
+			}
 			return this._executeFind(options, context, "rows", {
 				rowsLimit,
+				finiteIds,
 			}) as Promise<any[]>;
 		};
 	}
