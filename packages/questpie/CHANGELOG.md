@@ -1,5 +1,11 @@
 # questpie
 
+## 3.35.6
+
+### Patch Changes
+
+- [#406](https://github.com/questpie/questpie/pull/406) [`f486732`](https://github.com/questpie/questpie/commit/f486732f36e64df6c013ca9c2b8e11bcd10dd53e) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add content-free backend realtime invalidation subscriptions so authoritative row waiters can wake on a broker notice while an older transaction still holds back ordered outbox delivery. Async callbacks coalesce, retain existing reconciliation and release pending work on unsubscribe or shutdown.
+
 ## 3.35.5
 
 ## 3.35.4
