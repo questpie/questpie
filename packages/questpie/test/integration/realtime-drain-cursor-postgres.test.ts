@@ -17,7 +17,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import pg from "pg";
 
 import { withTransaction } from "../../src/exports/index.js";
@@ -48,8 +48,7 @@ let cleanup: (() => Promise<void>) | undefined;
  * `drain()` collapses concurrent calls, so a single call can return without
  * having read anything when the startup drain is still in flight.
  */
-async function drainFully(): Promise<void> {
-	const realtime = app.realtime as any;
+async function drainFully(realtime = app.realtime as any): Promise<void> {
 	for (let attempt = 0; attempt < 200; attempt++) {
 		await realtime.drain("poll");
 		if (!realtime.draining && !realtime.drainPending) return;
@@ -118,6 +117,85 @@ describe.skipIf(!databaseUrl)("realtime drain cursor on PostgreSQL", () => {
 	afterAll(async () => {
 		await cleanup?.();
 	}, 120_000);
+
+	it("invalidates over PostgreSQL notices while an older transaction in another database blocks ordered delivery", async () => {
+		const reader = new RealtimeService(
+			app.db,
+			{
+				pollIntervalMs: 0,
+				retentionDays: 0,
+			},
+			databaseUrl,
+		);
+		const holderUrl = new URL(databaseUrl!);
+		holderUrl.pathname = "/postgres";
+		if (new URL(databaseUrl!).pathname === holderUrl.pathname)
+			throw new Error(
+				"Cross-database invalidation proof requires a throwaway database distinct from postgres",
+			);
+		const holder = new pg.Client({ connectionString: holderUrl.toString() });
+		const seen: RealtimeChangeEvent[] = [];
+		const stopOrdered = reader.subscribe((event) => {
+			seen.push(event);
+		});
+		let stopInvalidation: (() => void) | undefined;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		try {
+			await (reader as any).ensureStarted();
+			await holder.connect();
+			await holder.query("begin");
+			const held = await holder.query(
+				"select current_database() as database, pg_current_xact_id() as xid",
+			);
+			expect(held.rows[0].database).toBe("postgres");
+			const recordId = `invalidation-${crypto.randomUUID()}`;
+			let ready = () => {};
+			const observed = new Promise<void>((resolve) => {
+				ready = resolve;
+			});
+			stopInvalidation = reader.subscribeInvalidation(async () => {
+				const rows = await app.db
+					.select()
+					.from(questpieRealtimeLogTable)
+					.where(eq(questpieRealtimeLogTable.recordId, recordId));
+				if (rows.length === 1) ready();
+			});
+			const event = await append(recordId);
+			await reader.notify(event);
+			await Promise.race([
+				observed,
+				new Promise<never>((_, reject) => {
+					timer = setTimeout(
+						() =>
+							reject(new Error("invalidation waited for the ordered horizon")),
+						2_000,
+					);
+				}),
+			]);
+			expect(seen.some((change) => change.recordId === recordId)).toBe(false);
+			const eligible = await app.db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(questpieRealtimeLogTable)
+				.where(
+					and(
+						eq(questpieRealtimeLogTable.recordId, recordId),
+						sql`${questpieRealtimeLogTable.txid} < pg_snapshot_xmin(pg_current_snapshot())`,
+					),
+				);
+			expect(eligible[0].count).toBe(0);
+			await holder.query("rollback");
+			await drainFully(reader);
+			expect(
+				seen.filter((change) => change.recordId === recordId),
+			).toHaveLength(1);
+		} finally {
+			if (timer) clearTimeout(timer);
+			stopInvalidation?.();
+			stopOrdered();
+			await holder.end();
+			await reader.destroy();
+		}
+	}, 30_000);
 
 	it("delivers a change whose transaction id inverts against its sequence", async () => {
 		const { seen, stop } = await collect();

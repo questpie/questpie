@@ -74,6 +74,13 @@ import type {
 } from "./types.js";
 
 export type RealtimeListener = (event: RealtimeChangeEvent) => void;
+export type RealtimeInvalidationListener = () => void | Promise<void>;
+
+type InvalidationEntry = {
+	signal: () => void;
+	close: () => void;
+	errorListener?: RealtimeErrorListener;
+};
 
 type AppendChangeInput = Omit<
 	RealtimeChangeEvent,
@@ -133,6 +140,8 @@ export class RealtimeService {
 	private unsubscribeNotices?: () => Promise<void>;
 	private clientTransport?: ClientTransport;
 	private listeners = new Set<ListenerEntry>();
+	private invalidationListeners = new Set<InvalidationEntry>();
+	private invalidationClosed = false;
 	private directCollectionListeners = new Map<string, Set<ListenerEntry>>();
 	private directCollectionRouters = new Map<
 		string,
@@ -263,7 +272,7 @@ export class RealtimeService {
 
 	private reportTransportFailure(message: string, error: unknown): void {
 		this.logger?.error(message, error);
-		const listeners = Array.from(this.listeners);
+		const listeners = [...this.listeners, ...this.invalidationListeners];
 		for (const entry of listeners) {
 			try {
 				entry.errorListener?.(error);
@@ -292,6 +301,7 @@ export class RealtimeService {
 	}
 
 	private drainOrDeferUntilStarted(reason: "broker" | "reconnect"): void {
+		this.invalidate();
 		this.drainSignalGeneration += 1;
 		// Only a started service has a seeded cursor. `initialize()` runs at boot
 		// on every node while `ensureStarted()` is reachable only from
@@ -419,7 +429,10 @@ export class RealtimeService {
 	}
 
 	async notify(event: RealtimeChangeEvent): Promise<void> {
-		if (!this.hasPhysicalBroker) return;
+		if (!this.hasPhysicalBroker) {
+			this.invalidate();
+			return;
+		}
 		await this.initialize();
 		await this.publishObserved(() =>
 			this.noticeRouter.publish({
@@ -893,6 +906,7 @@ export class RealtimeService {
 	private startPollTimer(): void {
 		if (this.pollIntervalMs <= 0 || this.pollTimer) return;
 		this.pollTimer = setInterval(() => {
+			this.invalidate();
 			this.drainSafely("poll");
 		}, this.pollIntervalMs);
 	}
@@ -1004,6 +1018,74 @@ export class RealtimeService {
 	 */
 	async cleanupOutbox(force = true): Promise<void> {
 		await this.scheduleRetentionCleanup(force);
+	}
+
+	/**
+	 * Content-free backend hints, independent of ordered outbox settlement.
+	 * Re-read authorized state; hints may be spurious or coalesced. Registration
+	 * is synchronous, then startup/reconnect and existing reconciliation close
+	 * missed-notice windows. No per-subscriber polling is created (QFM-30).
+	 * Unsubscribe drops pending work; an already running callback may finish.
+	 * Registration is rejected once service destruction begins.
+	 */
+	subscribeInvalidation(
+		listener: RealtimeInvalidationListener,
+		errorListener?: RealtimeErrorListener,
+	): () => void {
+		if (this.invalidationClosed) {
+			throw new Error("Realtime invalidation subscriptions are closed");
+		}
+		let active = true;
+		let running = false;
+		let pending = false;
+		const run = async () => {
+			running = true;
+			try {
+				while (pending) {
+					pending = false;
+					try {
+						await listener();
+					} catch (error) {
+						this.logger?.error(
+							"[Realtime] Invalidation listener failed",
+							error,
+						);
+						if (active) {
+							try {
+								errorListener?.(error);
+							} catch (listenerError) {
+								this.logger?.error(
+									"[Realtime] Invalidation error listener failed",
+									listenerError,
+								);
+							}
+						}
+					}
+				}
+			} finally {
+				running = false;
+			}
+		};
+		const entry: InvalidationEntry = {
+			errorListener,
+			signal: () => {
+				if (!active) return;
+				pending = true;
+				if (!running) void run();
+			},
+			close: () => {
+				active = false;
+				pending = false;
+				this.invalidationListeners.delete(entry);
+			},
+		};
+		this.invalidationListeners.add(entry);
+		this.ensureStartedSafely();
+		return entry.close;
+	}
+
+	private invalidate(): void {
+		for (const entry of this.invalidationListeners) entry.signal();
 	}
 
 	subscribe(
@@ -1375,6 +1457,7 @@ export class RealtimeService {
 			this.cursor = await this.readSettledHead();
 			this.started = true;
 			await this.initialize();
+			this.invalidate();
 
 			this.startPollTimer();
 			if (this.drainSignalGeneration === signalGeneration) {
@@ -1400,6 +1483,8 @@ export class RealtimeService {
 	}
 
 	async destroy(): Promise<void> {
+		this.invalidationClosed = true;
+		for (const entry of this.invalidationListeners) entry.close();
 		await this.topologyCoordinator.stop();
 		await this.channelPresenceRegistry.destroy();
 		await this.stop();

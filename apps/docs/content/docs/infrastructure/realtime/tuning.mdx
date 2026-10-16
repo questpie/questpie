@@ -100,6 +100,33 @@ payload over 10000 bytes is refused.
 
 ## The outbox table
 
+### Backend invalidation subscriptions
+
+Use `app.realtime.subscribeInvalidation(async () => { ... }, onError)` when a
+server-side waiter needs to re-read authoritative state promptly. It returns a
+synchronous unsubscribe function. Register first, then read once immediately to
+close the subscription race. Release the subscription when the waiter finishes.
+
+The callback receives no records, ids, sequence or cursor. An outbox broker
+notice wakes it before the ordered outbox's settlement frontier advances. This
+matters when an older transaction, including one in another database on the
+same PostgreSQL cluster, holds back that frontier while the desired row has
+already committed. Ordinary `subscribe` delivery retains its settled order and
+cursor guarantees.
+
+Invalidations may be spurious or coalesced. Each subscriber has at most one
+callback running and one pending rerun. Startup, broker reconnection and the
+existing reconciliation interval also invalidate; no per-subscriber timer or
+second broker is created. Without a broker, cross-process convergence uses that
+configured interval. Setting `pollIntervalMs: 0` gives up recovery from a lost
+notice. Unsubscribe or service shutdown prevents new callbacks and pending
+reruns; an already running callback may finish.
+New invalidation subscriptions are rejected once service destruction begins.
+
+Callback failures reach `onError` without stopping other subscribers. Reads
+still need their ordinary authorization checks. This is a backend signal, not
+an authorized client subscription: never forward it or raw rows to a client.
+
 One Drizzle table, `questpie_realtime_log`. QUESTPIE folds it into your app's
 schema unconditionally, so your normal migration creates it. You rarely touch
 it, but the whole runtime reads from it.

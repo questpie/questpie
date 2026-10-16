@@ -61,7 +61,7 @@
 		"prosemirror-view": "1.42.3",
 		"proxy-addr": "2.0.8",
 		"read-yaml-file": "^2.1.0",
-		"seroval": "1.6.3",
+		"seroval": "1.6.9",
 		"shell-quote": "1.11.0",
 		"source-map-js": "1.2.2",
 		"tinypool": "2.1.2",
