@@ -1041,7 +1041,7 @@ export class RealtimeService {
 		const run = async () => {
 			running = true;
 			try {
-				while (active && pending) {
+				while (pending) {
 					pending = false;
 					try {
 						await listener();
