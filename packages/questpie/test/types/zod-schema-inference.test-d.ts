@@ -84,3 +84,24 @@ const welcome = email({
 type _emailDefinition = Expect<
 	Equal<typeof welcome, EmailTemplateDefinition<{ name: string }, "welcome">>
 >;
+
+// Intentional differences from the old `z.ZodSchema<T>` inference, which
+// took a common supertype of `_zod.output` and the unbranded `parse` return:
+// a branded schema now keeps its brand, and an `any` schema gives `any`.
+const branded = z.string().brand<"UserId">();
+const brandedJob = job({
+	name: "branded",
+	schema: branded,
+	handler: async () => {},
+});
+type _brandKept = Expect<
+	Equal<
+		typeof brandedJob,
+		JobDefinition<z.output<typeof branded>, void, "branded">
+	>
+>;
+declare const untyped: any;
+const anyJob = job({ name: "any", schema: untyped, handler: async () => {} });
+type _anyPayload = Expect<
+	Equal<typeof anyJob, JobDefinition<any, void, "any">>
+>;
