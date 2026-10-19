@@ -4,6 +4,7 @@ import type {
 	Column,
 	GetColumnData,
 	InferInsertModel,
+	InferModelFromColumns,
 	InferSelectModel,
 	SQL,
 } from "drizzle-orm";
@@ -169,7 +170,10 @@ type InferCollectionSelect<
 	TFieldDefs extends Record<string, any>,
 	TTitle extends TitleExpression | undefined,
 > = Prettify<
-	Omit<InferSelectModel<TMainTable>, keyof ExtractMainFields<TFieldDefs>> &
+	InferModelFromColumns<
+		Omit<TMainTable["_"]["columns"], keyof ExtractMainFields<TFieldDefs>>,
+		"select"
+	> &
 		ExtractOutputTypes<ExtractMainFields<TFieldDefs>> &
 		ExtractOutputTypes<ExtractVirtualFields<TFieldDefs>> &
 		ExtractOutputTypes<ExtractI18nFields<TFieldDefs>> & {
@@ -179,13 +183,22 @@ type InferCollectionSelect<
 
 /**
  * Infer insert type from Collection using TState-based fieldDefinitions.
- * Uses Drizzle's $inferInsert for main fields + input types for i18n fields.
+ * Uses Drizzle's insert model for the columns no field defines (id,
+ * timestamps, …) + input types for main and i18n fields.
+ *
+ * Fields are omitted from the COLUMNS before Drizzle builds the model, not
+ * from the model afterwards: Drizzle's per-column required/optional key
+ * conditionals are the costly part, and every field column was computed only
+ * to be dropped. Same for the select model above.
  */
 type InferCollectionInsert<
 	TMainTable extends PgTable,
 	TFieldDefs extends Record<string, any>,
 > = Prettify<
-	Omit<InferInsertModel<TMainTable>, keyof ExtractMainFields<TFieldDefs>> &
+	InferModelFromColumns<
+		Omit<TMainTable["_"]["columns"], keyof ExtractMainFields<TFieldDefs>>,
+		"insert"
+	> &
 		ExtractInputObject<ExtractMainFields<TFieldDefs>> &
 		Partial<ExtractInputObject<ExtractI18nFields<TFieldDefs>>>
 >;
