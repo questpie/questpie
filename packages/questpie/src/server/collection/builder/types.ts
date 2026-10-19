@@ -1312,15 +1312,14 @@ export interface CollectionBuilderState {
 	 * Field definitions from Field Builder.
 	 * Stores the Field objects for validation, introspection, and localization.
 	 *
-	 * `any`, as on `GlobalBuilderState`, not `Field<FieldState>`. Every
-	 * `CollectionBuilder<infer S>` checks `S` against this constraint. A field
-	 * is a `FieldWithMethods` intersection, and relating an intersection to an
-	 * object type makes TypeScript compare it member by member; each chain
-	 * method returns another intersection, so it recurses to the depth limit,
-	 * uncached, for every field of every collection. The concrete state still
-	 * carries each field's precise type.
+	 * `StoredField`, not `Field<FieldState>`: every `CollectionBuilder<infer S>`
+	 * relates `S` to this constraint, and a `Field` target walks every chain
+	 * method of every field to the depth limit, once per collection.
 	 */
-	fieldDefinitions: Record<string, any>;
+	fieldDefinitions: Record<
+		string,
+		import("../../fields/field-class.js").StoredField
+	>;
 	/**
 	 * Phantom type for field types available in .fields(({ f }) => ...).
 	 * Set directly via EmptyCollectionState generic parameter.

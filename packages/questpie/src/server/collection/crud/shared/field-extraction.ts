@@ -5,14 +5,17 @@
  */
 
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
-import type { Field } from "#questpie/server/fields/field-class.js";
+import type {
+	Field,
+	StoredField,
+} from "#questpie/server/fields/field-class.js";
 
 /**
  * Extract field names by location from field definitions.
  * Runtime version of ExtractFieldsByLocation type.
  */
 export function extractFieldNamesByLocation(
-	fieldDefinitions: Record<string, Field<FieldState>>,
+	fieldDefinitions: Record<string, StoredField>,
 	location: "main" | "i18n" | "virtual" | "relation",
 ): string[] {
 	const names: string[] = [];
@@ -29,7 +32,7 @@ export function extractFieldNamesByLocation(
  * Replaces the old state.localized array.
  */
 export function extractLocalizedFieldNames(
-	fieldDefinitions: Record<string, Field<FieldState>>,
+	fieldDefinitions: Record<string, StoredField>,
 ): string[] {
 	return extractFieldNamesByLocation(fieldDefinitions, "i18n");
 }
@@ -38,7 +41,7 @@ export function extractLocalizedFieldNames(
  * Extract main field names.
  */
 export function extractMainFieldNames(
-	fieldDefinitions: Record<string, Field<FieldState>>,
+	fieldDefinitions: Record<string, StoredField>,
 ): string[] {
 	return extractFieldNamesByLocation(fieldDefinitions, "main");
 }
@@ -47,7 +50,7 @@ export function extractMainFieldNames(
  * Extract virtual field names.
  */
 export function extractVirtualFieldNames(
-	fieldDefinitions: Record<string, Field<FieldState>>,
+	fieldDefinitions: Record<string, StoredField>,
 ): string[] {
 	return extractFieldNamesByLocation(fieldDefinitions, "virtual");
 }
@@ -56,7 +59,7 @@ export function extractVirtualFieldNames(
  * Check if collection has any localized fields.
  */
 export function hasLocalizedFields(
-	fieldDefinitions: Record<string, Field<FieldState>> | undefined,
+	fieldDefinitions: Record<string, StoredField> | undefined,
 ): boolean {
 	if (!fieldDefinitions) return false;
 	return extractLocalizedFieldNames(fieldDefinitions).length > 0;
@@ -66,7 +69,7 @@ export function hasLocalizedFields(
  * Check if collection has any virtual fields.
  */
 export function hasVirtualFields(
-	fieldDefinitions: Record<string, Field<FieldState>> | undefined,
+	fieldDefinitions: Record<string, StoredField> | undefined,
 ): boolean {
 	if (!fieldDefinitions) return false;
 	return extractVirtualFieldNames(fieldDefinitions).length > 0;
@@ -78,7 +81,7 @@ export function hasVirtualFields(
  */
 export function splitFieldsByLocation<T extends Record<string, any>>(
 	data: T,
-	fieldDefinitions: Record<string, Field<FieldState>>,
+	fieldDefinitions: Record<string, StoredField>,
 ): { main: Partial<T>; localized: Partial<T> } {
 	const main: Partial<T> = {};
 	const localized: Partial<T> = {};
@@ -198,7 +201,7 @@ export type NestedLocalizationSchema =
  * Returns the schema for localized nested paths, or null if no nested localization.
  */
 export function extractNestedLocalizationSchema(
-	fieldDef: Field<FieldState>,
+	fieldDef: StoredField,
 ): NestedLocalizationSchema | null {
 	const s = fieldDef._state;
 	const fieldType = fieldDef.getType();
@@ -310,7 +313,7 @@ export function extractNestedLocalizationSchema(
  * Only includes fields that have nested localized content (not top-level localized).
  */
 export function extractNestedLocalizationSchemas(
-	fieldDefinitions: Record<string, Field<FieldState>>,
+	fieldDefinitions: Record<string, StoredField>,
 ): Record<string, NestedLocalizationSchema> {
 	const schemas: Record<string, NestedLocalizationSchema> = {};
 
@@ -341,7 +344,7 @@ export function extractNestedLocalizationSchemas(
  * Check if a collection has any nested localized fields (in JSONB).
  */
 export function hasNestedLocalizedFields(
-	fieldDefinitions: Record<string, Field<FieldState>> | undefined,
+	fieldDefinitions: Record<string, StoredField> | undefined,
 ): boolean {
 	if (!fieldDefinitions) return false;
 	return (

@@ -34,13 +34,7 @@ import type {
 import type { GlobalCRUD } from "#questpie/server/global/crud/types.js";
 import { text } from "#questpie/server/modules/core/fields/text.js";
 
-import type {
-	Equal,
-	Expect,
-	Extends,
-	HasKey,
-	IsAny,
-} from "./type-test-utils.js";
+import type { Equal, Expect, Extends, HasKey } from "./type-test-utils.js";
 
 // ============================================================================
 // Test fixtures
@@ -153,11 +147,16 @@ type RequiredValue = (typeof requiredFirst)["$types"]["value"];
 type _valueStillString = Expect<Equal<RequiredValue, string>>;
 
 // ============================================================================
-// CollectionBuilderState.fieldDefinitions stays `any`
+// CollectionBuilderState.fieldDefinitions carries no chain methods
 // ============================================================================
 
-// Every `CollectionBuilder<infer S>` checks `S` against this constraint. A
-// `Field` target makes TypeScript compare each field's method chain to the
-// depth limit, uncached, per collection. Do not narrow it back.
+// Every `CollectionBuilder<infer S>` relates `S` to this constraint. A target
+// with chain methods (`Field<FieldState>`, also with `TMethods = any`) walks
+// every chain of every field to the depth limit, once per collection.
 type FieldDefinitionTarget = CollectionBuilderState["fieldDefinitions"][string];
-type _fieldDefinitionTargetAny = Expect<IsAny<FieldDefinitionTarget>>;
+type _noChainMethodOnTarget = Expect<
+	Equal<HasKey<FieldDefinitionTarget, "required">, false>
+>;
+type _fieldFitsTarget = Expect<
+	Extends<typeof requiredFirst, FieldDefinitionTarget>
+>;
