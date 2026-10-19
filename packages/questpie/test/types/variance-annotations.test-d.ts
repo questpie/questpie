@@ -157,6 +157,9 @@ type FieldDefinitionTarget = CollectionBuilderState["fieldDefinitions"][string];
 type _noChainMethodOnTarget = Expect<
 	Equal<HasKey<FieldDefinitionTarget, "required">, false>
 >;
+type _readSurfaceOnTarget = Expect<
+	Equal<HasKey<FieldDefinitionTarget, "_state">, true>
+>;
 type _fieldFitsTarget = Expect<
 	Extends<typeof requiredFirst, FieldDefinitionTarget>
 >;

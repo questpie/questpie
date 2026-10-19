@@ -45,7 +45,11 @@ export * from "#questpie/server/modules/core/fields/index.js";
 // (every FieldRuntimeState carries an operatorSet — without these exports a
 // custom field type could not be assembled outside the framework).
 export * from "#questpie/server/fields/operators/builtin.js";
-export { Field, field } from "#questpie/server/fields/field-class.js";
+export {
+	Field,
+	field,
+	type StoredField,
+} from "#questpie/server/fields/field-class.js";
 export type {
 	ArrayFieldState,
 	DefaultFieldState,
