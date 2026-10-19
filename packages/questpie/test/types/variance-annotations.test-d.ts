@@ -21,6 +21,7 @@
  * Compile-time only — run with: tsc --noEmit
  */
 
+import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
 import type {
 	CRUD,
 	DeleteManyParams,
@@ -33,7 +34,13 @@ import type {
 import type { GlobalCRUD } from "#questpie/server/global/crud/types.js";
 import { text } from "#questpie/server/modules/core/fields/text.js";
 
-import type { Equal, Expect, Extends, HasKey } from "./type-test-utils.js";
+import type {
+	Equal,
+	Expect,
+	Extends,
+	HasKey,
+	IsAny,
+} from "./type-test-utils.js";
 
 // ============================================================================
 // Test fixtures
@@ -144,3 +151,13 @@ type _patternAfterChain = Expect<
 // State accumulation still flows through the wrapped common methods
 type RequiredValue = (typeof requiredFirst)["$types"]["value"];
 type _valueStillString = Expect<Equal<RequiredValue, string>>;
+
+// ============================================================================
+// CollectionBuilderState.fieldDefinitions stays `any`
+// ============================================================================
+
+// Every `CollectionBuilder<infer S>` checks `S` against this constraint. A
+// `Field` target makes TypeScript compare each field's method chain to the
+// depth limit, uncached, per collection. Do not narrow it back.
+type FieldDefinitionTarget = CollectionBuilderState["fieldDefinitions"][string];
+type _fieldDefinitionTargetAny = Expect<IsAny<FieldDefinitionTarget>>;
