@@ -1,1 +1,3 @@
-{ "pages": ["transactional-dispatch", "writing-an-adapter"] }
+{
+	"pages": ["transactional-dispatch", "graphile-worker", "writing-an-adapter"]
+}

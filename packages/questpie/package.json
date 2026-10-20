@@ -30,6 +30,7 @@
 		"./adapters/cloudflare-kv": "./src/exports/adapters/cloudflare-kv.ts",
 		"./adapters/cloudflare-queues": "./src/exports/adapters/cloudflare-queues.ts",
 		"./adapters/console": "./src/exports/adapters/console.ts",
+		"./adapters/graphile-worker": "./src/exports/adapters/graphile-worker.ts",
 		"./adapters/memory-kv": "./src/exports/adapters/memory-kv.ts",
 		"./adapters/pg-boss": "./src/exports/adapters/pg-boss.ts",
 		"./adapters/pg-notify": "./src/exports/adapters/pg-notify.ts",
@@ -98,6 +99,7 @@
 			"./adapters/cloudflare-kv": "./dist/adapters/cloudflare-kv.mjs",
 			"./adapters/cloudflare-queues": "./dist/adapters/cloudflare-queues.mjs",
 			"./adapters/console": "./dist/adapters/console.mjs",
+			"./adapters/graphile-worker": "./dist/adapters/graphile-worker.mjs",
 			"./adapters/memory-kv": "./dist/adapters/memory-kv.mjs",
 			"./adapters/pg-boss": "./dist/adapters/pg-boss.mjs",
 			"./adapters/pg-notify": "./dist/adapters/pg-notify.mjs",
@@ -192,9 +194,11 @@
 		"bullmq": "^5.0.0",
 		"bun-types": "latest",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
+		"graphile-worker": "0.18.0",
 		"nodemailer": "10.0.9",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.21.0",
+		"postgres": "3.4.8",
 		"pusher": "^5.3.4",
 		"pusher-js": "^8.5.0",
 		"react": "^19.2.0",
@@ -207,6 +211,7 @@
 		"@react-email/render": "^2.0.0",
 		"bullmq": "^5.0.0",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
+		"graphile-worker": "0.18.0",
 		"nodemailer": "^10.0.9",
 		"pg": "^8.13.1",
 		"pg-boss": "^12.21.0",
@@ -243,6 +248,9 @@
 			"optional": true
 		},
 		"react": {
+			"optional": true
+		},
+		"graphile-worker": {
 			"optional": true
 		}
 	}

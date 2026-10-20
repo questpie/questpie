@@ -158,7 +158,7 @@ export type QueueExecutionClaim =
 			token: string;
 			wrappedKey: QueueWrappedSecretKey;
 	  }
-	| { status: "busy" | "terminal" | "unavailable" };
+	| { status: "busy" | "terminal" | "unavailable" | "pending" };
 
 export async function claimQueueDispatchExecution(
 	db: QueueDatabase,
@@ -216,6 +216,7 @@ export async function claimQueueDispatchExecution(
 		.where(eq(questpieQueueDispatchTable.dispatchId, dispatchId))
 		.limit(1);
 	if (!existing || !existing.secretPayload) return { status: "unavailable" };
+	if (existing.status === "pending") return { status: "pending" };
 	if (existing.status === "completed" || existing.status === "failed") {
 		return { status: "terminal" };
 	}

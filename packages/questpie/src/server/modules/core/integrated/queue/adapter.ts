@@ -31,6 +31,12 @@ export interface QueueJobRecord {
 	finalAttempt?: boolean;
 	/** Framework-authored marker that the adapter payload is encrypted. */
 	secretPayload?: boolean;
+	/** Defer execution admission without consuming a handler retry. */
+	defer?: () => void;
+	/** Aborted when the adapter execution lease expires. */
+	signal?: AbortSignal;
+	/** Secret claim lease bounded by the adapter execution deadline. */
+	executionLeaseMs?: number;
 }
 
 export interface QueueListenOptions {
@@ -122,6 +128,9 @@ export interface QueueAdapter {
 	 * PostgreSQL transaction. The runtime then uses the durable dispatch relay.
 	 */
 	transactionalPublishing?: boolean;
+
+	/** Set false to keep encrypted dispatches on the durable relay path. */
+	transactionalSecretPublishing?: boolean;
 
 	/**
 	 * Inspect the durable broker state for crash-recovery reconciliation.
