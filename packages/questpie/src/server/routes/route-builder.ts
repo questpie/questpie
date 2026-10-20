@@ -185,10 +185,21 @@ export class RouteBuilder<
 	/**
 	 * Set input validation schema. Implies JSON mode.
 	 * Cannot be combined with `.raw()`.
+	 *
+	 * Generic over the schema itself and read through `z.output`, as Zod
+	 * advises library authors. Inferring `T` from `z.ZodSchema<T>` instead
+	 * compares the concrete schema with `ZodType<T>` member by member, which
+	 * cost tens of thousands of instantiations per route.
 	 */
-	schema<TInput>(
-		schema: z.ZodSchema<TInput>,
-	): RouteBuilder<TParams, _TMethod, JsonMode, HasSchema<TInput>, TOutput> {
+	schema<TZod extends z.ZodType>(
+		schema: TZod,
+	): RouteBuilder<
+		TParams,
+		_TMethod,
+		JsonMode,
+		HasSchema<z.output<TZod>>,
+		TOutput
+	> {
 		return new RouteBuilder({ ...this._config, mode: "json", schema });
 	}
 
@@ -201,14 +212,14 @@ export class RouteBuilder<
 	 * output type. When `.schema()` was also called, `.handler()` constrains the
 	 * handler's return type against it — a mismatch is a compile error.
 	 */
-	outputSchema<TNextOutput>(
-		schema: z.ZodSchema<TNextOutput>,
+	outputSchema<TZod extends z.ZodType>(
+		schema: TZod,
 	): RouteBuilder<
 		TParams,
 		_TMethod,
 		JsonMode,
 		TSchema,
-		HasOutput<TNextOutput>
+		HasOutput<z.output<TZod>>
 	> {
 		return new RouteBuilder({
 			...this._config,

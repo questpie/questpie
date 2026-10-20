@@ -1,6 +1,9 @@
 import type { BaseRequestContext } from "#questpie/server/config/context.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
-import type { Field } from "#questpie/server/fields/field-class.js";
+import type {
+	Field,
+	StoredField,
+} from "#questpie/server/fields/field-class.js";
 import type {
 	FieldHookContext,
 	FieldHooks,
@@ -9,7 +12,7 @@ import { parseRfc3339Instant } from "#questpie/shared/temporal.js";
 
 type RuntimeOperation = "create" | "read" | "update";
 
-type FieldDefinitionsMap = Record<string, Field<FieldState>>;
+type FieldDefinitionsMap = Record<string, StoredField>;
 
 function getRequest(context: BaseRequestContext): Request | undefined {
 	const maybeReq = (context as any).req ?? (context as any).request;
@@ -45,7 +48,7 @@ function createFieldHookContext(params: {
 	};
 }
 
-function hydrateFieldOutput(field: Field<FieldState>, value: unknown): unknown {
+function hydrateFieldOutput(field: StoredField, value: unknown): unknown {
 	if (value === null || value === undefined) return value;
 	const state = field._state;
 

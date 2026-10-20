@@ -21,6 +21,7 @@
  * Compile-time only — run with: tsc --noEmit
  */
 
+import type { CollectionBuilderState } from "#questpie/server/collection/builder/types.js";
 import type {
 	CRUD,
 	DeleteManyParams,
@@ -144,3 +145,21 @@ type _patternAfterChain = Expect<
 // State accumulation still flows through the wrapped common methods
 type RequiredValue = (typeof requiredFirst)["$types"]["value"];
 type _valueStillString = Expect<Equal<RequiredValue, string>>;
+
+// ============================================================================
+// CollectionBuilderState.fieldDefinitions carries no chain methods
+// ============================================================================
+
+// Every `CollectionBuilder<infer S>` relates `S` to this constraint. A target
+// with chain methods (`Field<FieldState>`, also with `TMethods = any`) walks
+// every chain of every field to the depth limit, once per collection.
+type FieldDefinitionTarget = CollectionBuilderState["fieldDefinitions"][string];
+type _noChainMethodOnTarget = Expect<
+	Equal<HasKey<FieldDefinitionTarget, "required">, false>
+>;
+type _readSurfaceOnTarget = Expect<
+	Equal<HasKey<FieldDefinitionTarget, "_state">, true>
+>;
+type _fieldFitsTarget = Expect<
+	Extends<typeof requiredFirst, FieldDefinitionTarget>
+>;

@@ -16,8 +16,7 @@
  * legitimate text-column strings are preserved.
  */
 
-import type { FieldState } from "#questpie/server/fields/field-class-types.js";
-import type { Field } from "#questpie/server/fields/field-class.js";
+import type { StoredField } from "#questpie/server/fields/field-class.js";
 
 /**
  * Drizzle column types that store as PostgreSQL jsonb.
@@ -32,7 +31,7 @@ const JSONB_FIELD_TYPES = new Set(["array", "object", "json", "blocks"]);
 /**
  * True if `fieldDef` is stored as a jsonb column.
  */
-export function isJsonbBackedField(fieldDef: Field<FieldState>): boolean {
+export function isJsonbBackedField(fieldDef: StoredField): boolean {
 	if (fieldDef._state.isArray) return true;
 	return JSONB_FIELD_TYPES.has(fieldDef.getType());
 }
@@ -83,7 +82,7 @@ function decodePreStringifiedJsonb(value: unknown): unknown {
  */
 export function normalizeJsonbInput(
 	data: Record<string, unknown>,
-	fieldDefinitions: Record<string, Field<FieldState>> | undefined,
+	fieldDefinitions: Record<string, StoredField> | undefined,
 ): Record<string, unknown> {
 	if (!fieldDefinitions) return data;
 

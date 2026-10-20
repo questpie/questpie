@@ -3,20 +3,20 @@
 	"tsVersion": "5.9.2",
 	"targets": {
 		"packages/questpie": {
-			"types": 504920,
-			"instantiations": 1831510
+			"types": 413127,
+			"instantiations": 1547917
 		},
 		"examples/toy-factory-backend": {
-			"types": 781255,
-			"instantiations": 2826959
+			"types": 535683,
+			"instantiations": 2154689
 		},
 		"examples/tanstack-barbershop": {
-			"types": 1027947,
-			"instantiations": 3618124
+			"types": 785834,
+			"instantiations": 2924144
 		},
 		"examples/city-portal": {
-			"types": 863138,
-			"instantiations": 2980539
+			"types": 667051,
+			"instantiations": 2440163
 		}
 	}
 }

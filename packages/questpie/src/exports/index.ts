@@ -131,7 +131,11 @@ export {
 	type InferFieldsFromFactory,
 } from "#questpie/server/fields/builder.js";
 export * from "#questpie/server/modules/core/fields/index.js";
-export { Field, field } from "#questpie/server/fields/field-class.js";
+export {
+	Field,
+	field,
+	type StoredField,
+} from "#questpie/server/fields/field-class.js";
 export type {
 	ArrayFieldState,
 	DefaultFieldState,

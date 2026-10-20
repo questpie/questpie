@@ -609,3 +609,28 @@ export function field<TState extends FieldState>(
 ): Field<TState> {
 	return new Field(state) as unknown as Field<TState>;
 }
+
+/**
+ * A field as framework code reads it from a collection's state: its type state
+ * and runtime methods, without the chain methods (`required()`, `label()`, …).
+ *
+ * Use it, not `Field<FieldState>`, as the target for "any field". Every chain
+ * method returns another `FieldWithMethods`, so relating a concrete field to
+ * the whole `Field` class walks each chain to the TypeScript depth limit.
+ * `Field<FieldState, any>` does not avoid that walk.
+ */
+export type StoredField = Pick<
+	Field<FieldState>,
+	| "_"
+	| "_state"
+	| "$types"
+	| "getType"
+	| "getLocation"
+	| "getOperators"
+	| "getMetadata"
+	| "getNestedFields"
+	| "toColumn"
+	| "toZodSchema"
+	| "fromDbValue"
+	| "toDbValue"
+>;

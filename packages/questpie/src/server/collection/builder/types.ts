@@ -1311,12 +1311,14 @@ export interface CollectionBuilderState {
 	/**
 	 * Field definitions from Field Builder.
 	 * Stores the Field objects for validation, introspection, and localization.
+	 *
+	 * `StoredField`, not `Field<FieldState>`: every `CollectionBuilder<infer S>`
+	 * relates `S` to this constraint, and a `Field` target walks every chain
+	 * method of every field to the depth limit, once per collection.
 	 */
 	fieldDefinitions: Record<
 		string,
-		import("../../fields/field-class.js").Field<
-			import("../../fields/field-class-types.js").FieldState
-		>
+		import("../../fields/field-class.js").StoredField
 	>;
 	/**
 	 * Phantom type for field types available in .fields(({ f }) => ...).

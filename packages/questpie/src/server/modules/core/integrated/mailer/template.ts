@@ -102,8 +102,13 @@ export type GetEmailTemplate<
  * });
  * ```
  */
-export function email<TName extends string, TInput>(
-	definition: EmailTemplateDefinition<TInput, TName>,
-): EmailTemplateDefinition<TInput, TName> {
-	return definition;
+export function email<TName extends string, TZod extends z.ZodType>(
+	definition: Omit<EmailTemplateDefinition<z.output<TZod>, TName>, "schema"> & {
+		schema: TZod;
+	},
+): EmailTemplateDefinition<z.output<TZod>, TName> {
+	// Generic over the schema, read through `z.output`: inferring `TInput`
+	// from `z.ZodSchema<TInput>` compares the schema with `ZodType<TInput>`
+	// member by member (see `job()`).
+	return definition as EmailTemplateDefinition<z.output<TZod>, TName>;
 }

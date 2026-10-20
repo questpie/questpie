@@ -22,7 +22,10 @@ import {
 } from "#questpie/server/collection/crud/shared/access-control.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
-import type { Field } from "#questpie/server/fields/field-class.js";
+import type {
+	Field,
+	StoredField,
+} from "#questpie/server/fields/field-class.js";
 import type {
 	SerializedOptionsConfig,
 	SerializedReactiveConfig,
@@ -1484,7 +1487,7 @@ type ReactiveFormFieldKey = "hidden" | "readOnly" | "disabled" | "compute";
  * @returns Serialized reactive config or undefined if no reactive behavior
  */
 export function extractFieldReactiveConfig(
-	fieldDef: Field<FieldState>,
+	fieldDef: StoredField,
 	formReactive?: FieldReactiveSchema,
 ): FieldReactiveSchema | undefined {
 	const optionsReactive = extractFieldOptionsReactiveConfig(fieldDef);
@@ -1664,7 +1667,7 @@ function serializeFormFieldReactiveConfig(
  * Extract reactive options config from field definition.
  */
 function extractFieldOptionsReactiveConfig(
-	fieldDef: Field<FieldState>,
+	fieldDef: StoredField,
 ): Pick<FieldReactiveSchema, "options"> | undefined {
 	const s = fieldDef._state;
 
