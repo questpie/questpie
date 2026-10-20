@@ -7,8 +7,8 @@
 			"instantiations": 1547917
 		},
 		"examples/toy-factory-backend": {
-			"types": 537713,
-			"instantiations": 2162056
+			"types": 535683,
+			"instantiations": 2154689
 		},
 		"examples/tanstack-barbershop": {
 			"types": 785834,

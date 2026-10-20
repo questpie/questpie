@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 import type { WorkflowDefinition } from "./types.js";
 
 /**
@@ -38,8 +40,26 @@ import type { WorkflowDefinition } from "./types.js";
  * });
  * ```
  */
-export function workflow<TName extends string, TInput, TOutput = void>(
-	definition: WorkflowDefinition<TInput, TOutput, TName>,
-): WorkflowDefinition<TInput, TOutput, TName> {
-	return definition;
+export function workflow<
+	TName extends string,
+	TZod extends z.ZodType,
+	TOutput = void,
+>(
+	definition: WorkflowDefinitionInput<TName, TZod, TOutput>,
+): WorkflowDefinition<z.output<TZod>, TOutput, TName> {
+	return definition as WorkflowDefinition<z.output<TZod>, TOutput, TName>;
 }
+
+/**
+ * `workflow()` input: generic over the schema itself, read through
+ * `z.output`. Inferring the input from `schema: z.ZodSchema<TInput>` compares
+ * the concrete schema with `ZodType<TInput>` member by member, which cost tens
+ * of thousands of instantiations per workflow.
+ */
+type WorkflowDefinitionInput<
+	TName extends string,
+	TZod extends z.ZodType,
+	TOutput,
+> = Omit<WorkflowDefinition<z.output<TZod>, TOutput, TName>, "schema"> & {
+	schema: TZod;
+};
