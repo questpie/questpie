@@ -1,5 +1,17 @@
 # @questpie/workflows
 
+## 3.36.0
+
+### Minor Changes
+
+- [#410](https://github.com/questpie/questpie/pull/410) [`c2d7ac6`](https://github.com/questpie/questpie/commit/c2d7ac6f0cc04938dee6ba36dbf7a933d3a0f731) Thanks [@drepkovsky](https://github.com/drepkovsky)! - `workflow()` is now generic over the Zod schema and reads it through `z.output`, like `job()` in `questpie`. Inferring the input from `schema: z.ZodSchema<TInput>` compared every schema with `ZodType<TInput>` member by member. Inferred input types are unchanged, except that a branded schema now keeps its brand and an `any`-typed schema infers `any`. Explicit type arguments (`workflow<Name, Input>(…)`) change shape.
+
+### Patch Changes
+
+- Updated dependencies [[`1c6d3e4`](https://github.com/questpie/questpie/commit/1c6d3e448263743554a6c2de9c22c3edf0aa7058)]:
+  - questpie@3.36.0
+  - @questpie/admin@3.36.0
+
 ## 3.35.7
 
 ### Patch Changes
