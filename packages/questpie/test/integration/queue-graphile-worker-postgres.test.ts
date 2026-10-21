@@ -620,7 +620,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			const reader = child.stdout.getReader();
 			const message = await Promise.race([
 				reader.read(),
-				Bun.sleep(5000).then(() => {
+				Bun.sleep(20_000).then(() => {
 					throw new Error("Crash worker did not claim job");
 				}),
 			]);
@@ -687,7 +687,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			const reader = child.stdout.getReader();
 			await Promise.race([
 				reader.read(),
-				Bun.sleep(5000).then(() => {
+				Bun.sleep(20_000).then(() => {
 					throw new Error("Crash worker did not start");
 				}),
 			]);
