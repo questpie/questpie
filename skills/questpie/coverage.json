@@ -74,7 +74,9 @@
 		"normalizeBasePath": "internal canonical HTTP mount normalization shared by core and adapter packages",
 		"validateChannelWirePattern": "advanced channel adapter/helper surface",
 		"verifyCrdtCandidateToken": "custom CRDT engine staged-candidate verifier",
-		"verifyCrdtStagedAggregateBundle": "custom CRDT engine staged-bundle verifier"
+		"verifyCrdtStagedAggregateBundle": "custom CRDT engine staged-bundle verifier",
+		"GraphileWorkerAdapter": "optional queue adapter class; configuration and operating contract: apps/docs/content/docs/infrastructure/queue/graphile-worker.mdx",
+		"graphileWorkerAdapter": "optional Graphile Worker factory; configuration and operating contract: apps/docs/content/docs/infrastructure/queue/graphile-worker.mdx"
 	},
 	"internal": {
 		"BINDINGS_TOKEN_HEADER": "sandbox wire-protocol constant",

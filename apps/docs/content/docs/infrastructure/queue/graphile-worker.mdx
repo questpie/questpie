@@ -1,0 +1,267 @@
+---
+title: Graphile Worker
+description: Run PostgreSQL background jobs through one shared LISTEN-driven worker pool.
+kind: guide
+package: questpie
+---
+
+The Graphile Worker adapter runs [QUESTPIE jobs](/docs/code/jobs/dispatching)
+through one shared runner. Use it when a large job registry makes a separate
+polling consumer per job name too expensive. It requires PostgreSQL 12+,
+Node 22.18+, and `graphile-worker` **0.18.0**.
+
+## Configure the adapter
+
+Install the optional peer alongside QUESTPIE:
+
+```bash
+bun add graphile-worker@0.18.0 pg
+```
+
+```ts title="questpie.config.ts"
+import { graphileWorkerAdapter } from "questpie/adapters/graphile-worker";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	app: { url: process.env.APP_URL! },
+	db: { url: process.env.DATABASE_URL! },
+	queue: {
+		adapter: graphileWorkerAdapter({
+			connectionString: process.env.DATABASE_URL!,
+			listenConnectionString: process.env.DIRECT_DATABASE_URL!,
+			concurrentJobs: 10,
+			maxPoolSize: 10,
+			useApplicationTransaction: true,
+		}),
+	},
+});
+```
+
+`connectionString` serves publishing, schedule storage and adapter initialization.
+`listenConnectionString` serves the runner, including its dedicated `LISTEN`
+connection and its fetch/settlement queries. Both URLs must address the same
+queue database. With one direct URL, omit `listenConnectionString`: publishing
+and consuming share a single pool. With two URLs, each pool is bounded by
+`maxPoolSize`. The adapter also holds one direct/session connection for execution
+fences. Budget at most `maxPoolSize + 1` connections per replica with one URL,
+or `2 * maxPoolSize + 1` with separate URLs. The runner pool's limit includes
+its dedicated LISTEN connection; `concurrentJobs` does not add connections.
+
+PgBouncer transaction pooling cannot retain a `LISTEN` subscription. Give the
+runner a direct or session-pooled URL. Set `noPreparedStatements: true` when the
+publishing URL passes through a pooler that cannot preserve named statements.
+Startup sends a `NOTIFY` through the publishing pool and requires the runner's
+LISTEN connection to receive it within three seconds. A lost subscription fails
+startup with a direct/session-connection error. This checks delivery at startup;
+it does not certify the pooler's future connection routing. Execution fences use
+the same direct/session URL and must retain their connection for the process lifetime.
+
+## Concurrency and polling
+
+`queue.listen({ teamSize: 5, batchSize: 10 })` limits each job name to five
+executing handlers in this process. `concurrentJobs` limits the whole process;
+it can reduce effective concurrency below `teamSize`. Saturated names are
+excluded from subsequent shared fetches. The adapter reserves each fetched
+job's permit before Graphile can fetch again. Fetches contain one job, even when
+`batchSize` is larger: Graphile 0.18 cannot bound a larger batch by available
+permits for each task. This costs one fetch round trip per job. It prevents
+capacity deferral from rotating job generations or scrambling FIFO within the
+same priority and availability time. Other job names can still use free slots.
+
+`batchSize` is validated as a positive upper bound; this adapter currently uses
+one. Array payloads remain one handler call.
+
+Newly committed jobs wake the runner through PostgreSQL `NOTIFY`.
+`pollInterval` defaults to 1000 ms and provides recovery polling, including
+future `startAfter` jobs and retries. One shared buffer polls for all job names.
+Future jobs can become runnable without a new notification, so their pickup
+latency includes this interval. Cron and receipt cleanup add one shared timer
+at each UTC minute.
+
+Unexpected runner shutdown or loss of a fence connection while work is in flight
+clears listening state, stops cron/recovery timers, emits an error and calls
+`process.exit(1)`. This also works under Bun with a pending top-level await.
+A host can supply `onFatalError(error)` to own termination; that callback must
+terminate the process, even when it has active HTTP servers. Run consumers under
+a process supervisor. Idle fence connections use TCP keepalive and reconnect on
+the next dispatch after a drop.
+
+Graphile's migration NOTIFY is database-wide and contains no schema. The adapter
+replaces its unscoped shutdown check with a query of this schema's migration
+ledger; a breaking migration in another schema does not stop this consumer.
+
+Graphile errors, including shared-fetch errors that have no worker event, reach
+the adapter's `error` listeners. The adapter also retries Graphile 0.18's cached
+task-discovery failures by reordering the supported task names on an error.
+This keeps the shared runner recoverable after a transient database timeout.
+
+`stop()` stops fetching, drains handlers already assigned to worker slots,
+returns buffered framework jobs to pending and waits for batched settlement before
+closing connections. QUESTPIE owns process signal handling. A handler that
+never settles can prevent graceful shutdown; use bounded I/O in handlers.
+
+## Publication contract
+
+| Option            | Behavior                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| `priority`        | Higher values run first; integer range -32767 to 32768.                                    |
+| `startAfter`      | Delay in seconds, a `Date`, or a date string.                                              |
+| `retryLimit`      | Retries after the first attempt; defaults to 2.                                            |
+| `retryDelay`      | Seconds between retries; defaults to 0.                                                    |
+| `retryBackoff`    | Multiply delay by `2 ** (attempt - 1)`, capped at one day.                                 |
+| `singletonKey`    | Suppress a second pending/active job with the same job name and key.                       |
+| `queuePolicy`     | Ignored; singleton suppression covers pending and active jobs.                             |
+| `expireInSeconds` | Execution lease in seconds (default 900); aborts the handler and follows the retry policy. |
+
+Singleton suppression throws rather than reporting another logical dispatch as
+accepted. The first payload survives. Completed and permanently failed jobs
+release their singleton identity. Use `idempotencyKey` for a logical operation
+that must remain recognized after completion; do not combine it with
+`singletonKey`.
+
+## Idempotency and secret payloads
+
+[Transactional dispatch](/docs/infrastructure/queue/transactional-dispatch)
+keeps QUESTPIE's seven-day logical idempotency receipts. Graphile's `job_key`
+alone is insufficient: successful jobs are deleted. The adapter also keeps a
+durable publication receipt. Replaying a dispatch after a lost
+publication response returns the original adapter ID, including after
+the broker job has completed. Terminal adapter receipts become prunable seven
+days after admission once their broker job no longer exists. Publication also
+retires an expired receipt's remaining transport and replaces it atomically, so independent cleanup timers cannot
+acknowledge old work as a newly admitted operation. Framework receipts continue
+to enforce their own longer secret-completion retention window.
+
+Each newly reserved framework receipt gets a fresh logical dispatch ID with
+this adapter. Replays within retention still return the existing receipt ID.
+After pruning, a new publication with the same key has its own lifetime even
+if the previous job is still delayed or executing. Both jobs remain runnable;
+the new publication cannot acknowledge or erase secrets belonging to old work.
+
+Secret payloads keep the framework relay path even when application
+transactions are enabled. The relay publishes ciphertext; the wrapped data
+key remains in the application dispatch ledger. A worker arriving before
+relay acceptance, or while another worker holds the execution claim, defers
+without consuming a handler retry. Successful execution erases the key.
+The adapter persists secret execution admission after the claim is acquired,
+before decrypting and invoking user code. A worker that dies while waiting for
+the claim therefore leaves its handler retry budget intact.
+Broker reconciliation recognizes pending, active, failed and missing jobs;
+missing/completed broker work without a persisted framework completion is a
+failed receipt and permits key erasure only after a live execution claim ends.
+Public Graphile administrative removal, completion or permanent failure is
+terminal; recovery does not recreate that work. A normal timeout rotates the
+physical ID in the adapter's transaction, so it remains distinguishable from
+an external terminal operation.
+
+## Application transactions
+
+`useApplicationTransaction` defaults to `false`. Enable it only when the
+application and queue share the same PostgreSQL database and transaction role
+can access the adapter schema. Non-secret publication then calls
+`graphile_worker.add_job(...)` through the caller's Drizzle transaction.
+Committing makes the business changes and job visible together; rollback
+removes both. The broker `NOTIFY` is delivered at commit.
+
+The bridge uses Drizzle's `execute(SQL)` contract and supports the installed
+`drizzle-orm` postgres-js driver. JSON passes as a bound text parameter followed
+by a database cast, avoiding driver-specific JSON serialization. Keyed dispatches
+reserve and accept a framework receipt in that transaction; they do not wait
+for a relay hop. Adapters without transactional publication keep the relay.
+
+## Schedules and operations
+
+`schedule()` persists one cron expression per job name. Five-field expressions
+are evaluated in UTC with Graphile's cron parser. A shared scheduler atomically
+locks each due schedule and enqueues it in the same transaction. Multiple
+worker processes admit one job per matching minute. Missed minutes are not
+backfilled. `unschedule()` removes future admissions; already admitted jobs
+remain queued. Schedule payloads are delivered unchanged.
+
+The adapter supports `listen()`, cron, singleton suppression and durable
+terminal-state inspection. It does not advertise `runOnce()` or push consumers.
+Job execution is at least once; make external side effects idempotent.
+Handlers receive `signal?: AbortSignal`. Pass it to cancellable I/O. Abort cannot
+stop synchronous JavaScript or undo an external side effect that already happened.
+
+On first start, Graphile installs its schema, and the adapter installs its
+`questpie_*` tables and version record in that schema. Initialization checks
+Graphile migrations and the adapter schema version with reads. Adapter DDL runs
+only when that version is missing, under a schema-specific advisory transaction
+lock with a second version check. Routine replica startup takes no DDL locks. The connection role therefore
+needs CREATE on the database/schema and ownership (or equivalent migration
+privileges) for the adapter tables and indexes, including a partial index on
+Graphile 0.18's `_private_jobs(locked_at, id)`. Do not configure a DML-only role
+for initialization. Runtime publication and recovery use Graphile's public `add_job`,
+`remove_job` and `complete_jobs` SQL functions.
+Admission, settlement and lease recovery also take a `SELECT FOR UPDATE` row lock on the 0.18 transport row to
+serialize with administrative cancellation; the joined public view cannot
+provide that lock. The adapter checks the exact installed Graphile package
+version at startup. Use a dedicated schema with 0.18.0 workers; this package
+check does not certify a database schema migrated by a newer Graphile version.
+
+The adapter owns the logical execution lease and retry count. Each retry gets
+a new physical Graphile job ID; a late completion from an expired attempt
+cannot settle its successor. The shared lease sweep runs every second with at
+most 100 candidates from each indexed deadline scan. Administrative transport
+audit checks at most 100 receipts every five seconds, advancing a keyset cursor;
+a full audit cycle grows with the live receipt count. When a worker dies,
+another worker admits the retry after the execution lease expires, plus the sweep interval.
+It also recovers a worker that died after fetching but before entering a handler.
+Reclaiming a fetched job that has not entered its handler does not spend a retry:
+it may be waiting for a per-name permit in a healthy process. Handler attempts
+begin only when that permit is acquired.
+For secret jobs, the execution claim must also be acquired before an attempt
+is counted. Recovery distinguishes this pre-execution phase durably; it does
+not need the dead process's memory to refund a busy claim.
+Graphile's native stale-lock interval does not gate logical recovery.
+Graphile's native attempts are reserved for infrastructure failures before
+admission or during settlement, with its native backoff and a 32767-attempt
+ceiling. They do not spend handler retries. These failures reach the adapter's
+error listeners. The current broker key is checked before handler admission
+and settlement; rotating it uses the public `remove_job` result as an atomic
+claim, so administrative removal cannot be reversed by a concurrent retry.
+Handler completion checks expiry after user code and request-scope disposal
+settle, including when synchronous work delays timer delivery. A timeout signals
+cancellation but holds the permit and dispatch fence until that work settles.
+A session advisory lock prevents other runners from recovering this live attempt.
+A non-cooperative handler can block its own retry until it settles or its process
+exits. Shutdown aborts active signals, drains handlers, and defers interrupted
+work without spending a handler retry. Use bounded I/O in handlers and disposers.
+
+Once a handler has succeeded within its execution window, saving that success
+uses the current execution token and session fence. Transient database failures
+are reported and completion retries under that ownership even after the original
+lease deadline. Database latency must not cause a successful handler to execute
+again. A superseded token cannot settle a newer attempt. Secret receipt completion
+also uses token ownership; admission and renewal still enforce the adapter's
+absolute deadline. pg-boss supplies no absolute deadline and permits its current
+token to renew after a heartbeat lapse.
+
+Missing secret receipts and malformed adapter/secret envelopes are permanent
+admission failures. They terminalize and erase ciphertext; reconciliation erases
+the remaining wrapped key. Missing runtime encryption configuration or context
+database is a retryable host misconfiguration: it is reported without spending a
+handler retry or erasing the job. Pending relay acceptance and busy execution
+claims also preserve retries. A terminal `failed` framework receipt stays failed:
+its key is erased and late completion cannot reverse that decision.
+
+`forceUnlockWorkers` affects every job locked by a runner pool, so expiry never
+uses it to unlock unrelated long-running jobs. A dead attempt's old transport
+row can remain locked until Graphile's native stale-lock cleanup, while its
+logical retry executes through a different ID. Adapter cleanup deletes retired
+transport rows once Graphile permits deletion. Raw SQL-created jobs without
+adapter receipts keep Graphile's native retry and stale-lock behavior; reserve
+the `__questpieQueue` envelope metadata for the adapter. Ownership comes from
+the dispatch/retirement ledgers or that envelope, never a mutable native key.
+Graphile may return a retired buffered job with its key cleared; it is acknowledged
+without invoking user code. `localQueue:returnJobs` releases buffered permit
+reservations, including at the native five-minute TTL.
+
+Drain or migrate queued pg-boss work before switching adapters; the two brokers
+do not share queued jobs or cron registrations.
+
+See Graphile's [requirements](https://worker.graphile.org/docs/requirements),
+[configuration](https://worker.graphile.org/docs/config),
+[connection strings](https://worker.graphile.org/docs/connection-string) and
+[job-key behavior](https://worker.graphile.org/docs/job-key).

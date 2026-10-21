@@ -51,6 +51,8 @@ export type JobHandlerContext = [keyof Questpie.JobHandlerContext] extends [
 	: Questpie.JobHandlerContext;
 
 export type JobHandlerArgs<TPayload = unknown> = JobHandlerContext & {
+	/** Aborted when a supporting adapter expires this execution attempt. */
+	signal?: AbortSignal;
 	/** Validated job payload */
 	payload: TPayload;
 	/** Current locale */

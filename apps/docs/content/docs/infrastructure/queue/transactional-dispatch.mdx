@@ -1,6 +1,6 @@
 ---
 title: Transactional dispatch
-description: What happens when you publish a job inside a database transaction. pg-boss joins it, every other adapter commits an intent to a ledger table and a relay publishes after the commit, and both routes have to survive the process dying in between.
+description: How queue jobs commit with business changes, through a compatible adapter or a durable relay.
 kind: guide
 package: questpie
 ---
@@ -14,6 +14,9 @@ either way. What backs it does not.
 pg-boss with `useApplicationTransaction: true`, its default, implements
 `publishInTransaction` and inserts the job through the same Drizzle transaction
 your business write is using. One commit, both rows, nothing in between.
+The [Graphile Worker adapter](/docs/infrastructure/queue/graphile-worker) offers
+the same route for non-secret jobs when `useApplicationTransaction: true` is
+explicitly enabled. Its secret payloads always use the relay described below.
 
 BullMQ, Cloudflare Queues and any adapter without that method cannot see your
 transaction. QUESTPIE writes an intent row into `questpie_queue_dispatch` inside

@@ -195,6 +195,41 @@ describe.skipIf(!runPostgresContract)(
 			}
 		});
 
+		test("a successful pg-boss secret handler completes after its unchanged claim lapses", async () => {
+			let calls = 0;
+			const lapseQueue = createQueueClient(
+				{
+					delivery: {
+						name: "queue-secret-lapsed-claim",
+						schema: z.object({ value: z.string() }),
+						handler: async ({ dispatchId }) => {
+							calls++;
+							await setup.app.db
+								.update(questpieQueueDispatchTable)
+								.set({ executionClaimedUntil: new Date(0) })
+								.where(eq(questpieQueueDispatchTable.dispatchId, dispatchId!));
+						},
+					},
+				},
+				adapter,
+				{
+					createContext: () =>
+						setup.app.createContext({ accessMode: "system" }),
+					getApp: () => setup.app,
+					getDatabase: () => setup.app.db,
+					secret: rootSecret,
+					logger: { info() {}, warn() {}, error() {} },
+				},
+			);
+			const id = await lapseQueue.delivery.publish(
+				{ value: "private" },
+				{ secretPayload: true, idempotencyKey: "lapsed-claim", retryLimit: 0 },
+			);
+			await lapseQueue.runOnce();
+			expect(calls).toBe(1);
+			expect((await lapseQueue.getReceipt(id!))?.status).toBe("completed");
+		});
+
 		test("commits only ciphertext to the Queue ledger and broker", async () => {
 			const rawSecret = "raw-invitation-token-must-never-be-persisted";
 			const dispatchId = await withTransaction(setup.app.db, () =>

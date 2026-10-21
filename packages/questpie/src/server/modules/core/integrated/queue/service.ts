@@ -29,6 +29,7 @@ import {
 	reserveQueueDispatch,
 	stableQueueDispatchId,
 } from "./dispatch-store.js";
+import { QueueAdmissionError, withQueueAbort } from "./execution-signal.js";
 import {
 	decryptQueueSecretPayload,
 	encryptQueueSecretPayload,
@@ -198,37 +199,92 @@ export function createQueueClient<
 				let executionToken: string | undefined;
 				let executionHeartbeat: ReturnType<typeof setInterval> | undefined;
 				let completionPersisted = false;
+				const releaseExecution = async () => {
+					if (executionHeartbeat) clearInterval(executionHeartbeat);
+					executionHeartbeat = undefined;
+					if (
+						secretPayload &&
+						executionToken &&
+						!completionPersisted &&
+						job.dispatchId &&
+						context.db
+					) {
+						await releaseQueueDispatchExecution(
+							context.db,
+							job.dispatchId,
+							executionToken,
+						).catch(() =>
+							logger.warn(
+								"[QUESTPIE Queue] Secret execution claim release failed",
+								{ dispatchId: job.dispatchId, jobName: jobDef.name },
+							),
+						);
+					}
+				};
 				try {
+					job.signal?.throwIfAborted();
 					if (secretPayload) {
-						if (
-							!job.dispatchId ||
-							!context.db ||
-							!runtimeOptions.secret ||
-							!isQueueSecretPayloadEnvelope(job.data)
-						) {
-							throw new Error("Secret execution prerequisites unavailable");
+						if (!context.db || !runtimeOptions.secret) {
+							job.defer?.();
+							throw new Error(
+								"Secret worker runtime configuration unavailable",
+							);
+						}
+						if (!job.dispatchId || !isQueueSecretPayloadEnvelope(job.data)) {
+							throw new QueueAdmissionError(
+								"Secret execution prerequisites unavailable",
+							);
 						}
 						const claim = await claimQueueDispatchExecution(
 							context.db,
 							job.dispatchId,
+							{
+								leaseMs: job.executionLeaseMs,
+								deadline: job.executionDeadline,
+							},
 						);
 						if (claim.status === "terminal") return;
+						if (
+							(claim.status === "pending" || claim.status === "busy") &&
+							job.defer
+						) {
+							job.defer();
+							return;
+						}
 						if (claim.status !== "claimed") {
-							throw new Error("Secret execution claim unavailable");
+							throw new QueueAdmissionError(
+								"Secret execution claim unavailable",
+							);
 						}
 						executionToken = claim.token;
-						executionHeartbeat = setInterval(() => {
-							void renewQueueDispatchExecution(
-								context.db!,
-								job.dispatchId!,
-								claim.token,
-							).catch(() => {
-								logger.warn(
-									"[QUESTPIE Queue] Secret execution claim heartbeat failed",
-									{ dispatchId: job.dispatchId, jobName: jobDef.name },
-								);
-							});
-						}, 20_000);
+						job.signal?.throwIfAborted();
+						await job.beginExecution?.();
+						executionHeartbeat = setInterval(
+							() => {
+								if (job.signal?.aborted) return;
+								void renewQueueDispatchExecution(
+									context.db!,
+									job.dispatchId!,
+									claim.token,
+									{
+										leaseMs: job.executionLeaseMs,
+										deadline: job.executionDeadline,
+									},
+								).catch(() => {
+									logger.warn(
+										"[QUESTPIE Queue] Secret execution claim heartbeat failed",
+										{ dispatchId: job.dispatchId, jobName: jobDef.name },
+									);
+								});
+							},
+							Math.max(
+								1,
+								Math.min(
+									20_000,
+									Math.floor((job.executionLeaseMs ?? 60_000) / 3),
+								),
+							),
+						);
 						executionHeartbeat.unref?.();
 						job.data = await decryptQueueSecretPayload({
 							dispatchId: job.dispatchId,
@@ -266,13 +322,18 @@ export function createQueueClient<
 								},
 								async () => {
 									try {
-										return await jobDef.handler({
-											...services,
-											payload: validated,
-											locale: context.locale,
-											dispatchId: job.dispatchId,
-											idempotencyKey: job.idempotencyKey,
-										} as any);
+										job.signal?.throwIfAborted();
+										return await withQueueAbort(
+											jobDef.handler({
+												...services,
+												payload: validated,
+												signal: job.signal,
+												locale: context.locale,
+												dispatchId: job.dispatchId,
+												idempotencyKey: job.idempotencyKey,
+											} as any),
+											job.signal,
+										);
 									} catch (error) {
 										if (secretPayload) {
 											throw redactedSecretQueueError(
@@ -311,36 +372,27 @@ export function createQueueClient<
 						);
 					});
 					if (secretPayload && job.dispatchId && context.db) {
-						await completeQueueDispatch(context.db, job.dispatchId);
+						job.signal?.throwIfAborted();
+						await completeQueueDispatch(
+							context.db,
+							job.dispatchId,
+							executionToken!,
+						);
 						completionPersisted = true;
 					}
 				} catch (error) {
 					if (secretPayload) {
+						if (error instanceof QueueAdmissionError)
+							throw new QueueAdmissionError(
+								"QUESTPIE Queue secret job handling failed",
+							);
 						throw redactedSecretQueueError(
 							"QUESTPIE Queue secret job handling failed",
 						);
 					}
 					throw error;
 				} finally {
-					if (executionHeartbeat) clearInterval(executionHeartbeat);
-					if (
-						secretPayload &&
-						executionToken &&
-						!completionPersisted &&
-						job.dispatchId &&
-						context.db
-					) {
-						await releaseQueueDispatchExecution(
-							context.db,
-							job.dispatchId,
-							executionToken,
-						).catch(() => {
-							logger.warn(
-								"[QUESTPIE Queue] Secret execution claim release failed",
-								{ dispatchId: job.dispatchId, jobName: jobDef.name },
-							);
-						});
-					}
+					await releaseExecution();
 				}
 			};
 		}
@@ -698,10 +750,14 @@ export function createQueueClient<
 						"QUESTPIE Queue: idempotencyKey and singletonKey cannot be combined because singleton suppression cannot identify a newly accepted logical dispatch.",
 					);
 				}
-				const dispatchId = await stableQueueDispatchId(
+				let dispatchId = await stableQueueDispatchId(
 					jobDef.name,
 					options.idempotencyKey,
 				);
+				// A broker ledger may still own delayed work after the framework
+				// receipt expires. Give the next lifetime its own identity; the
+				// unique job/key reservation still deduplicates current replays.
+				if (adapter.uniqueDispatchIds) dispatchId = crypto.randomUUID();
 				const encrypted = options.secretPayload
 					? await encryptQueueSecretPayload({
 							dispatchId,
@@ -712,9 +768,13 @@ export function createQueueClient<
 					: undefined;
 				const adapterPayload = encrypted?.payload ?? validated;
 				const adapterOptions = options;
+				const transactionalPublication =
+					canPublishInTransaction &&
+					(!options.secretPayload ||
+						adapter.transactionalSecretPublishing !== false);
 				const tx = getCurrentTransaction();
 
-				if (tx && canPublishInTransaction && options.idempotencyKey) {
+				if (tx && transactionalPublication && options.idempotencyKey) {
 					const reservation = await reserveQueueDispatch(tx, {
 						dispatchId,
 						jobName: jobDef.name,
@@ -739,7 +799,7 @@ export function createQueueClient<
 					return reservation.dispatchId;
 				}
 
-				if (tx && canPublishInTransaction) {
+				if (tx && transactionalPublication) {
 					await adapter.publishInTransaction!(
 						tx,
 						jobDef.name,
@@ -770,7 +830,7 @@ export function createQueueClient<
 							"QUESTPIE Queue: database context is required for portable idempotency.",
 						);
 					}
-					if (canPublishInTransaction) {
+					if (transactionalPublication) {
 						return withTransaction(db, async (transaction) => {
 							const reservation = await reserveQueueDispatch(transaction, {
 								dispatchId,

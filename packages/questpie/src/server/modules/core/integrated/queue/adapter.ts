@@ -31,6 +31,16 @@ export interface QueueJobRecord {
 	finalAttempt?: boolean;
 	/** Framework-authored marker that the adapter payload is encrypted. */
 	secretPayload?: boolean;
+	/** Defer execution admission without consuming a handler retry. */
+	defer?: () => void;
+	/** Persist execution admission after a secret claim is acquired, before user code. */
+	beginExecution?: () => Promise<void>;
+	/** Aborted when the adapter execution lease expires. */
+	signal?: AbortSignal;
+	/** Secret claim lease bounded by the adapter execution deadline. */
+	executionLeaseMs?: number;
+	/** Absolute database deadline; claims and terminal writes cannot extend it. */
+	executionDeadline?: Date;
 }
 
 export interface QueueListenOptions {
@@ -122,6 +132,16 @@ export interface QueueAdapter {
 	 * PostgreSQL transaction. The runtime then uses the durable dispatch relay.
 	 */
 	transactionalPublishing?: boolean;
+
+	/** Set false to keep encrypted dispatches on the durable relay path. */
+	transactionalSecretPublishing?: boolean;
+
+	/**
+	 * Use a fresh dispatch identity for each newly reserved receipt lifetime.
+	 * Required by adapters whose durable ledger can outlive framework retention.
+	 * Replays still return the existing receipt identity until it is pruned.
+	 */
+	uniqueDispatchIds?: boolean;
 
 	/**
 	 * Inspect the durable broker state for crash-recovery reconciliation.

@@ -48,11 +48,12 @@ block out.
 | Adapter           | Factory and import                                                     | Needs                            | Pick it when                                                         |
 | ----------------- | ---------------------------------------------------------------------- | -------------------------------- | -------------------------------------------------------------------- |
 | pg-boss           | `pgBossAdapter()` from `questpie/adapters/pg-boss`                     | the Postgres you already have    | Always, until you have a reason not to. This is the starter default. |
+| Graphile Worker   | `graphileWorkerAdapter()` from `questpie/adapters/graphile-worker`     | PostgreSQL 12+, Node 22.18+      | Share one LISTEN-driven runner across many job names.                |
 | BullMQ            | `bullMQAdapter()` from `questpie/adapters/bullmq`                      | Redis, plus the `bullmq` package | You already run Redis and want a dedicated high-throughput queue.    |
 | Cloudflare Queues | `cloudflareQueuesAdapter()` from `questpie/adapters/cloudflare-queues` | a Queues producer binding        | You deploy to Workers. It is the only one that runs there.           |
-| yours             | anything implementing `QueueAdapter`                                   | whatever your broker needs       | The three above do not cover your infrastructure.                    |
+| yours             | anything implementing `QueueAdapter`                                   | whatever your broker needs       | The adapters above do not cover your infrastructure.                 |
 
-None are re-exported from `questpie/queue`. `pg-boss` and `bullmq` are optional
+None are re-exported from `questpie/queue`. `pg-boss`, `bullmq` and `graphile-worker` are optional
 peer dependencies, pulled in only by their own subpath. Cloudflare needs neither.
 
 ### What each one can do
@@ -112,8 +113,9 @@ spread straight into `new PgBoss(...)` and stays pg-boss's to document.
 | `useApplicationTransaction` | `true`  | Insert the job through the app's current Drizzle transaction. Set `false` for a separate database. |
 
 The adapter creates each queue on demand and caches the name, so you never
-declare queues yourself. It is also the only adapter that can insert the job in
-your transaction, which is why it is the default.
+declare queues yourself. It inserts jobs in your transaction by default. The
+[Graphile Worker adapter](/docs/infrastructure/queue/graphile-worker) also
+supports application transactions when explicitly enabled.
 
 ### BullMQ options
 

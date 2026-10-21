@@ -13,21 +13,11 @@ import {
 
 import { systemTimestamp } from "#questpie/server/db/system-columns.js";
 
-class JsonDriverValue {
-	constructor(private readonly value: unknown) {}
-
-	toJSON(): unknown {
-		return this.value;
-	}
-
-	toPostgres(): string {
-		return JSON.stringify(this.value);
-	}
-}
-
 const jsonbSafe = customType<{ data: unknown; driverData: unknown }>({
 	dataType: () => "jsonb",
-	toDriver: (value) => new JsonDriverValue(value),
+	// Bind as text before casting: works with postgres-js after Drizzle replaces
+	// its JSON serializers, and keeps Bun SQL from JSON-encoding a string twice.
+	toDriver: (value) => sql`${JSON.stringify(value)}::text::jsonb`,
 	fromDriver: (value) => value,
 });
 
