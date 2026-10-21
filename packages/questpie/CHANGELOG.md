@@ -1,5 +1,15 @@
 # questpie
 
+## 3.38.0
+
+### Minor Changes
+
+- [#416](https://github.com/questpie/questpie/pull/416) [`83eff96`](https://github.com/questpie/questpie/commit/83eff968297d2eb292f5b1692e949aa7c6324026) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add `lockMany({ ids, mode: "update" })` to block foreign-key child inserts when an aggregate requires it. The default remains `FOR NO KEY UPDATE`, and unknown modes return a 400 bad request.
+
+  Preserve caller and transaction AsyncLocalStorage through database transaction callbacks with `AsyncResource.bind`, including Bun SQL cold acquisition and idle reconnects.
+
+  Add `db: { url, driver: "node-postgres" }` to select the optional `pg` peer on Bun as well as Node, preserving automatic selection when omitted. A missing `pg` peer now reports the selected driver and how to install the dependency.
+
 ## 3.37.0
 
 ### Minor Changes
