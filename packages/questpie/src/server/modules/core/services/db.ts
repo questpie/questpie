@@ -128,10 +128,13 @@ export default service({
 				);
 			}
 
-			const [{ default: pg }, { drizzle: drizzlePg }] = await Promise.all([
-				import("pg"),
-				import("drizzle-orm/node-postgres"),
-			]);
+			const { default: pg } = await import("pg").catch((cause: unknown) => {
+				throw new Error(
+					'QUESTPIE db driver "node-postgres" requires the optional "pg" peer dependency. Install it with `bun add pg`.',
+					{ cause },
+				);
+			});
+			const { drizzle: drizzlePg } = await import("drizzle-orm/node-postgres");
 
 			// node-postgres takes acquire/idle timeouts in MILLISECONDS and
 			// connection lifetime in SECONDS. `prepare` has no pool-level knob (it

@@ -149,6 +149,10 @@ the claim therefore leaves its handler retry budget intact.
 Broker reconciliation recognizes pending, active, failed and missing jobs;
 missing/completed broker work without a persisted framework completion is a
 failed receipt and permits key erasure only after a live execution claim ends.
+The framework receipt records its publishing broker, database target and schema,
+so the same rule holds after Graphile prunes its own ledger. A different adapter
+or schema leaves identified foreign receipts intact. Generate and apply a
+migration for the new nullable `adapter_identity` column before upgrading.
 Public Graphile administrative removal, completion or permanent failure is
 terminal; recovery does not recreate that work. A normal timeout rotates the
 physical ID in the adapter's transaction, so it remains distinguishable from

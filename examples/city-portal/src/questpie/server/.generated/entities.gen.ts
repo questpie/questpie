@@ -34,6 +34,7 @@ import _mig_20260805T180807_realtimeSettlementRetention from "../migrations/2026
 import _mig_20260806T151904_removeRealtimeHead from "../migrations/20260806T151904_remove-realtime-head";
 import _mig_20260915T042701_realtimeIdempotency1 from "../migrations/20260915T042701_realtime-idempotency-1";
 import _mig_20261013T205201_queueDispatchRetention from "../migrations/20261013T205201_queue-dispatch-retention";
+import _mig_20261021T125516_queueDispatchOwnership from "../migrations/20261021T125516_queue-dispatch-ownership";
 
 // ── Blocks ─────────────────────────────────────────────────
 import { accordionBlock as _bloc_accordion } from "../blocks/accordion";

@@ -22,8 +22,11 @@ Nested calls reuse the transaction, rollback suppresses after-commit effects,
 and successful after-commit effects run back in the caller's scope, outside
 the transaction. The original two Autopilot scenarios are covered using actual
 Drizzle transactions: idle reconnect (asserting a changed backend PID), and a
-foreign callback scope. The suite runs in the PostgreSQL CI job and also passes
-with the repository's Bun 1.3.13. Driver configuration is checked under both
+foreign callback scope. The reconnect scenario supplements the deterministic
+foreign-resource unit test: on the repository's Bun 1.3.13, removing the bind
+makes that unit test fail with an undefined caller store; restoring it passes.
+The PostgreSQL foreign-callback test remains the database-backed proof of
+nesting, rollback and commit effects. Driver configuration is checked under both
 Bun and a real Node subprocess.
 
 ## Row locks
@@ -50,16 +53,34 @@ Inspection now distinguishes two cases:
 
 - `unknown`: ownership is unproven. A missing adapter ledger entry, another
   schema or another broker cannot justify changing the framework receipt.
-  Reconciliation leaves it intact.
+  Identified foreign work stays intact; legacy unknown receipts have the bounded
+  compatibility window described below.
 - `missing`: an adapter-owned dispatch is known, but its broker job is absent.
   This remains terminal evidence alongside `failed` and `completed`.
 
-Graphile has a durable ownership ledger, so it can distinguish these cases.
-pg-boss has no independent ownership ledger; a missing pg-boss job returns
-`unknown` too. This deliberately retains a secret receipt whose ownership can
-no longer be established rather than irreversibly destroying its key. Explicit
-terminal broker states and framework completion/failure still erase keys, and
-Graphile administrative removal of a known job still reconciles terminally.
+Publication now persists the adapter's `executionIdentity` on the framework
+receipt, in both transactional and relay acceptance. It fingerprints broker,
+database connection target and schema without credentials or pool settings.
+A matching identity proves ownership even after pg-boss's `keep_until` deletes
+a never-started job (14 days by default) or Graphile prunes its ledger (7 days).
+Both adapters then report `missing`, allowing claim-aware terminalization and
+key erasure. Identified foreign receipts are excluded from reconciliation and
+adapters also return `unknown` without querying foreign storage.
+
+Reconciliation is capped at 20 batches per invocation and resumes at its previous
+cursor when capped, so live jobs at the front do not starve later terminal work.
+Unknown inspections are persisted with a one-hour cooldown in the accepted row's
+otherwise-unused `available_at`; a restart cannot reset that cooldown. Legacy
+receipts without identity are adopted only when inspection finds a broker job or
+ownership ledger. If still unknown 30 days after acceptance (or creation when no
+acceptance timestamp exists), they fail with the normal execution-claim guard and
+the wrapped key is erased. This is the finite compatibility window for receipts
+whose publishing storage was never recorded; operators must transfer or settle
+older unclassified live work before upgrading.
+
+The new nullable `adapter_identity` column requires a generated application
+migration before using the upgraded queue. Example migrations are CLI-generated
+without opening a database; committed migrations and snapshots stay immutable.
 
 The real PostgreSQL regression starts Graphile over receipts published through
 pg-boss and through a different Graphile schema, with absent, live and expired

@@ -20,6 +20,7 @@ import {
 	decodeQueueDispatchEnvelope,
 	encodeQueueDispatchEnvelope,
 } from "../dispatch-envelope.js";
+import { queueExecutionIdentity } from "../execution-identity.js";
 import type { PublishOptions } from "../types.js";
 
 export type PgBossAdapterOptions = ConstructorOptions & {
@@ -34,6 +35,7 @@ export type PgBossAdapterOptions = ConstructorOptions & {
 };
 
 export class PgBossAdapter implements QueueAdapter {
+	readonly executionIdentity: string | undefined;
 	public readonly capabilities = {
 		longRunningConsumer: true,
 		runOnceConsumer: true,
@@ -50,6 +52,9 @@ export class PgBossAdapter implements QueueAdapter {
 	public readonly transactionalPublishing: boolean;
 
 	constructor(options: PgBossAdapterOptions) {
+		this.executionIdentity = options.db
+			? undefined
+			: queueExecutionIdentity("pg-boss", options, options.schema ?? "pgboss");
 		const { version } = pgBossPackage;
 		const supported = /^12\.(\d+)\.\d+(?:\+[a-zA-Z\d.-]+)?$/.exec(version);
 		if (!supported || Number(supported[1]) < 21) {
@@ -206,12 +211,22 @@ export class PgBossAdapter implements QueueAdapter {
 	async inspectExecutionState(
 		jobName: string,
 		adapterJobId: string,
+		publishingAdapterIdentity?: string,
 	): Promise<QueueExecutionState> {
+		if (
+			publishingAdapterIdentity &&
+			publishingAdapterIdentity !== this.executionIdentity
+		)
+			return "unknown";
 		await this.start();
 		const job = await this.boss.getJobById(jobName, adapterJobId);
-		// pg-boss has no separate ownership ledger. Absence can mean this receipt
-		// belongs to another broker or schema, so it cannot authorize key erasure.
-		if (!job) return "unknown";
+		// The framework receipt outlives pg-boss retention and proves ownership
+		// even after a never-started job has been deleted by keep_until.
+		if (!job)
+			return publishingAdapterIdentity &&
+				publishingAdapterIdentity === this.executionIdentity
+				? "missing"
+				: "unknown";
 		switch (job.state) {
 			case "completed":
 				return "completed";

@@ -31,6 +31,7 @@ import {
 	reconcileQueueDispatchExecutions,
 	releaseQueueDispatchExecution,
 	pruneQueueDispatches,
+	QUEUE_LEGACY_UNKNOWN_RETENTION_MS,
 	renewQueueDispatchExecution,
 } from "../../src/server/modules/core/integrated/queue/dispatch-store.js";
 import { questpieQueueDispatchTable } from "../../src/server/modules/core/integrated/queue/dispatch-table.js";
@@ -1180,6 +1181,240 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			}
 		},
 	);
+
+	test.each([false, true])(
+		"pg-boss retention deletes its own secret job and reconciliation erases the key, transactional=%s",
+		async (transactional) => {
+			const bossSchema = `retention_${randomUUID().replaceAll("-", "")}`;
+			const publisher = new PgBossAdapter({
+				connectionString: url,
+				schema: bossSchema,
+				useApplicationTransaction: transactional,
+			});
+			const queue = makeQueue(publisher, db, async () => {});
+			try {
+				const id = (await queue.delivery.publish(
+					{ value: "retained-secret" },
+					{
+						secretPayload: true,
+						idempotencyKey: randomUUID(),
+						startAfter: 3600,
+					},
+				))!;
+				const [receipt] = await db
+					.select()
+					.from(questpieQueueDispatchTable)
+					.where(eq(questpieQueueDispatchTable.dispatchId, id));
+				expect(receipt.adapterIdentity).toBe(publisher.executionIdentity);
+				expect(receipt.wrappedSecretKey).not.toBeNull();
+				await pool.query(
+					`UPDATE "${bossSchema}".job SET keep_until = now() - interval '1 day' WHERE id = $1`,
+					[receipt.adapterJobId],
+				);
+				await pool.query(
+					`UPDATE "${bossSchema}".queue SET maintain_on = NULL WHERE name = 'delivery'`,
+				);
+				const boss = (
+					publisher as unknown as { boss: import("pg-boss").PgBoss }
+				).boss;
+				await boss.supervise("delivery");
+				expect(
+					await boss.getJobById("delivery", receipt.adapterJobId!),
+				).toBeNull();
+				await expect(
+					reconcileQueueDispatchExecutions({ adapter: publisher, db }),
+				).resolves.toMatchObject({ terminal: 1 });
+				const [failed] = await db
+					.select()
+					.from(questpieQueueDispatchTable)
+					.where(eq(questpieQueueDispatchTable.dispatchId, id));
+				expect(failed).toMatchObject({
+					status: "failed",
+					wrappedSecretKey: null,
+				});
+			} finally {
+				await queue.stop();
+				await pool.query(`DROP SCHEMA IF EXISTS "${bossSchema}" CASCADE`);
+			}
+		},
+	);
+
+	test("a pruned Graphile ownership ledger still terminalizes its own framework receipt", async () => {
+		const queue = makeQueue(adapter, db, async () => {});
+		try {
+			const id = (await queue.delivery.publish(
+				{ value: "retained-secret" },
+				{ secretPayload: true, idempotencyKey: randomUUID(), startAfter: 3600 },
+			))!;
+			await pool.query(`SELECT "${schema}".remove_job($1)`, [
+				`questpie:${id}:0`,
+			]);
+			await pool.query(
+				`UPDATE "${schema}".questpie_dispatches SET status = 'completed', created_at = now() - interval '8 days' WHERE dispatch_id = $1`,
+				[id],
+			);
+			await (
+				adapter as unknown as { tickSchedules(): Promise<void> }
+			).tickSchedules();
+			expect(
+				(
+					await pool.query(
+						`SELECT * FROM "${schema}".questpie_dispatches WHERE dispatch_id = $1`,
+						[id],
+					)
+				).rows,
+			).toHaveLength(0);
+			await expect(
+				reconcileQueueDispatchExecutions({ adapter, db }),
+			).resolves.toMatchObject({ terminal: 1 });
+			const [failed] = await db
+				.select()
+				.from(questpieQueueDispatchTable)
+				.where(eq(questpieQueueDispatchTable.dispatchId, id));
+			expect(failed).toMatchObject({
+				status: "failed",
+				wrappedSecretKey: null,
+			});
+		} finally {
+			await queue.stop();
+		}
+	});
+
+	test("unknown legacy reconciliation is capped, backed off and eventually erases keys without touching foreign live receipts", async () => {
+		const now = new Date();
+		const ids = Array.from({ length: 5 }, () => randomUUID()).sort();
+		const foreignId = randomUUID();
+		await db.insert(questpieQueueDispatchTable).values(
+			[...ids, foreignId].map((id) => ({
+				dispatchId: id,
+				jobName: "unknown-cost",
+				idempotencyKey: id,
+				status: "accepted",
+				secretPayload: true,
+				wrappedSecretKey: { test: "key" },
+				adapterJobId: id,
+				adapterIdentity: id === foreignId ? "foreign-live-storage" : null,
+				createdAt: now,
+				acceptedAt: now,
+				availableAt: now,
+			})),
+		);
+		const calls: string[] = [];
+		const inspector = {
+			executionIdentity: adapter.executionIdentity,
+			capabilities: { executionTerminalState: true },
+			inspectExecutionState: async (_job: string, id: string) => {
+				calls.push(id);
+				return "unknown";
+			},
+		} as QueueAdapter;
+		try {
+			for (const inspected of [2, 2, 1, 0]) {
+				await expect(
+					reconcileQueueDispatchExecutions({
+						adapter: inspector,
+						db,
+						batchSize: 2,
+						maxBatches: 1,
+						now,
+					}),
+				).resolves.toEqual({ inspected, terminal: 0 });
+			}
+			expect(calls).toEqual(ids);
+			const rows = await db
+				.select()
+				.from(questpieQueueDispatchTable)
+				.where(
+					inArray(questpieQueueDispatchTable.dispatchId, [...ids, foreignId]),
+				);
+			for (const row of rows) expect(row.wrappedSecretKey).not.toBeNull();
+			// The cooldown persists across a new adapter instance/process.
+			await expect(
+				reconcileQueueDispatchExecutions({
+					adapter: { ...inspector },
+					db,
+					now,
+				}),
+			).resolves.toEqual({ inspected: 0, terminal: 0 });
+			const expired = new Date(
+				now.getTime() + QUEUE_LEGACY_UNKNOWN_RETENTION_MS + 1,
+			);
+			await expect(
+				reconcileQueueDispatchExecutions({
+					adapter: inspector,
+					db,
+					now: expired,
+				}),
+			).resolves.toEqual({ inspected: 5, terminal: 5 });
+			const terminal = await db
+				.select()
+				.from(questpieQueueDispatchTable)
+				.where(inArray(questpieQueueDispatchTable.dispatchId, ids));
+			for (const row of terminal)
+				expect(row).toMatchObject({ status: "failed", wrappedSecretKey: null });
+			const [foreign] = await db
+				.select()
+				.from(questpieQueueDispatchTable)
+				.where(eq(questpieQueueDispatchTable.dispatchId, foreignId));
+			expect(foreign).toMatchObject({
+				status: "accepted",
+				wrappedSecretKey: { test: "key" },
+				availableAt: now,
+			});
+		} finally {
+			await db
+				.delete(questpieQueueDispatchTable)
+				.where(
+					inArray(questpieQueueDispatchTable.dispatchId, [...ids, foreignId]),
+				);
+		}
+	});
+
+	test("capped reconciliation resumes beyond live receipts instead of starving terminal work", async () => {
+		const ids = Array.from({ length: 4 }, () => randomUUID()).sort();
+		const now = new Date();
+		await db.insert(questpieQueueDispatchTable).values(
+			ids.map((id) => ({
+				dispatchId: id,
+				jobName: "bounded-live",
+				idempotencyKey: id,
+				status: "accepted",
+				secretPayload: true,
+				wrappedSecretKey: { test: "key" },
+				adapterJobId: id,
+				adapterIdentity: adapter.executionIdentity,
+				createdAt: now,
+				availableAt: now,
+			})),
+		);
+		const calls: string[] = [];
+		const inspector = {
+			executionIdentity: adapter.executionIdentity,
+			capabilities: { executionTerminalState: true },
+			inspectExecutionState: async (_job: string, id: string) => {
+				calls.push(id);
+				return id === ids[3] ? "failed" : "pending";
+			},
+		} as QueueAdapter;
+		try {
+			for (let index = 0; index < 4; index++) {
+				await expect(
+					reconcileQueueDispatchExecutions({
+						adapter: inspector,
+						db,
+						batchSize: 1,
+						maxBatches: 1,
+						now,
+					}),
+				).resolves.toEqual({ inspected: 1, terminal: index === 3 ? 1 : 0 });
+			}
+			expect(calls).toEqual(ids);
+		} finally {
+			await db
+				.delete(questpieQueueDispatchTable)
+				.where(inArray(questpieQueueDispatchTable.dispatchId, ids));
+		}
+	});
 
 	test("secret terminal failures reconcile durable broker state and erase keys", async () => {
 		const queue = makeQueue(adapter, db, async () => {
