@@ -1,5 +1,14 @@
 # @questpie/mcp
 
+## 3.37.0
+
+### Patch Changes
+
+- [#414](https://github.com/questpie/questpie/pull/414) [`93a6042`](https://github.com/questpie/questpie/commit/93a6042ccaf4891e1db888c4c5c859225293d2a0) Thanks [@questpie-autopilot](https://github.com/apps/questpie-autopilot)! - Require MCP TypeScript SDK 1.32.1 to include the session-bound experimental task and bounded HTTP validation fixes (GHSA-22jm-h49p-29qw and GHSA-46jr-4wx8-v453).
+
+- Updated dependencies [[`93a6042`](https://github.com/questpie/questpie/commit/93a6042ccaf4891e1db888c4c5c859225293d2a0)]:
+  - questpie@3.37.0
+
 ## 3.36.0
 
 ### Patch Changes
