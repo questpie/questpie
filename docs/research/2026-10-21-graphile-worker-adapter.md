@@ -28,7 +28,8 @@ preserving unrelated long jobs in that runner.
 
 The adapter therefore owns a logical dispatch ledger. Publication, physical
 `add_job` admission and ledger updates share a transaction. Each physical job
-has one native attempt; the ledger owns retries, backoff and expiry. Handler
+uses native retries only for infrastructure failures; the ledger owns handler
+retries, backoff and expiry. Handler
 claiming writes a token and deadline. Timeout aborts the handler through
 `AbortSignal`; a token-checked completion or failure settles only that attempt.
 A retry creates a different physical ID. Late Graphile settlement can only
@@ -72,6 +73,42 @@ checks after a row-lock wait.
 The lock CTE relies on PostgreSQL's rejection of row-locking SELECTs from CTE
 inlining, present in the [PostgreSQL 12 planner](https://github.com/postgres/postgres/blob/REL_12_STABLE/src/backend/optimizer/plan/subselect.c).
 
+A second adversarial pass reproduced three additional races. Native attempts
+now have a 32767-attempt ceiling, preserving transient admission/settlement
+errors independently of handler attempts while keeping public permanent-failure
+operations terminal. Admission and settlement check the current broker state;
+retry admission requires a successful public `remove_job` result in the same
+transaction. Concurrent administrative removal therefore cannot be hidden by
+the next logical generation. Native `job:error` events reach error listeners.
+Admission/settlement lock the current `_private_jobs` row with SELECT FOR UPDATE
+without modifying it; the public `jobs` view has an outer join and cannot supply
+that lock. This is deliberately tied to the startup-checked 0.18 schema. A
+regression holds public removal uncommitted and proves fetched admission waits
+for cancellation to commit rather than using its old snapshot.
+
+Adapter terminal receipt retention now starts at admission, before framework
+hand-off/completion retention. Enqueue atomically deletes expired terminal
+receipts before attempting insertion, retiring a remaining native key even if
+Graphile retains its failed transport. Framework receipts prevent replay during
+their own longer retention window, including after adapter cleanup. Tests cover
+both cleanup orderings for ordinary and encrypted jobs.
+
+Per-name admission no longer waits inside every Graphile slot. An enumerable
+TaskList view omits saturated names from the next shared fetch while keeping
+their handler functions addressable for buffered work. A reserved idle task
+keeps Graphile's supported list nonempty. Buffered excess framework work rotates
+without spending an attempt; public `WorkerPool.nudge` wakes fetch on permit
+release. A regression holds one name blocked and proves another progresses
+before release, with a 60-second fallback poll. Graphile 0.18's `forbiddenFlags`
+path bypasses its shared buffer even for an empty array, so it is deliberately
+unused. This behavior was checked in installed `localQueue.js`/`worker.js`.
+
+Graphile 0.18 also throws when its quiescent WAITING buffer returns jobs during
+release. Shutdown first exposes only the idle task, drains buffered framework
+jobs back to pending without executing them, then invokes graceful shutdown
+after the public local-queue mode event reports an empty buffer. A real-PG test
+proves buffered work survives stop/restart with `retryLimit: 0`.
+
 ## Local comparison
 
 The checked-in runner is `packages/questpie/bench/queue-graphile.ts`:
@@ -91,13 +128,14 @@ adapter had ten sequential samples.
 
 | Measurement           |   pg-boss | Graphile Worker |
 | --------------------- | --------: | --------------: |
-| Idle SQL statements   |      2036 |              20 |
-| Idle SQL statements/s |   203.542 |           2.000 |
-| Pickup p50            | 1689.7 ms |         96.9 ms |
-| Pickup p95 / max      | 6206.7 ms |        350.5 ms |
+| Idle SQL statements   |      1981 |              21 |
+| Idle SQL statements/s |   198.036 |           2.100 |
+| Pickup p50            |   16.9 ms |         10.6 ms |
+| Pickup p95 / max      | 2004.0 ms |         14.4 ms |
 
-Idle statement count fell 99.0%. The host was under concurrent development
-load; ten samples do not establish a production latency SLO. An earlier run
+Idle statement count fell 98.9%. This run includes the transport-retry,
+retention and capacity-admission fixes. The host was under concurrent
+development load; ten samples do not establish a production latency SLO. An earlier run
 before adding the expiry lease sweep measured 1.10 idle statements/s; that is
 not the final adapter's cost. The comparison uses the installed pg-boss, not a
 fresh measurement of Autopilot's published 3.35.7 deployment. A separate test

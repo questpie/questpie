@@ -53,9 +53,11 @@ The adapter does not detect a misconfigured pooler from its URL.
 
 `queue.listen({ teamSize: 5, batchSize: 10 })` limits each job name to five
 executing handlers in this process. `concurrentJobs` limits the whole process;
-it can reduce effective concurrency below `teamSize`. Graphile worker slots
-await per-name permits, so a backlog of one job name can occupy slots waiting
-for that name. Choose the global limit with long-running jobs in mind.
+it can reduce effective concurrency below `teamSize`. Saturated names are
+excluded from subsequent shared fetches. Already fetched framework jobs that
+cannot acquire a permit return to pending without spending a handler attempt;
+they do not occupy worker slots while waiting. Releasing a permit wakes the
+shared runner, so independent job names can progress during a backlog.
 
 `batchSize` is the size of the shared fetch buffer. It does not run an array
 payload as multiple handler calls. The adapter always delivers one published
@@ -69,7 +71,7 @@ latency includes this interval. Cron and receipt cleanup add one shared timer
 at each UTC minute.
 
 `stop()` stops fetching, drains handlers already assigned to worker slots,
-returns buffered jobs to PostgreSQL and waits for batched settlement before
+returns buffered framework jobs to pending and waits for batched settlement before
 closing connections. QUESTPIE owns process signal handling. A handler that
 never settles can prevent graceful shutdown; use bounded I/O in handlers.
 
@@ -99,8 +101,11 @@ keeps QUESTPIE's seven-day logical idempotency receipts. Graphile's `job_key`
 alone is insufficient: successful jobs are deleted. The adapter also keeps a
 durable publication receipt. Replaying a dispatch after a lost
 publication response returns the original adapter ID, including after
-the broker job has completed. Receipts are pruned in batches after seven days from terminal completion
-once the broker job no longer exists.
+the broker job has completed. Terminal adapter receipts become prunable seven
+days after admission once their broker job no longer exists. Publication also
+retires an expired receipt's remaining transport and replaces it atomically, so independent cleanup timers cannot
+acknowledge old work as a newly admitted operation. Framework receipts continue
+to enforce their own longer secret-completion retention window.
 
 Secret payloads keep the framework relay path even when application
 transactions are enabled. The relay publishes ciphertext; the wrapped data
@@ -149,6 +154,9 @@ On first start, Graphile installs its schema, and the adapter installs three
 `questpie_*` tables in that schema. The initialization role needs schema/table
 privileges. Runtime publication and recovery use Graphile's public `add_job`,
 `remove_job` and `complete_jobs` SQL functions.
+Admission and settlement also take a read lock on the 0.18 transport row to
+serialize with administrative cancellation; the joined public view cannot
+provide that lock. The adapter checks the exact Graphile version at startup.
 
 The adapter owns the logical execution lease and retry count. Each retry gets
 a new physical Graphile job ID; a late completion from an expired attempt
@@ -160,6 +168,12 @@ Reclaiming a fetched job that has not entered its handler does not spend a retry
 it may be waiting for a per-name permit in a healthy process. Handler attempts
 begin only when that permit is acquired.
 Graphile's native stale-lock interval does not gate logical recovery.
+Graphile's native attempts are reserved for infrastructure failures before
+admission or during settlement, with its native backoff and a 32767-attempt
+ceiling. They do not spend handler retries. These failures reach the adapter's
+error listeners. The current broker key is checked before handler admission
+and settlement; rotating it uses the public `remove_job` result as an atomic
+claim, so administrative removal cannot be reversed by a concurrent retry.
 Database settlement checks the deadline even if synchronous work delays timer
 delivery. Secret claim renewal and completion require the current claim token
 and cannot extend the adapter deadline. Abort stops heartbeats and releases the
