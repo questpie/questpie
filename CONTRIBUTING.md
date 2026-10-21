@@ -145,7 +145,8 @@ That is intentional.
   (GHSA-46jr-4wx8-v453). Keep workspace consumers on the patched SDK.
 - **`vite: 8.1.6`** — the 8.1 patch release that fixes the bundled editor launcher
   Windows existence-check bypass (GHSA-587h-7wmj-h5pm). The lockfile also resolves
-  standalone `launch-editor` consumers to 2.14.2.
+  standalone `launch-editor: 2.14.2` override keeps all other launcher consumers
+  on the same fix.
 
 ## Changesets
 
