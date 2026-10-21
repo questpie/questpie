@@ -152,6 +152,9 @@ cannot settle its successor. The shared lease sweep runs at most one second
 apart (or at the shorter `pollInterval`). When a worker dies, another worker
 admits the retry after the execution lease expires, plus the sweep interval.
 It also recovers a worker that died after fetching but before entering a handler.
+Reclaiming a fetched job that has not entered its handler does not spend a retry:
+it may be waiting for a per-name permit in a healthy process. Handler attempts
+begin only when that permit is acquired.
 Graphile's native stale-lock interval does not gate logical recovery.
 
 `forceUnlockWorkers` affects every job locked by a runner pool, so expiry never

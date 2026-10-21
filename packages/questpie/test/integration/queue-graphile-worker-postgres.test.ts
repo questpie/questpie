@@ -592,6 +592,48 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		expect(await adapter.inspectExecutionState("late", id)).toBe("completed");
 	});
 
+	test("waiting for a healthy worker's per-job permit never spends a handler retry", async () => {
+		let release!: () => void;
+		const blocked = new Promise<void>((resolve) => (release = resolve));
+		const seen: unknown[] = [];
+		await adapter.listen({
+			permit: async ({ data }) => {
+				seen.push(data);
+				if ((data as { order: number }).order === 1) await blocked;
+			},
+		});
+		await adapter.publish("permit", { order: 1 }, { expireInSeconds: 30 });
+		await until(() => seen.length === 1);
+		const waiting = await adapter.publish(
+			"permit",
+			{ order: 2 },
+			{ expireInSeconds: 0.1, retryLimit: 0 },
+		);
+		try {
+			await until(async () => {
+				const [receipt] = (
+					await pool.query(
+						`SELECT generation, attempts, status FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
+						[waiting],
+					)
+				).rows;
+				if (receipt.generation === 0) return false;
+				expect(receipt).toMatchObject({ attempts: 0, status: "pending" });
+				return true;
+			});
+			expect(seen).toEqual([{ order: 1 }]);
+			release();
+			await until(
+				async () =>
+					(await adapter.inspectExecutionState("permit", waiting)) ===
+					"completed",
+			);
+			expect(seen).toEqual([{ order: 1 }, { order: 2 }]);
+		} finally {
+			release();
+		}
+	});
+
 	test("a killed worker's lease retries near expireInSeconds, without the native four-hour unlock", async () => {
 		const id = await adapter.publish(
 			"crash",
@@ -663,7 +705,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		const waiting = await adapter.publish(
 			"crash",
 			{ order: 2 },
-			{ expireInSeconds: 2, retryLimit: 1 },
+			{ expireInSeconds: 2, retryLimit: 0 },
 		);
 		const child = Bun.spawn(
 			[

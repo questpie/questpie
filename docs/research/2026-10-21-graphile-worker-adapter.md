@@ -33,7 +33,11 @@ claiming writes a token and deadline. Timeout aborts the handler through
 `AbortSignal`; a token-checked completion or failure settles only that attempt.
 A retry creates a different physical ID. Late Graphile settlement can only
 remove the old row. The lease sweep also handles a worker that died after
-fetching, while its task was waiting for a per-name permit.
+fetching, while its task was waiting for a per-name permit. Reclaiming a fetched
+transport does not count as a handler failure: the same wait can occur in a
+healthy process. A real-PostgreSQL regression holds one per-name permit beyond
+another fetched job's expiry and proves that `retryLimit: 0` still executes it
+once after the permit becomes available.
 
 `remove_job` retires the old key without unlocking sibling jobs. After a dead
 process, the retired transport row may remain locked until native cleanup, but

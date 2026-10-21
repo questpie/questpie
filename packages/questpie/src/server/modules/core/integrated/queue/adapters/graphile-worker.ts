@@ -367,7 +367,9 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 		);
 		const delay =
 			outcome === "deferred"
-				? 1
+				? record.status === "active"
+					? 1
+					: 0
 				: Math.min(
 						86400,
 						(options.retryDelay ?? 0) *
@@ -418,27 +420,23 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	private async recoverLeases(): Promise<void> {
 		await this.inTransaction(async (execute) => {
 			const expired =
-				await execute(sql`SELECT d.*, j.locked_at AS broker_locked_at FROM ${this.table("questpie_dispatches")} d
+				await execute(sql`SELECT d.* FROM ${this.table("questpie_dispatches")} d
 				LEFT JOIN ${this.table("jobs")} j ON j.id = d.job_id
 				WHERE (d.status = 'active' AND d.lease_until <= now()) OR
 				(d.status = 'pending' AND d.available_at <= now() AND (j.id IS NULL OR
 					(j.locked_at IS NULL AND j.attempts >= j.max_attempts) OR
 					j.locked_at + (COALESCE((d.options->>'expireInSeconds')::double precision, 900) * interval '1 second') <= now()))
 				ORDER BY d.available_at LIMIT 100 FOR UPDATE OF d SKIP LOCKED`);
-			for (let record of expired) {
+			for (const record of expired) {
 				this.activeControllers.get(String(record.dispatch_id))?.abort();
-				if (record.status === "pending" && record.broker_locked_at) {
-					[record] = await execute(
-						sql`UPDATE ${this.table("questpie_dispatches")} SET attempts = attempts + 1 WHERE dispatch_id = ${String(record.dispatch_id)} RETURNING *`,
-					);
-					await this.settle(execute, record!, "failed");
-				} else {
-					await this.settle(
-						execute,
-						record,
-						record.status === "active" ? "failed" : "deferred",
-					);
-				}
+				// A fetched job may still be waiting for a local permit/buffer slot
+				// in a healthy runner. Reclaim transport without spending a handler
+				// attempt; the old physical ID cannot activate the new generation.
+				await this.settle(
+					execute,
+					record,
+					record.status === "active" ? "failed" : "deferred",
+				);
 			}
 		});
 	}
