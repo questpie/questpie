@@ -178,10 +178,13 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 					dispatch_id text PRIMARY KEY, job_name text NOT NULL, job_id bigint UNIQUE,
 					singleton_key text, payload json, options json,
 					status text NOT NULL DEFAULT 'pending', attempts integer NOT NULL DEFAULT 0,
+					handler_started boolean NOT NULL DEFAULT true,
 					generation integer NOT NULL DEFAULT 0, lease_token uuid, lease_until timestamptz,
 					available_at timestamptz NOT NULL DEFAULT now(), finished_at timestamptz,
 					created_at timestamptz NOT NULL DEFAULT now()
 				)`);
+				await execute(sql`ALTER TABLE ${this.table("questpie_dispatches")}
+					ADD COLUMN IF NOT EXISTS handler_started boolean NOT NULL DEFAULT true`);
 				await execute(
 					sql`CREATE INDEX IF NOT EXISTS questpie_dispatches_lease ON ${this.table("questpie_dispatches")} (lease_until) WHERE status = 'active'`,
 				);
@@ -405,12 +408,38 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 			}
 			if (record.status === "active")
 				throw new Error("Graphile Worker execution is awaiting lease recovery");
+			const started = (record.options as PublishOptions).secretPayload !== true;
 			const [active] =
-				await execute(sql`UPDATE ${this.table("questpie_dispatches")} SET status = 'active', attempts = attempts + 1,
+				await execute(sql`UPDATE ${this.table("questpie_dispatches")} SET status = 'active', attempts = attempts + ${started ? 1 : 0}, handler_started = ${started},
 				lease_token = ${token}::uuid, lease_until = clock_timestamp() + (COALESCE((options->>'expireInSeconds')::double precision, 900) * interval '1 second')
 				WHERE dispatch_id = ${String(record.dispatch_id)} RETURNING *`);
 			return active;
 		});
+	}
+
+	private async beginExecution(
+		dispatchId: string,
+		token: string,
+	): Promise<void> {
+		const admitted = await this.inTransaction(async (execute) => {
+			const [record] =
+				await execute(sql`SELECT * FROM ${this.table("questpie_dispatches")}
+				WHERE dispatch_id = ${dispatchId} AND status = 'active' AND lease_token = ${token}::uuid FOR UPDATE`);
+			if (!record)
+				throw new Error("Graphile Worker execution admission expired");
+			if (await this.brokerIsTerminal(execute, record)) {
+				await this.settle(execute, record, "failed", false);
+				return false;
+			}
+			const [started] =
+				await execute(sql`UPDATE ${this.table("questpie_dispatches")}
+				SET handler_started = true, attempts = attempts + ${record.handler_started ? 0 : 1}
+				WHERE dispatch_id = ${dispatchId} AND lease_until > clock_timestamp() RETURNING dispatch_id`);
+			if (!started)
+				throw new Error("Graphile Worker execution admission expired");
+			return true;
+		});
+		if (!admitted) throw new Error("Graphile Worker execution was cancelled");
 	}
 
 	/** Rotate physical IDs so late Graphile settlement cannot touch a newer attempt. */
@@ -474,7 +503,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 					);
 		const [next] =
 			await execute(sql`UPDATE ${this.table("questpie_dispatches")} SET status = 'pending', generation = generation + 1,
-			attempts = attempts - ${outcome === "deferred" && record.status === "active" ? 1 : 0}, lease_token = NULL, lease_until = NULL,
+			attempts = attempts - ${outcome === "deferred" && record.status === "active" && record.handler_started ? 1 : 0}, lease_token = NULL, lease_until = NULL,
 			available_at = now() + (${delay} * interval '1 second') WHERE dispatch_id = ${String(record.dispatch_id)} RETURNING *`);
 		await this.materialize(execute, next!);
 	}
@@ -483,15 +512,27 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 		dispatchId: string,
 		token: string,
 		outcome: "completed" | "failed" | "deferred",
+		deadline: Date,
 	): Promise<void> {
-		await this.inTransaction(async (execute) => {
-			const [record] =
-				await execute(sql`SELECT * FROM ${this.table("questpie_dispatches")} WHERE dispatch_id = ${dispatchId}
+		for (;;) {
+			try {
+				await this.inTransaction(async (execute) => {
+					const [record] =
+						await execute(sql`SELECT * FROM ${this.table("questpie_dispatches")} WHERE dispatch_id = ${dispatchId}
 				AND status = 'active' AND lease_token = ${token}::uuid FOR UPDATE`);
-			if (record) {
-				await this.settle(execute, record, outcome);
+					if (record) {
+						await this.settle(execute, record, outcome);
+					}
+				});
+				return;
+			} catch (error) {
+				this.emitError(error);
+				// Preserve the intended outcome while this execution owns its lease.
+				// A database error is not an application failure or a new attempt.
+				if (Date.now() >= deadline.getTime()) throw error;
+				await new Promise((resolve) => setTimeout(resolve, 100));
 			}
-		});
+		}
 	}
 
 	async inspectExecutionState(
@@ -535,7 +576,9 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				await this.settle(
 					execute,
 					record,
-					record.status === "active" ? "failed" : "deferred",
+					record.status === "active" && record.handler_started
+						? "failed"
+						: "deferred",
 				);
 			}
 		});
@@ -712,13 +755,16 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 					const duration = (options.expireInSeconds ?? 900) * 1000;
 					timer = setTimeout(() => controller!.abort(), duration);
 					let deferred = false;
+					let handlerStarted = record.handler_started === true;
+					let outcome: "completed" | "failed" = "completed";
 					try {
 						await withQueueAbort(
 							handler({
 								id: dispatchId,
 								...decodeQueueDispatchEnvelope(payload, dispatchId),
 								finalAttempt:
-									Number(record.attempts) > (options.retryLimit ?? 2),
+									Number(record.attempts) + (handlerStarted ? 0 : 1) >
+									(options.retryLimit ?? 2),
 								signal: controller.signal,
 								executionLeaseMs: Math.max(
 									1,
@@ -728,17 +774,23 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 								defer: () => {
 									deferred = true;
 								},
+								beginExecution: async () => {
+									await this.beginExecution(dispatchId!, token);
+									handlerStarted = true;
+								},
 							}),
 							controller.signal,
 						);
-						await this.finish(
-							dispatchId,
-							token,
-							deferred ? "deferred" : "completed",
-						);
-					} catch {
-						await this.finish(dispatchId, token, "failed");
+					} catch (error) {
+						if (!handlerStarted) throw error;
+						outcome = "failed";
 					}
+					await this.finish(
+						dispatchId,
+						token,
+						deferred ? "deferred" : outcome,
+						new Date(record.lease_until as Date),
+					);
 				} finally {
 					if (timer) clearTimeout(timer);
 					if (

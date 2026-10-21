@@ -259,6 +259,7 @@ export function createQueueClient<
 						}
 						executionToken = claim.token;
 						job.signal?.throwIfAborted();
+						await job.beginExecution?.();
 						executionHeartbeat = setInterval(
 							() => {
 								if (job.signal?.aborted) return;

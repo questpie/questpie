@@ -135,6 +135,24 @@ still pending. The old job is neither deleted nor mistaken for the new payload.
 Real postgres-js tests cover both ordinary and secret replacement publications,
 and prove the new immediate job and old delayed job each execute their payload.
 
+Another adversarial probe distinguished a handler error from a database error
+persisting its outcome. The wrapper now catches only handler execution errors;
+completion/deferral persistence retries its original outcome under the same
+token until the lease ends, reporting infrastructure errors. Deadline checks
+and public administrative cancellation remain authoritative on every retry.
+
+Secret admission has a durable `handler_started` marker. Fetching and acquiring
+a per-name permit do not spend a secret handler attempt: the framework calls
+the optional `beginExecution` hook only after acquiring its execution claim.
+That hook commits the start marker and attempt count before decryption/user
+code. Recovery defers an expired unstarted admission without an attempt refund
+or decrement; started attempts retain normal failure/expiry retry accounting.
+This also covers a process dying before a busy claim can call `defer()`.
+Real PostgreSQL regressions exercise successful-completion lock contention,
+busy-secret deferral contention before and beyond expiry, and SIGKILL of a real
+framework consumer blocked on its execution claim. They require the accepted
+secret to survive and execute with `retryLimit: 0` after the prior claim clears.
+
 ## Local comparison
 
 The checked-in runner is `packages/questpie/bench/queue-graphile.ts`:

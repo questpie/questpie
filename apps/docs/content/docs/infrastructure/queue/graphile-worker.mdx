@@ -123,6 +123,9 @@ transactions are enabled. The relay publishes ciphertext; the wrapped data
 key remains in the application dispatch ledger. A worker arriving before
 relay acceptance, or while another worker holds the execution claim, defers
 without consuming a handler retry. Successful execution erases the key.
+The adapter persists secret execution admission after the claim is acquired,
+before decrypting and invoking user code. A worker that dies while waiting for
+the claim therefore leaves its handler retry budget intact.
 Broker reconciliation recognizes pending, active, failed and missing jobs;
 missing/completed broker work without a persisted framework completion is a
 failed receipt and permits key erasure only after a live execution claim ends.
@@ -180,6 +183,9 @@ It also recovers a worker that died after fetching but before entering a handler
 Reclaiming a fetched job that has not entered its handler does not spend a retry:
 it may be waiting for a per-name permit in a healthy process. Handler attempts
 begin only when that permit is acquired.
+For secret jobs, the execution claim must also be acquired before an attempt
+is counted. Recovery distinguishes this pre-execution phase durably; it does
+not need the dead process's memory to refund a busy claim.
 Graphile's native stale-lock interval does not gate logical recovery.
 Graphile's native attempts are reserved for infrastructure failures before
 admission or during settlement, with its native backoff and a 32767-attempt
@@ -192,6 +198,13 @@ delivery. Secret claim renewal and completion require the current claim token
 and cannot extend the adapter deadline. Abort stops heartbeats and releases the
 claim even when request-scope disposal is still waiting. Cleanup itself must use
 bounded I/O; cancellation cannot force an arbitrary disposer to return.
+
+A transient database error while saving completion or deferral is reported and
+retried with the same intended outcome and execution token, within its lease.
+It does not turn a successful handler into a handler failure. If that lease
+expires, database time still decides expiry; an unstarted secret admission is
+deferred without consuming an attempt, while an expired started handler follows
+the configured retry policy.
 
 `forceUnlockWorkers` affects every job locked by a runner pool, so expiry never
 uses it to unlock unrelated long-running jobs. A dead attempt's old transport

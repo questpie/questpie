@@ -33,6 +33,8 @@ export interface QueueJobRecord {
 	secretPayload?: boolean;
 	/** Defer execution admission without consuming a handler retry. */
 	defer?: () => void;
+	/** Persist execution admission after a secret claim is acquired, before user code. */
+	beginExecution?: () => Promise<void>;
 	/** Aborted when the adapter execution lease expires. */
 	signal?: AbortSignal;
 	/** Secret claim lease bounded by the adapter execution deadline. */

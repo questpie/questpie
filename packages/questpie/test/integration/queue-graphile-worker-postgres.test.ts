@@ -26,6 +26,7 @@ import {
 	claimQueueDispatchExecution,
 	completeQueueDispatch,
 	reconcileQueueDispatchExecutions,
+	releaseQueueDispatchExecution,
 	pruneQueueDispatches,
 	renewQueueDispatchExecution,
 } from "../../src/server/modules/core/integrated/queue/dispatch-store.js";
@@ -611,6 +612,191 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		expect(receipt.attempts).toBe(1);
 		errors.length = 0;
 	});
+
+	test.each([0, 1])(
+		"a completion lock timeout preserves success and the handler budget, retryLimit=%s",
+		async (retryLimit) => {
+			await adapter.stop();
+			const restricted = new URL(url);
+			restricted.searchParams.set("options", "-c lock_timeout=150ms");
+			adapter = new GraphileWorkerAdapter({
+				connectionString: restricted.toString(),
+				schema,
+				concurrentJobs: 1,
+				pollInterval: 100,
+			});
+			adapter.on("error", (error) => errors.push(error));
+			let release!: () => void;
+			const blocked = new Promise<void>((resolve) => (release = resolve));
+			let calls = 0;
+			const id = await adapter.publish(
+				"completion",
+				{},
+				{ expireInSeconds: 30, retryLimit },
+			);
+			await adapter.listen({
+				completion: async () => {
+					calls++;
+					await blocked;
+				},
+			});
+			await until(() => calls === 1);
+			const lock = await pool.connect();
+			try {
+				await lock.query("BEGIN");
+				await lock.query(
+					`SELECT FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1 FOR UPDATE`,
+					[id],
+				);
+				release();
+				await until(
+					async () =>
+						(
+							await pool.query(
+								"SELECT FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE $1",
+								[
+									`%SELECT * FROM "${schema}"."questpie_dispatches" WHERE dispatch_id%`,
+								],
+							)
+						).rowCount! > 0,
+				);
+				await Bun.sleep(220);
+				await lock.query("COMMIT");
+				await until(
+					async () =>
+						(await adapter.inspectExecutionState("completion", id)) ===
+						"completed",
+				);
+				expect(calls).toBe(1);
+				const [receipt] = (
+					await pool.query(
+						`SELECT attempts FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
+						[id],
+					)
+				).rows;
+				expect(receipt.attempts).toBe(1);
+				expect(
+					errors.some((error) => error.message.includes("lock timeout")),
+				).toBe(true);
+			} finally {
+				release();
+				await lock.query("ROLLBACK");
+				lock.release();
+				await adapter.stop();
+				errors.length = 0;
+			}
+		},
+	);
+
+	test.each([false, true])(
+		"settlement timeout preserves a deferred secret without spending a handler attempt, beyond lease=%s",
+		async (beyondLease) => {
+			await adapter.stop();
+			const restricted = new URL(url);
+			restricted.searchParams.set("options", "-c lock_timeout=150ms");
+			adapter = new GraphileWorkerAdapter({
+				connectionString: restricted.toString(),
+				schema,
+				concurrentJobs: 1,
+				pollInterval: 100,
+				useApplicationTransaction: true,
+			});
+			adapter.on("error", (error) => errors.push(error));
+			let calls = 0;
+			const queue = makeQueue(adapter, db, async () => {
+				calls++;
+			});
+			const id = (await queue.delivery.publish(
+				{ value: "preserved" },
+				{
+					idempotencyKey: randomUUID(),
+					secretPayload: true,
+					retryLimit: 0,
+					expireInSeconds: beyondLease ? 0.5 : 30,
+				},
+			))!;
+			const claim = await claimQueueDispatchExecution(db, id);
+			if (claim.status !== "claimed")
+				throw new Error("Expected prior execution claim");
+			const frameworkLock = await pool.connect();
+			const adapterLock = await pool.connect();
+			try {
+				await frameworkLock.query("BEGIN");
+				await frameworkLock.query(
+					"SELECT FROM questpie_queue_dispatch WHERE dispatch_id=$1 FOR UPDATE",
+					[id],
+				);
+				await queue.listen({ gracefulShutdown: false });
+				await until(
+					async () =>
+						(
+							await pool.query(
+								"SELECT FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%queue_execution_owner%'",
+							)
+						).rowCount! > 0,
+				);
+				await adapterLock.query("BEGIN");
+				await adapterLock.query(
+					`SELECT FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1 FOR UPDATE`,
+					[id],
+				);
+				await frameworkLock.query("COMMIT");
+				await until(
+					async () =>
+						(
+							await pool.query(
+								"SELECT FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE $1",
+								[
+									`%SELECT * FROM "${schema}"."questpie_dispatches" WHERE dispatch_id%`,
+								],
+							)
+						).rowCount! > 0,
+				);
+				await Bun.sleep(beyondLease ? 700 : 220);
+				await adapterLock.query("COMMIT");
+				await Bun.sleep(200);
+				expect(calls).toBe(0);
+				expect(await adapter.inspectExecutionState("delivery", id)).not.toBe(
+					"failed",
+				);
+				await reconcileQueueDispatchExecutions({ adapter, db });
+				const [pending] = (
+					await pool.query(
+						"SELECT wrapped_secret_key FROM questpie_queue_dispatch WHERE dispatch_id=$1",
+						[id],
+					)
+				).rows;
+				expect(pending.wrapped_secret_key).not.toBeNull();
+				await releaseQueueDispatchExecution(db, id, claim.token);
+				await until(
+					async () => (await queue.getReceipt(id))?.status === "completed",
+				);
+				expect(calls).toBe(1);
+				await until(
+					async () =>
+						(await adapter.inspectExecutionState("delivery", id)) ===
+						"completed",
+				);
+				const [completed] = (
+					await pool.query(
+						`SELECT attempts FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
+						[id],
+					)
+				).rows;
+				expect(completed.attempts).toBe(1);
+				expect(
+					errors.some((error) => error.message.includes("lock timeout")),
+				).toBe(true);
+			} finally {
+				for (const lock of [frameworkLock, adapterLock]) {
+					await lock.query("ROLLBACK");
+					lock.release();
+				}
+				await queue.stop();
+				errors.length = 0;
+			}
+		},
+	);
 
 	test("task discovery recovers after a database timeout and reports the error", async () => {
 		await adapter.stop();
@@ -1544,6 +1730,87 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		} finally {
 			child.kill("SIGKILL");
 			await child.exited;
+		}
+	});
+
+	test("a worker killed before secret claim admission preserves retryLimit zero", async () => {
+		let calls = 0;
+		const queue = makeQueue(adapter, db, async () => {
+			calls++;
+		});
+		const id = (await queue.delivery.publish(
+			{ value: "survives-preflight-crash" },
+			{
+				idempotencyKey: randomUUID(),
+				secretPayload: true,
+				retryLimit: 0,
+				expireInSeconds: 1,
+			},
+		))!;
+		const claim = await claimQueueDispatchExecution(db, id);
+		if (claim.status !== "claimed")
+			throw new Error("Expected prior execution claim");
+		const lock = await pool.connect();
+		await lock.query("BEGIN");
+		await lock.query(
+			"SELECT FROM questpie_queue_dispatch WHERE dispatch_id=$1 FOR UPDATE",
+			[id],
+		);
+		const child = Bun.spawn(
+			[
+				process.execPath,
+				new URL(
+					"../fixtures/queue-graphile-worker/secret-claim-worker.ts",
+					import.meta.url,
+				).pathname,
+			],
+			{
+				env: {
+					...process.env,
+					QUESTPIE_GRAPHILE_CRASH_URL: url,
+					QUESTPIE_GRAPHILE_CRASH_SCHEMA: schema,
+				},
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
+		try {
+			await until(
+				async () =>
+					(
+						await pool.query(
+							"SELECT FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%queue_execution_owner%'",
+						)
+					).rowCount! > 0,
+				20000,
+			);
+			child.kill("SIGKILL");
+			await child.exited;
+			await lock.query("COMMIT");
+			await releaseQueueDispatchExecution(db, id, claim.token);
+			await queue.listen({ gracefulShutdown: false });
+			await until(
+				async () => (await queue.getReceipt(id))?.status === "completed",
+			);
+			expect(calls).toBe(1);
+			await until(
+				async () =>
+					(await adapter.inspectExecutionState("delivery", id)) === "completed",
+			);
+			const [receipt] = (
+				await pool.query(
+					`SELECT attempts, generation FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
+					[id],
+				)
+			).rows;
+			expect(receipt.attempts).toBe(1);
+			expect(receipt.generation).toBeGreaterThan(0);
+		} finally {
+			child.kill("SIGKILL");
+			await child.exited;
+			await lock.query("ROLLBACK");
+			lock.release();
+			await queue.stop();
 		}
 	});
 
