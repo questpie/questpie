@@ -51,19 +51,21 @@ lease. Timeout stops heartbeats and signals cancellation, but the wrapper waits
 for user code and scope disposal to settle before releasing its permit and
 execution token. A dedicated session connection holds one advisory lock per
 active dispatch; recovery must acquire the corresponding transaction advisory
-lock before admitting a successor. Losing this session is fatal to the host.
+lock before admitting a successor. Losing this session with fenced work in flight is fatal to the host; idle
+connections use keepalive and reconnect on demand.
 This costs one connection per replica and prevents an expired, non-cooperative
-handler from overlapping its retry in another runner. Completion after the
-absolute deadline still fails. A pending relay acceptance or busy execution
-claim defers without spending a retry. Missing prerequisites and invalid
-envelopes terminalize and erase ciphertext.
+handler from overlapping its retry in another runner. A handler that overruns the execution window fails. Persisting a success
+already produced within that window retains token/fence ownership beyond the
+lease deadline. A pending relay acceptance or busy execution
+claim defers without spending a retry. Missing receipts and invalid envelopes terminalize and erase ciphertext. Missing
+runtime secret/context database is a retryable host error that preserves the job.
 
-Secret claim admission, renewal and completion lock the receipt before checking
-database wall-clock time. Completion requires the current token. An adapter
-supplying a deadline also requires a live claim and caps renewal at that
-deadline. The pg-boss path supplies no absolute deadline and retains its previous
-semantics: a matching token can renew or complete after a heartbeat lapse until
-a successor replaces it. Real-PostgreSQL tests exercise both paths.
+Secret claim admission and renewal lock the receipt before checking database
+wall-clock time. Completion locks and checks the current token and accepted
+status, without rejecting a success solely because database persistence outlived
+the lease. A newer token fences an old completion; terminal failure stays terminal
+because its payload/key are already erased. Real PostgreSQL tests cover row-lock
+waits beyond expiry, superseded tokens and late completion of failed receipts.
 
 The lock CTE relies on PostgreSQL's rejection of row-locking SELECTs from CTE
 inlining, present in the [PostgreSQL 12 planner](https://github.com/postgres/postgres/blob/REL_12_STABLE/src/backend/optimizer/plan/subselect.c).
@@ -135,8 +137,10 @@ and prove the new immediate job and old delayed job each execute their payload.
 Another adversarial probe distinguished a handler error from a database error
 persisting its outcome. The wrapper now catches only handler execution errors;
 completion/deferral persistence retries its original outcome under the same
-token until the lease ends, reporting infrastructure errors. Deadline checks
-and public administrative cancellation remain authoritative on every retry.
+token while the execution token and session fence remain owned, reporting infrastructure
+errors. Public administrative cancellation remains authoritative on every retry.
+Failure/deferral retries may stop at expiry for the recovery sweep; successful
+completion does not become a new handler attempt because persistence was delayed.
 
 Secret admission has a durable `handler_started` marker. Fetching and acquiring
 a per-name permit do not spend a secret handler attempt: the framework calls
@@ -220,10 +224,89 @@ audit deliberately trades full-cycle latency for bounded work. The test also
 requires both plans below 100 ms and proves that an expired dispatch recovers
 while the backlog is present.
 
-Unexpected runner termination (including a breaking migration NOTIFY) stops
-timers, marks the adapter not listening and terminates a process kept alive by
-another interval. A second subprocess test kills the execution-fence backend.
+Unexpected runner termination stops timers, marks the adapter not listening and
+exits non-zero even with a pending top-level await. A breaking migration NOTIFY
+is checked against this schema's migration ledger before it is considered fatal;
+a real Graphile install in another schema leaves this runner healthy. A second subprocess test kills the execution-fence backend.
 A startup test strips LISTEN, simulating subscription loss across transaction
 pooling, and verifies a bounded explicit failure. The cron test arms the real
 timer immediately before a minute boundary and observes publication through
 the runner instead of calling `tickSchedules` directly.
+
+## Round-2 lifecycle corrections and remaining mechanisms
+
+Installed `localQueue.js` emits `localQueue:returnJobs` before returning buffered
+jobs on TTL expiry. Every reservation is released on that event as well as on
+handler exit. `sql/returnJobs.js` decrements native attempts and clears locks,
+even after `remove_job` has cleared a retired job's key. Ownership therefore
+comes from the current/retired ledger or the envelope; an old physical lifetime
+is acknowledged without invoking a foreign handler. Regressions invoke the real
+TTL path with and without recovery rotation, then require fresh publications to
+run and only decoded payloads to reach user code.
+
+Adapter schema version 1 is checked before any adapter DDL and checked again
+under a schema-specific advisory transaction lock. A routine replica start does
+not take index ShareLocks behind an application transaction. The version record
+also upgrades a pre-version unreleased adapter schema once. Graphile's own
+migration check remains in use. Installed `main.js` emits the public notification
+event synchronously before checking `message.payload`; the adapter clears that
+unscoped payload and checks only its schema's `migrations` table. This deliberate
+0.18 compatibility hook is covered by cross-schema install and own-schema
+breaking-migration subprocess tests.
+
+Remaining custom mechanisms implement parts of the QUESTPIE queue contract that
+Graphile 0.18 does not supply:
+
+- Per-name permits implement `teamSize` per replica, including values above one.
+  Native named queues serialize across all replicas and must be assigned by the
+  publisher, which does not know a consumer's `teamSize`. They cannot implement
+  that contract. The shared buffer and its native return/unlock remain in use.
+- The ledger gives stable logical dispatch identity, portable handler retry
+  counts, secret pre-admission accounting and terminal-state inspection. Native
+  `job_key` implements dedupe for each physical lifetime; it is not an ownership
+  marker and cannot represent all of those receipt states.
+- Per-dispatch session fences hold through non-cooperative expiry and scope
+  disposal. Native stale unlock is four hours; `forceUnlockWorkers` unlocks active
+  siblings as well. A bounded sweep plus physical generations recovers dead work
+  near its configured expiry without unlocking another live handler. Retired rows
+  are suppressed after native return and cleaned through public `complete_jobs`.
+- Singleton admission uses a transaction advisory lock to make the active logical
+  dispatch check atomic across publishers. Physical `job_key` cannot express a
+  singleton shared by different dispatch IDs while preserving their identities.
+- Durable cron and receipt-retention cleanup share one minute timer. Recovery is
+  bounded by partial indexes and a keyset audit, independent of pending backlog.
+
+No custom code writes native lock fields. Public `remove_job`, `complete_jobs`
+and Graphile's own `returnJobs` retain transport ownership. The regression suite
+uses native administrative transactions and explicit barriers instead of sleeps
+that assume an expired success must first become a native failure.
+
+## Round-2 throughput measurement
+
+`packages/questpie/bench/queue-graphile-throughput.ts` preloads 300 jobs per sample
+in a fresh schema, then runs one process with one task name and 5 ms handlers.
+Three samples per setting, PostgreSQL 17, Bun 1.3.13, Graphile 0.18.0,
+`pollInterval: 100`, default pool size 10. The adapter timing includes startup,
+all handlers and completed ledger writes; publication is outside the interval.
+
+| Implementation                   | Concurrency / teamSize | Jobs/s, three samples | Median jobs/s |
+| -------------------------------- | ---------------------- | --------------------- | ------------- |
+| Adapter                          | 1                      | 71.0, 75.7, 75.7      | 75.7          |
+| Adapter                          | 5                      | 264.5, 202.8, 141.9   | 202.8         |
+| Native Graphile, one named queue | 1                      | 9.13, 9.06, 9.13      | 9.13          |
+| Native Graphile, unnamed jobs    | 5                      | 446.7, 494.5, 485.3   | 485.3         |
+
+This diagnoses two different costs. Single-row fetches plus ledger admission,
+transport locking, token settlement and session fence round trips add about
+8 ms to each serial 5 ms handler in this local run. Native named queues leave
+fetch polling after a locked queue returns no runnable row; at 100 ms polling,
+that particular preloaded serial baseline reaches only about 9 jobs/s. The
+adapter nudges on permit release and does not show that polling ceiling. Native
+unnamed parallel work avoids the ledger/fence contract and is faster here.
+These native settings are diagnostic baselines, not equivalent durability or
+per-replica concurrency contracts. The shared development host ran other work,
+so the parallel samples vary substantially; they establish neither a throughput
+floor nor a production SLO. The new serial run did not reproduce the previous
+12–199 jobs/s spread: its range was 71–76 jobs/s. Larger fetch batches could reduce
+round trips but currently violate per-name admission/FIFO; that tradeoff remains
+explicit rather than silently dropping the queue contract.

@@ -25,6 +25,7 @@ import { getActiveRequestScope } from "../../src/server/config/request-scope.js"
 import {
 	claimQueueDispatchExecution,
 	completeQueueDispatch,
+	failQueueDispatch,
 	reconcileQueueDispatchExecutions,
 	releaseQueueDispatchExecution,
 	pruneQueueDispatches,
@@ -103,6 +104,197 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		expect(errors).toEqual([]);
 	});
 
+	test.each([false, true])(
+		"TTL returns buffered capacity without leaks or foreign replay, rotated=%s",
+		async (rotated) => {
+			await adapter.stop();
+			adapter = new GraphileWorkerAdapter({
+				connectionString: url,
+				schema,
+				concurrentJobs: 1,
+				pollInterval: 50,
+			});
+			adapter.on("error", (error) => errors.push(error));
+			let release!: () => void;
+			const blocked = new Promise<void>((resolve) => (release = resolve));
+			let entered = false;
+			const seen: unknown[] = [];
+			const internal = adapter as unknown as {
+				checkListener(
+					events: import("graphile-worker").WorkerEvents,
+				): Promise<void>;
+				recoverLeases(): Promise<void>;
+			};
+			let buffered: { setModeTtlExpired(): void } | undefined;
+			const checkListener = internal.checkListener.bind(adapter);
+			internal.checkListener = async (events) => {
+				events.on("localQueue:setMode", ({ newMode, localQueue }) => {
+					if (newMode === "WAITING") buffered = localQueue;
+				});
+				await checkListener(events);
+			};
+			await adapter.listen({
+				busy: async () => {
+					entered = true;
+					await blocked;
+				},
+				buffered: async ({ data }) => {
+					seen.push(data);
+				},
+			});
+			try {
+				await adapter.publish("busy", {});
+				await until(() => entered);
+				const id = await adapter.publish(
+					"buffered",
+					{ value: "original" },
+					{ expireInSeconds: 30 },
+				);
+				await until(() => Boolean(buffered));
+				if (rotated) {
+					await pool.query(
+						`UPDATE "${schema}"._private_jobs SET locked_at=now()-interval '1 hour' WHERE key=$1`,
+						[`questpie:${id}:0`],
+					);
+					await internal.recoverLeases();
+				}
+				// Exercise the installed TTL -> returnJobs path without a five-minute sleep.
+				buffered!.setModeTtlExpired();
+				await until(
+					async () =>
+						(
+							await pool.query(
+								`SELECT FROM "${schema}".jobs WHERE locked_at IS NULL`,
+							)
+						).rowCount! > 0,
+				);
+				release();
+				await until(() => seen.length >= 1);
+				await adapter.publish("buffered", { value: "fresh" });
+				await until(() => seen.length >= 2);
+				await until(
+					async () =>
+						(await pool.query(`SELECT FROM "${schema}".jobs`)).rowCount === 0,
+				);
+				expect(seen).toEqual([{ value: "original" }, { value: "fresh" }]);
+			} finally {
+				release();
+			}
+		},
+	);
+
+	test("routine replica startup does not wait for application transaction locks", async () => {
+		const lock = await pool.connect();
+		const replica = new GraphileWorkerAdapter({
+			connectionString: url,
+			schema,
+		});
+		let starting: Promise<void> | undefined;
+		try {
+			await lock.query("BEGIN");
+			await lock.query(
+				`INSERT INTO "${schema}".questpie_dispatches (dispatch_id,job_name) VALUES ($1,'startup')`,
+				[randomUUID()],
+			);
+			await lock.query(`SELECT "${schema}".add_job('startup', '{}'::json)`);
+			starting = replica.start();
+			expect(
+				await Promise.race([
+					starting.then(() => "started"),
+					Bun.sleep(750).then(() => "blocked"),
+				]),
+			).toBe("started");
+		} finally {
+			await lock.query("ROLLBACK");
+			lock.release();
+			await starting;
+			await replica.stop();
+		}
+	});
+
+	test.each(["secret", "database"])(
+		"missing runtime %s preserves unstarted secret work",
+		async (missing) => {
+			let calls = 0;
+			const publisher = makeQueue(adapter, db, async () => {
+				calls++;
+			});
+			const consumer = makeQueue(
+				adapter,
+				db,
+				async () => {
+					calls++;
+				},
+				missing === "secret" ? null : undefined,
+				missing === "database",
+			);
+			const id = (await publisher.delivery.publish(
+				{ value: "preserved" },
+				{
+					secretPayload: true,
+					retryLimit: 0,
+					expireInSeconds: 0.2,
+					idempotencyKey: randomUUID(),
+				},
+			))!;
+			try {
+				await consumer.listen({ gracefulShutdown: false });
+				await until(
+					async () =>
+						(
+							await pool.query(
+								`SELECT FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1 AND generation > 0`,
+								[id],
+							)
+						).rowCount === 1,
+				);
+				await consumer.stop();
+				await reconcileQueueDispatchExecutions({ adapter, db });
+				const [receipt] = await db
+					.select()
+					.from(questpieQueueDispatchTable)
+					.where(eq(questpieQueueDispatchTable.dispatchId, id));
+				expect(receipt.wrappedSecretKey).not.toBeNull();
+				expect(receipt.status).toBe("accepted");
+				expect(errors.length).toBeGreaterThan(0);
+				expect(
+					errors.every(
+						(error) =>
+							error.message === "QUESTPIE Queue secret job handling failed",
+					),
+				).toBe(true);
+				errors.length = 0;
+				expect(calls).toBe(0);
+				await publisher.listen({ gracefulShutdown: false });
+				await until(() => calls === 1);
+				await until(
+					async () => (await publisher.getReceipt(id))?.status === "completed",
+				);
+			} finally {
+				await publisher.stop();
+				await consumer.stop();
+			}
+		},
+	);
+
+	test("an idle fence connection reconnects for the next dispatch", async () => {
+		let calls = 0;
+		await adapter.listen({
+			reconnect: async () => {
+				calls++;
+			},
+		});
+		const internal = adapter as unknown as { executionClient: pg.Client };
+		const [{ pid }] = (
+			await internal.executionClient.query("SELECT pg_backend_pid() AS pid")
+		).rows;
+		await pool.query("SELECT pg_terminate_backend($1)", [pid]);
+		await until(() => errors.length > 0);
+		errors.length = 0;
+		await adapter.publish("reconnect", {});
+		await until(() => calls === 1);
+	});
+
 	test("FIFO admission does not rotate generations under a saturated name", async () => {
 		const seen: number[] = [];
 		for (let i = 0; i < 50; i++) await adapter.publish("fifo", i);
@@ -168,23 +360,13 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		}
 	});
 
-	test.each(["receipt", "runtime-secret", "envelope"])(
+	test.each(["receipt", "envelope"])(
 		"permanent secret %s failure terminalizes and erases ciphertext",
 		async (missing) => {
 			const publisher = makeQueue(adapter, db, async () => {
 				throw new Error("must not run");
 			});
-			const queue =
-				missing === "runtime-secret"
-					? makeQueue(
-							adapter,
-							db,
-							async () => {
-								throw new Error("must not run");
-							},
-							null,
-						)
-					: publisher;
+			const queue = publisher;
 			const id = await publisher.delivery.publish(
 				{ value: "private" },
 				{ secretPayload: true, retryLimit: 0, idempotencyKey: randomUUID() },
@@ -238,6 +420,24 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		},
 	);
 
+	test("a terminal failed receipt rejects late completion even with its previous token", async () => {
+		const queue = makeQueue(adapter, db, async () => {});
+		const id = (await queue.delivery.publish(
+			{ value: "terminal" },
+			{ secretPayload: true, idempotencyKey: randomUUID() },
+		))!;
+		const claim = await claimQueueDispatchExecution(db, id);
+		if (claim.status !== "claimed") throw new Error("Expected owner");
+		await db
+			.update(questpieQueueDispatchTable)
+			.set({ executionClaimedUntil: new Date(0) })
+			.where(eq(questpieQueueDispatchTable.dispatchId, id));
+		expect(await failQueueDispatch(db, id)).toBe(true);
+		await expect(completeQueueDispatch(db, id, claim.token)).rejects.toThrow();
+		expect((await queue.getReceipt(id))?.status).toBe("failed");
+		await queue.stop();
+	});
+
 	test("token-matching pg-boss claims can renew and complete after a lease lapse", async () => {
 		const queue = makeQueue(adapter, db, async () => {});
 		for (const renew of [false, true]) {
@@ -259,6 +459,42 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			expect((await queue.getReceipt(id!))?.status).toBe("completed");
 		}
 		await queue.stop();
+	});
+
+	test("a Graphile install in another schema leaves this runner healthy", async () => {
+		const child = Bun.spawn(
+			[
+				process.execPath,
+				new URL(
+					"../fixtures/queue-graphile-worker/death-worker.ts",
+					import.meta.url,
+				).pathname,
+			],
+			{
+				env: {
+					...process.env,
+					QUESTPIE_GRAPHILE_CRASH_URL: url,
+					QUESTPIE_GRAPHILE_CRASH_SCHEMA: schema,
+					QUESTPIE_GRAPHILE_DEATH_MODE: "foreign-migration",
+				},
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
+		try {
+			expect(
+				await Promise.race([
+					child.exited,
+					Bun.sleep(8000).then(() => "timeout"),
+				]),
+			).toBe(0);
+			expect(await new Response(child.stdout).text()).toContain(
+				"foreign-migration:healthy",
+			);
+		} finally {
+			child.kill("SIGKILL");
+			await child.exited;
+		}
 	});
 
 	test.each(["migration", "shutdown", "fence", "shutdown-fence"])(
@@ -1011,7 +1247,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			const id = await adapter.publish(
 				"completion",
 				{},
-				{ expireInSeconds: 30, retryLimit },
+				{ expireInSeconds: 0.2, retryLimit },
 			);
 			await adapter.listen({
 				completion: async () => {
@@ -1039,7 +1275,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 							)
 						).rowCount! > 0,
 				);
-				await Bun.sleep(220);
+				await Bun.sleep(700);
 				await lock.query("COMMIT");
 				await until(
 					async () =>
@@ -1241,88 +1477,54 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 	});
 
 	test("lease recovery serializes with an uncommitted permanent failure", async () => {
-		await adapter.stop();
-		const restricted = new URL(url);
-		restricted.searchParams.set("options", "-c lock_timeout=150ms");
-		adapter = new GraphileWorkerAdapter({
-			connectionString: restricted.toString(),
-			schema,
-			concurrentJobs: 1,
-			pollInterval: 100,
-		});
-		adapter.on("error", (error) => errors.push(error));
-		const lock = await pool.connect();
-		let release!: () => void;
-		const blocked = new Promise<void>((resolve) => (release = resolve));
-		let calls = 0;
-		try {
-			await adapter.listen({
-				recovery: async () => {
-					calls++;
-					await blocked;
-				},
-			});
-			const id = await adapter.publish(
-				"recovery",
-				{},
-				{ retryLimit: 2, expireInSeconds: 0.7 },
-			);
-			await until(() => calls === 1);
-			await lock.query("BEGIN");
-			await lock.query(
-				`SELECT FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1 FOR UPDATE`,
+		const id = await adapter.publish("recovery", {}, { retryLimit: 2 });
+		await pool.query(
+			`UPDATE "${schema}".questpie_dispatches SET status='active', attempts=1, lease_token=$2, lease_until=now()-interval '1 second' WHERE dispatch_id=$1`,
+			[id, randomUUID()],
+		);
+		const [{ job_id }] = (
+			await pool.query(
+				`SELECT job_id FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
 				[id],
-			);
-			release();
-			await until(
-				async () =>
-					(
-						await pool.query(
-							`SELECT FROM "${schema}".jobs WHERE locked_at IS NULL AND last_error IS NOT NULL`,
-						)
-					).rowCount === 1,
-			);
-			await lock.query("COMMIT");
-			await adapter.stop();
-			await adapter.start();
-			await Bun.sleep(750);
-			const [native] = (await pool.query(`SELECT id FROM "${schema}".jobs`))
-				.rows;
+			)
+		).rows;
+		const lock = await pool.connect();
+		let recovery: Promise<void> | undefined;
+		try {
 			await lock.query("BEGIN");
 			await lock.query(
 				`SELECT "${schema}".permanently_fail_jobs(ARRAY[$1::bigint])`,
-				[native.id],
+				[job_id],
 			);
-			const listening = adapter.listen({
-				recovery: async () => {
-					calls++;
-				},
-			});
+			recovery = (
+				adapter as unknown as { recoverLeases(): Promise<void> }
+			).recoverLeases();
 			await until(
 				async () =>
 					(
 						await pool.query(
-							`SELECT FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE $1`,
+							"SELECT FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE $1",
 							[`%${schema}%`],
 						)
 					).rowCount! > 0,
 			);
 			await lock.query("COMMIT");
-			await listening;
-			await until(
-				async () =>
-					(await adapter.inspectExecutionState("recovery", id)) === "failed",
-				2000,
+			await recovery;
+			expect(await adapter.inspectExecutionState("recovery", id)).toBe(
+				"failed",
 			);
-			expect(calls).toBe(1);
-			expect(
-				errors.every((error) => error.message.includes("lock timeout")),
-			).toBe(true);
-			errors.length = 0;
+			let calls = 0;
+			await adapter.listen({
+				recovery: async () => {
+					calls++;
+				},
+			});
+			await Bun.sleep(150);
+			expect(calls).toBe(0);
 		} finally {
-			release();
 			await lock.query("ROLLBACK");
 			lock.release();
+			await recovery;
 		}
 	});
 
@@ -1710,7 +1912,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		},
 	);
 
-	test("expired or superseded secret owners cannot renew or persist completion", async () => {
+	test("secret completion requires the current token, while renewal requires a live deadline", async () => {
 		const queue = makeQueue(adapter, db, async () => {});
 		const id = await queue.delivery.publish(
 			{ value: "private" },
@@ -1736,17 +1938,14 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 				deadline: new Date(0),
 			}),
 		).toBe(false);
-		await expect(
-			completeQueueDispatch(db, id!, current.token, { deadline: new Date(0) }),
-		).rejects.toThrow();
-		expect((await queue.getReceipt(id!))?.status).toBe("queued");
+
 		await completeQueueDispatch(db, id!, current.token);
 		expect((await queue.getReceipt(id!))?.status).toBe("completed");
 		await queue.stop();
 	});
 
 	test.each(["claim", "renew", "complete"])(
-		"secret %s checks its deadline after waiting for a row lock",
+		"secret %s checks ownership after waiting for a row lock",
 		async (operation) => {
 			const queue = makeQueue(adapter, db, async () => {});
 			const id = await queue.delivery.publish(
@@ -1774,7 +1973,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 							)
 						: operation === "renew"
 							? renewQueueDispatchExecution(db, id!, token, { deadline })
-							: completeQueueDispatch(db, id!, token, { deadline }).then(
+							: completeQueueDispatch(db, id!, token).then(
 									() => true,
 									() => false,
 								);
@@ -1784,8 +1983,10 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 				await lock.query("ROLLBACK");
 				lock.release();
 			}
-			expect(await attempt).toBe(false);
-			expect((await queue.getReceipt(id!))?.status).toBe("queued");
+			expect(await attempt).toBe(operation === "complete");
+			expect((await queue.getReceipt(id!))?.status).toBe(
+				operation === "complete" ? "completed" : "queued",
+			);
 			await queue.stop();
 		},
 	);
@@ -2399,6 +2600,7 @@ function makeQueue(
 	db: ReturnType<typeof drizzle>,
 	handle: (payload: unknown, signal?: AbortSignal) => Promise<void>,
 	runtimeSecret: string | null = "graphile-test-root-secret-at-least-32-bytes",
+	missingContextDb = false,
 ) {
 	return createQueueClient(
 		{
@@ -2411,7 +2613,7 @@ function makeQueue(
 		adapter,
 		{
 			getDatabase: () => db,
-			createContext: async () => ({ db }),
+			createContext: async () => ({ db: missingContextDb ? undefined : db }),
 			getApp: () => ({ db, collections: {}, globals: {} }),
 			secret: runtimeSecret ?? undefined,
 			logger: { info() {}, warn() {}, error() {} },

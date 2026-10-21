@@ -224,12 +224,13 @@ export function createQueueClient<
 				try {
 					job.signal?.throwIfAborted();
 					if (secretPayload) {
-						if (
-							!job.dispatchId ||
-							!context.db ||
-							!runtimeOptions.secret ||
-							!isQueueSecretPayloadEnvelope(job.data)
-						) {
+						if (!context.db || !runtimeOptions.secret) {
+							job.defer?.();
+							throw new Error(
+								"Secret worker runtime configuration unavailable",
+							);
+						}
+						if (!job.dispatchId || !isQueueSecretPayloadEnvelope(job.data)) {
 							throw new QueueAdmissionError(
 								"Secret execution prerequisites unavailable",
 							);
@@ -376,9 +377,6 @@ export function createQueueClient<
 							context.db,
 							job.dispatchId,
 							executionToken!,
-							{
-								deadline: job.executionDeadline,
-							},
 						);
 						completionPersisted = true;
 					}

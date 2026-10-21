@@ -78,10 +78,17 @@ Future jobs can become runnable without a new notification, so their pickup
 latency includes this interval. Cron and receipt cleanup add one shared timer
 at each UTC minute.
 
-Unexpected runner shutdown or loss of the execution-fence connection clears the
-adapter's listening state, stops cron/recovery timers and raises an uncaught
-fatal error, terminating the hosting process non-zero even if its HTTP server
-is still running. Run consumers under a process supervisor that restarts them.
+Unexpected runner shutdown or loss of a fence connection while work is in flight
+clears listening state, stops cron/recovery timers, emits an error and calls
+`process.exit(1)`. This also works under Bun with a pending top-level await.
+A host can supply `onFatalError(error)` to own termination; that callback must
+terminate the process, even when it has active HTTP servers. Run consumers under
+a process supervisor. Idle fence connections use TCP keepalive and reconnect on
+the next dispatch after a drop.
+
+Graphile's migration NOTIFY is database-wide and contains no schema. The adapter
+replaces its unscoped shutdown check with a query of this schema's migration
+ledger; a breaking migration in another schema does not stop this consumer.
 
 Graphile errors, including shared-fetch errors that have no worker event, reach
 the adapter's `error` listeners. The adapter also retries Graphile 0.18's cached
@@ -177,9 +184,11 @@ Job execution is at least once; make external side effects idempotent.
 Handlers receive `signal?: AbortSignal`. Pass it to cancellable I/O. Abort cannot
 stop synchronous JavaScript or undo an external side effect that already happened.
 
-On first start, Graphile installs its schema, and the adapter installs three
-`questpie_*` tables in that schema. Initialization checks Graphile migrations
-and runs idempotent adapter DDL on every start under an advisory transaction lock. The connection role therefore
+On first start, Graphile installs its schema, and the adapter installs its
+`questpie_*` tables and version record in that schema. Initialization checks
+Graphile migrations and the adapter schema version with reads. Adapter DDL runs
+only when that version is missing, under a schema-specific advisory transaction
+lock with a second version check. Routine replica startup takes no DDL locks. The connection role therefore
 needs CREATE on the database/schema and ownership (or equivalent migration
 privileges) for the adapter tables and indexes, including a partial index on
 Graphile 0.18's `_private_jobs(locked_at, id)`. Do not configure a DML-only role
@@ -212,33 +221,30 @@ ceiling. They do not spend handler retries. These failures reach the adapter's
 error listeners. The current broker key is checked before handler admission
 and settlement; rotating it uses the public `remove_job` result as an atomic
 claim, so administrative removal cannot be reversed by a concurrent retry.
-Database settlement checks the deadline even if synchronous work delays timer
-delivery. Secret claim renewal and completion require the current claim token
-and cannot extend the adapter deadline. A timeout signals cancellation but holds
-the handler's permit and dispatch token until user code and request-scope
-disposal settle. A session advisory lock fences that dispatch against other
-runners' recovery throughout this wait. A non-cooperative handler can therefore
-block its own retry indefinitely; terminate its process to release the fence.
-The old attempt cannot persist success after its deadline. Shutdown also aborts
-active signals, drains handlers, and defers interrupted work without spending a
-handler retry. Use bounded I/O in handlers and disposers.
+Handler completion checks expiry after user code and request-scope disposal
+settle, including when synchronous work delays timer delivery. A timeout signals
+cancellation but holds the permit and dispatch fence until that work settles.
+A session advisory lock prevents other runners from recovering this live attempt.
+A non-cooperative handler can block its own retry until it settles or its process
+exits. Shutdown aborts active signals, drains handlers, and defers interrupted
+work without spending a handler retry. Use bounded I/O in handlers and disposers.
 
-Missing secret receipts, missing encryption configuration and malformed
-adapter/secret envelopes are permanent admission failures. They terminalize the
-adapter receipt and erase its ciphertext without using native infrastructure
-retries. Framework reconciliation then erases any retained wrapped key. Pending
-relay acceptance and a busy execution claim still defer without spending retries.
+Once a handler has succeeded within its execution window, saving that success
+uses the current execution token and session fence. Transient database failures
+are reported and completion retries under that ownership even after the original
+lease deadline. Database latency must not cause a successful handler to execute
+again. A superseded token cannot settle a newer attempt. Secret receipt completion
+also uses token ownership; admission and renewal still enforce the adapter's
+absolute deadline. pg-boss supplies no absolute deadline and permits its current
+token to renew after a heartbeat lapse.
 
-The deadline checks apply only when an adapter supplies an absolute deadline.
-The existing pg-boss path retains token-based ownership: after a heartbeat lapse,
-the unchanged owner can renew or complete until a newer token replaces it.
-
-A transient database error while saving completion or deferral is reported and
-retried with the same intended outcome and execution token, within its lease.
-It does not turn a successful handler into a handler failure. If that lease
-expires, database time still decides expiry; an unstarted secret admission is
-deferred without consuming an attempt, while an expired started handler follows
-the configured retry policy.
+Missing secret receipts and malformed adapter/secret envelopes are permanent
+admission failures. They terminalize and erase ciphertext; reconciliation erases
+the remaining wrapped key. Missing runtime encryption configuration or context
+database is a retryable host misconfiguration: it is reported without spending a
+handler retry or erasing the job. Pending relay acceptance and busy execution
+claims also preserve retries. A terminal `failed` framework receipt stays failed:
+its key is erased and late completion cannot reverse that decision.
 
 `forceUnlockWorkers` affects every job locked by a runner pool, so expiry never
 uses it to unlock unrelated long-running jobs. A dead attempt's old transport
@@ -246,7 +252,11 @@ row can remain locked until Graphile's native stale-lock cleanup, while its
 logical retry executes through a different ID. Adapter cleanup deletes retired
 transport rows once Graphile permits deletion. Raw SQL-created jobs without
 adapter receipts keep Graphile's native retry and stale-lock behavior; reserve
-job keys beginning `questpie:` for the adapter.
+the `__questpieQueue` envelope metadata for the adapter. Ownership comes from
+the dispatch/retirement ledgers or that envelope, never a mutable native key.
+Graphile may return a retired buffered job with its key cleared; it is acknowledged
+without invoking user code. `localQueue:returnJobs` releases buffered permit
+reservations, including at the native five-minute TTL.
 
 Drain or migrate queued pg-boss work before switching adapters; the two brokers
 do not share queued jobs or cron registrations.

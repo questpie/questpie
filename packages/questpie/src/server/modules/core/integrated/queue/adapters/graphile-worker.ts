@@ -42,6 +42,8 @@ export interface GraphileWorkerAdapterOptions {
 	useApplicationTransaction?: boolean;
 	/** Disable named prepared statements when using a transaction pooler. */
 	noPreparedStatements?: boolean;
+	/** Host-owned fatal termination hook. Default: log and process.exit(1). Must terminate the host. */
+	onFatalError?: (error: Error) => void;
 }
 
 type Executor = (query: SQL) => Promise<Record<string, unknown>[]>;
@@ -83,6 +85,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	private readonly activeTasks = new Set<Promise<unknown>>();
 	private executionCommands: Promise<void> = Promise.resolve();
 	private fatalError?: Error;
+	private migrationRevision = 0;
 	private auditCursor = "";
 	private lastAuditAt = 0;
 	private readonly warnedPolicies = new Set<string>();
@@ -137,12 +140,15 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 		if (this.recoveryTimer) clearTimeout(this.recoveryTimer);
 		for (const controller of this.activeControllers.values())
 			controller.abort();
-		// Error listeners may only log. An uncaught exception also terminates a
-		// host that still has HTTP servers or other referenced event-loop handles.
-		setImmediate(() => {
-			throw this.fatalError;
-		});
-		this.emitError(this.fatalError);
+		try {
+			this.emitError(this.fatalError);
+		} finally {
+			if (this.options.onFatalError) this.options.onFatalError(this.fatalError);
+			else {
+				console.error(this.fatalError);
+				process.exit(1);
+			}
+		}
 	}
 
 	private executionKey(dispatchId: string): string {
@@ -153,14 +159,44 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 		text: string,
 		values: string[],
 	): Promise<pg.QueryResult> {
-		const query = this.executionCommands.then(() =>
-			this.executionClient!.query(text, values),
-		);
+		const query = this.executionCommands.then(async () => {
+			await this.connectExecutionClient();
+			return this.executionClient!.query(text, values);
+		});
 		this.executionCommands = query.then(
 			() => {},
 			() => {},
 		);
 		return query;
+	}
+
+	private async connectExecutionClient(): Promise<void> {
+		if (this.executionClient) return;
+		const client = new pg.Client({
+			connectionString:
+				this.options.listenConnectionString ?? this.options.connectionString,
+			keepAlive: true,
+			keepAliveInitialDelayMillis: 10_000,
+		});
+		this.executionClient = client;
+		const lost = (error: Error) => {
+			if (this.executionClient !== client) return;
+			this.executionClient = undefined;
+			void client.end().catch(() => {});
+			if (this.executing.size > 0) this.fatal(error, true);
+			else this.emitError(error);
+		};
+		client.on("error", lost);
+		client.on("end", () =>
+			lost(new Error("Execution fence connection closed")),
+		);
+		try {
+			await client.connect();
+		} catch (error) {
+			if (this.executionClient === client) this.executionClient = undefined;
+			await client.end().catch(() => {});
+			throw error;
+		}
 	}
 
 	async ensureQueue(
@@ -232,10 +268,16 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 					],
 				},
 			});
+			const [revision] = await this.execute(
+				sql`SELECT max(id) AS id FROM ${this.table("migrations")}`,
+			);
+			this.migrationRevision = Number(revision!.id);
+			if (await this.adapterSchemaCurrent()) return;
 			await this.inTransaction(async (execute) => {
 				await execute(
 					sql`SELECT pg_advisory_xact_lock(hashtextextended(${"questpie-graphile:" + this.schema}, 0))`,
 				);
+				if (await this.adapterSchemaCurrent(execute)) return;
 				await execute(sql`CREATE TABLE IF NOT EXISTS ${this.table("questpie_dispatches")} (
 					dispatch_id text PRIMARY KEY, job_name text NOT NULL, job_id bigint UNIQUE,
 					singleton_key text, payload json, options json,
@@ -270,12 +312,31 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 					job_name text PRIMARY KEY, cron text NOT NULL, payload json NOT NULL,
 					options json NOT NULL, last_run timestamptz NOT NULL DEFAULT date_trunc('minute', now())
 				)`);
+				await execute(
+					sql`CREATE TABLE IF NOT EXISTS ${this.table("questpie_adapter_migrations")} (version integer PRIMARY KEY)`,
+				);
+				await execute(
+					sql`INSERT INTO ${this.table("questpie_adapter_migrations")} (version) VALUES (1) ON CONFLICT DO NOTHING`,
+				);
 			});
 		} catch (error) {
 			await pool.end();
 			this.pool = undefined;
 			throw error;
 		}
+	}
+
+	private async adapterSchemaCurrent(
+		execute: Executor = this.execute,
+	): Promise<boolean> {
+		const [table] = await execute(
+			sql`SELECT to_regclass(${'"' + this.schema + '".questpie_adapter_migrations'}) AS name`,
+		);
+		if (!table?.name) return false;
+		const [version] = await execute(
+			sql`SELECT version FROM ${this.table("questpie_adapter_migrations")} WHERE version = 1`,
+		);
+		return Boolean(version);
 	}
 
 	private execute: Executor = async (query) => {
@@ -530,23 +591,16 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				(outcome === "failed" &&
 					Number(record.attempts) <= (options.retryLimit ?? 2)));
 		if (!retry) {
-			const [settled] =
-				await execute(sql`UPDATE ${this.table("questpie_dispatches")} SET status = ${outcome}, payload = NULL, options = NULL,
-				lease_token = NULL, lease_until = NULL, finished_at = now() WHERE dispatch_id = ${String(record.dispatch_id)}
-				AND (${outcome} <> 'completed' OR lease_until > clock_timestamp()) RETURNING dispatch_id`);
-			// The row is already locked. Enforce expiry in the terminal write,
-			// independently of delayed JavaScript timers or database round trips.
-			if (!settled && outcome === "completed") {
-				this.activeControllers.get(String(record.dispatch_id))?.abort();
-				await this.settle(execute, record, "failed");
-			}
+			await execute(sql`UPDATE ${this.table("questpie_dispatches")} SET status = ${outcome}, payload = NULL, options = NULL,
+				lease_token = NULL, lease_until = NULL, finished_at = now() WHERE dispatch_id = ${String(record.dispatch_id)}`);
 			return;
 		}
 		await execute(
 			sql`INSERT INTO ${this.table("questpie_retired_jobs")} (job_id) VALUES (${String(record.job_id)}::bigint) ON CONFLICT DO NOTHING`,
 		);
-		// remove_job clears a locked job's key and prevents another native attempt;
-		// it never unlocks siblings that share Graphile's process-wide pool ID.
+		// remove_job retires the physical key without unlocking active siblings.
+		// returnJobs can make that old row runnable again; ownership below uses
+		// the ledger/envelope, so retired rows are acknowledged without user code.
 		const [removed] = await execute(
 			sql`SELECT id FROM ${this.table("remove_job")}(${this.physicalKey(record)})`,
 		);
@@ -595,9 +649,13 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				return;
 			} catch (error) {
 				this.emitError(error);
-				// Preserve the intended outcome while this execution owns its lease.
+				// Preserve success while this token and its session fence remain owned.
 				// A database error is not an application failure or a new attempt.
-				if (Date.now() >= deadline.getTime()) throw error;
+				if (
+					this.fatalError ||
+					(outcome !== "completed" && Date.now() >= deadline.getTime())
+				)
+					throw error;
 				await new Promise((resolve) => setTimeout(resolve, 100));
 			}
 		}
@@ -810,26 +868,36 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 			});
 			limits.set(name, permits);
 			const executeTask: TaskList[string] = async (payload, helpers) => {
-				const owned = helpers.job.key?.startsWith("questpie:");
 				const release =
 					reservations.get(String(helpers.job.id)) ?? (await permits.acquire());
 				reservations.delete(String(helpers.job.id));
-				if (this.runnerClosing && owned) {
-					release();
-					await this.inTransaction(async (execute) => {
-						const [record] = await execute(
-							sql`SELECT * FROM ${this.table("questpie_dispatches")} WHERE job_id = ${String(helpers.job.id)}::bigint AND status = 'pending' FOR UPDATE`,
-						);
-						if (record) await this.settle(execute, record, "deferred");
-					});
-					return;
-				}
+
 				let timer: ReturnType<typeof setTimeout> | undefined;
 				let dispatchId: string | undefined;
 				let controller: AbortController | undefined;
 				let lockedDispatch: string | undefined;
 				let fenceAcquired = false;
 				try {
+					const [identity] = await this.execute(
+						sql`SELECT dispatch_id FROM ${this.table("questpie_dispatches")} WHERE job_id = ${String(helpers.job.id)}::bigint
+						UNION ALL SELECT NULL AS dispatch_id FROM ${this.table("questpie_retired_jobs")} WHERE job_id = ${String(helpers.job.id)}::bigint`,
+					);
+					const owned =
+						Boolean(identity) ||
+						Boolean(
+							payload &&
+							typeof payload === "object" &&
+							"__questpieQueue" in payload,
+						);
+					if (this.runnerClosing && owned) {
+						await this.inTransaction(async (execute) => {
+							const [record] = await execute(
+								sql`SELECT * FROM ${this.table("questpie_dispatches")} WHERE job_id = ${String(helpers.job.id)}::bigint AND status = 'pending' FOR UPDATE`,
+							);
+							if (record) await this.settle(execute, record, "deferred");
+						});
+						return;
+					}
 					if (!owned) {
 						await handler({
 							id: String(helpers.job.id),
@@ -839,10 +907,8 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 						});
 						return;
 					}
-					const [identity] = await this.execute(
-						sql`SELECT dispatch_id FROM ${this.table("questpie_dispatches")} WHERE job_id = ${String(helpers.job.id)}::bigint`,
-					);
-					if (!identity) return;
+
+					if (!identity?.dispatch_id) return;
 					const key = this.executionKey(String(identity.dispatch_id));
 					if (this.executing.has(key))
 						throw new Error("Graphile Worker dispatch is still executing");
@@ -900,6 +966,8 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 							}),
 							controller.signal,
 						);
+						if (Date.now() >= new Date(record.lease_until as Date).getTime())
+							throw new Error("QUESTPIE Queue execution expired");
 					} catch (error) {
 						permanent = error instanceof QueueAdmissionError;
 						if (!handlerStarted && !permanent) throw error;
@@ -968,20 +1036,25 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 		let ready!: () => void;
 		this.listenStarting = new Promise<void>((resolve) => (ready = resolve));
 		try {
-			this.executionClient = new pg.Client({
-				connectionString:
-					this.options.listenConnectionString ?? this.options.connectionString,
-			});
-			const executionClient = this.executionClient;
-			executionClient.on("error", (error) => {
-				if (this.executionClient === executionClient) this.fatal(error, true);
-			});
-			executionClient.on("end", () => {
-				if (this.executionClient === executionClient)
-					this.fatal(new Error("Execution fence connection closed"), true);
-			});
-			await this.executionClient.connect();
+			await this.connectExecutionClient();
 			const events = new EventEmitter() as WorkerEvents;
+			events.on("pool:listen:notification", ({ message }) => {
+				if (message.channel !== "worker:migrate") return;
+				// 0.18 notifies database-wide without a schema. Its synchronous event
+				// runs before main.js reads this payload; suppress that unscoped check
+				// and check the migration ledger of our schema instead.
+				message.payload = "{}";
+				void this.execute(
+					sql`SELECT id FROM ${this.table("migrations")} WHERE breaking AND id > ${this.migrationRevision} LIMIT 1`,
+				)
+					.then((rows) => {
+						if (rows.length)
+							this.fatal(
+								new Error("Breaking migration of the Graphile Worker schema"),
+							);
+					})
+					.catch((error) => this.fatal(error));
+			});
 			events.on("pool:gracefulShutdown", () =>
 				this.fatal(new Error("Graphile Worker initiated shutdown")),
 			);
@@ -989,6 +1062,14 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				for (const job of jobs) {
 					const release = limits.get(job.task_identifier)?.tryAcquire();
 					if (release) reservations.set(String(job.id), release);
+				}
+			});
+			events.on("localQueue:returnJobs", ({ jobs }) => {
+				for (const job of jobs) {
+					const id = String(job.id);
+					const release = reservations.get(id);
+					reservations.delete(id);
+					release?.();
 				}
 			});
 			events.on("localQueue:setMode", ({ newMode }) => {

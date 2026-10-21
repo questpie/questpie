@@ -354,7 +354,6 @@ export async function completeQueueDispatch(
 	db: QueueDatabase,
 	dispatchId: string,
 	executionToken: string,
-	options: { deadline?: Date } = {},
 ): Promise<void> {
 	const owner = executionOwner(db, dispatchId);
 	const updated = await db
@@ -378,12 +377,6 @@ export async function completeQueueDispatch(
 				eq(owner.secretPayload, true),
 				eq(owner.status, "accepted"),
 				eq(owner.executionClaimToken, executionToken),
-				options.deadline
-					? gt(owner.executionClaimedUntil, sql`clock_timestamp()`)
-					: undefined,
-				options.deadline
-					? sql`${options.deadline.toISOString()}::timestamptz > clock_timestamp()`
-					: undefined,
 			),
 		)
 		.returning({ dispatchId: questpieQueueDispatchTable.dispatchId });
