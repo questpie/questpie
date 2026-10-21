@@ -765,7 +765,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 						reservedTask(name) ||
 						(!this.runnerClosing && !limits.get(name)?.full),
 				);
-				return discoveryRetry ? names.reverse() : names;
+				return discoveryRetry ? [...names.slice(1), names[0]!] : names;
 			},
 		});
 		this.listening = true;
