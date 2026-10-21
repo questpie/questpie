@@ -160,37 +160,60 @@ export type QueueExecutionClaim =
 	  }
 	| { status: "busy" | "terminal" | "unavailable" | "pending" };
 
+function executionOwner(db: QueueDatabase, dispatchId: string) {
+	// FOR UPDATE prevents CTE inlining. Deadline predicates in the outer
+	// statement run after this row lock is acquired, including lock waits.
+	return db
+		.$with("queue_execution_owner")
+		.as(
+			db
+				.select()
+				.from(questpieQueueDispatchTable)
+				.where(eq(questpieQueueDispatchTable.dispatchId, dispatchId))
+				.for("update"),
+		);
+}
+
 export async function claimQueueDispatchExecution(
 	db: QueueDatabase,
 	dispatchId: string,
-	options: { leaseMs?: number; now?: Date } = {},
+	options: { leaseMs?: number; now?: Date; deadline?: Date } = {},
 ): Promise<QueueExecutionClaim> {
 	const leaseMs = boundedInteger(
 		options.leaseMs,
 		DEFAULT_EXECUTION_LEASE_MS,
 		3_600_000,
 	);
-	const currentTime = options.now ?? sql`CURRENT_TIMESTAMP`;
-	const claimedUntil = options.now
+	const currentTime = options.now ?? sql`clock_timestamp()`;
+	const leaseUntil = options.now
 		? new Date(options.now.getTime() + leaseMs)
-		: sql`CURRENT_TIMESTAMP + (${leaseMs} * interval '1 millisecond')`;
+		: sql`clock_timestamp() + (${leaseMs} * interval '1 millisecond')`;
+	const claimedUntil = options.deadline
+		? sql`LEAST(${leaseUntil}, ${options.deadline.toISOString()}::timestamptz)`
+		: leaseUntil;
 	const token = crypto.randomUUID();
+	const owner = executionOwner(db, dispatchId);
 	const claimed = await db
+		.with(owner)
 		.update(questpieQueueDispatchTable)
 		.set({
 			executionClaimToken: token,
 			executionClaimedUntil: claimedUntil,
 		})
+		.from(owner)
 		.where(
 			and(
-				eq(questpieQueueDispatchTable.dispatchId, dispatchId),
-				eq(questpieQueueDispatchTable.secretPayload, true),
-				eq(questpieQueueDispatchTable.status, "accepted"),
-				isNotNull(questpieQueueDispatchTable.wrappedSecretKey),
+				eq(questpieQueueDispatchTable.dispatchId, owner.dispatchId),
+				eq(owner.secretPayload, true),
+				eq(owner.status, "accepted"),
+				isNotNull(owner.wrappedSecretKey),
+				options.deadline
+					? sql`${options.deadline.toISOString()}::timestamptz > ${currentTime}`
+					: undefined,
 				or(
-					isNull(questpieQueueDispatchTable.executionClaimToken),
-					isNull(questpieQueueDispatchTable.executionClaimedUntil),
-					lt(questpieQueueDispatchTable.executionClaimedUntil, currentTime),
+					isNull(owner.executionClaimToken),
+					isNull(owner.executionClaimedUntil),
+					lt(owner.executionClaimedUntil, currentTime),
 				),
 			),
 		)
@@ -236,23 +259,32 @@ export async function renewQueueDispatchExecution(
 	db: QueueDatabase,
 	dispatchId: string,
 	token: string,
-	options: { leaseMs?: number } = {},
+	options: { leaseMs?: number; deadline?: Date } = {},
 ): Promise<boolean> {
 	const leaseMs = boundedInteger(
 		options.leaseMs,
 		DEFAULT_EXECUTION_LEASE_MS,
 		3_600_000,
 	);
+	const owner = executionOwner(db, dispatchId);
 	const updated = await db
+		.with(owner)
 		.update(questpieQueueDispatchTable)
 		.set({
-			executionClaimedUntil: sql`CURRENT_TIMESTAMP + (${leaseMs} * interval '1 millisecond')`,
+			executionClaimedUntil: options.deadline
+				? sql`LEAST(clock_timestamp() + (${leaseMs} * interval '1 millisecond'), ${options.deadline.toISOString()}::timestamptz)`
+				: sql`clock_timestamp() + (${leaseMs} * interval '1 millisecond')`,
 		})
+		.from(owner)
 		.where(
 			and(
-				eq(questpieQueueDispatchTable.dispatchId, dispatchId),
-				eq(questpieQueueDispatchTable.status, "accepted"),
-				eq(questpieQueueDispatchTable.executionClaimToken, token),
+				eq(questpieQueueDispatchTable.dispatchId, owner.dispatchId),
+				eq(owner.status, "accepted"),
+				eq(owner.executionClaimToken, token),
+				gt(owner.executionClaimedUntil, sql`clock_timestamp()`),
+				options.deadline
+					? sql`${options.deadline.toISOString()}::timestamptz > clock_timestamp()`
+					: undefined,
 			),
 		)
 		.returning({ dispatchId: questpieQueueDispatchTable.dispatchId });
@@ -319,8 +351,12 @@ export async function getQueueDispatchReceipt(
 export async function completeQueueDispatch(
 	db: QueueDatabase,
 	dispatchId: string,
+	executionToken: string,
+	options: { deadline?: Date } = {},
 ): Promise<void> {
+	const owner = executionOwner(db, dispatchId);
 	const updated = await db
+		.with(owner)
 		.update(questpieQueueDispatchTable)
 		.set({
 			status: "completed",
@@ -333,11 +369,17 @@ export async function completeQueueDispatch(
 			failedAt: null,
 			lastError: null,
 		})
+		.from(owner)
 		.where(
 			and(
-				eq(questpieQueueDispatchTable.dispatchId, dispatchId),
-				eq(questpieQueueDispatchTable.secretPayload, true),
-				inArray(questpieQueueDispatchTable.status, ["accepted", "failed"]),
+				eq(questpieQueueDispatchTable.dispatchId, owner.dispatchId),
+				eq(owner.secretPayload, true),
+				eq(owner.status, "accepted"),
+				eq(owner.executionClaimToken, executionToken),
+				gt(owner.executionClaimedUntil, sql`clock_timestamp()`),
+				options.deadline
+					? sql`${options.deadline.toISOString()}::timestamptz > clock_timestamp()`
+					: undefined,
 			),
 		)
 		.returning({ dispatchId: questpieQueueDispatchTable.dispatchId });

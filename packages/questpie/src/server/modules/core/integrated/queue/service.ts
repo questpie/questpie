@@ -199,7 +199,36 @@ export function createQueueClient<
 				let executionToken: string | undefined;
 				let executionHeartbeat: ReturnType<typeof setInterval> | undefined;
 				let completionPersisted = false;
+				const releaseExecution = async () => {
+					if (executionHeartbeat) clearInterval(executionHeartbeat);
+					executionHeartbeat = undefined;
+					if (
+						secretPayload &&
+						executionToken &&
+						!completionPersisted &&
+						job.dispatchId &&
+						context.db
+					) {
+						await releaseQueueDispatchExecution(
+							context.db,
+							job.dispatchId,
+							executionToken,
+						).catch(() =>
+							logger.warn(
+								"[QUESTPIE Queue] Secret execution claim release failed",
+								{ dispatchId: job.dispatchId, jobName: jobDef.name },
+							),
+						);
+					}
+				};
+				// Disposal can outlive cancellation. End ownership immediately rather
+				// than letting a blocked disposer keep the expired claim alive.
+				const onAbort = () => {
+					void releaseExecution();
+				};
+				job.signal?.addEventListener("abort", onAbort, { once: true });
 				try {
+					job.signal?.throwIfAborted();
 					if (secretPayload) {
 						if (
 							!job.dispatchId ||
@@ -212,7 +241,10 @@ export function createQueueClient<
 						const claim = await claimQueueDispatchExecution(
 							context.db,
 							job.dispatchId,
-							{ leaseMs: job.executionLeaseMs },
+							{
+								leaseMs: job.executionLeaseMs,
+								deadline: job.executionDeadline,
+							},
 						);
 						if (claim.status === "terminal") return;
 						if (
@@ -226,13 +258,18 @@ export function createQueueClient<
 							throw new Error("Secret execution claim unavailable");
 						}
 						executionToken = claim.token;
+						job.signal?.throwIfAborted();
 						executionHeartbeat = setInterval(
 							() => {
+								if (job.signal?.aborted) return;
 								void renewQueueDispatchExecution(
 									context.db!,
 									job.dispatchId!,
 									claim.token,
-									{ leaseMs: job.executionLeaseMs },
+									{
+										leaseMs: job.executionLeaseMs,
+										deadline: job.executionDeadline,
+									},
 								).catch(() => {
 									logger.warn(
 										"[QUESTPIE Queue] Secret execution claim heartbeat failed",
@@ -335,7 +372,15 @@ export function createQueueClient<
 						);
 					});
 					if (secretPayload && job.dispatchId && context.db) {
-						await completeQueueDispatch(context.db, job.dispatchId);
+						job.signal?.throwIfAborted();
+						await completeQueueDispatch(
+							context.db,
+							job.dispatchId,
+							executionToken!,
+							{
+								deadline: job.executionDeadline,
+							},
+						);
 						completionPersisted = true;
 					}
 				} catch (error) {
@@ -346,25 +391,8 @@ export function createQueueClient<
 					}
 					throw error;
 				} finally {
-					if (executionHeartbeat) clearInterval(executionHeartbeat);
-					if (
-						secretPayload &&
-						executionToken &&
-						!completionPersisted &&
-						job.dispatchId &&
-						context.db
-					) {
-						await releaseQueueDispatchExecution(
-							context.db,
-							job.dispatchId,
-							executionToken,
-						).catch(() => {
-							logger.warn(
-								"[QUESTPIE Queue] Secret execution claim release failed",
-								{ dispatchId: job.dispatchId, jobName: jobDef.name },
-							);
-						});
-					}
+					job.signal?.removeEventListener("abort", onAbort);
+					await releaseExecution();
 				}
 			};
 		}

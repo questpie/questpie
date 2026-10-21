@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { job } from "../../src/exports/index.js";
 import {
+	claimQueueDispatchExecution,
 	completeQueueDispatch,
 	failQueueDispatch,
 } from "../../src/server/modules/core/integrated/queue/dispatch-store.js";
@@ -124,9 +125,11 @@ describe("secret-bearing Queue runtime", () => {
 			},
 		);
 
+		const claim = await claimQueueDispatchExecution(setup.app.db, dispatchId!);
+		if (claim.status !== "claimed") throw new Error("Expected execution claim");
 		await Promise.all([
-			completeQueueDispatch(setup.app.db, dispatchId!),
-			completeQueueDispatch(setup.app.db, dispatchId!),
+			completeQueueDispatch(setup.app.db, dispatchId!, claim.token),
+			completeQueueDispatch(setup.app.db, dispatchId!, claim.token),
 			failQueueDispatch(setup.app.db, dispatchId!),
 		]);
 		await failQueueDispatch(setup.app.db, dispatchId!);

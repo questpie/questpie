@@ -52,6 +52,26 @@ or busy execution claim defers without spending a handler retry. Non-secret
 transactional publication uses Drizzle `execute(SQL)` and bound text-to-JSON
 casts; real postgres-js commit/rollback tests exercise it.
 
+Adversarial probes exposed four gaps that the initial happy-path suite missed:
+external broker terminalization was treated as retryable transport loss; blocked
+scope disposal kept a secret claim alive after expiry; a delayed JavaScript timer
+allowed a success past the database deadline; and failed initial recovery left
+an orphan runner. The adapter now treats missing, detached-key and permanently
+failed current broker jobs as terminal. Adapter-owned rotation atomically points
+the ledger at the next physical ID, so it never resembles external removal.
+
+Secret claim admission, renewal and completion lock the receipt before checking
+database wall-clock time. Completion requires the current token. Renewal is
+capped at the adapter's absolute deadline and cannot revive an expired claim.
+An abort listener ends the heartbeat and releases ownership independently of a
+blocked request-scope disposer. Adapter settlement checks database time after
+acquiring its own row lock. Failed listener initialization drains its runner and
+closes a separate pool before another listen is allowed; stop waits for ongoing
+initialization. Real-PostgreSQL regressions cover all four probes plus deadline
+checks after a row-lock wait.
+The lock CTE relies on PostgreSQL's rejection of row-locking SELECTs from CTE
+inlining, present in the [PostgreSQL 12 planner](https://github.com/postgres/postgres/blob/REL_12_STABLE/src/backend/optimizer/plan/subselect.c).
+
 ## Local comparison
 
 The checked-in runner is `packages/questpie/bench/queue-graphile.ts`:

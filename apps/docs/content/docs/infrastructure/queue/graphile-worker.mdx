@@ -110,6 +110,10 @@ without consuming a handler retry. Successful execution erases the key.
 Broker reconciliation recognizes pending, active, failed and missing jobs;
 missing/completed broker work without a persisted framework completion is a
 failed receipt and permits key erasure only after a live execution claim ends.
+Public Graphile administrative removal, completion or permanent failure is
+terminal; recovery does not recreate that work. A normal timeout rotates the
+physical ID in the adapter's transaction, so it remains distinguishable from
+an external terminal operation.
 
 ## Application transactions
 
@@ -156,6 +160,11 @@ Reclaiming a fetched job that has not entered its handler does not spend a retry
 it may be waiting for a per-name permit in a healthy process. Handler attempts
 begin only when that permit is acquired.
 Graphile's native stale-lock interval does not gate logical recovery.
+Database settlement checks the deadline even if synchronous work delays timer
+delivery. Secret claim renewal and completion require the current claim token
+and cannot extend the adapter deadline. Abort stops heartbeats and releases the
+claim even when request-scope disposal is still waiting. Cleanup itself must use
+bounded I/O; cancellation cannot force an arbitrary disposer to return.
 
 `forceUnlockWorkers` affects every job locked by a runner pool, so expiry never
 uses it to unlock unrelated long-running jobs. A dead attempt's old transport

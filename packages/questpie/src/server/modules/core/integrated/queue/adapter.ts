@@ -37,6 +37,8 @@ export interface QueueJobRecord {
 	signal?: AbortSignal;
 	/** Secret claim lease bounded by the adapter execution deadline. */
 	executionLeaseMs?: number;
+	/** Absolute database deadline; claims and terminal writes cannot extend it. */
+	executionDeadline?: Date;
 }
 
 export interface QueueListenOptions {
