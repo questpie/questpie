@@ -187,6 +187,8 @@ export interface RealtimeConfig {
 	channelEvents?: Partial<
 		import("./channel-event-ledger.js").ChannelEventLedgerConfig
 	>;
+	/** Memory-only Channels lane; independent from the durable change broker. */
+	ephemeral?: import("#questpie/server/channels/ephemeral.js").EphemeralConfig;
 	/** Cross-instance lease register tuning for SSE presence channels. */
 	channelPresence?: Partial<
 		import("./sse-channel-presence.js").ChannelPresenceConfig

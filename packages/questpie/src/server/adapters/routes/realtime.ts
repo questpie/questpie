@@ -202,6 +202,7 @@ type ValidatedChannelSubscription = {
 	params: Record<string, string>;
 	resolvedName: string;
 	presenceChannel: boolean;
+	ephemeral: boolean;
 	subject?: string;
 	lastEventId?: string;
 	presence?: Record<string, unknown>;
@@ -793,6 +794,8 @@ async function resolveChannelSubscription(
 		app.config.realtime?.channelSecurity,
 	);
 	const definition = channels.getDefinition(input.channel);
+	if (definition.ephemeralOptions && input.lastEventId)
+		throw new Error("Ephemeral channels cannot resume");
 	const resolvedName = channels.resolveName(input.channel, params);
 	const authoritySubject = resolveChannelAuthoritySubject(context);
 	let presence: Record<string, unknown> | undefined;
@@ -810,6 +813,7 @@ async function resolveChannelSubscription(
 		params,
 		resolvedName,
 		presenceChannel: definition.visibility === "presence",
+		ephemeral: Boolean(definition.ephemeralOptions),
 		...(authoritySubject
 			? { subject: opaqueChannelAuthoritySubject(authoritySubject) }
 			: {}),
@@ -2059,7 +2063,8 @@ export async function realtimeSubscribe(
 						unsubscribeLedger = await app.realtime!.subscribeChannel({
 							subscriptionId: `${edgeSessionId}:${channel.id}:${bindingInstanceId}`,
 							channel: channel.resolvedName,
-							...(channel.subject
+							ephemeral: channel.ephemeral,
+							...(channel.subject || channel.ephemeral
 								? {
 										subject: channel.subject,
 										reauthorize: async () => {

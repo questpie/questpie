@@ -4,6 +4,8 @@ import {
 	opaqueChannelAuthoritySubject,
 	resolveChannelAuthoritySubject,
 } from "#questpie/server/channels/authority.js";
+import type { EphemeralChannelOptions } from "#questpie/server/channels/channel-builder.js";
+import { EphemeralChannels } from "#questpie/server/channels/ephemeral.js";
 import type {
 	ChannelAuthorityRevocation,
 	ChannelAuthorityRevocationReceipt,
@@ -16,7 +18,10 @@ import type { DrizzleClientFromQuestpieConfig } from "#questpie/server/config/ty
 import type { LoggerAdapter } from "#questpie/server/modules/core/integrated/logger/types.js";
 
 import { CoreNoticeRouter } from "../collaboration/notice-router.js";
-import { PgNotifyChangeBroker } from "./adapters/pg-notify.js";
+import {
+	PgNotifyChangeBroker,
+	PgNotifyEphemeralBroker,
+} from "./adapters/pg-notify.js";
 import { ChannelAuthorityFenceStore } from "./channel-authority-fence.js";
 import {
 	type AppendChannelEventInput,
@@ -169,6 +174,7 @@ export class RealtimeService {
 	private nextRetentionCleanupAt = 0;
 	private retentionCleanupInProgress = false;
 	private readonly channelEventLedger: ChannelEventLedger;
+	private readonly ephemeral: EphemeralChannels;
 	private readonly authorityFences: ChannelAuthorityFenceStore;
 	private readonly channelPresenceRegistry: SseChannelPresenceRegistry;
 	private readonly topologyCoordinator: RealtimeTopologyCoordinator;
@@ -225,6 +231,20 @@ export class RealtimeService {
 						error,
 					),
 			},
+		);
+		this.ephemeral = new EphemeralChannels(
+			{
+				...config.ephemeral,
+				broker:
+					config.ephemeral?.broker ??
+					(this.pgConnectionString
+						? new PgNotifyEphemeralBroker({
+								connectionString: this.pgConnectionString,
+							})
+						: undefined),
+			},
+			(error) =>
+				this.logger?.error("[Realtime] Ephemeral delivery failed", error),
 		);
 		this.channelEventLedger = new ChannelEventLedger(
 			this.db,
@@ -798,6 +818,14 @@ export class RealtimeService {
 		return this.clientTransport.publishChannel(input);
 	}
 
+	publishEphemeralEvent(
+		input: AppendChannelEventInput,
+		options: EphemeralChannelOptions,
+		publisher: string,
+	): Promise<ChannelEventReceipt> {
+		return this.ephemeral.publish(input, options, publisher);
+	}
+
 	async appendChannelEvent(
 		input: AppendChannelEventInput,
 		options: AppendChannelEventOptions = {},
@@ -827,8 +855,10 @@ export class RealtimeService {
 	async subscribeChannel(
 		input: Omit<LocalChannelSubscriptionInput, "stage"> & {
 			presence?: RegisterChannelPresenceInput;
+			ephemeral?: boolean;
 		},
 	): Promise<() => Promise<void>> {
+		if (input.ephemeral) return this.ephemeral.subscribe(input);
 		if (this.clientTransport) await this.initialize();
 		const { presence, ...subscription } = input;
 		let counted = false;
@@ -1484,6 +1514,7 @@ export class RealtimeService {
 
 	async destroy(): Promise<void> {
 		this.invalidationClosed = true;
+		await this.ephemeral.destroy();
 		for (const entry of this.invalidationListeners) entry.close();
 		await this.topologyCoordinator.stop();
 		await this.channelPresenceRegistry.destroy();

@@ -1,1 +1,3 @@
-{ "pages": ["transports", "authorization", "presence", "delivery"] }
+{
+	"pages": ["ephemeral", "transports", "authorization", "presence", "delivery"]
+}

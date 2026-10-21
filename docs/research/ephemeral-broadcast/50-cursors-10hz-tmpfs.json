@@ -1,0 +1,280 @@
+{
+	"environment": {
+		"bun": "1.4.2",
+		"postgres": "PostgreSQL 17.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+		"os": "linux",
+		"cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"cpus": 12,
+		"loadAverage": [23.77, 13.25, 12.15],
+		"freeMemoryBytes": 2865364992
+	},
+	"durationMs": 10000,
+	"results": [
+		{
+			"mode": "writes-only",
+			"cursors": 50,
+			"pages": 10,
+			"inputHz": 10,
+			"elapsedMs": 10000,
+			"offered": 0,
+			"accepted": 0,
+			"cursorNotifies": 0,
+			"presenceNotifies": 0,
+			"notifies": 0,
+			"fanoutRoundTrips": 0,
+			"failedFanout": 0,
+			"pendingFanout": 0,
+			"notifyPerSecond": 0,
+			"receivedUnique": 0,
+			"deliveredFrames": 0,
+			"latencyP50Ms": null,
+			"latencyP95Ms": null,
+			"latencyP99Ms": null,
+			"ledgerInserts": 0,
+			"writes": 7833,
+			"writesPerSecond": 783.3,
+			"writeP95Ms": 2.5072030000001178,
+			"writeP99Ms": 7.755866999999853,
+			"maximumPending": 0,
+			"errors": [],
+			"postgresWaitSamples": {
+				"Client/ClientRead": 3,
+				"CPU/running": 1
+			}
+		},
+		{
+			"mode": "ephemeral",
+			"cursors": 50,
+			"pages": 10,
+			"inputHz": 10,
+			"elapsedMs": 10544,
+			"offered": 5000,
+			"accepted": 5000,
+			"cursorNotifies": 960,
+			"presenceNotifies": 20,
+			"notifies": 980,
+			"fanoutRoundTrips": 98,
+			"failedFanout": 0,
+			"pendingFanout": 0,
+			"notifyPerSecond": 92.94385432473445,
+			"receivedUnique": 4800,
+			"deliveredFrames": 24000,
+			"latencyP50Ms": 18,
+			"latencyP95Ms": 102,
+			"latencyP99Ms": 104,
+			"ledgerInserts": 0,
+			"writes": 9594,
+			"writesPerSecond": 909.9013657056146,
+			"writeP95Ms": 0.45748599999933504,
+			"writeP99Ms": 0.7826649999988149,
+			"maximumPending": 50,
+			"errors": [],
+			"postgresWaitSamples": {
+				"CPU/running": 5,
+				"Client/ClientRead": 2,
+				"IO/DataFileExtend": 1
+			}
+		},
+		{
+			"mode": "channels",
+			"cursors": 50,
+			"pages": 10,
+			"inputHz": 10,
+			"elapsedMs": 24356,
+			"offered": 4850,
+			"accepted": 4850,
+			"cursorNotifies": 4686,
+			"presenceNotifies": 0,
+			"notifies": 4686,
+			"fanoutRoundTrips": 4686,
+			"failedFanout": 164,
+			"pendingFanout": 0,
+			"notifyPerSecond": 192.39612415831826,
+			"receivedUnique": 1657,
+			"deliveredFrames": 6756,
+			"latencyP50Ms": 1702,
+			"latencyP95Ms": 3351,
+			"latencyP99Ms": 3415,
+			"ledgerInserts": 4850,
+			"writes": 7125,
+			"writesPerSecond": 292.5357201510921,
+			"writeP95Ms": 4.2531810000000405,
+			"writeP99Ms": 43.17197799999849,
+			"maximumPending": 620,
+			"errors": [
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				}
+			],
+			"postgresWaitSamples": {
+				"IO/DataFileRead": 1,
+				"Client/ClientRead": 18,
+				"CPU/running": 42,
+				"LWLock/BufferContent": 1,
+				"Lock/transactionid": 59,
+				"IO/WalWrite": 12,
+				"LWLock/WALWrite": 85,
+				"Lock/tuple": 50,
+				"IO/DataFileExtend": 9,
+				"Lock/extend": 15,
+				"IO/SlruWrite": 1,
+				"LWLock/XidGen": 3
+			}
+		}
+	],
+	"storage": "tmpfs, 512 MiB; fsync=on; synchronous_commit=on",
+	"sourceBase": "a65bdc4c2a39dd4c16c9d69bbe2811784fb6714b",
+	"capturedAtUtc": "2026-10-21T23:47:56.371522+00:00",
+	"implementationSha256": {
+		"packages/questpie/src/server/channels/ephemeral.ts": "9a72106bec39d5b48352bfd767d01e9ca9ccd0f29c9f15b422d5143a16990c1d",
+		"packages/questpie/src/server/channels/ephemeral-broker.ts": "afb0d9b8d4b5bf729d8728331634a607ca595dca043fb68b393d93f3645fb853",
+		"packages/questpie/src/server/modules/core/integrated/realtime/adapters/pg-notify.ts": "a35522c5e6512f066a71904688ef2f1ca190cecad220d19089875c9d7d2ae053"
+	}
+}

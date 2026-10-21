@@ -1,5 +1,7 @@
 import type { Client, ClientConfig, Notification } from "pg";
 
+import type { EphemeralBroker } from "#questpie/server/channels/ephemeral-broker.js";
+
 import type {
 	ChangeBroker,
 	ChangeBrokerState,
@@ -286,16 +288,24 @@ class PgNotifyDriver {
 		return () => this.stateHandlers.delete(handler);
 	}
 
-	protected async publishPayload(value: unknown): Promise<void> {
-		const payload = JSON.stringify(value);
-		const payloadBytes = new TextEncoder().encode(payload).byteLength;
-		if (payloadBytes >= PG_NOTIFY_MAX_PAYLOAD_BYTES) {
-			const error = new Error(
-				`${this.constructor.name} payload must be smaller than ${PG_NOTIFY_MAX_PAYLOAD_BYTES} bytes (received ${payloadBytes}).`,
-			);
-			this.reportError("payload", error);
-			throw error;
+	protected publishPayload(value: unknown): Promise<void> {
+		return this.publishSerializedPayloads([JSON.stringify(value)]);
+	}
+
+	protected async publishSerializedPayloads(
+		payloads: readonly string[],
+	): Promise<void> {
+		for (const payload of payloads) {
+			const payloadBytes = new TextEncoder().encode(payload).byteLength;
+			if (payloadBytes >= PG_NOTIFY_MAX_PAYLOAD_BYTES) {
+				const error = new Error(
+					`${this.constructor.name} payload must be smaller than ${PG_NOTIFY_MAX_PAYLOAD_BYTES} bytes (received ${payloadBytes}).`,
+				);
+				this.reportError("payload", error);
+				throw error;
+			}
 		}
+
 		if (this.stopping) throw new Error("pg-notify driver is stopping");
 		if (this.pendingPublishes >= PG_NOTIFY_MAX_PENDING_PUBLISHES) {
 			const error = new Error(
@@ -323,8 +333,10 @@ class PgNotifyDriver {
 				await this.roundTrip(
 					client,
 					this.ownsPublisherClient,
-					"select pg_notify($1, $2)",
-					[this.channel, payload],
+					payloads.length === 1
+						? "select pg_notify($1, $2)"
+						: "select pg_notify($1, message) from unnest($2::text[]) as message",
+					[this.channel, payloads.length === 1 ? payloads[0] : payloads],
 				);
 			} catch (error) {
 				// A failed or unanswered publish gets a fresh session next time.
@@ -751,3 +763,68 @@ export class PgNotifyChangeBroker
 export const pgNotifyChangeBroker = (
 	options: PgNotifyChangeBrokerOptions = {},
 ) => new PgNotifyChangeBroker(options);
+
+export type PgNotifyEphemeralBrokerOptions = {
+	/** Direct/session-pooled URL. Never pass an application transaction client. */
+	connectionString: string;
+	/** Isolate applications sharing a database. Default questpie_ephemeral_v1. */
+	channel?: string;
+};
+
+class EphemeralNotifyDriver extends PgNotifyDriver {
+	send(messages: readonly string[]): Promise<void> {
+		return this.publishSerializedPayloads(messages);
+	}
+}
+
+/** One LISTEN connection per app process, plus one autocommit publisher.
+ * Reuses the existing driver's bounded queue, timeouts and reconnect handling.
+ */
+export class PgNotifyEphemeralBroker implements EphemeralBroker {
+	private readonly driver: EphemeralNotifyDriver;
+	private unsubscribe?: () => void;
+	private unsubscribeState?: () => void;
+
+	constructor(options: PgNotifyEphemeralBrokerOptions) {
+		this.driver = new EphemeralNotifyDriver({
+			connectionString: options.connectionString,
+			channel: options.channel ?? "questpie_ephemeral_v1",
+		});
+	}
+
+	async start(
+		onMessage: (message: string) => void,
+		onDisconnect: (error: unknown) => void,
+	): Promise<void> {
+		if (this.unsubscribe) return;
+		this.unsubscribe = this.driver.subscribe((value) =>
+			onMessage(JSON.stringify(value)),
+		);
+		this.unsubscribeState = this.driver.onStateChange((state) => {
+			if (state === "disconnected")
+				onDisconnect(new Error("Ephemeral LISTEN connection lost"));
+		});
+		try {
+			await this.driver.start();
+		} catch (error) {
+			await this.stop();
+			throw error;
+		}
+	}
+
+	publish(messages: readonly string[]): Promise<void> {
+		return this.driver.send(messages);
+	}
+
+	async stop(): Promise<void> {
+		this.unsubscribe?.();
+		this.unsubscribeState?.();
+		this.unsubscribe = undefined;
+		this.unsubscribeState = undefined;
+		await this.driver.stop();
+	}
+}
+
+export const pgNotifyEphemeralBroker = (
+	options: PgNotifyEphemeralBrokerOptions,
+) => new PgNotifyEphemeralBroker(options);

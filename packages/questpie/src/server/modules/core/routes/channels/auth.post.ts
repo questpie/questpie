@@ -28,6 +28,8 @@ export default route()
 				throw new Error("Channel name does not match generated identity");
 			}
 			const definition = channels.getDefinition(input.channel);
+			if (definition.ephemeralOptions)
+				throw new Error("Ephemeral channels require SSE");
 			const realtime = routeApp(ctx).realtime;
 			if (!realtime) {
 				observeChannelSecurity(ctx, {

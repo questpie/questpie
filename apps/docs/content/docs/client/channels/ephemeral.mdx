@@ -1,0 +1,118 @@
+---
+title: Ephemeral channels
+description: Broadcast cursors and typing hints and track presence without event or presence rows.
+---
+
+Use `.ephemeral()` for cursors, selections, typing hints and other state that can be replaced by the next update. Events and presence live in memory and use the same SSE connection as your other channels and live queries.
+
+## Define awareness for a page
+
+```ts title="src/questpie/server/channels/page.ts"
+import { channel } from "questpie/channels";
+import { z } from "zod";
+import { canReadPage, pageMember } from "../domain/page-access";
+
+export default channel("page-awareness-[pageId]")
+	.ephemeral({ coalesceMs: 100 })
+	.events({
+		cursor: z.object({
+			actorId: z.string(),
+			x: z.number(),
+			y: z.number(),
+			at: z.number(),
+		}),
+		typing: z.object({
+			actorId: z.string(),
+			active: z.boolean(),
+			at: z.number(),
+		}),
+	})
+	.authorize({ subscribe: canReadPage, publish: false })
+	.presence(pageMember);
+```
+
+`canReadPage` is your existing page read check. It receives the fresh request context and `{ params: { pageId } }`. `pageMember` resolves the current member's public identity on the server. Denied and missing pages should return the same result.
+
+Keep `publish: false` when a payload names an actor. Send cursor updates to an application POST route that checks page access, resolves the actor from the authenticated session and stamps the server time. Its system-bound channel service can publish:
+
+```ts
+await channels
+	.page({ pageId })
+	.publish(
+		"cursor",
+		{ actorId, x, y, at: Date.now() },
+		{ coalesceKey: actorId },
+	);
+```
+
+The server-only `coalesceKey` distinguishes actors when a service publishes on behalf of several people. Browser request bodies cannot select this key. For ordinary browser publishes, the framework partitions updates by authenticated principal and event. Authorization validates access; it does not rewrite actor IDs in application payloads.
+
+Run codegen, then subscribe through the existing client:
+
+```ts
+const page = client.channels.page({ pageId });
+const stopEvents = page.subscribe(({ event, data }) => {
+	if (event === "cursor") drawCursor(data);
+});
+const stopPresence = page.subscribePresence(renderMembers);
+
+// When the page closes:
+stopEvents();
+stopPresence();
+```
+
+Both subscriptions share a logical channel and the client's physical SSE stream. Throttle the browser's POSTs to about one every 100 ms, retaining the newest pointer position between sends. Server coalescing reduces fan-out traffic; it does not reduce incoming HTTP requests.
+
+The executable framework example is `packages/questpie/examples/ephemeral-awareness.ts`; its actor partitioning is covered by the ephemeral unit tests.
+
+## Delivery and presence
+
+Each coalescing window retains the newest value for each publisher/key and event on a resolved channel. Different publishers keep independent cursors. Packets are batched per channel and process; a broker flush can send several packets together.
+
+A publish receipt acknowledges a validated update submitted to the best-effort lane. Its `eventId` is an opaque UUID, useful for diagnostics. Events may be superseded or dropped under overload or during a disconnect. Subscribe again to receive new updates and rebuild the roster; ephemeral channels reject replay and resume cursors. Use ordinary Channels when events need ordered replay. When converting a durable channel, give the ephemeral lane a new wire pattern and deploy the matching client; old durable resume cursors are rejected.
+
+Subscribing to an ephemeral presence channel joins it. The server renews active connections every 10 seconds, broadcasts leave on unsubscribe and expires missing heartbeats after 30 seconds. Multiple connections for one principal produce one roster entry. A new subscriber requests the other processes' current members; the roster fills asynchronously and is rebuilt after reconnecting.
+
+Access is checked at admission, before each delivery batch and every second while idle, using a fresh request context. A denied, failed or timed-out check ends that logical subscription, clears its pending events and removes its presence. Other subscriptions on the shared stream can continue. With the default authorization timeout, an idle revocation is detected within roughly one second plus up to five seconds for a slow check. Change the subscribe rule's underlying access state to revoke access; durable `invalidateAuthority()` fences are unavailable on this lane.
+
+The ephemeral lane issues no ledger, authority-fence or presence writes. The existing shared SSE transport still manages its connection topology and lease in the database. Application authorization rules may also read the database. Ephemeral publishing is independent of application write transactions: a later rollback does not undo a cursor or typing hint.
+
+## Limits
+
+| Boundary      | Limit                                                                         |
+| ------------- | ----------------------------------------------------------------------------- |
+| Event data    | 1024 serialized bytes by default; configure up to 4096 with `maxPayloadBytes` |
+| Presence data | 1024 serialized bytes per connection                                          |
+| Broker packet | 7900 UTF-8 bytes; large channel batches split into packets                    |
+| Pending keys  | 100 per channel; the oldest pending signal is replaced at capacity            |
+| Local topics  | 100 active subscribed topics and 100 pending publish topics per process       |
+| Presence      | 100 connections tracked per channel and process; 100 cached roster members    |
+| Coalescing    | 100 ms by default; integer `coalesceMs` from 10 to 1000                       |
+
+The existing channel HTTP origin checks, Zod schemas and per-session/principal rate limits also apply. Limits protect process memory; they are not a distributed rate limiter. This implementation supports SSE.
+
+## Choose a broker
+
+The default uses in-process fan-out with PGlite and Postgres NOTIFY when the runtime has a PostgreSQL connection URL. Use a direct or session-pooled URL for LISTEN, especially when your application uses a transaction pooler:
+
+```ts title="questpie.config.ts"
+import { runtimeConfig } from "questpie/app";
+import { pgNotifyEphemeralBroker } from "questpie/adapters/pg-notify";
+
+export default runtimeConfig({
+	realtime: {
+		ephemeral: {
+			broker: pgNotifyEphemeralBroker({
+				connectionString: process.env.REALTIME_DATABASE_URL!,
+				channel: "my_app_ephemeral_v1",
+			}),
+		},
+	},
+});
+```
+
+Create one app runtime and broker per process. The ephemeral adapter owns one LISTEN connection and a separate autocommit publisher connection, shared by all its topics and subscribers. One SQL call sends all packets ready in a flush. It reuses the existing Postgres driver's reconnect, health-check and timeout behavior. A listener failure ends local subscriptions so clients reconnect and rebuild state. Each application sharing a database should use its own broker channel.
+
+For a single process, select `new InProcessEphemeralBroker()` from `questpie/channels`. This broker exchanges no messages with other processes.
+
+A future Redis pub/sub adapter implements `EphemeralBroker` from `questpie/channels`: `start(onMessage, onDisconnect)`, `publish(messages)` and `stop()`. Messages are serialized UTF-8 strings; `publish` receives one flush's packets. Report connection loss through `onDisconnect`. Broker selection does not change channel definitions or client calls. Redis is not required or implemented for this lane.

@@ -5,7 +5,7 @@ description: Define schema-validated application events with channel(), authoriz
 
 Channels are typed application event streams built on the same realtime runtime as live queries. Define each channel once in `channels/`; codegen adds it to request contexts as `channels`, to the generated `AppConfig`, and to `client.channels`. The application API stays the same whether delivery uses the zero-infrastructure SSE path or the managed Pusher/Soketi path.
 
-Use channels for transient events such as chat notifications, progress, typing, or presence. The bounded replay ledger is delivery infrastructure, **not** queryable application history. Persist messages that users must retrieve later in a collection.
+Use channels for chat notifications and progress. For cursors, typing and presence without event or presence rows, use [ephemeral channels](/docs/client/channels/ephemeral). The bounded replay ledger is delivery infrastructure, **not** queryable application history. Persist messages that users must retrieve later in a collection.
 
 ## Define a channel
 

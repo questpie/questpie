@@ -13,15 +13,21 @@ import {
 	type ServerChannelFacadeReservedKey,
 } from "#questpie/shared/channel-facade.js";
 
-import type { ChannelAuthoritySubject } from "./authority.js";
+import {
+	opaqueChannelAuthoritySubject,
+	resolveChannelAuthoritySubject,
+	type ChannelAuthoritySubject,
+} from "./authority.js";
 import {
 	type AnyChannelDefinition,
 	type ChannelAuthorizationRule,
 	type ChannelDefinitions,
 	type ChannelEventsOf,
+	type EphemeralChannelOptions,
 	type ChannelParamsOf,
 	type ChannelPresenceOf,
 } from "./channel-builder.js";
+import { serializeEphemeralPayload } from "./ephemeral.js";
 import {
 	assertChannelPayloadSize,
 	assertUniqueResolvedChannelName,
@@ -57,6 +63,11 @@ export class ChannelRuntimeError extends Error {
 }
 
 export interface ChannelPublisher {
+	publishEphemeralEvent?(
+		input: AppendChannelEventInput,
+		options: EphemeralChannelOptions,
+		publisher: string,
+	): Promise<ChannelPublishReceipt>;
 	appendChannelEvent(
 		input: AppendChannelEventInput,
 		options?: AppendChannelEventOptions,
@@ -129,6 +140,7 @@ type BoundPublishMethod<TDefinition extends AnyChannelDefinition> = <
 >(
 	event: TEvent,
 	data: z.input<ChannelEventsOf<TDefinition>[TEvent]>,
+	options?: { coalesceKey?: string },
 ) => Promise<ChannelPublishReceipt>;
 
 type PresenceHandle<TDefinition extends AnyChannelDefinition> = [
@@ -189,9 +201,14 @@ export type ChannelPublishReceipt = Readonly<{
 	eventId: string;
 }>;
 
-export type PreparedChannelPublish = Readonly<AppendChannelEventInput>;
+export type PreparedChannelPublish = Readonly<
+	AppendChannelEventInput & {
+		ephemeral?: { options: EphemeralChannelOptions; publisher: string };
+	}
+>;
 
 type RuntimeChannelPublishInput = {
+	coalesceKey?: string;
 	params?: Record<string, string>;
 	event: string;
 	data: unknown;
@@ -346,6 +363,10 @@ export class ChannelsService<
 	): Promise<ChannelAuthorityRevocationReceipt> {
 		const params = (input.params ?? {}) as ChannelParamsOf<TChannels[TChannel]>;
 		const resolvedName = this.resolveName(channel, params);
+		if (this.getDefinition(channel).ephemeralOptions)
+			throw new Error(
+				"Ephemeral access is rechecked live; update the subscribe rule",
+			);
 		return revokeResolvedChannelAuthority(
 			this.publisher,
 			this.context.db,
@@ -380,6 +401,11 @@ export class ChannelsService<
 		input: RuntimeChannelPublishInput,
 	): Promise<PreparedChannelPublish> {
 		const definition = this.getDefinition(channel);
+		if (
+			input.coalesceKey !== undefined &&
+			(!input.coalesceKey || input.coalesceKey.length > 256)
+		)
+			throw new Error("Invalid ephemeral coalescing key");
 		const params = (input.params ?? {}) as ChannelParamsOf<TChannels[TChannel]>;
 		const resolvedName = assertUniqueResolvedChannelName(
 			this.definitions,
@@ -410,12 +436,25 @@ export class ChannelsService<
 			);
 		}
 		assertChannelPayloadSize(parsed.data);
+		if (definition.ephemeralOptions)
+			serializeEphemeralPayload(parsed.data, definition.ephemeralOptions);
+		const subject = definition.ephemeralOptions
+			? resolveChannelAuthoritySubject(this.context)
+			: null;
 
 		return {
 			channel: resolvedName,
 			event,
 			schemaIdentity: `${String(channel)}:${event}`,
 			data: parsed.data,
+			...(definition.ephemeralOptions
+				? {
+						ephemeral: {
+							options: definition.ephemeralOptions,
+							publisher: `${subject ? opaqueChannelAuthoritySubject(subject) : "system"}:${input.coalesceKey ?? ""}`,
+						},
+					}
+				: {}),
 		};
 	}
 
@@ -423,6 +462,15 @@ export class ChannelsService<
 	publishPrepared(
 		prepared: PreparedChannelPublish,
 	): Promise<ChannelPublishReceipt> {
+		if (prepared.ephemeral) {
+			if (!this.publisher.publishEphemeralEvent)
+				throw new Error("Ephemeral publisher unavailable");
+			return this.publisher.publishEphemeralEvent(
+				prepared,
+				prepared.ephemeral.options,
+				prepared.ephemeral.publisher,
+			);
+		}
 		return this.publisher.appendChannelEvent(prepared, {
 			db: this.context.db,
 		});
@@ -554,10 +602,12 @@ export function createChannels<
 			>(
 				event: TEvent,
 				data: z.input<ChannelEventsOf<TChannels[TChannel]>[TEvent]>,
+				options?: { coalesceKey?: string },
 			) =>
 				service
 					.preparePublishRequest(channel, {
 						params: boundParams,
+						coalesceKey: options?.coalesceKey,
 						event,
 						data,
 					})
@@ -566,6 +616,10 @@ export function createChannels<
 				service.authorize(channel, boundParams, verb),
 			resolvePresence: () => service.resolvePresence(channel, boundParams),
 			invalidateAuthority: async (input: ChannelAuthorityInvalidationInput) => {
+				if (service.getDefinition(channel).ephemeralOptions)
+					throw new Error(
+						"Ephemeral access is rechecked live; update the subscribe rule",
+					);
 				const receipt = await revokeResolvedChannelAuthority(
 					publisher,
 					context.db,
