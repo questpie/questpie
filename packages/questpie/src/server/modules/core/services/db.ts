@@ -97,8 +97,11 @@ export default service({
 			// Pick the Postgres driver by runtime so a single `db.url` config runs
 			// on BOTH Bun and Node: Bun → the native zero-dep `bun:sql` client;
 			// Node (e.g. Next.js's server runtime) → `node-postgres` via the
-			// optional `pg` peer dependency. Bun servers keep the bun-sql path.
-			if (typeof (globalThis as { Bun?: unknown }).Bun !== "undefined") {
+			// optional `pg` peer dependency. An explicit driver also selects pg on Bun.
+			if (
+				config.db.driver !== "node-postgres" &&
+				typeof (globalThis as { Bun?: unknown }).Bun !== "undefined"
+			) {
 				const [{ SQL }, { drizzle: drizzleBun }] = await Promise.all([
 					import("bun"),
 					import("drizzle-orm/bun-sql"),

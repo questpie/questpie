@@ -669,7 +669,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 		const [record] = await this
 			.execute(sql`SELECT d.status, d.dispatch_id, d.generation, j.id AS broker_id, j.key, j.locked_at, j.attempts, j.max_attempts FROM ${this.table("questpie_dispatches")} d
 			LEFT JOIN ${this.table("jobs")} j ON j.id = d.job_id WHERE d.dispatch_id = ${adapterJobId} AND d.job_name = ${jobName}`);
-		if (!record) return "missing";
+		if (!record) return "unknown";
 		if (record.status === "completed" || record.status === "failed")
 			return record.status;
 		if (!record.broker_id) return "missing";

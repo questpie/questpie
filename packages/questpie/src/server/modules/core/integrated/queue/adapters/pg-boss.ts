@@ -209,7 +209,9 @@ export class PgBossAdapter implements QueueAdapter {
 	): Promise<QueueExecutionState> {
 		await this.start();
 		const job = await this.boss.getJobById(jobName, adapterJobId);
-		if (!job) return "missing";
+		// pg-boss has no separate ownership ledger. Absence can mean this receipt
+		// belongs to another broker or schema, so it cannot authorize key erasure.
+		if (!job) return "unknown";
 		switch (job.state) {
 			case "completed":
 				return "completed";

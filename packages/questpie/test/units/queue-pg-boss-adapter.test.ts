@@ -523,6 +523,6 @@ describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
 		);
 		await expect(
 			adapter.inspectExecutionState!("echo", "retained-record-missing"),
-		).resolves.toBe("missing");
+		).resolves.toBe("unknown");
 	});
 });

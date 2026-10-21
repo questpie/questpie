@@ -59,3 +59,15 @@ type FactoryAppConfig = Omit<
 type _factoryAppDbPreservesCustomClient = Expect<
 	Equal<DrizzleClientFromQuestpieConfig<FactoryAppConfig>, CustomDb>
 >;
+
+const explicitDriver = runtimeConfig({
+	db: { url: "postgres://localhost/example", driver: "node-postgres" },
+});
+type _explicitDriverPreserved = Expect<
+	Equal<typeof explicitDriver.db.driver, "node-postgres">
+>;
+
+runtimeConfig({
+	// @ts-expect-error Only the optional node-postgres override is supported.
+	db: { url: "postgres://localhost/example", driver: "other-driver" },
+});

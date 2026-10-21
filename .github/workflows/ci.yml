@@ -214,8 +214,10 @@ jobs:
         env:
           QUESTPIE_QUEUE_SECRET_POSTGRES_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
 
-      - name: Verify Graphile Worker queue contracts
-        run: bun test packages/questpie/test/integration/queue-graphile-worker-postgres.test.ts --timeout 30000
+      - name: Verify Graphile Worker queue contracts twice
+        run: |
+          bun test packages/questpie/test/integration/queue-graphile-worker-postgres.test.ts --timeout 30000
+          bun test packages/questpie/test/integration/queue-graphile-worker-postgres.test.ts --timeout 30000
         env:
           QUESTPIE_GRAPHILE_POSTGRES_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
 
@@ -240,6 +242,7 @@ jobs:
         working-directory: packages/questpie
         run: |
           bun test test/collection/transaction-locks-postgres.test.ts
+          bun test test/integration/transaction-async-context-postgres.test.ts
           bun test test/collection/read-execution-postgres.test.ts
           bun test test/integration/queue-dispatch-plan-postgres.test.ts
         env:

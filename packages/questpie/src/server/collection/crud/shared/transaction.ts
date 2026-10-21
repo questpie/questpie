@@ -131,7 +131,7 @@
  * @module
  */
 
-import { AsyncLocalStorage } from "node:async_hooks";
+import { AsyncLocalStorage, AsyncResource } from "node:async_hooks";
 
 /**
  * Transaction context stored in AsyncLocalStorage
@@ -333,10 +333,14 @@ export async function withTransaction<T>(
 	// Execute transaction within the AsyncLocalStorage context
 	// Cast needed because some @types/node versions type run() as returning void
 	const result = (await transactionStorage.run(ctx, async () => {
-		return db.transaction(async (tx: any) => {
-			ctx.tx = tx;
-			return fn(tx);
-		});
+		// Bun SQL can invoke this callback in its connection's async scope after
+		// a cold acquire or idle reconnect. Bind both caller and transaction ALS.
+		return db.transaction(
+			AsyncResource.bind(async (tx: any) => {
+				ctx.tx = tx;
+				return fn(tx);
+			}),
+		);
 	})) as T;
 
 	// Transaction committed successfully - run afterCommit callbacks
