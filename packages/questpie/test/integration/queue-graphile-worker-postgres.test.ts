@@ -612,6 +612,155 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		errors.length = 0;
 	});
 
+	test("task discovery recovers after a database timeout and reports the error", async () => {
+		await adapter.stop();
+		const restricted = new URL(url);
+		restricted.searchParams.set("options", "-c lock_timeout=150ms");
+		adapter = new GraphileWorkerAdapter({
+			connectionString: url,
+			listenConnectionString: restricted.toString(),
+			schema,
+			concurrentJobs: 2,
+			pollInterval: 100,
+		});
+		adapter.on("error", (error) => errors.push(error));
+		let release!: () => void;
+		const blocked = new Promise<void>((resolve) => (release = resolve));
+		let calls = 0;
+		const lock = await pool.connect();
+		try {
+			await adapter.listen(
+				{
+					discovery: async () => {
+						if (++calls === 1) await blocked;
+					},
+				},
+				{ teamSize: 1, batchSize: 1 },
+			);
+			await adapter.publish("discovery", {});
+			await until(() => calls === 1);
+			await Bun.sleep(200);
+			await lock.query("BEGIN");
+			await lock.query(
+				`LOCK TABLE "${schema}"._private_tasks IN ACCESS EXCLUSIVE MODE`,
+			);
+			release();
+			await until(
+				async () =>
+					(
+						await pool.query(
+							`SELECT FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE $1`,
+							[`insert into "${schema}"._private_tasks%`],
+						)
+					).rowCount! > 0,
+			);
+			await Bun.sleep(220);
+			await lock.query("COMMIT");
+			const id = await adapter.publish("discovery", {});
+			await until(
+				async () =>
+					(await adapter.inspectExecutionState("discovery", id)) ===
+					"completed",
+				2500,
+			);
+			expect(calls).toBe(2);
+			expect(
+				errors.some((error) => error.message.includes("lock timeout")),
+			).toBe(true);
+			errors.length = 0;
+		} finally {
+			release();
+			await lock.query("ROLLBACK");
+			lock.release();
+		}
+	});
+
+	test("lease recovery serializes with an uncommitted permanent failure", async () => {
+		await adapter.stop();
+		const restricted = new URL(url);
+		restricted.searchParams.set("options", "-c lock_timeout=150ms");
+		adapter = new GraphileWorkerAdapter({
+			connectionString: restricted.toString(),
+			schema,
+			concurrentJobs: 1,
+			pollInterval: 100,
+		});
+		adapter.on("error", (error) => errors.push(error));
+		const lock = await pool.connect();
+		let release!: () => void;
+		const blocked = new Promise<void>((resolve) => (release = resolve));
+		let calls = 0;
+		try {
+			await adapter.listen({
+				recovery: async () => {
+					calls++;
+					await blocked;
+				},
+			});
+			const id = await adapter.publish(
+				"recovery",
+				{},
+				{ retryLimit: 2, expireInSeconds: 0.7 },
+			);
+			await until(() => calls === 1);
+			await lock.query("BEGIN");
+			await lock.query(
+				`SELECT FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1 FOR UPDATE`,
+				[id],
+			);
+			release();
+			await until(
+				async () =>
+					(
+						await pool.query(
+							`SELECT FROM "${schema}".jobs WHERE locked_at IS NULL AND last_error IS NOT NULL`,
+						)
+					).rowCount === 1,
+			);
+			await lock.query("COMMIT");
+			await adapter.stop();
+			await adapter.start();
+			await Bun.sleep(750);
+			const [native] = (await pool.query(`SELECT id FROM "${schema}".jobs`))
+				.rows;
+			await lock.query("BEGIN");
+			await lock.query(
+				`SELECT "${schema}".permanently_fail_jobs(ARRAY[$1::bigint])`,
+				[native.id],
+			);
+			const listening = adapter.listen({
+				recovery: async () => {
+					calls++;
+				},
+			});
+			await until(
+				async () =>
+					(
+						await pool.query(
+							`SELECT FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE $1`,
+							[`%${schema}%`],
+						)
+					).rowCount! > 0,
+			);
+			await lock.query("COMMIT");
+			await listening;
+			await until(
+				async () =>
+					(await adapter.inspectExecutionState("recovery", id)) === "failed",
+				2000,
+			);
+			expect(calls).toBe(1);
+			expect(
+				errors.every((error) => error.message.includes("lock timeout")),
+			).toBe(true);
+			errors.length = 0;
+		} finally {
+			release();
+			await lock.query("ROLLBACK");
+			lock.release();
+		}
+	});
+
 	test("removing an active job prevents handler failure from creating a successor", async () => {
 		let release!: () => void;
 		const blocked = new Promise<void>((resolve) => (release = resolve));
@@ -719,6 +868,66 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 	});
 
 	test.each([false, true])(
+		"a new receipt lifetime preserves an older delayed job, new secret=%s",
+		async (newSecret) => {
+			const seen: string[] = [];
+			const queue = makeQueue(adapter, db, async (payload) => {
+				seen.push((payload as { value: string }).value);
+			});
+			const idempotencyKey = randomUUID();
+			const original = await queue.delivery.publish(
+				{ value: "old-delayed" },
+				{ idempotencyKey, startAfter: 9 * 86400 },
+			);
+			await pool.query(
+				`UPDATE questpie_queue_dispatch SET created_at=now()-interval '8 days', accepted_at=now()-interval '8 days' WHERE dispatch_id=$1`,
+				[original],
+			);
+			await pool.query(
+				`UPDATE "${schema}".questpie_dispatches SET created_at=now()-interval '8 days', available_at=now()+interval '1 day' WHERE dispatch_id=$1`,
+				[original],
+			);
+			const [old] = (
+				await pool.query(
+					`SELECT job_id FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
+					[original],
+				)
+			).rows;
+			await pool.query(
+				`SELECT "${schema}".reschedule_jobs(ARRAY[$1::bigint],run_at:=now()+interval '1 day')`,
+				[old.job_id],
+			);
+			expect((await pruneQueueDispatches(db)).deleted).toBeGreaterThan(0);
+			const fresh = await queue.delivery.publish(
+				{ value: "new-immediate" },
+				{ idempotencyKey, secretPayload: newSecret },
+			);
+			expect(fresh).not.toBe(original);
+			await queue.listen({ gracefulShutdown: false });
+			await until(() => seen.length === 1);
+			expect(seen).toEqual(["new-immediate"]);
+			await until(
+				async () =>
+					(await adapter.inspectExecutionState("delivery", fresh!)) ===
+					"completed",
+			);
+			if (newSecret) {
+				await until(
+					async () => (await queue.getReceipt(fresh!))?.status === "completed",
+				);
+				expect((await queue.getReceipt(fresh!))?.status).toBe("completed");
+			}
+			await pool.query(
+				`SELECT "${schema}".reschedule_jobs(ARRAY[$1::bigint],run_at:=now())`,
+				[old.job_id],
+			);
+			await until(() => seen.length === 2);
+			expect(seen).toEqual(["new-immediate", "old-delayed"]);
+			await queue.stop();
+		},
+	);
+
+	test.each([false, true])(
 		"a key admits a new payload after framework retention before adapter cleanup, secret=%s",
 		async (secret) => {
 			const seen: string[] = [];
@@ -756,7 +965,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 				[id],
 			);
 			expect((await pruneQueueDispatches(db)).deleted).toBeGreaterThan(0);
-			await queue.delivery.publish({ value: "second" }, options);
+			const fresh = await queue.delivery.publish({ value: "second" }, options);
 			await (
 				adapter as unknown as { tickSchedules(): Promise<void> }
 			).tickSchedules();
@@ -764,7 +973,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			expect(seen).toEqual(["first", "second"]);
 			if (secret)
 				await until(
-					async () => (await queue.getReceipt(id!))?.status === "completed",
+					async () => (await queue.getReceipt(fresh!))?.status === "completed",
 				);
 			await queue.stop();
 		},
@@ -810,12 +1019,15 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 				).rowCount,
 			).toBe(1);
 			expect((await pruneQueueDispatches(db)).deleted).toBeGreaterThan(0);
-			await queue.delivery.publish({ value: "new-lifetime" }, options);
+			const fresh = await queue.delivery.publish(
+				{ value: "new-lifetime" },
+				options,
+			);
 			await until(() => seen.length === 1);
 			expect(seen).toEqual([{ value: "new-lifetime" }]);
 			if (secret)
 				await until(
-					async () => (await queue.getReceipt(id!))?.status === "completed",
+					async () => (await queue.getReceipt(fresh!))?.status === "completed",
 				);
 			await queue.stop();
 		},

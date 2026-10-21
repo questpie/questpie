@@ -51,6 +51,11 @@ type ScheduleOptions = Omit<
 >;
 const dialect = new PgDialect();
 const capacityTask = "__questpie_graphile_capacity__";
+const capacityRetryTask = "__questpie_graphile_capacity_retry__";
+
+function reservedTask(name: string): boolean {
+	return name === capacityTask || name === capacityRetryTask;
+}
 
 /**
  * Graphile Worker 0.18 adapter. All job names share one LISTEN-driven pool and
@@ -67,6 +72,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	} as const;
 	readonly transactionalPublishing: boolean;
 	readonly transactionalSecretPublishing = false;
+	readonly uniqueDispatchIds = true;
 	private readonly options: GraphileWorkerAdapterOptions;
 	private readonly schema: string;
 	private readonly errors = new Set<(error: Error) => void>();
@@ -414,6 +420,13 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 		outcome: "completed" | "failed" | "deferred",
 		allowRetry = true,
 	): Promise<void> {
+		// Every settlement path, including buffered capacity deferral, locks the
+		// current transport after the ledger. Recheck public cancellation after
+		// the lock wait, before deciding whether a successor may be published.
+		if (allowRetry && (await this.brokerIsTerminal(execute, record))) {
+			await this.settle(execute, record, "failed", false);
+			return;
+		}
 		const options = record.options as PublishOptions;
 		const retry =
 			allowRetry &&
@@ -476,13 +489,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				await execute(sql`SELECT * FROM ${this.table("questpie_dispatches")} WHERE dispatch_id = ${dispatchId}
 				AND status = 'active' AND lease_token = ${token}::uuid FOR UPDATE`);
 			if (record) {
-				const cancelled = await this.brokerIsTerminal(execute, record);
-				await this.settle(
-					execute,
-					record,
-					cancelled ? "failed" : outcome,
-					!cancelled,
-				);
+				await this.settle(execute, record, outcome);
 			}
 		});
 	}
@@ -510,10 +517,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 
 	private async recoverLeases(): Promise<void> {
 		await this.inTransaction(async (execute) => {
-			const expired =
-				await execute(sql`SELECT d.*, (j.id IS NULL OR j.key IS DISTINCT FROM
-					('questpie:' || d.dispatch_id || ':' || d.generation::text) OR
-					(j.locked_at IS NULL AND j.attempts >= j.max_attempts)) AS transport_terminal
+			const expired = await execute(sql`SELECT d.*
 				FROM ${this.table("questpie_dispatches")} d
 				LEFT JOIN ${this.table("jobs")} j ON j.id = d.job_id
 				WHERE d.status IN ('pending', 'active') AND (j.id IS NULL OR
@@ -531,10 +535,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				await this.settle(
 					execute,
 					record,
-					record.transport_terminal || record.status === "active"
-						? "failed"
-						: "deferred",
-					!record.transport_terminal,
+					record.status === "active" ? "failed" : "deferred",
 				);
 			}
 		});
@@ -665,7 +666,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 		const tasks: TaskList = {};
 		const limits = new Map<string, HandlerPermits>();
 		for (const [name, handler] of Object.entries(handlers)) {
-			if (name === capacityTask)
+			if (reservedTask(name))
 				throw new Error("Graphile Worker job name is reserved");
 			const permits = new HandlerPermits(teamSize, () => {
 				if (this.listening && !this.runnerClosing)
@@ -755,13 +756,17 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 		// Keep buffered handlers addressable while omitting saturated names from
 		// future batches. The idle task keeps the supported list nonempty.
 		tasks[capacityTask] = async () => {};
+		tasks[capacityRetryTask] = async () => {};
+		let discoveryRetry = false;
 		const runnableTasks = new Proxy(tasks, {
-			ownKeys: (target) =>
-				Object.keys(target).filter(
+			ownKeys: (target) => {
+				const names = Object.keys(target).filter(
 					(name) =>
-						name === capacityTask ||
+						reservedTask(name) ||
 						(!this.runnerClosing && !limits.get(name)?.full),
-				),
+				);
+				return discoveryRetry ? names.reverse() : names;
+			},
 		});
 		this.listening = true;
 		let ready!: () => void;
@@ -803,7 +808,22 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 					noHandleSignals: true,
 					noPreparedStatements: this.options.noPreparedStatements,
 					events,
-					logger: new Logger(() => () => {}),
+					logger: new Logger(() => (level, message, metadata) => {
+						if (level !== "error") return;
+						// Graphile logs concurrent joins of the same shutdown
+						// promise as errors, although the operation succeeds.
+						if (
+							message ===
+							"gracefulShutdown called when gracefulShutdown is already in progress"
+						)
+							return;
+						// 0.18 caches a rejected task-discovery promise until the
+						// enumerable list changes. Reorder the same supported names
+						// after an error so the next shared fetch retries discovery.
+						// Two reserved idle tasks keep this possible even at capacity.
+						discoveryRetry = !discoveryRetry;
+						this.emitError(metadata.error ?? new Error(message));
+					}),
 					preset: {
 						worker: {
 							localQueue: { size: batchSize },
@@ -951,7 +971,7 @@ function runAt(value: PublishOptions["startAfter"]): string {
 }
 
 function validatePublication(jobName: string, options: PublishOptions): void {
-	if (jobName === capacityTask)
+	if (reservedTask(jobName))
 		throw new Error("Graphile Worker job name is reserved");
 	if (!jobName || jobName.length > 128)
 		throw new Error("Graphile Worker job names must contain 1–128 characters");

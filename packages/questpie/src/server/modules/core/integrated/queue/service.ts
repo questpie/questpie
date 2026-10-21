@@ -750,10 +750,14 @@ export function createQueueClient<
 						"QUESTPIE Queue: idempotencyKey and singletonKey cannot be combined because singleton suppression cannot identify a newly accepted logical dispatch.",
 					);
 				}
-				const dispatchId = await stableQueueDispatchId(
+				let dispatchId = await stableQueueDispatchId(
 					jobDef.name,
 					options.idempotencyKey,
 				);
+				// A broker ledger may still own delayed work after the framework
+				// receipt expires. Give the next lifetime its own identity; the
+				// unique job/key reservation still deduplicates current replays.
+				if (adapter.uniqueDispatchIds) dispatchId = crypto.randomUUID();
 				const encrypted = options.secretPayload
 					? await encryptQueueSecretPayload({
 							dispatchId,

@@ -82,7 +82,8 @@ transaction. Concurrent administrative removal therefore cannot be hidden by
 the next logical generation. Native `job:error` events reach error listeners.
 Admission/settlement lock the current `_private_jobs` row with SELECT FOR UPDATE
 without modifying it; the public `jobs` view has an outer join and cannot supply
-that lock. This is deliberately tied to the startup-checked 0.18 schema. A
+that lock. This is deliberately tied to the installed 0.18.0 package. Its startup
+guard checks the package version, not the exact database migration revision. A
 regression holds public removal uncommitted and proves fetched admission waits
 for cancellation to commit rather than using its old snapshot.
 
@@ -109,6 +110,31 @@ jobs back to pending without executing them, then invokes graceful shutdown
 after the public local-queue mode event reports an empty buffer. A real-PG test
 proves buffered work survives stop/restart with `retryLimit: 0`.
 
+A further independent pass reproduced cancellation during lease recovery,
+a rejected task-discovery promise cached indefinitely, and a receipt-lifetime
+collision for a job delayed beyond framework retention. Recovery now locks
+the native row and rechecks terminal state after that lock, matching admission
+and settlement. A public permanent-failure transaction held uncommitted is
+covered by a real database regression; recovery must not create a successor.
+
+Installed `dist/taskIdentifiers.js` caches its task lookup by the JSON list of
+enumerable task names before the lookup succeeds. Installed `localQueue.js`
+logs fetch failures without a corresponding worker event. The public Logger
+now forwards these errors and changes the enumeration order of the same task
+names, making the next shared fetch retry discovery. Two reserved idle names
+allow that change even when all real names are saturated. It does not disable
+the shared buffer, patch Graphile internals or restart the pool. A real table
+lock and runner lock timeout prove error reporting and recovery without restart.
+
+Graphile advertises `uniqueDispatchIds` to the framework: each prospective
+publication gets a fresh identity before secret encryption and reservation.
+The framework's unique job/key constraint returns the retained ID on replay;
+relay retries continue using that persisted identity. After a receipt is pruned,
+its next lifetime gets a distinct ID even while the previous delayed work is
+still pending. The old job is neither deleted nor mistaken for the new payload.
+Real postgres-js tests cover both ordinary and secret replacement publications,
+and prove the new immediate job and old delayed job each execute their payload.
+
 ## Local comparison
 
 The checked-in runner is `packages/questpie/bench/queue-graphile.ts`:
@@ -129,14 +155,17 @@ adapter had ten sequential samples.
 | Measurement           |   pg-boss | Graphile Worker |
 | --------------------- | --------: | --------------: |
 | Idle SQL statements   |      1981 |              21 |
-| Idle SQL statements/s |   198.036 |           2.100 |
-| Pickup p50            |   16.9 ms |         10.6 ms |
-| Pickup p95 / max      | 2004.0 ms |         14.4 ms |
+| Idle SQL statements/s |   198.048 |           2.100 |
+| Pickup p50            | 1121.5 ms |          7.4 ms |
+| Pickup p95 / max      | 2004.9 ms |         11.3 ms |
 
 Idle statement count fell 98.9%. This run includes the transport-retry,
-retention and capacity-admission fixes. The host was under concurrent
+receipt-lifetime, task-discovery and capacity-admission fixes. The host was under concurrent
 development load; ten samples do not establish a production latency SLO. An earlier run
 before adding the expiry lease sweep measured 1.10 idle statements/s; that is
 not the final adapter's cost. The comparison uses the installed pg-boss, not a
 fresh measurement of Autopilot's published 3.35.7 deployment. A separate test
 sets recovery polling to 60 seconds and proves immediate LISTEN-driven pickup.
+An earlier ten-sample run had pg-boss p50 16.9 ms and p95 2004.0 ms, illustrating
+how a small sequential sample can align with the poll phase; these measurements
+do not imply a stable production median.

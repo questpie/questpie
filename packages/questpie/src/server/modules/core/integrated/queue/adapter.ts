@@ -135,6 +135,13 @@ export interface QueueAdapter {
 	transactionalSecretPublishing?: boolean;
 
 	/**
+	 * Use a fresh dispatch identity for each newly reserved receipt lifetime.
+	 * Required by adapters whose durable ledger can outlive framework retention.
+	 * Replays still return the existing receipt identity until it is pruned.
+	 */
+	uniqueDispatchIds?: boolean;
+
+	/**
 	 * Inspect the durable broker state for crash-recovery reconciliation.
 	 *
 	 * Adapters must not advertise executionTerminalState without implementing

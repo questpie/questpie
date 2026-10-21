@@ -70,6 +70,11 @@ Future jobs can become runnable without a new notification, so their pickup
 latency includes this interval. Cron and receipt cleanup add one shared timer
 at each UTC minute.
 
+Graphile errors, including shared-fetch errors that have no worker event, reach
+the adapter's `error` listeners. The adapter also retries Graphile 0.18's cached
+task-discovery failures by reordering the supported task names on an error.
+This keeps the shared runner recoverable after a transient database timeout.
+
 `stop()` stops fetching, drains handlers already assigned to worker slots,
 returns buffered framework jobs to pending and waits for batched settlement before
 closing connections. QUESTPIE owns process signal handling. A handler that
@@ -106,6 +111,12 @@ days after admission once their broker job no longer exists. Publication also
 retires an expired receipt's remaining transport and replaces it atomically, so independent cleanup timers cannot
 acknowledge old work as a newly admitted operation. Framework receipts continue
 to enforce their own longer secret-completion retention window.
+
+Each newly reserved framework receipt gets a fresh logical dispatch ID with
+this adapter. Replays within retention still return the existing receipt ID.
+After pruning, a new publication with the same key has its own lifetime even
+if the previous job is still delayed or executing. Both jobs remain runnable;
+the new publication cannot acknowledge or erase secrets belonging to old work.
 
 Secret payloads keep the framework relay path even when application
 transactions are enabled. The relay publishes ciphertext; the wrapped data
@@ -154,9 +165,11 @@ On first start, Graphile installs its schema, and the adapter installs three
 `questpie_*` tables in that schema. The initialization role needs schema/table
 privileges. Runtime publication and recovery use Graphile's public `add_job`,
 `remove_job` and `complete_jobs` SQL functions.
-Admission and settlement also take a read lock on the 0.18 transport row to
+Admission, settlement and lease recovery also take a read lock on the 0.18 transport row to
 serialize with administrative cancellation; the joined public view cannot
-provide that lock. The adapter checks the exact Graphile version at startup.
+provide that lock. The adapter checks the exact installed Graphile package
+version at startup. Use a dedicated schema with 0.18.0 workers; this package
+check does not certify a database schema migrated by a newer Graphile version.
 
 The adapter owns the logical execution lease and retry count. Each retry gets
 a new physical Graphile job ID; a late completion from an expired attempt
