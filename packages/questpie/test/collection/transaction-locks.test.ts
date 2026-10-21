@@ -78,6 +78,23 @@ describe("transaction-scoped collection locks", () => {
 		expect(lockedIds).toEqual([first.id, second.id].sort());
 	});
 
+	it.each(["share", "UPDATE", null, 1])(
+		"rejects unknown row lock mode %s",
+		async (mode) => {
+			await expect(
+				withTransaction(setup.app.db, (tx) =>
+					setup.app.collections.lockTargets.lockMany(
+						{ ids: [], mode },
+						{ ...context, db: tx },
+					),
+				),
+			).rejects.toMatchObject({
+				code: "BAD_REQUEST",
+				message: "Unknown row lock mode",
+			});
+		},
+	);
+
 	it("rejects an oversized lock request before querying", async () => {
 		const ids = Array.from({ length: 101 }, (_, index) => `target-${index}`);
 

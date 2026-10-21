@@ -669,6 +669,30 @@ describe.skipIf(!runPostgresContract)(
 			).toBe("inserted");
 		});
 
+		it.each([undefined, "no key update", "update"] as const)(
+			"lockMany mode %s controls foreign-key child insertion",
+			async (mode) => {
+				const parent = await setup.app.collections.postgres_fk_parents.create(
+					{ name: "Explicit lock mode" },
+					systemContext,
+				);
+				expect(
+					await insertWhileParentHeld(
+						(tx) =>
+							setup.app.collections.postgres_fk_parents.lockMany(
+								{ ids: [parent.id], mode },
+								{ ...systemContext, db: tx },
+							),
+						() =>
+							rawFkPool!.query(
+								"insert into postgres_fk_raw_children (parent_id) values ($1)",
+								[parent.id],
+							),
+					),
+				).toBe(mode === "update" ? "waiting" : "inserted");
+			},
+		);
+
 		it("locks FOR UPDATE when an update changes a unique column", async () => {
 			const parent = await setup.app.collections.postgres_fk_parents.create(
 				{ name: "Keyed", code: "keyed-1" },

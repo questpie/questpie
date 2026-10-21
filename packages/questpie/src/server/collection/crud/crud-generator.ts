@@ -523,6 +523,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			params: LockManyParams,
 			context: CRUDContext = {},
 		): Promise<Array<string | number>> => {
+			if (
+				params.mode !== undefined &&
+				params.mode !== "update" &&
+				params.mode !== "no key update"
+			) {
+				throw ApiError.badRequest("Unknown row lock mode");
+			}
 			const normalized = this.normalizeContext(context);
 			const db = this.getDb(normalized);
 			const currentTransaction = getCurrentTransaction();
@@ -577,7 +584,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					.from(this.table)
 					.where(and(...whereClauses))
 					.orderBy(asc(idColumn))
-					.for("no key update");
+					.for(params.mode ?? "no key update");
 
 			return lockedRows.map(({ id }) => id);
 		};

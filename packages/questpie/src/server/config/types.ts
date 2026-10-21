@@ -406,7 +406,7 @@ export type DbCreateResult<TDb extends AnyDrizzleClient = AnyDrizzleClient> =
 
 /**
  * Optional connection-pool tuning for the `db: { url }` variant. Applied to
- * whichever Postgres driver the runtime selects — Bun's native `bun:sql` on
+ * the selected Postgres driver — by default Bun's native `bun:sql` on
  * Bun, `node-postgres` on Node. All timeouts are in MILLISECONDS; questpie
  * converts to each driver's native unit.
  *
@@ -450,6 +450,8 @@ export interface DbPoolConfig {
 export type DbConfig =
 	| {
 			url: string;
+			/** Use the optional `pg` peer on either runtime. Omit for automatic Bun/Node selection. */
+			driver?: "node-postgres";
 			/** Optional connection-pool tuning. Omit to use driver defaults. */
 			pool?: DbPoolConfig;
 	  }

@@ -240,6 +240,7 @@ jobs:
         working-directory: packages/questpie
         run: |
           bun test test/collection/transaction-locks-postgres.test.ts
+          bun test test/integration/transaction-async-context-postgres.test.ts
           bun test test/collection/read-execution-postgres.test.ts
           bun test test/integration/queue-dispatch-plan-postgres.test.ts
         env:
