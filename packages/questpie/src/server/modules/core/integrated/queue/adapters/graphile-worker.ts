@@ -24,7 +24,6 @@ import {
 	decodeQueueDispatchEnvelope,
 	encodeQueueDispatchEnvelope,
 } from "../dispatch-envelope.js";
-import { queueExecutionIdentity } from "../execution-identity.js";
 import { QueueAdmissionError, withQueueAbort } from "../execution-signal.js";
 import type { PublishOptions } from "../types.js";
 
@@ -65,7 +64,6 @@ function reservedTask(name: string): boolean {
  * one fetch buffer; teamSize limits actual handlers independently per name.
  */
 export class GraphileWorkerAdapter implements QueueAdapter {
-	readonly executionIdentity: string;
 	readonly capabilities = {
 		longRunningConsumer: true,
 		runOnceConsumer: false,
@@ -106,11 +104,6 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	private readonly activeControllers = new Map<string, AbortController>();
 
 	constructor(options: GraphileWorkerAdapterOptions) {
-		this.executionIdentity = queueExecutionIdentity(
-			"graphile-worker",
-			options,
-			options.schema ?? "graphile_worker",
-		);
 		this.options = options;
 		this.schema = options.schema ?? "graphile_worker";
 		if (!/^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/.test(this.schema)) {
@@ -671,21 +664,12 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	async inspectExecutionState(
 		jobName: string,
 		adapterJobId: string,
-		publishingAdapterIdentity?: string,
 	): Promise<QueueExecutionState> {
-		if (
-			publishingAdapterIdentity &&
-			publishingAdapterIdentity !== this.executionIdentity
-		)
-			return "unknown";
 		await this.start();
 		const [record] = await this
 			.execute(sql`SELECT d.status, d.dispatch_id, d.generation, j.id AS broker_id, j.key, j.locked_at, j.attempts, j.max_attempts FROM ${this.table("questpie_dispatches")} d
 			LEFT JOIN ${this.table("jobs")} j ON j.id = d.job_id WHERE d.dispatch_id = ${adapterJobId} AND d.job_name = ${jobName}`);
-		if (!record)
-			return publishingAdapterIdentity === this.executionIdentity
-				? "missing"
-				: "unknown";
+		if (!record) return "missing";
 		if (record.status === "completed" || record.status === "failed")
 			return record.status;
 		if (!record.broker_id) return "missing";

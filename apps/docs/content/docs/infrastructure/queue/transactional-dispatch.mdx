@@ -96,15 +96,6 @@ const { claimed, accepted, failed, terminal } = await app.queue.drain({
 | `maxBatches`  | `1`     | Consecutive batches in this pass. An integer from 1 to 100.      |
 | `concurrency` | `8`     | Rows relayed in parallel within a batch.                         |
 
-Secret execution reconciliation inspects at most 20 pages per call and resumes
-capped scans on the next pass. Receipts belonging to a different known adapter
-or schema are excluded. Unknown legacy receipts are checked at most once per
-hour; if ownership remains unproven for 30 days after acceptance, they fail and
-the wrapped key is erased once no execution claim is live. Transfer or settle
-older unclassified live work before upgrading. New receipts retain their
-publishing storage identity, so broker or adapter-ledger retention can be
-reconciled without imposing that legacy age limit on live work.
-
 It returns `{ claimed, accepted, failed, terminal }`. Concurrent calls collapse
 into the one already running rather than stacking, so a cron that fires while
 the previous pass is still going will not pile up.

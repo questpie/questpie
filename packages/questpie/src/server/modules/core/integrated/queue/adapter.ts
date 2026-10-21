@@ -18,10 +18,7 @@ export type QueueExecutionState =
 	| "active"
 	| "completed"
 	| "failed"
-	/** A known, adapter-owned dispatch has lost its broker job. */
-	| "missing"
-	/** Ownership is unproven; only the legacy receipt age limit may terminalize it. */
-	| "unknown";
+	| "missing";
 
 export interface QueueJobRecord {
 	id: string;
@@ -98,9 +95,6 @@ export interface QueueAdapter {
 	 */
 	capabilities?: Partial<QueueAdapterCapabilities>;
 
-	/** Stable broker/database/schema scope, persisted when publication is accepted. */
-	executionIdentity?: string;
-
 	/**
 	 * Start the queue adapter (connect to DB/Redis, etc.)
 	 */
@@ -154,16 +148,10 @@ export interface QueueAdapter {
 	 *
 	 * Adapters must not advertise executionTerminalState without implementing
 	 * this method for every broker-owned terminal path.
-	 * Return `unknown` when the adapter cannot prove ownership (including an
-	 * absent ledger entry). Absence in a different broker/schema is not failure.
-	 * Reserve `missing` for a known owned dispatch whose broker job is gone.
-	 * The optional third argument is the identity persisted at publication;
-	 * matching executionIdentity proves ownership after broker/ledger retention.
 	 */
 	inspectExecutionState?(
 		jobName: string,
 		adapterJobId: string,
-		publishingAdapterIdentity?: string,
 	): Promise<QueueExecutionState>;
 
 	/**

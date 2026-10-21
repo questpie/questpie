@@ -498,21 +498,6 @@ describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
 		expect(attempts).toEqual([false, true]);
 	});
 
-	it("recognizes its own retention-deleted job but never inspects foreign storage", async () => {
-		const { adapter, fake } = makeAdapter();
-		await expect(
-			adapter.inspectExecutionState(
-				"echo",
-				"deleted",
-				adapter.executionIdentity,
-			),
-		).resolves.toBe("missing");
-		await expect(
-			adapter.inspectExecutionState("echo", "foreign", "another-storage"),
-		).resolves.toBe("unknown");
-		expect(fake.inspectionCalls.map(({ id }) => id)).toEqual(["deleted"]);
-	});
-
 	it("source-qualifies broker terminal states for crash-recovery reconciliation", async () => {
 		const { adapter, fake } = makeAdapter();
 		fake.inspectedJobs.set("echo:completed", { state: "completed" });
@@ -538,6 +523,6 @@ describe("PgBossAdapter — v10+ work() callback receives Job[]", () => {
 		);
 		await expect(
 			adapter.inspectExecutionState!("echo", "retained-record-missing"),
-		).resolves.toBe("unknown");
+		).resolves.toBe("missing");
 	});
 });

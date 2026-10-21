@@ -80,7 +80,6 @@ export const questpieQueueDispatchTable = pgTable(
 			mode: "date",
 		}),
 		adapterJobId: text("adapter_job_id"),
-		adapterIdentity: text("adapter_identity"),
 		lastError: text("last_error"),
 		acceptedAt: timestamp("accepted_at", {
 			withTimezone: true,

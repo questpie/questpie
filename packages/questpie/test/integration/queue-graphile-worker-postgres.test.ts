@@ -13,17 +13,15 @@ import {
 	generateDrizzleJson,
 	generateMigration,
 } from "drizzle-kit/api-postgres";
-import { eq, getTableName, inArray, sql } from "drizzle-orm";
+import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import pg from "pg";
 import postgres from "postgres";
 import { z } from "zod";
 
 import { GraphileWorkerAdapter } from "../../src/exports/adapters/graphile-worker.js";
-import { PgBossAdapter } from "../../src/exports/adapters/pg-boss.js";
 import { withTransaction } from "../../src/server/collection/crud/shared/transaction.js";
 import { getActiveRequestScope } from "../../src/server/config/request-scope.js";
-import type { QueueAdapter } from "../../src/server/modules/core/integrated/queue/adapter.js";
 import {
 	claimQueueDispatchExecution,
 	completeQueueDispatch,
@@ -31,7 +29,6 @@ import {
 	reconcileQueueDispatchExecutions,
 	releaseQueueDispatchExecution,
 	pruneQueueDispatches,
-	QUEUE_LEGACY_UNKNOWN_RETENTION_MS,
 	renewQueueDispatchExecution,
 } from "../../src/server/modules/core/integrated/queue/dispatch-store.js";
 import { questpieQueueDispatchTable } from "../../src/server/modules/core/integrated/queue/dispatch-table.js";
@@ -944,7 +941,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			);
 			expect(
 				await adapter.inspectExecutionState("transaction", committed),
-			).toBe("unknown");
+			).toBe("missing");
 		});
 		expect(await adapter.inspectExecutionState("transaction", committed)).toBe(
 			"pending",
@@ -963,7 +960,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			}),
 		).rejects.toThrow("rollback");
 		expect(await adapter.inspectExecutionState("transaction", rolledBack)).toBe(
-			"unknown",
+			"missing",
 		);
 		const [record] = (
 			await pool.query(
@@ -1084,336 +1081,6 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		);
 		expect(seen).toEqual([{ value: "handoff-race" }]);
 		await queue.stop();
-	});
-
-	test.each(["pg-boss", "other-graphile-schema"])(
-		"startup and recovery preserve live secret receipts owned by %s",
-		async (source) => {
-			const oldSchema = `old_${randomUUID().replaceAll("-", "")}`;
-			const oldAdapter =
-				source === "pg-boss"
-					? new PgBossAdapter({
-							connectionString: url,
-							schema: oldSchema,
-							useApplicationTransaction: false,
-						})
-					: new GraphileWorkerAdapter({
-							connectionString: url,
-							schema: oldSchema,
-						});
-			const oldQueue = makeQueue(oldAdapter, db, async () => {});
-			const newQueue = makeQueue(adapter, db, async () => {});
-			try {
-				const foreignIds: string[] = [];
-				for (const claim of ["absent", "live", "expired"]) {
-					const id = (await oldQueue.delivery.publish(
-						{ value: "preserve-key" },
-						{
-							secretPayload: true,
-							idempotencyKey: randomUUID(),
-							startAfter: 3600,
-						},
-					))!;
-					foreignIds.push(id);
-					if (claim !== "absent")
-						await db
-							.update(questpieQueueDispatchTable)
-							.set({
-								executionClaimToken: randomUUID(),
-								executionClaimedUntil: new Date(
-									Date.now() + (claim === "live" ? 60000 : -60000),
-								),
-							})
-							.where(eq(questpieQueueDispatchTable.dispatchId, id));
-				}
-				const ids = [...foreignIds];
-				const read = () =>
-					db
-						.select()
-						.from(questpieQueueDispatchTable)
-						.where(inArray(questpieQueueDispatchTable.dispatchId, ids))
-						.orderBy(questpieQueueDispatchTable.dispatchId);
-				const before = await read();
-				expect(before).toHaveLength(3);
-				for (const receipt of before) {
-					expect(receipt.status).toBe("accepted");
-					expect(receipt.wrappedSecretKey).not.toBeNull();
-				}
-				await newQueue.listen({ gracefulShutdown: false });
-				await newQueue.drain();
-				expect(await read()).toEqual(before);
-				// Publishing also reconciles. Preserve these receipts while adding
-				// this adapter's own still-live, not-yet-admitted secret job.
-				const ownId = (await newQueue.delivery.publish(
-					{ value: "not-admitted" },
-					{
-						secretPayload: true,
-						idempotencyKey: randomUUID(),
-						startAfter: 3600,
-					},
-				))!;
-				expect(await read()).toEqual(before);
-				ids.push(ownId);
-				const withOwn = await read();
-				expect(withOwn).toHaveLength(4);
-				for (const receipt of withOwn) {
-					expect(receipt.status).toBe("accepted");
-					expect(receipt.wrappedSecretKey).not.toBeNull();
-				}
-				// Starting the previous adapter must be equally safe for rollback.
-				await oldQueue.listen({ gracefulShutdown: false });
-				await oldQueue.drain();
-				await newQueue.drain();
-				expect(await read()).toEqual(withOwn);
-				for (const id of foreignIds) {
-					const receipt = before.find((row) => row.dispatchId === id)!;
-					expect(
-						await oldAdapter.inspectExecutionState!(
-							"delivery",
-							receipt.adapterJobId!,
-						),
-					).toBe("pending");
-				}
-			} finally {
-				await newQueue.stop();
-				await oldQueue.stop();
-				await pool.query(`DROP SCHEMA IF EXISTS "${oldSchema}" CASCADE`);
-			}
-		},
-	);
-
-	test.each([false, true])(
-		"pg-boss retention deletes its own secret job and reconciliation erases the key, transactional=%s",
-		async (transactional) => {
-			const bossSchema = `retention_${randomUUID().replaceAll("-", "")}`;
-			const publisher = new PgBossAdapter({
-				connectionString: url,
-				schema: bossSchema,
-				useApplicationTransaction: transactional,
-			});
-			const queue = makeQueue(publisher, db, async () => {});
-			try {
-				const id = (await queue.delivery.publish(
-					{ value: "retained-secret" },
-					{
-						secretPayload: true,
-						idempotencyKey: randomUUID(),
-						startAfter: 3600,
-					},
-				))!;
-				const [receipt] = await db
-					.select()
-					.from(questpieQueueDispatchTable)
-					.where(eq(questpieQueueDispatchTable.dispatchId, id));
-				expect(receipt.adapterIdentity).toBe(publisher.executionIdentity);
-				expect(receipt.wrappedSecretKey).not.toBeNull();
-				await pool.query(
-					`UPDATE "${bossSchema}".job SET keep_until = now() - interval '1 day' WHERE id = $1`,
-					[receipt.adapterJobId],
-				);
-				await pool.query(
-					`UPDATE "${bossSchema}".queue SET maintain_on = NULL WHERE name = 'delivery'`,
-				);
-				const boss = (
-					publisher as unknown as { boss: import("pg-boss").PgBoss }
-				).boss;
-				await boss.supervise("delivery");
-				expect(
-					await boss.getJobById("delivery", receipt.adapterJobId!),
-				).toBeNull();
-				await expect(
-					reconcileQueueDispatchExecutions({ adapter: publisher, db }),
-				).resolves.toMatchObject({ terminal: 1 });
-				const [failed] = await db
-					.select()
-					.from(questpieQueueDispatchTable)
-					.where(eq(questpieQueueDispatchTable.dispatchId, id));
-				expect(failed).toMatchObject({
-					status: "failed",
-					wrappedSecretKey: null,
-				});
-			} finally {
-				await queue.stop();
-				await pool.query(`DROP SCHEMA IF EXISTS "${bossSchema}" CASCADE`);
-			}
-		},
-	);
-
-	test("a pruned Graphile ownership ledger still terminalizes its own framework receipt", async () => {
-		const queue = makeQueue(adapter, db, async () => {});
-		try {
-			const id = (await queue.delivery.publish(
-				{ value: "retained-secret" },
-				{ secretPayload: true, idempotencyKey: randomUUID(), startAfter: 3600 },
-			))!;
-			await pool.query(`SELECT "${schema}".remove_job($1)`, [
-				`questpie:${id}:0`,
-			]);
-			await pool.query(
-				`UPDATE "${schema}".questpie_dispatches SET status = 'completed', created_at = now() - interval '8 days' WHERE dispatch_id = $1`,
-				[id],
-			);
-			await (
-				adapter as unknown as { tickSchedules(): Promise<void> }
-			).tickSchedules();
-			expect(
-				(
-					await pool.query(
-						`SELECT * FROM "${schema}".questpie_dispatches WHERE dispatch_id = $1`,
-						[id],
-					)
-				).rows,
-			).toHaveLength(0);
-			await expect(
-				reconcileQueueDispatchExecutions({ adapter, db }),
-			).resolves.toMatchObject({ terminal: 1 });
-			const [failed] = await db
-				.select()
-				.from(questpieQueueDispatchTable)
-				.where(eq(questpieQueueDispatchTable.dispatchId, id));
-			expect(failed).toMatchObject({
-				status: "failed",
-				wrappedSecretKey: null,
-			});
-		} finally {
-			await queue.stop();
-		}
-	});
-
-	test("unknown legacy reconciliation is capped, backed off and eventually erases keys without touching foreign live receipts", async () => {
-		const now = new Date();
-		const ids = Array.from({ length: 5 }, () => randomUUID()).sort();
-		const foreignId = randomUUID();
-		await db.insert(questpieQueueDispatchTable).values(
-			[...ids, foreignId].map((id) => ({
-				dispatchId: id,
-				jobName: "unknown-cost",
-				idempotencyKey: id,
-				status: "accepted",
-				secretPayload: true,
-				wrappedSecretKey: { test: "key" },
-				adapterJobId: id,
-				adapterIdentity: id === foreignId ? "foreign-live-storage" : null,
-				createdAt: now,
-				acceptedAt: now,
-				availableAt: now,
-			})),
-		);
-		const calls: string[] = [];
-		const inspector = {
-			executionIdentity: adapter.executionIdentity,
-			capabilities: { executionTerminalState: true },
-			inspectExecutionState: async (_job: string, id: string) => {
-				calls.push(id);
-				return "unknown";
-			},
-		} as QueueAdapter;
-		try {
-			for (const inspected of [2, 2, 1, 0]) {
-				await expect(
-					reconcileQueueDispatchExecutions({
-						adapter: inspector,
-						db,
-						batchSize: 2,
-						maxBatches: 1,
-						now,
-					}),
-				).resolves.toEqual({ inspected, terminal: 0 });
-			}
-			expect(calls).toEqual(ids);
-			const rows = await db
-				.select()
-				.from(questpieQueueDispatchTable)
-				.where(
-					inArray(questpieQueueDispatchTable.dispatchId, [...ids, foreignId]),
-				);
-			for (const row of rows) expect(row.wrappedSecretKey).not.toBeNull();
-			// The cooldown persists across a new adapter instance/process.
-			await expect(
-				reconcileQueueDispatchExecutions({
-					adapter: { ...inspector },
-					db,
-					now,
-				}),
-			).resolves.toEqual({ inspected: 0, terminal: 0 });
-			const expired = new Date(
-				now.getTime() + QUEUE_LEGACY_UNKNOWN_RETENTION_MS + 1,
-			);
-			await expect(
-				reconcileQueueDispatchExecutions({
-					adapter: inspector,
-					db,
-					now: expired,
-				}),
-			).resolves.toEqual({ inspected: 5, terminal: 5 });
-			const terminal = await db
-				.select()
-				.from(questpieQueueDispatchTable)
-				.where(inArray(questpieQueueDispatchTable.dispatchId, ids));
-			for (const row of terminal)
-				expect(row).toMatchObject({ status: "failed", wrappedSecretKey: null });
-			const [foreign] = await db
-				.select()
-				.from(questpieQueueDispatchTable)
-				.where(eq(questpieQueueDispatchTable.dispatchId, foreignId));
-			expect(foreign).toMatchObject({
-				status: "accepted",
-				wrappedSecretKey: { test: "key" },
-				availableAt: now,
-			});
-		} finally {
-			await db
-				.delete(questpieQueueDispatchTable)
-				.where(
-					inArray(questpieQueueDispatchTable.dispatchId, [...ids, foreignId]),
-				);
-		}
-	});
-
-	test("capped reconciliation resumes beyond live receipts instead of starving terminal work", async () => {
-		const ids = Array.from({ length: 4 }, () => randomUUID()).sort();
-		const now = new Date();
-		await db.insert(questpieQueueDispatchTable).values(
-			ids.map((id) => ({
-				dispatchId: id,
-				jobName: "bounded-live",
-				idempotencyKey: id,
-				status: "accepted",
-				secretPayload: true,
-				wrappedSecretKey: { test: "key" },
-				adapterJobId: id,
-				adapterIdentity: adapter.executionIdentity,
-				createdAt: now,
-				availableAt: now,
-			})),
-		);
-		const calls: string[] = [];
-		const inspector = {
-			executionIdentity: adapter.executionIdentity,
-			capabilities: { executionTerminalState: true },
-			inspectExecutionState: async (_job: string, id: string) => {
-				calls.push(id);
-				return id === ids[3] ? "failed" : "pending";
-			},
-		} as QueueAdapter;
-		try {
-			for (let index = 0; index < 4; index++) {
-				await expect(
-					reconcileQueueDispatchExecutions({
-						adapter: inspector,
-						db,
-						batchSize: 1,
-						maxBatches: 1,
-						now,
-					}),
-				).resolves.toEqual({ inspected: 1, terminal: index === 3 ? 1 : 0 });
-			}
-			expect(calls).toEqual(ids);
-		} finally {
-			await db
-				.delete(questpieQueueDispatchTable)
-				.where(inArray(questpieQueueDispatchTable.dispatchId, ids));
-		}
 	});
 
 	test("secret terminal failures reconcile durable broker state and erase keys", async () => {
@@ -2163,7 +1830,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 				adapter as unknown as { tickSchedules(): Promise<void> }
 			).tickSchedules();
 			expect(await adapter.inspectExecutionState("delivery", id!)).toBe(
-				"unknown",
+				"missing",
 			);
 			expect(await queue.delivery.publish({ value: "replay" }, options)).toBe(
 				id,
@@ -2929,7 +2596,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 });
 
 function makeQueue(
-	adapter: QueueAdapter,
+	adapter: GraphileWorkerAdapter,
 	db: ReturnType<typeof drizzle>,
 	handle: (payload: unknown, signal?: AbortSignal) => Promise<void>,
 	runtimeSecret: string | null = "graphile-test-root-secret-at-least-32-bytes",

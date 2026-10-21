@@ -795,7 +795,6 @@ export function createQueueClient<
 						tx,
 						reservation.dispatchId,
 						adapterJobId,
-						adapter.executionIdentity,
 					);
 					return reservation.dispatchId;
 				}
@@ -853,7 +852,6 @@ export function createQueueClient<
 								transaction,
 								reservation.dispatchId,
 								adapterJobId,
-								adapter.executionIdentity,
 							);
 							return reservation.dispatchId;
 						});

@@ -39,10 +39,6 @@ const SAFE_ADAPTER_PUBLICATION_ERROR = "Adapter publication failed";
 const DEFAULT_EXECUTION_LEASE_MS = 60_000;
 const DEFAULT_PRUNE_BATCH_SIZE = 500;
 const DEFAULT_PRUNE_MAX_BATCHES = 20;
-const DEFAULT_RECONCILE_MAX_BATCHES = 20;
-const UNKNOWN_RECHECK_MS = 60 * 60 * 1_000;
-/** Only pre-identity receipts need an age bound; foreign owned work is excluded. */
-export const QUEUE_LEGACY_UNKNOWN_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
 /**
  * How long an idempotency receipt is honoured after hand-off: a finished
@@ -53,12 +49,6 @@ export const QUEUE_LEGACY_UNKNOWN_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 export const QUEUE_DISPATCH_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 
 type QueueDatabase = AnyDrizzleClient;
-type ReconcileCursor = { createdAt: Date; dispatchId: string };
-// Resume capped scans so live jobs at the front cannot starve later receipts.
-const reconcileCursors = new WeakMap<
-	QueueAdapter,
-	WeakMap<QueueDatabase, ReconcileCursor>
->();
 
 export type QueueDispatchRecord =
 	typeof questpieQueueDispatchTable.$inferSelect;
@@ -448,7 +438,6 @@ export async function reconcileQueueDispatchExecutions(options: {
 	adapter: QueueAdapter;
 	db: QueueDatabase;
 	batchSize?: number;
-	maxBatches?: number;
 	logger?: QueueDispatchLogger;
 	now?: Date;
 }): Promise<{ inspected: number; terminal: number }> {
@@ -463,27 +452,7 @@ export async function reconcileQueueDispatchExecutions(options: {
 		DEFAULT_BATCH_SIZE,
 		1_000,
 	);
-	const maxBatches = boundedInteger(
-		options.maxBatches,
-		DEFAULT_RECONCILE_MAX_BATCHES,
-		100,
-	);
-	const currentTime = options.now
-		? sql`${options.now.toISOString()}::timestamptz`
-		: sql`CURRENT_TIMESTAMP`;
-	const eligible = and(
-		queueDispatchReconcilePredicate(questpieQueueDispatchTable),
-		lte(questpieQueueDispatchTable.availableAt, currentTime),
-		options.adapter.executionIdentity
-			? or(
-					isNull(questpieQueueDispatchTable.adapterIdentity),
-					eq(
-						questpieQueueDispatchTable.adapterIdentity,
-						options.adapter.executionIdentity,
-					),
-				)
-			: isNull(questpieQueueDispatchTable.adapterIdentity),
-	);
+	const eligible = queueDispatchReconcilePredicate(questpieQueueDispatchTable);
 	const [highWater] = await options.db
 		.select({
 			createdAt: questpieQueueDispatchTable.createdAt,
@@ -498,22 +467,20 @@ export async function reconcileQueueDispatchExecutions(options: {
 		.limit(1);
 	if (!highWater) return { inspected: 0, terminal: 0 };
 
-	let cursors = reconcileCursors.get(options.adapter);
-	if (!cursors) {
-		cursors = new WeakMap();
-		reconcileCursors.set(options.adapter, cursors);
-	}
-	let cursor = cursors.get(options.db);
+	let cursor:
+		| {
+				createdAt: Date;
+				dispatchId: string;
+		  }
+		| undefined;
 	let inspected = 0;
 	let terminal = 0;
-	for (let batch = 0; batch < maxBatches; batch++) {
+	while (true) {
 		const records = await options.db
 			.select({
 				dispatchId: questpieQueueDispatchTable.dispatchId,
 				jobName: questpieQueueDispatchTable.jobName,
 				adapterJobId: questpieQueueDispatchTable.adapterJobId,
-				adapterIdentity: questpieQueueDispatchTable.adapterIdentity,
-				legacyExpired: sql<boolean>`${questpieQueueDispatchTable.adapterIdentity} IS NULL AND COALESCE(${questpieQueueDispatchTable.acceptedAt}, ${questpieQueueDispatchTable.createdAt}) < ${currentTime} - (${QUEUE_LEGACY_UNKNOWN_RETENTION_MS} * interval '1 millisecond')`,
 				createdAt: questpieQueueDispatchTable.createdAt,
 			})
 			.from(questpieQueueDispatchTable)
@@ -543,10 +510,7 @@ export async function reconcileQueueDispatchExecutions(options: {
 				asc(questpieQueueDispatchTable.dispatchId),
 			)
 			.limit(batchSize);
-		if (records.length === 0) {
-			cursors.delete(options.db);
-			break;
-		}
+		if (records.length === 0) break;
 		inspected += records.length;
 		for (const record of records) {
 			if (!record.adapterJobId) continue;
@@ -555,7 +519,6 @@ export async function reconcileQueueDispatchExecutions(options: {
 				brokerState = await options.adapter.inspectExecutionState(
 					record.jobName,
 					record.adapterJobId,
-					record.adapterIdentity ?? undefined,
 				);
 			} catch {
 				options.logger?.warn?.(
@@ -566,36 +529,6 @@ export async function reconcileQueueDispatchExecutions(options: {
 					},
 				);
 				continue;
-			}
-			if (brokerState === "unknown") {
-				if (!record.legacyExpired) {
-					await options.db
-						.update(questpieQueueDispatchTable)
-						.set({
-							availableAt: options.now
-								? new Date(options.now.getTime() + UNKNOWN_RECHECK_MS)
-								: sql`CURRENT_TIMESTAMP + (${UNKNOWN_RECHECK_MS} * interval '1 millisecond')`,
-						})
-						.where(
-							and(
-								eq(questpieQueueDispatchTable.dispatchId, record.dispatchId),
-								eq(questpieQueueDispatchTable.status, "accepted"),
-							),
-						);
-					continue;
-				}
-				brokerState = "missing";
-			} else if (!record.adapterIdentity && options.adapter.executionIdentity) {
-				// A present broker job/ledger proves ownership of a legacy receipt.
-				await options.db
-					.update(questpieQueueDispatchTable)
-					.set({ adapterIdentity: options.adapter.executionIdentity })
-					.where(
-						and(
-							eq(questpieQueueDispatchTable.dispatchId, record.dispatchId),
-							isNull(questpieQueueDispatchTable.adapterIdentity),
-						),
-					);
 			}
 			if (
 				brokerState !== "failed" &&
@@ -619,15 +552,7 @@ export async function reconcileQueueDispatchExecutions(options: {
 			createdAt: last.createdAt,
 			dispatchId: last.dispatchId,
 		};
-		if (
-			records.length < batchSize ||
-			(last.createdAt.getTime() === highWater.createdAt.getTime() &&
-				last.dispatchId === highWater.dispatchId)
-		) {
-			cursors.delete(options.db);
-			break;
-		}
-		cursors.set(options.db, cursor);
+		if (records.length < batchSize) break;
 	}
 	return { inspected, terminal };
 }
@@ -787,7 +712,6 @@ async function acceptQueueDispatch(
 	db: QueueDatabase,
 	task: QueueDispatchRecord,
 	adapterJobId: string | null,
-	adapterIdentity: string | undefined,
 	now?: Date,
 ): Promise<boolean> {
 	if (!task.leaseToken) return false;
@@ -809,7 +733,6 @@ async function acceptQueueDispatch(
 			payload: null,
 			options: null,
 			adapterJobId,
-			adapterIdentity: adapterIdentity ?? null,
 			acceptedAt: now ?? sql`CURRENT_TIMESTAMP`,
 			leaseToken: null,
 			leasedUntil: null,
@@ -824,7 +747,6 @@ export async function acceptReservedQueueDispatch(
 	db: QueueDatabase,
 	dispatchId: string,
 	adapterJobId: string | null,
-	adapterIdentity?: string,
 ): Promise<void> {
 	const updated = await db
 		.update(questpieQueueDispatchTable)
@@ -833,7 +755,6 @@ export async function acceptReservedQueueDispatch(
 			payload: null,
 			options: null,
 			adapterJobId,
-			adapterIdentity: adapterIdentity ?? null,
 			acceptedAt: sql`CURRENT_TIMESTAMP`,
 			leaseToken: null,
 			leasedUntil: null,
@@ -938,7 +859,6 @@ export async function drainQueueDispatches(options: {
 						options.db,
 						task,
 						adapterJobId,
-						options.adapter.executionIdentity,
 						options.now,
 					);
 					if (receiptStored) accepted += 1;

@@ -96,9 +96,6 @@ describe("Queue secret dispatch schema upgrade", () => {
 		expect(migration).toContain(
 			'ALTER TABLE "questpie_queue_dispatch" ADD COLUMN "execution_claimed_until" timestamp with time zone',
 		);
-		expect(migration).toContain(
-			'ALTER TABLE "questpie_queue_dispatch" ADD COLUMN "adapter_identity" text',
-		);
 		expect(migration).not.toContain("DROP TABLE");
 	});
 
