@@ -47,29 +47,24 @@ rows once unlocked. Runtime recovery uses public Graphile SQL functions rather
 than modifying its private tables.
 
 Framework secret execution claims use a lease no longer than the adapter's
-lease. Timeout stops the handler wait and heartbeat, releases its claim, and
-leaves erasure to durable execution reconciliation. A pending relay acceptance
-or busy execution claim defers without spending a handler retry. Non-secret
-transactional publication uses Drizzle `execute(SQL)` and bound text-to-JSON
-casts; real postgres-js commit/rollback tests exercise it.
-
-Adversarial probes exposed four gaps that the initial happy-path suite missed:
-external broker terminalization was treated as retryable transport loss; blocked
-scope disposal kept a secret claim alive after expiry; a delayed JavaScript timer
-allowed a success past the database deadline; and failed initial recovery left
-an orphan runner. The adapter now treats missing, detached-key and permanently
-failed current broker jobs as terminal. Adapter-owned rotation atomically points
-the ledger at the next physical ID, so it never resembles external removal.
+lease. Timeout stops heartbeats and signals cancellation, but the wrapper waits
+for user code and scope disposal to settle before releasing its permit and
+execution token. A dedicated session connection holds one advisory lock per
+active dispatch; recovery must acquire the corresponding transaction advisory
+lock before admitting a successor. Losing this session is fatal to the host.
+This costs one connection per replica and prevents an expired, non-cooperative
+handler from overlapping its retry in another runner. Completion after the
+absolute deadline still fails. A pending relay acceptance or busy execution
+claim defers without spending a retry. Missing prerequisites and invalid
+envelopes terminalize and erase ciphertext.
 
 Secret claim admission, renewal and completion lock the receipt before checking
-database wall-clock time. Completion requires the current token. Renewal is
-capped at the adapter's absolute deadline and cannot revive an expired claim.
-An abort listener ends the heartbeat and releases ownership independently of a
-blocked request-scope disposer. Adapter settlement checks database time after
-acquiring its own row lock. Failed listener initialization drains its runner and
-closes a separate pool before another listen is allowed; stop waits for ongoing
-initialization. Real-PostgreSQL regressions cover all four probes plus deadline
-checks after a row-lock wait.
+database wall-clock time. Completion requires the current token. An adapter
+supplying a deadline also requires a live claim and caps renewal at that
+deadline. The pg-boss path supplies no absolute deadline and retains its previous
+semantics: a matching token can renew or complete after a heartbeat lapse until
+a successor replaces it. Real-PostgreSQL tests exercise both paths.
+
 The lock CTE relies on PostgreSQL's rejection of row-locking SELECTs from CTE
 inlining, present in the [PostgreSQL 12 planner](https://github.com/postgres/postgres/blob/REL_12_STABLE/src/backend/optimizer/plan/subselect.c).
 
@@ -97,9 +92,11 @@ both cleanup orderings for ordinary and encrypted jobs.
 Per-name admission no longer waits inside every Graphile slot. An enumerable
 TaskList view omits saturated names from the next shared fetch while keeping
 their handler functions addressable for buffered work. A reserved idle task
-keeps Graphile's supported list nonempty. Buffered excess framework work rotates
-without spending an attempt; public `WorkerPool.nudge` wakes fetch on permit
-release. A regression holds one name blocked and proves another progresses
+keeps Graphile's supported list nonempty. Each fetch now requests one job and
+reserves its permit in the synchronous `localQueue:getJobs:complete` event,
+before the next shared fetch. This prevents excess fetching and generation
+churn; larger configured batch sizes remain upper bounds. It costs one fetch
+round trip per job. Public `WorkerPool.nudge` wakes fetch on permit release. A regression holds one name blocked and proves another progresses
 before release, with a 60-second fallback poll. Graphile 0.18's `forbiddenFlags`
 path bypasses its shared buffer even for an empty array, so it is deliberately
 unused. This behavior was checked in installed `localQueue.js`/`worker.js`.
@@ -177,13 +174,56 @@ adapter had ten sequential samples.
 | Pickup p50            | 1121.5 ms |          7.4 ms |
 | Pickup p95 / max      | 2004.9 ms |         11.3 ms |
 
-Idle statement count fell 98.9%. This run includes the transport-retry,
-receipt-lifetime, task-discovery and capacity-admission fixes. The host was under concurrent
+This earlier measurement predates the single-job fetch, execution-fence and
+bounded recovery corrections below. Its 98.9% idle-statement reduction is not a
+measurement of the current head. The host was under concurrent
 development load; ten samples do not establish a production latency SLO. An earlier run
 before adding the expiry lease sweep measured 1.10 idle statements/s; that is
-not the final adapter's cost. The comparison uses the installed pg-boss, not a
+not the current adapter's cost. The comparison uses the installed pg-boss, not a
 fresh measurement of Autopilot's published 3.35.7 deployment. A separate test
 sets recovery polling to 60 seconds and proves immediate LISTEN-driven pickup.
 An earlier ten-sample run had pg-boss p50 16.9 ms and p95 2004.0 ms, illustrating
 how a small sequential sample can align with the poll phase; these measurements
 do not imply a stable production median.
+
+## Recovery under 100,000 pending jobs
+
+The PostgreSQL integration test inserts 100,000 future native jobs and matching
+adapter receipts using Graphile's public `add_jobs`, analyzes both tables, then
+executes the adapter's actual recovery queries. One expired active dispatch is
+recovered; the measured plans below run after that dispatch has returned to
+pending. PostgreSQL 17, Bun 1.3.13, warm local buffers:
+
+```text
+Deadline candidates: EXPLAIN (ANALYZE, BUFFERS)
+Limit -> LockRows -> Nested Loop
+  Unique -> Sort -> Append
+    Limit -> Index Scan questpie_dispatches_lease
+    Limit -> Nested Loop
+      Index Only Scan questpie_transport_locked
+      Index Scan questpie_dispatches_job_id_key
+  Index Scan questpie_dispatches_pkey
+Rows: 0; shared hits: 4; execution: 0.160 ms
+
+Administrative audit: EXPLAIN (ANALYZE, BUFFERS)
+CTE batch: Limit -> LockRows -> Index Scan questpie_dispatches_audit
+Sort -> Nested Loop Left Join
+  CTE Scan batch (100 rows)
+  Index Scan jobs_pkey1 (100 primary-key probes)
+Rows: 100; shared hits: 428; execution: 0.421 ms
+```
+
+Neither plan contains a sequential scan. The lease sweep runs once per second;
+the bounded keyset audit runs every five seconds. Unlike the previous OR-heavy
+view join, neither cost scales with the total pending backlog per sweep. The
+audit deliberately trades full-cycle latency for bounded work. The test also
+requires both plans below 100 ms and proves that an expired dispatch recovers
+while the backlog is present.
+
+Unexpected runner termination (including a breaking migration NOTIFY) stops
+timers, marks the adapter not listening and terminates a process kept alive by
+another interval. A second subprocess test kills the execution-fence backend.
+A startup test strips LISTEN, simulating subscription loss across transaction
+pooling, and verifies a bounded explicit failure. The cron test arms the real
+timer immediately before a minute boundary and observes publication through
+the runner instead of calling `tickSchedules` directly.

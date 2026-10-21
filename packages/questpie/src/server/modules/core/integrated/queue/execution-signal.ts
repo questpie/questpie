@@ -1,15 +1,12 @@
-/** Reject on execution expiry while observing late handler rejection. */
-export function withQueueAbort<T>(
+/** Permanent admission failure; retrying cannot restore the missing prerequisites. */
+export class QueueAdmissionError extends Error {}
+
+/** Wait for user code to settle, retaining concurrency and ownership after abort. */
+export async function withQueueAbort<T>(
 	promise: Promise<T>,
 	signal?: AbortSignal,
 ): Promise<T> {
-	if (!signal) return promise;
-	return new Promise<T>((resolve, reject) => {
-		const aborted = () => reject(new Error("QUESTPIE Queue execution expired"));
-		signal.addEventListener("abort", aborted, { once: true });
-		if (signal.aborted) aborted();
-		promise
-			.then(resolve, reject)
-			.finally(() => signal.removeEventListener("abort", aborted));
-	});
+	const result = await promise;
+	if (signal?.aborted) throw new Error("QUESTPIE Queue execution expired");
+	return result;
 }

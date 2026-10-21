@@ -16,5 +16,8 @@ await adapter.listen(
 			await new Promise<void>(() => {});
 		},
 	},
-	{ batchSize: Number(process.env.QUESTPIE_GRAPHILE_CRASH_BATCH ?? 10) },
+	{
+		teamSize: 2,
+		batchSize: Number(process.env.QUESTPIE_GRAPHILE_CRASH_BATCH ?? 10),
+	},
 );

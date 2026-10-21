@@ -42,26 +42,34 @@ export default runtimeConfig({
 connection and its fetch/settlement queries. Both URLs must address the same
 queue database. With one direct URL, omit `listenConnectionString`: publishing
 and consuming share a single pool. With two URLs, each pool is bounded by
-`maxPoolSize`; allow for both in your database connection budget.
+`maxPoolSize`. The adapter also holds one direct/session connection for execution
+fences. Budget at most `maxPoolSize + 1` connections per replica with one URL,
+or `2 * maxPoolSize + 1` with separate URLs. The runner pool's limit includes
+its dedicated LISTEN connection; `concurrentJobs` does not add connections.
 
 PgBouncer transaction pooling cannot retain a `LISTEN` subscription. Give the
 runner a direct or session-pooled URL. Set `noPreparedStatements: true` when the
 publishing URL passes through a pooler that cannot preserve named statements.
-The adapter does not detect a misconfigured pooler from its URL.
+Startup sends a `NOTIFY` through the publishing pool and requires the runner's
+LISTEN connection to receive it within three seconds. A lost subscription fails
+startup with a direct/session-connection error. This checks delivery at startup;
+it does not certify the pooler's future connection routing. Execution fences use
+the same direct/session URL and must retain their connection for the process lifetime.
 
 ## Concurrency and polling
 
 `queue.listen({ teamSize: 5, batchSize: 10 })` limits each job name to five
 executing handlers in this process. `concurrentJobs` limits the whole process;
 it can reduce effective concurrency below `teamSize`. Saturated names are
-excluded from subsequent shared fetches. Already fetched framework jobs that
-cannot acquire a permit return to pending without spending a handler attempt;
-they do not occupy worker slots while waiting. Releasing a permit wakes the
-shared runner, so independent job names can progress during a backlog.
+excluded from subsequent shared fetches. The adapter reserves each fetched
+job's permit before Graphile can fetch again. Fetches contain one job, even when
+`batchSize` is larger: Graphile 0.18 cannot bound a larger batch by available
+permits for each task. This costs one fetch round trip per job. It prevents
+capacity deferral from rotating job generations or scrambling FIFO within the
+same priority and availability time. Other job names can still use free slots.
 
-`batchSize` is the size of the shared fetch buffer. It does not run an array
-payload as multiple handler calls. The adapter always delivers one published
-payload to one handler, including payloads that are arrays.
+`batchSize` is validated as a positive upper bound; this adapter currently uses
+one. Array payloads remain one handler call.
 
 Newly committed jobs wake the runner through PostgreSQL `NOTIFY`.
 `pollInterval` defaults to 1000 ms and provides recovery polling, including
@@ -69,6 +77,11 @@ future `startAfter` jobs and retries. One shared buffer polls for all job names.
 Future jobs can become runnable without a new notification, so their pickup
 latency includes this interval. Cron and receipt cleanup add one shared timer
 at each UTC minute.
+
+Unexpected runner shutdown or loss of the execution-fence connection clears the
+adapter's listening state, stops cron/recovery timers and raises an uncaught
+fatal error, terminating the hosting process non-zero even if its HTTP server
+is still running. Run consumers under a process supervisor that restarts them.
 
 Graphile errors, including shared-fetch errors that have no worker event, reach
 the adapter's `error` listeners. The adapter also retries Graphile 0.18's cached
@@ -165,10 +178,14 @@ Handlers receive `signal?: AbortSignal`. Pass it to cancellable I/O. Abort canno
 stop synchronous JavaScript or undo an external side effect that already happened.
 
 On first start, Graphile installs its schema, and the adapter installs three
-`questpie_*` tables in that schema. The initialization role needs schema/table
-privileges. Runtime publication and recovery use Graphile's public `add_job`,
+`questpie_*` tables in that schema. Initialization checks Graphile migrations
+and runs idempotent adapter DDL on every start under an advisory transaction lock. The connection role therefore
+needs CREATE on the database/schema and ownership (or equivalent migration
+privileges) for the adapter tables and indexes, including a partial index on
+Graphile 0.18's `_private_jobs(locked_at, id)`. Do not configure a DML-only role
+for initialization. Runtime publication and recovery use Graphile's public `add_job`,
 `remove_job` and `complete_jobs` SQL functions.
-Admission, settlement and lease recovery also take a read lock on the 0.18 transport row to
+Admission, settlement and lease recovery also take a `SELECT FOR UPDATE` row lock on the 0.18 transport row to
 serialize with administrative cancellation; the joined public view cannot
 provide that lock. The adapter checks the exact installed Graphile package
 version at startup. Use a dedicated schema with 0.18.0 workers; this package
@@ -176,9 +193,11 @@ check does not certify a database schema migrated by a newer Graphile version.
 
 The adapter owns the logical execution lease and retry count. Each retry gets
 a new physical Graphile job ID; a late completion from an expired attempt
-cannot settle its successor. The shared lease sweep runs at most one second
-apart (or at the shorter `pollInterval`). When a worker dies, another worker
-admits the retry after the execution lease expires, plus the sweep interval.
+cannot settle its successor. The shared lease sweep runs every second with at
+most 100 candidates from each indexed deadline scan. Administrative transport
+audit checks at most 100 receipts every five seconds, advancing a keyset cursor;
+a full audit cycle grows with the live receipt count. When a worker dies,
+another worker admits the retry after the execution lease expires, plus the sweep interval.
 It also recovers a worker that died after fetching but before entering a handler.
 Reclaiming a fetched job that has not entered its handler does not spend a retry:
 it may be waiting for a per-name permit in a healthy process. Handler attempts
@@ -195,9 +214,24 @@ and settlement; rotating it uses the public `remove_job` result as an atomic
 claim, so administrative removal cannot be reversed by a concurrent retry.
 Database settlement checks the deadline even if synchronous work delays timer
 delivery. Secret claim renewal and completion require the current claim token
-and cannot extend the adapter deadline. Abort stops heartbeats and releases the
-claim even when request-scope disposal is still waiting. Cleanup itself must use
-bounded I/O; cancellation cannot force an arbitrary disposer to return.
+and cannot extend the adapter deadline. A timeout signals cancellation but holds
+the handler's permit and dispatch token until user code and request-scope
+disposal settle. A session advisory lock fences that dispatch against other
+runners' recovery throughout this wait. A non-cooperative handler can therefore
+block its own retry indefinitely; terminate its process to release the fence.
+The old attempt cannot persist success after its deadline. Shutdown also aborts
+active signals, drains handlers, and defers interrupted work without spending a
+handler retry. Use bounded I/O in handlers and disposers.
+
+Missing secret receipts, missing encryption configuration and malformed
+adapter/secret envelopes are permanent admission failures. They terminalize the
+adapter receipt and erase its ciphertext without using native infrastructure
+retries. Framework reconciliation then erases any retained wrapped key. Pending
+relay acceptance and a busy execution claim still defer without spending retries.
+
+The deadline checks apply only when an adapter supplies an absolute deadline.
+The existing pg-boss path retains token-based ownership: after a heartbeat lapse,
+the unchanged owner can renew or complete until a newer token replaces it.
 
 A transient database error while saving completion or deferral is reported and
 retried with the same intended outcome and execution token, within its lease.

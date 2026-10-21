@@ -103,6 +103,385 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		expect(errors).toEqual([]);
 	});
 
+	test("FIFO admission does not rotate generations under a saturated name", async () => {
+		const seen: number[] = [];
+		for (let i = 0; i < 50; i++) await adapter.publish("fifo", i);
+		await adapter.listen(
+			{
+				fifo: async ({ data }) => {
+					seen.push(data as number);
+					await Bun.sleep(5);
+				},
+			},
+			{ teamSize: 1, batchSize: 10 },
+		);
+		await until(() => seen.length === 50);
+		expect(seen).toEqual(Array.from({ length: 50 }, (_, i) => i));
+		expect(
+			(
+				await pool.query(
+					`SELECT sum(generation)::int AS generations FROM "${schema}".questpie_dispatches`,
+				)
+			).rows[0].generations,
+		).toBe(0);
+	});
+
+	test("non-cooperative expiry holds its permit and dispatch fence across runners", async () => {
+		let release!: () => void;
+		const blocked = new Promise<void>((resolve) => (release = resolve));
+		let calls = 0;
+		const id = await adapter.publish(
+			"fenced",
+			{},
+			{ expireInSeconds: 0.1, retryLimit: 1 },
+		);
+		await adapter.listen({
+			fenced: async () => {
+				calls++;
+				await blocked;
+			},
+		});
+		await until(() => calls === 1);
+		const second = new GraphileWorkerAdapter({
+			connectionString: url,
+			schema,
+			pollInterval: 100,
+		});
+		try {
+			await second.listen({
+				fenced: async () => {
+					calls++;
+				},
+			});
+			await Bun.sleep(1300);
+			expect(calls).toBe(1);
+			expect(await adapter.inspectExecutionState("fenced", id)).toBe("active");
+			release();
+			await until(
+				async () =>
+					(await adapter.inspectExecutionState("fenced", id)) === "completed",
+			);
+			expect(calls).toBe(2);
+		} finally {
+			release();
+			await second.stop();
+		}
+	});
+
+	test.each(["receipt", "runtime-secret", "envelope"])(
+		"permanent secret %s failure terminalizes and erases ciphertext",
+		async (missing) => {
+			const publisher = makeQueue(adapter, db, async () => {
+				throw new Error("must not run");
+			});
+			const queue =
+				missing === "runtime-secret"
+					? makeQueue(
+							adapter,
+							db,
+							async () => {
+								throw new Error("must not run");
+							},
+							null,
+						)
+					: publisher;
+			const id = await publisher.delivery.publish(
+				{ value: "private" },
+				{ secretPayload: true, retryLimit: 0, idempotencyKey: randomUUID() },
+			);
+			if (missing === "receipt")
+				await db
+					.delete(questpieQueueDispatchTable)
+					.where(eq(questpieQueueDispatchTable.dispatchId, id!));
+			if (missing === "envelope")
+				await pool.query(
+					`UPDATE "${schema}"._private_jobs SET payload='{"broken":true}'::json WHERE key=$1`,
+					[`questpie:${id}:0`],
+				);
+			try {
+				await queue.listen({ gracefulShutdown: false });
+				await until(
+					async () =>
+						(await adapter.inspectExecutionState("delivery", id!)) === "failed",
+					2000,
+				);
+				const [record] = (
+					await pool.query(
+						`SELECT payload, options, generation FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
+						[id],
+					)
+				).rows;
+				expect(record).toMatchObject({
+					payload: null,
+					options: null,
+					generation: 0,
+				});
+				await until(
+					async () =>
+						(await pool.query(`SELECT FROM "${schema}".jobs`)).rowCount === 0,
+				);
+				await reconcileQueueDispatchExecutions({ adapter, db });
+				if (missing !== "receipt") {
+					const [receipt] = await db
+						.select()
+						.from(questpieQueueDispatchTable)
+						.where(eq(questpieQueueDispatchTable.dispatchId, id!));
+					expect(receipt).toMatchObject({
+						status: "failed",
+						payload: null,
+						wrappedSecretKey: null,
+					});
+				}
+			} finally {
+				await queue.stop();
+			}
+		},
+	);
+
+	test("token-matching pg-boss claims can renew and complete after a lease lapse", async () => {
+		const queue = makeQueue(adapter, db, async () => {});
+		for (const renew of [false, true]) {
+			const id = await queue.delivery.publish(
+				{ value: "private" },
+				{ secretPayload: true, idempotencyKey: randomUUID() },
+			);
+			const claim = await claimQueueDispatchExecution(db, id!);
+			if (claim.status !== "claimed") throw new Error("Expected claim");
+			await db
+				.update(questpieQueueDispatchTable)
+				.set({ executionClaimedUntil: new Date(0) })
+				.where(eq(questpieQueueDispatchTable.dispatchId, id!));
+			if (renew)
+				expect(await renewQueueDispatchExecution(db, id!, claim.token)).toBe(
+					true,
+				);
+			await completeQueueDispatch(db, id!, claim.token);
+			expect((await queue.getReceipt(id!))?.status).toBe("completed");
+		}
+		await queue.stop();
+	});
+
+	test.each(["migration", "shutdown", "fence", "shutdown-fence"])(
+		"unexpected %s termination exits a live host non-zero",
+		async (mode) => {
+			const child = Bun.spawn(
+				[
+					process.execPath,
+					new URL(
+						"../fixtures/queue-graphile-worker/death-worker.ts",
+						import.meta.url,
+					).pathname,
+				],
+				{
+					env: {
+						...process.env,
+						QUESTPIE_GRAPHILE_CRASH_URL: url,
+						QUESTPIE_GRAPHILE_CRASH_SCHEMA: schema,
+						QUESTPIE_GRAPHILE_DEATH_MODE: mode,
+					},
+					stdout: "pipe",
+					stderr: "pipe",
+				},
+			);
+			try {
+				const exit = await Promise.race([
+					child.exited,
+					Bun.sleep(8000).then(() => "timeout"),
+				]);
+				expect(exit).not.toBe("timeout");
+				expect(exit).not.toBe(0);
+				expect(await new Response(child.stdout).text()).toContain(
+					"stopped:false:false",
+				);
+				expect(await new Response(child.stderr).text()).toContain(
+					"stopped unexpectedly",
+				);
+			} finally {
+				child.kill("SIGKILL");
+				await child.exited;
+			}
+		},
+	);
+
+	test("LISTEN self-check waits for the subscription to commit before sending its probe", async () => {
+		const internal = adapter as unknown as { pool: pg.Pool };
+		const wrapped = new WeakSet<pg.PoolClient>();
+		internal.pool.on("acquire", (connection) => {
+			if (wrapped.has(connection)) return;
+			wrapped.add(connection);
+			connection.query = new Proxy(connection.query, {
+				apply(target, receiver, args) {
+					if (
+						typeof args[0] === "string" &&
+						args[0].includes('LISTEN "jobs:insert"')
+					)
+						args[0] = "SELECT pg_sleep(0.2); " + args[0];
+					return Reflect.apply(target, receiver, args);
+				},
+			});
+		});
+		await adapter.listen({ probe: async () => {} });
+	});
+
+	test("LISTEN self-check rejects a connection that loses its subscription", async () => {
+		const internal = adapter as unknown as { pool: pg.Pool };
+		const wrapped = new WeakSet<pg.PoolClient>();
+		internal.pool.on("acquire", (connection) => {
+			if (wrapped.has(connection)) return;
+			wrapped.add(connection);
+			connection.query = new Proxy(connection.query, {
+				apply(target, receiver, args) {
+					if (
+						typeof args[0] === "string" &&
+						args[0].includes('LISTEN "jobs:insert"')
+					)
+						args[0] = "SELECT 1";
+					return Reflect.apply(target, receiver, args);
+				},
+			});
+		});
+		await expect(adapter.listen({ probe: async () => {} })).rejects.toThrow(
+			"LISTEN self-check timed out",
+		);
+	});
+
+	test("cron's armed timer publishes a due minute", async () => {
+		await adapter.schedule("timer-cron", "* * * * *", { scheduled: true });
+		await pool.query(
+			`UPDATE "${schema}".questpie_schedules SET last_run=now()-interval '1 minute'`,
+		);
+		let calls = 0;
+		const originalNow = Date.now;
+		// Arm the actual timer one millisecond before the next UTC minute.
+		Date.now = () => Math.floor(originalNow() / 60000) * 60000 + 59999;
+		try {
+			await adapter.listen({
+				"timer-cron": async () => {
+					calls++;
+				},
+			});
+		} finally {
+			Date.now = originalNow;
+		}
+		await until(() => calls === 1);
+	});
+
+	test("recovery uses bounded index scans with 100k pending jobs", async () => {
+		await pool.query(`WITH jobs AS (
+			SELECT * FROM "${schema}".add_jobs(ARRAY(SELECT
+				('backlog', '{}'::json, NULL, now()+interval '1 day', 32767, 'questpie:backlog-'||n||':0', 0, NULL)::"${schema}".job_spec
+				FROM generate_series(1,100000) n))
+		) INSERT INTO "${schema}".questpie_dispatches (dispatch_id, job_name, job_id, payload, options, available_at)
+		SELECT substring(key from 10 for length(key)-11), 'backlog', id, payload, '{}'::json, run_at FROM jobs`);
+		await pool.query(`ANALYZE "${schema}".questpie_dispatches`);
+		await pool.query(`ANALYZE "${schema}"._private_jobs`);
+		const captured: { text: string; values: unknown[] }[] = [];
+		const wrapped = new WeakSet<pg.PoolClient>();
+		(adapter as unknown as { pool: pg.Pool }).pool.on(
+			"acquire",
+			(connection) => {
+				if (wrapped.has(connection)) return;
+				wrapped.add(connection);
+				connection.query = new Proxy(connection.query, {
+					apply(target, receiver, args) {
+						if (
+							typeof args[0] === "string" &&
+							(args[0].startsWith("SELECT d.*") ||
+								args[0].startsWith("WITH batch AS MATERIALIZED"))
+						)
+							captured.push({
+								text: args[0],
+								values: Array.isArray(args[1]) ? args[1] : [],
+							});
+						return Reflect.apply(target, receiver, args);
+					},
+				});
+			},
+		);
+		const expired = await adapter.publish("expired", {}, { retryLimit: 1 });
+		await pool.query(
+			`UPDATE "${schema}".questpie_dispatches SET status='active', attempts=1, lease_token=$2, lease_until=now()-interval '1 second' WHERE dispatch_id=$1`,
+			[expired, randomUUID()],
+		);
+		const started = performance.now();
+		await (
+			adapter as unknown as { recoverLeases(): Promise<void> }
+		).recoverLeases();
+		expect(performance.now() - started).toBeLessThan(1000);
+		expect(
+			(
+				await pool.query(
+					`SELECT generation FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
+					[expired],
+				)
+			).rows[0].generation,
+		).toBe(1);
+		expect(captured).toHaveLength(2);
+		const plans: string[] = [];
+		for (const query of captured) {
+			const plan = await pool.query(
+				"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + query.text,
+				query.values,
+			);
+			const root = plan.rows[0]["QUERY PLAN"][0];
+			expect(root["Execution Time"]).toBeLessThan(100);
+			const text = JSON.stringify(root, null, 2);
+			expect(text).not.toContain('"Node Type": "Seq Scan"');
+			plans.push(text);
+		}
+		if (process.env.QUESTPIE_GRAPHILE_PLAN_OUTPUT)
+			await Bun.write(
+				process.env.QUESTPIE_GRAPHILE_PLAN_OUTPUT,
+				plans.join("\n\n"),
+			);
+	}, 30000);
+
+	test("Graphile shutdown cannot release a non-cooperative handler's fence early", async () => {
+		let release!: () => void;
+		const blocked = new Promise<void>((resolve) => (release = resolve));
+		let entered = false;
+		const id = await adapter.publish(
+			"shutdown-fence",
+			{},
+			{ expireInSeconds: 0.1 },
+		);
+		await adapter.listen({
+			"shutdown-fence": async () => {
+				entered = true;
+				await blocked;
+			},
+		});
+		await until(() => entered);
+		const internal = adapter as unknown as {
+			runner: {
+				abortPromise: Promise<void>;
+				gracefulShutdown(): Promise<void>;
+				_shuttingDown: boolean;
+			};
+		};
+		let stopped = false;
+		const stopping = adapter.stop().then(() => {
+			stopped = true;
+		});
+		try {
+			await until(() => internal.runner._shuttingDown);
+			// Graphile races task promises against its pool abort promise. Trigger
+			// its normal five-second abort path, without ending the user promise.
+			await internal.runner.abortPromise.catch(() => {});
+			await Bun.sleep(100);
+			expect(stopped).toBe(false);
+			const lock = await pool.query(
+				"SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired",
+				[`questpie-execution:${schema}:${id}`],
+			);
+			expect(lock.rows[0].acquired).toBe(false);
+		} finally {
+			release();
+			await stopping;
+		}
+		errors.length = 0; // Graphile reports its intentional pool abort as a job error.
+	}, 15000);
+
 	test("publishes scalar/array payloads and preserves logical identities with stable adapter ids", async () => {
 		const seen: unknown[] = [];
 		const dispatchId = randomUUID();
@@ -1004,7 +1383,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 					if (data === 1) await blocked;
 				},
 			},
-			{ batchSize: 2 },
+			{ teamSize: 2, batchSize: 2 },
 		);
 		try {
 			await until(() => seen.length === 1);
@@ -1260,7 +1639,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 	);
 
 	test.each([false, true])(
-		"expiry releases secret ownership while scope disposal is blocked, aborting handler=%s",
+		"expiry fences secret execution while scope disposal is blocked, aborting handler=%s",
 		async (waitForAbort) => {
 			let release!: () => void;
 			const blocked = new Promise<void>((resolve) => (release = resolve));
@@ -1312,6 +1691,9 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			try {
 				await queue.listen({ gracefulShutdown: false });
 				await until(() => disposing);
+				await Bun.sleep(650);
+				expect(calls).toBe(1);
+				release();
 				await until(
 					async () => (await queue.getReceipt(id!))?.status === "completed",
 				);
@@ -1340,7 +1722,11 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			.update(questpieQueueDispatchTable)
 			.set({ executionClaimedUntil: new Date(Date.now() - 1000) })
 			.where(eq(questpieQueueDispatchTable.dispatchId, id!));
-		expect(await renewQueueDispatchExecution(db, id!, old.token)).toBe(false);
+		expect(
+			await renewQueueDispatchExecution(db, id!, old.token, {
+				deadline: new Date(Date.now() + 60000),
+			}),
+		).toBe(false);
 		const current = await claimQueueDispatchExecution(db, id!);
 		if (current.status !== "claimed")
 			throw new Error("Expected successor claim");
@@ -1590,11 +1976,14 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 				if (++attempts === 1) await old;
 			},
 		});
+		await until(() => attempts === 1);
+		await Bun.sleep(250);
+		expect(attempts).toBe(1);
+		releaseOld();
 		await until(
 			async () =>
 				(await adapter.inspectExecutionState("late", id)) === "completed",
 		);
-		releaseOld();
 		await Bun.sleep(100);
 		expect(attempts).toBe(2);
 		expect(await adapter.inspectExecutionState("late", id)).toBe("completed");
@@ -1642,17 +2031,15 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		);
 		try {
 			await until(() => seen.length === 1);
-			await until(
-				async () =>
-					Number(
-						(
-							await pool.query(
-								`SELECT generation FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
-								[waiting],
-							)
-						).rows[0].generation,
-					) > 0,
-			);
+			await Bun.sleep(100);
+			expect(
+				(
+					await pool.query(
+						`SELECT generation FROM "${schema}".questpie_dispatches WHERE dispatch_id=$1`,
+						[waiting],
+					)
+				).rows[0].generation,
+			).toBe(0);
 			await adapter.publish("independent", {}, { priority: 32768 });
 			await until(() => independent, 2000);
 			expect(seen).toEqual([1]);
@@ -1905,7 +2292,7 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 					if (data === 1) await blocked;
 				},
 			},
-			{ batchSize: 2 },
+			{ teamSize: 2, batchSize: 2 },
 		);
 		await until(() => seen.length === 1);
 		await until(
@@ -1935,19 +2322,24 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 				seen.push(data);
 			},
 		});
-		await until(() => seen.length === 2);
-		expect(seen).toEqual([1, 2]);
+		await until(() => seen.includes(2));
+		expect(seen[0]).toBe(1);
+		expect(seen.filter((value) => value === 2)).toHaveLength(1);
 	});
 
-	test("drains active handlers before releasing connections; repeated stop is safe", async () => {
+	test("shutdown aborts and drains active handlers before releasing connections; repeated stop is safe", async () => {
 		let entered = false;
+		let aborted = false;
 		let release!: () => void;
 		const blocked = new Promise<void>((resolve) => {
 			release = resolve;
 		});
 		await adapter.publish("shutdown", {});
 		await adapter.listen({
-			shutdown: async () => {
+			shutdown: async ({ signal }) => {
+				signal?.addEventListener("abort", () => {
+					aborted = true;
+				});
 				entered = true;
 				await blocked;
 			},
@@ -1961,7 +2353,14 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		expect(stopped).toBe(false);
 		release();
 		await Promise.all([stop, adapter.stop()]);
-		expect((await pool.query(`SELECT FROM "${schema}".jobs`)).rowCount).toBe(0);
+		expect(aborted).toBe(true);
+		expect(
+			(
+				await pool.query(
+					`SELECT status, attempts FROM "${schema}".questpie_dispatches`,
+				)
+			).rows[0],
+		).toMatchObject({ status: "pending", attempts: 0 });
 	});
 
 	test("durable cron admits one job across scheduler processes and unschedule removes it", async () => {
@@ -1999,6 +2398,7 @@ function makeQueue(
 	adapter: GraphileWorkerAdapter,
 	db: ReturnType<typeof drizzle>,
 	handle: (payload: unknown, signal?: AbortSignal) => Promise<void>,
+	runtimeSecret: string | null = "graphile-test-root-secret-at-least-32-bytes",
 ) {
 	return createQueueClient(
 		{
@@ -2013,7 +2413,7 @@ function makeQueue(
 			getDatabase: () => db,
 			createContext: async () => ({ db }),
 			getApp: () => ({ db, collections: {}, globals: {} }),
-			secret: "graphile-test-root-secret-at-least-32-bytes",
+			secret: runtimeSecret ?? undefined,
 			logger: { info() {}, warn() {}, error() {} },
 		},
 	);

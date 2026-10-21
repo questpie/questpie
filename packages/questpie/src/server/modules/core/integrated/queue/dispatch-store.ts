@@ -281,7 +281,9 @@ export async function renewQueueDispatchExecution(
 				eq(questpieQueueDispatchTable.dispatchId, owner.dispatchId),
 				eq(owner.status, "accepted"),
 				eq(owner.executionClaimToken, token),
-				gt(owner.executionClaimedUntil, sql`clock_timestamp()`),
+				options.deadline
+					? gt(owner.executionClaimedUntil, sql`clock_timestamp()`)
+					: undefined,
 				options.deadline
 					? sql`${options.deadline.toISOString()}::timestamptz > clock_timestamp()`
 					: undefined,
@@ -376,7 +378,9 @@ export async function completeQueueDispatch(
 				eq(owner.secretPayload, true),
 				eq(owner.status, "accepted"),
 				eq(owner.executionClaimToken, executionToken),
-				gt(owner.executionClaimedUntil, sql`clock_timestamp()`),
+				options.deadline
+					? gt(owner.executionClaimedUntil, sql`clock_timestamp()`)
+					: undefined,
 				options.deadline
 					? sql`${options.deadline.toISOString()}::timestamptz > clock_timestamp()`
 					: undefined,

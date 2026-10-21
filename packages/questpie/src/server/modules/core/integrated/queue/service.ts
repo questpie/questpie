@@ -29,7 +29,7 @@ import {
 	reserveQueueDispatch,
 	stableQueueDispatchId,
 } from "./dispatch-store.js";
-import { withQueueAbort } from "./execution-signal.js";
+import { QueueAdmissionError, withQueueAbort } from "./execution-signal.js";
 import {
 	decryptQueueSecretPayload,
 	encryptQueueSecretPayload,
@@ -221,12 +221,6 @@ export function createQueueClient<
 						);
 					}
 				};
-				// Disposal can outlive cancellation. End ownership immediately rather
-				// than letting a blocked disposer keep the expired claim alive.
-				const onAbort = () => {
-					void releaseExecution();
-				};
-				job.signal?.addEventListener("abort", onAbort, { once: true });
 				try {
 					job.signal?.throwIfAborted();
 					if (secretPayload) {
@@ -236,7 +230,9 @@ export function createQueueClient<
 							!runtimeOptions.secret ||
 							!isQueueSecretPayloadEnvelope(job.data)
 						) {
-							throw new Error("Secret execution prerequisites unavailable");
+							throw new QueueAdmissionError(
+								"Secret execution prerequisites unavailable",
+							);
 						}
 						const claim = await claimQueueDispatchExecution(
 							context.db,
@@ -255,7 +251,9 @@ export function createQueueClient<
 							return;
 						}
 						if (claim.status !== "claimed") {
-							throw new Error("Secret execution claim unavailable");
+							throw new QueueAdmissionError(
+								"Secret execution claim unavailable",
+							);
 						}
 						executionToken = claim.token;
 						job.signal?.throwIfAborted();
@@ -386,13 +384,16 @@ export function createQueueClient<
 					}
 				} catch (error) {
 					if (secretPayload) {
+						if (error instanceof QueueAdmissionError)
+							throw new QueueAdmissionError(
+								"QUESTPIE Queue secret job handling failed",
+							);
 						throw redactedSecretQueueError(
 							"QUESTPIE Queue secret job handling failed",
 						);
 					}
 					throw error;
 				} finally {
-					job.signal?.removeEventListener("abort", onAbort);
 					await releaseExecution();
 				}
 			};
