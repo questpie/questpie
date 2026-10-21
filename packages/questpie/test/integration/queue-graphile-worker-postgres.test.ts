@@ -654,6 +654,76 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		}
 	});
 
+	test("a worker killed while awaiting a per-job permit does not hold the fetched job for four hours", async () => {
+		const long = await adapter.publish(
+			"crash",
+			{ order: 1 },
+			{ expireInSeconds: 30, retryLimit: 0 },
+		);
+		const waiting = await adapter.publish(
+			"crash",
+			{ order: 2 },
+			{ expireInSeconds: 2, retryLimit: 1 },
+		);
+		const child = Bun.spawn(
+			[
+				process.execPath,
+				new URL(
+					"../fixtures/queue-graphile-worker/crash-worker.ts",
+					import.meta.url,
+				).pathname,
+			],
+			{
+				env: {
+					...process.env,
+					QUESTPIE_GRAPHILE_CRASH_URL: url,
+					QUESTPIE_GRAPHILE_CRASH_SCHEMA: schema,
+				},
+				stdout: "pipe",
+				stderr: "pipe",
+			},
+		);
+		try {
+			const reader = child.stdout.getReader();
+			await Promise.race([
+				reader.read(),
+				Bun.sleep(5000).then(() => {
+					throw new Error("Crash worker did not start");
+				}),
+			]);
+			reader.releaseLock();
+			await until(
+				async () =>
+					Number(
+						(
+							await pool.query(
+								`SELECT count(*) FROM "${schema}".jobs WHERE locked_at IS NOT NULL`,
+							)
+						).rows[0].count,
+					) === 2,
+			);
+			child.kill("SIGKILL");
+			await child.exited;
+			const seen: unknown[] = [];
+			await adapter.listen({
+				crash: async ({ data }) => {
+					seen.push(data);
+				},
+			});
+			await until(
+				async () =>
+					(await adapter.inspectExecutionState("crash", waiting)) ===
+					"completed",
+				3000,
+			);
+			expect(seen).toEqual([{ order: 2 }]);
+			expect(await adapter.inspectExecutionState("crash", long)).toBe("active");
+		} finally {
+			child.kill("SIGKILL");
+			await child.exited;
+		}
+	});
+
 	test("drains active handlers before releasing connections; repeated stop is safe", async () => {
 		let entered = false;
 		let release!: () => void;
@@ -736,7 +806,7 @@ function makeQueue(
 
 async function until(
 	predicate: () => boolean | Promise<boolean>,
-	timeout = 5000,
+	timeout = 10000,
 ): Promise<void> {
 	const deadline = performance.now() + timeout;
 	while (!(await predicate())) {

@@ -75,16 +75,16 @@ never settles can prevent graceful shutdown; use bounded I/O in handlers.
 
 ## Publication contract
 
-| Option            | Behavior                                                             |
-| ----------------- | -------------------------------------------------------------------- |
-| `priority`        | Higher values run first; integer range -32767 to 32768.              |
-| `startAfter`      | Delay in seconds, a `Date`, or a date string.                        |
-| `retryLimit`      | Retries after the first attempt; defaults to 2.                      |
-| `retryDelay`      | Seconds between retries; defaults to 0.                              |
-| `retryBackoff`    | Multiply delay by `2 ** (attempt - 1)`, capped at one day.           |
-| `singletonKey`    | Suppress a second pending/active job with the same job name and key. |
-| `queuePolicy`     | Ignored; singleton suppression covers pending and active jobs.       |
-| `expireInSeconds` | Rejected: Graphile has no equivalent safe handler timeout contract.  |
+| Option            | Behavior                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| `priority`        | Higher values run first; integer range -32767 to 32768.                                    |
+| `startAfter`      | Delay in seconds, a `Date`, or a date string.                                              |
+| `retryLimit`      | Retries after the first attempt; defaults to 2.                                            |
+| `retryDelay`      | Seconds between retries; defaults to 0.                                                    |
+| `retryBackoff`    | Multiply delay by `2 ** (attempt - 1)`, capped at one day.                                 |
+| `singletonKey`    | Suppress a second pending/active job with the same job name and key.                       |
+| `queuePolicy`     | Ignored; singleton suppression covers pending and active jobs.                             |
+| `expireInSeconds` | Execution lease in seconds (default 900); aborts the handler and follows the retry policy. |
 
 Singleton suppression throws rather than reporting another logical dispatch as
 accepted. The first payload survives. Completed and permanently failed jobs
