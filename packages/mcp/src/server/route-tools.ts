@@ -47,12 +47,17 @@ function routeSchemas(route: IntrospectedRoute) {
 	let encodedDateOutput = false;
 	try {
 		input = definition.schema
-			? z.toJSONSchema(definition.schema, { io: "input", reused: "ref" })
+			? z.toJSONSchema(definition.schema, {
+					io: "input",
+					reused: "ref",
+					target: "draft-7",
+				})
 			: { type: "object", properties: {} };
 		output = definition.outputSchema
 			? z.toJSONSchema(definition.outputSchema, {
 					io: "output",
 					reused: "ref",
+					target: "draft-7",
 					// Domain Date output has an ISO JSON wire encoding. Date input
 					// still needs an explicit ISO string schema piped into coercion.
 					unrepresentable: ({ zodSchema }) => {
@@ -75,10 +80,11 @@ function routeSchemas(route: IntrospectedRoute) {
 	}
 	const wrapped = route.params.length > 0 || input.type !== "object";
 	if (wrapped) {
-		const { $defs, $schema, ...body } = input;
+		const { $defs, definitions, $schema, ...body } = input;
 		input = {
 			...($schema ? { $schema } : {}),
 			...($defs ? { $defs } : {}),
+			...(definitions ? { definitions } : {}),
 			type: "object",
 			properties: {
 				...(route.params.length
@@ -101,10 +107,11 @@ function routeSchemas(route: IntrospectedRoute) {
 	}
 	const wrappedOutput = !!output && output.type !== "object";
 	if (output && wrappedOutput) {
-		const { $defs, $schema, ...body } = output;
+		const { $defs, definitions, $schema, ...body } = output;
 		output = {
 			...($schema ? { $schema } : {}),
 			...($defs ? { $defs } : {}),
+			...(definitions ? { definitions } : {}),
 			type: "object",
 			properties: { value: body },
 			required: ["value"],
