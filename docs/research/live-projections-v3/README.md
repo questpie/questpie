@@ -155,6 +155,16 @@ between collections while another transaction commits both updates.
   inside a managed transaction rolled both records back to **0/0**.
 - User-mode collection access still filtered the second tenant inside the wrapper.
 
+A second [real-PostgreSQL experiment](./access-batching-experiment.md) measured
+10/50/100 roots with identical disclosure across four strategies. At 100 roots,
+manual related reads used **102 SQL**; built-in `with` used **4**; per-row SQL
+field access used **104**; freshly acquired batched authority facts plus pure
+field decisions used **5**. The batched paths stayed at 4/5 statements for all
+three cardinalities. All 36 evaluations passed tenant/relation/field disclosure
+and SQL-growth assertions. This is one belongs-to edge, not nested-plan or
+production latency proof. It also exposes two implicit count queries in the
+current relation path; data-only reads are a further separate optimization.
+
 This establishes that existing execution machinery can host these semantics;
 it does not establish live invalidation, revocation fencing or throughput.
 The fixture and [raw result](./prototype-results.json) are research artifacts,

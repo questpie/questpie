@@ -88,6 +88,9 @@ the enforceable promise is about the supported projection surface.
 - Do not silently fall back from the planned path to arbitrary callback reads.
   Unsupported behavior must be visible to the author and performance tooling.
 
-The next experiment compares manual relation fetches, current `with` loading,
-per-row access SQL and evaluation-scoped batched facts against real PostgreSQL.
-Its purpose is query-growth evidence, not a production throughput claim.
+The [completed PostgreSQL experiment](./access-batching-experiment.md) compares
+manual relation fetches, current `with` loading, per-row access SQL and fresh
+batched facts. At 100 roots it measured 102, 4, 104 and 5 SQL statements,
+respectively, while preserving disclosure across all 36 evaluations. Its scope
+is query-growth evidence for one relation and policy, not production throughput
+or proof for arbitrary nested projections.
