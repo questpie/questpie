@@ -16,3 +16,7 @@ Non-object route inputs (including root unions) use the advertised `{ input: ...
 Public HTTP handleError now treats an unwrapped ZodError as an internal 500. Convert errors from application-owned input parsing with ApiError.fromZodError; do not convert handler or output errors. HOOK_ERROR is exposed as INTERNAL_SERVER_ERROR, and validation details are limited to eight entries. The compatibility isDev option no longer enables public diagnostic disclosure. Use server-side logs for full diagnostics. Custom and CRUD MCP tools retain their existing error classification; canonical route product errors are normalized by the shared route executor.
 
 The MCP SDK is pinned to 1.32.1 because route schema adaptation depends on its validation and registration contract. Upgrade it only with discovery-before-invocation parity and schema-reference tests.
+
+Preparation also classifies a ZodError thrown by a nested parse inside the input schema as VALIDATION_ERROR; unknown transform exceptions and handler/output Zod errors remain internal. Field-error bounds now preserve safe path/message feedback when localization issue data is too large. executeJsonRoute input failures now throw ApiError rather than raw ZodError; fromZodError retains at most eight fields without invalid values. Unique-constraint product messages omit the conflicting value.
+
+Delegated handoffs validate credentials and input before invoking execution; product access remains at execution, so an approval may still be followed by a product denial. Approval is not a cached authorization verdict.

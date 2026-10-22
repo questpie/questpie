@@ -74,3 +74,75 @@ it("validates tuple route wrappers with shared definitions after SDK discovery",
 		await setup.cleanup();
 	}
 });
+
+it("keeps recursive root references inside parameter and result wrappers", async () => {
+	type Node = { label: string; children: Node[] };
+	const node: z.ZodType<Node> = z.object({
+		label: z.string(),
+		children: z.array(z.lazy(() => node)).default([]),
+	});
+	type Tree = string | Tree[];
+	const tree: z.ZodType<Tree> = z.union([
+		z.string(),
+		z.array(z.lazy(() => tree)),
+	]);
+	const setup = await buildMockApp({
+		routes: {
+			"nodes/[scopeId]:POST": route()
+				.post()
+				.params<{ scopeId: string }>()
+				.schema(node)
+				.outputSchema(node)
+				.access(true)
+				.meta({ mcp: { expose: true, name: "nodes" } })
+				.handler(({ input }) => input),
+			"tree:POST": route()
+				.post()
+				.schema(z.object({}))
+				.outputSchema(tree)
+				.access(true)
+				.meta({ mcp: { expose: true, name: "tree" } })
+				.handler((): Tree => ["a", ["b", ["c"]]]),
+		},
+	});
+	const server = await createMcpServer(setup.app, {
+		config: {
+			routes: {
+				routes: {
+					"nodes/[scopeId]": {
+						operations: { execute: true },
+						requiredScopes: false,
+					},
+					tree: { operations: { execute: true }, requiredScopes: false },
+				},
+			},
+		},
+	});
+	const [ct, st] = InMemoryTransport.createLinkedPair();
+	const client = new Client({ name: "route-recursive", version: "1" });
+	try {
+		await server.connect(st);
+		await client.connect(ct);
+		const tools = (await client.listTools()).tools;
+		const descriptor = tools.find((tool) => tool.name === "nodes")!;
+		const args = {
+			params: { scopeId: "scope" },
+			input: { label: "a", children: [{ label: "b" }] },
+		};
+		expect(
+			new AjvJsonSchemaValidator().getValidator(descriptor.inputSchema)(args)
+				.valid,
+		).toBe(true);
+		const result = await client.callTool({ name: "nodes", arguments: args });
+		expect(result.structuredContent).toEqual({
+			label: "a",
+			children: [{ label: "b", children: [] }],
+		});
+		const recursive = await client.callTool({ name: "tree", arguments: {} });
+		expect(recursive.structuredContent).toEqual({ value: ["a", ["b", ["c"]]] });
+	} finally {
+		await client.close();
+		await server.close();
+		await setup.cleanup();
+	}
+});

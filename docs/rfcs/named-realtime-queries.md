@@ -55,6 +55,14 @@ product access in the shared executor. Query semantics determine the read-only
 annotation. Client wire input and parsed handler input retain their distinct
 Zod types; neither transformations nor output validation run twice.
 
+A delegated handoff verifies credential eligibility and input before it invokes
+execution. Product access is evaluated once at execution, inside the appropriate
+query snapshot or domain operation. A handoff that asks for approval can therefore
+approve a request that product policy later denies. Approval is not authorization;
+keeping the policy at execution avoids treating a pre-approval verdict as current
+permission or holding a database transaction while approval is pending. This is an
+intentional tradeoff for opaque delegation and approval integrations.
+
 Ordinary routes retain their behavior and transaction ownership. Do not add a
 managed `.command()` in this release. Autopilot recovers concurrent receipts
 after rollback and dispatches assignment after commit; an outer transaction

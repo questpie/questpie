@@ -80,8 +80,17 @@ all of this holds.
 | The route is JSON mode   | A raw route has no input schema to advertise.      |
 | The MCP module allows it | Its own policy still gates the tool.               |
 
-The tool's input schema is your `.schema()`. For a route with URL params, the
-tool takes `{ params, input }` instead, so an agent can fill in `:id`.
+The tool's input schema derives from `.schema()`. URL params use
+`{ params, input }`. A non-object input, including a root union, uses `{ input }`;
+a named object schema emitted as a root reference also uses this envelope.
+Ordinary object inputs keep their existing shape. Non-object or root-reference
+outputs use `{ value }`, while ordinary object outputs remain unchanged. Inspect
+the advertised schema when calling a tool.
+
+Input and output schemas must represent their JSON wire contract. An exposed
+unrepresentable schema fails MCP server creation explicitly, rather than
+advertising an empty schema. Date inputs need an explicit ISO string schema
+piped into coercion; Date outputs advertise their ISO encoding.
 
 | `mcp` key     | Effect                                           |
 | ------------- | ------------------------------------------------ |
@@ -93,7 +102,9 @@ tool takes `{ params, input }` instead, so an agent can fill in `:id`.
 
 `annotations` carries `readOnlyHint`, `destructiveHint`, `idempotentHint` and
 `openWorldHint`. All four ride out to the agent as standard MCP tool hints.
-None of them changes how QUESTPIE runs the route.
+These hints do not replace authorization. A declared `.query()` derives
+`readOnlyHint: true` from its read-only semantics; ordinary routes retain their
+explicit metadata.
 
 <Callout type="warn" title="Your access rule still runs">
 	Exposing a route as a tool does not bypass `.access()`. The MCP module checks

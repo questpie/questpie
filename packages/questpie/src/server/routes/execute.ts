@@ -6,8 +6,11 @@
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
+import { types as nodeTypes } from "node:util";
+
 import { is, sql } from "drizzle-orm";
 import { PgTransaction, type PgTransactionConfig } from "drizzle-orm/pg-core";
+import { ZodError } from "zod";
 
 import { deriveRequestContextOnDb } from "#questpie/server/adapters/utils/context.js";
 import {
@@ -219,7 +222,14 @@ export function prepareJsonRoute<
 	// handler or by output validation stays raw, so it is reported as a server error.
 	let parsed = input;
 	if (definition.schema) {
-		const result = definition.schema.safeParse(input);
+		let result: ReturnType<typeof definition.schema.safeParse>;
+		try {
+			result = definition.schema.safeParse(input);
+		} catch (error) {
+			if (!nodeTypes.isProxy(error) && error instanceof ZodError)
+				throw ApiError.fromZodError(error);
+			throw error;
+		}
 		if (!result.success) throw ApiError.fromZodError(result.error);
 		parsed = result.data;
 	}
