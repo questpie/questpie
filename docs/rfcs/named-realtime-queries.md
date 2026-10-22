@@ -138,6 +138,23 @@ they do not block the usable API minor. Watch count alone is not a capacity resu
 
 ## Public contracts and budgets
 
+The owner accepted a minor release with explicit compatibility exceptions on
+2026-10-23. Keep the catalog ceiling and the new MCP error/schema envelopes;
+publish their migration notes with the release. This is not a claim that every
+existing call remains compatible. Authorization and transaction-lifetime fixes
+remain part of the release.
+
+The release notes must explain these upgrades:
+
+- Keep the final catalog below 100,000 UTF-8 bytes and target 85,000 bytes.
+- Read route product errors from canonical JSON text and `questpie/error`
+  metadata; do not expect error `structuredContent` or internal diagnostics.
+- Use each advertised input/output schema, including `{ input }` and `{ value }`
+  wrappers where present, and represent Date input as an explicit JSON wire schema.
+- Expect functional product access at invocation, even when a tool is listed.
+- Follow the HTTP error and relation-read migration notes for changed public
+  errors, authorized relation predicates and per-parent child bounds.
+
 HTTP and MCP use one safe public error shape. Explicit product errors preserve
 their code and permitted details. Production responses omit causes, stacks,
 database constraint values and internal database context. Input validation and
