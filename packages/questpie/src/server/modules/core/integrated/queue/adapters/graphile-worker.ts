@@ -87,6 +87,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	private fatalError?: Error;
 	private migrationRevision = 0;
 	private auditCursor = "";
+	private retiredPass?: { cursor?: string; end: string };
 	private lastAuditAt = 0;
 	private readonly warnedPolicies = new Set<string>();
 	private runner?: WorkerPool;
@@ -775,7 +776,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	}
 
 	private async tickSchedules(): Promise<void> {
-		await this.inTransaction(async (execute) => {
+		const retiredPass = await this.inTransaction(async (execute) => {
 			const schedules =
 				await execute(sql`SELECT *, date_trunc('minute', now()) AS current_minute FROM ${this.table("questpie_schedules")}
 				WHERE last_run < date_trunc('minute', now()) FOR UPDATE SKIP LOCKED`);
@@ -821,13 +822,52 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				WHERE d.status IN ('completed', 'failed') AND d.created_at < now() - interval '7 days'
 				AND NOT EXISTS (SELECT FROM ${this.table("jobs")} j WHERE j.id = d.job_id)
 				LIMIT 500)`);
-			await execute(
-				sql`SELECT ${this.table("complete_jobs")}(ARRAY(SELECT job_id FROM ${this.table("questpie_retired_jobs")} LIMIT 500))`,
-			);
-			await execute(
-				sql`DELETE FROM ${this.table("questpie_retired_jobs")} r WHERE NOT EXISTS (SELECT FROM ${this.table("jobs")} j WHERE j.id = r.job_id)`,
-			);
+			// Freeze the pass endpoint so higher arrivals cannot postpone wrapping.
+			let pass = this.retiredPass;
+			if (!pass) {
+				const [last] =
+					await execute(sql`SELECT job_id AS pass_end FROM ${this.table("questpie_retired_jobs")}
+					ORDER BY job_id DESC LIMIT 1`);
+				if (!last) return undefined;
+				pass = { end: String(last.pass_end) };
+			}
+			const lowerBound =
+				pass.cursor === undefined
+					? sql`job_id >= ${"-9223372036854775808"}::bigint`
+					: sql`job_id > ${pass.cursor}::bigint`;
+			// Bound ledger reads before checking native locks, and advance even
+			// across fully locked pages. LATERAL bounds native PK probes as well.
+			const retired = await execute(sql`SELECT r.job_id, j.removable FROM (
+				SELECT job_id FROM ${this.table("questpie_retired_jobs")}
+				WHERE ${lowerBound} AND job_id <= ${pass.end}::bigint ORDER BY job_id LIMIT 500
+			) r LEFT JOIN LATERAL (
+				SELECT (locked_at IS NULL OR locked_at < now() - interval '4 hours') AS removable
+				FROM ${this.table("_private_jobs")} WHERE id = r.job_id LIMIT 1
+			) j ON true ORDER BY r.job_id`);
+			if (retired.length > 0) {
+				const lastId = String(retired.at(-1)!.job_id);
+				const removable = retired
+					.filter((row) => row.removable)
+					.map((row) => String(row.job_id));
+				if (removable.length > 0)
+					await execute(
+						sql`SELECT ${this.table("complete_jobs")}(${sql.param(removable)}::bigint[])`,
+					);
+				// Resolve tuple locations inside this statement: Tid Scan avoids a
+				// second, unbounded ledger scan when deleting the bounded page.
+				await execute(sql`DELETE FROM ${this.table("questpie_retired_jobs")} r
+					WHERE r.ctid = ANY(ARRAY(
+						SELECT ctid FROM ${this.table("questpie_retired_jobs")}
+						WHERE ${lowerBound} AND job_id <= ${lastId}::bigint
+						ORDER BY job_id LIMIT 500
+					)) AND (SELECT j.id FROM ${this.table("_private_jobs")} j WHERE j.id = r.job_id LIMIT 1) IS NULL`);
+				return retired.length === 500 && BigInt(lastId) < BigInt(pass.end)
+					? { cursor: lastId, end: pass.end }
+					: undefined;
+			}
+			return undefined;
 		});
+		this.retiredPass = retiredPass;
 	}
 
 	private armSchedules(): void {
