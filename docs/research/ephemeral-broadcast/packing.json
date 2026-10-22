@@ -1,0 +1,100 @@
+{
+	"date": "2026-10-22T01:01:58.581Z",
+	"bun": "1.4.2",
+	"topics": 100,
+	"keysPerTopic": 100,
+	"payloadTextBytes": 60,
+	"method": "Same event metadata and entries; old candidate reserialization vs independent typed-entry packing. Cold includes encoding, cached models entries validated at publish.",
+	"results": [
+		{
+			"round": 0,
+			"old": {
+				"ms": 915.615454,
+				"bytes": 1810570,
+				"packets": 300
+			},
+			"linearCold": {
+				"ms": 52.165604999999914,
+				"bytes": 1897870,
+				"packets": 300
+			},
+			"linearCached": {
+				"ms": 3.0340439999999944,
+				"bytes": 1897870,
+				"packets": 300
+			}
+		},
+		{
+			"round": 1,
+			"old": {
+				"ms": 791.15602,
+				"bytes": 1810570,
+				"packets": 300
+			},
+			"linearCold": {
+				"ms": 45.63582199999996,
+				"bytes": 1897870,
+				"packets": 300
+			},
+			"linearCached": {
+				"ms": 2.6640319999999065,
+				"bytes": 1897870,
+				"packets": 300
+			}
+		},
+		{
+			"round": 2,
+			"old": {
+				"ms": 854.005696,
+				"bytes": 1810570,
+				"packets": 300
+			},
+			"linearCold": {
+				"ms": 47.47524300000032,
+				"bytes": 1897870,
+				"packets": 300
+			},
+			"linearCached": {
+				"ms": 1.9057840000000397,
+				"bytes": 1897870,
+				"packets": 300
+			}
+		},
+		{
+			"round": 3,
+			"old": {
+				"ms": 927.250364,
+				"bytes": 1810570,
+				"packets": 300
+			},
+			"linearCold": {
+				"ms": 54.38110800000004,
+				"bytes": 1897870,
+				"packets": 300
+			},
+			"linearCached": {
+				"ms": 2.9199909999997544,
+				"bytes": 1897870,
+				"packets": 300
+			}
+		},
+		{
+			"round": 4,
+			"old": {
+				"ms": 896.576626,
+				"bytes": 1810570,
+				"packets": 300
+			},
+			"linearCold": {
+				"ms": 49.13551699999971,
+				"bytes": 1897870,
+				"packets": 300
+			},
+			"linearCached": {
+				"ms": 2.636219999999412,
+				"bytes": 1897870,
+				"packets": 300
+			}
+		}
+	]
+}

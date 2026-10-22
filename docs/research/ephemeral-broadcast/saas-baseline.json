@@ -1,0 +1,977 @@
+{
+	"environment": {
+		"bun": "1.4.2",
+		"postgres": "PostgreSQL 17.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+		"cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"cpus": 12,
+		"hostMemory": 33424678912,
+		"databaseBytes": "161568435"
+	},
+	"results": [
+		{
+			"label": "50:20",
+			"accessSharing": "default",
+			"users": 50,
+			"pages": 20,
+			"tenants": 20,
+			"pods": 2,
+			"durationMs": 30000,
+			"elapsedMs": 31001,
+			"activePublishers": 10,
+			"ticks": 300,
+			"attempted": 4460,
+			"skipped": 0,
+			"pendingMax": 86,
+			"statuses": {
+				"cursor:200": 3000,
+				"list:200": 600,
+				"save:200": 600,
+				"refetch:200": 260
+			},
+			"errorMessages": {},
+			"frames": 7607,
+			"presenceFrames": 0,
+			"activityFrames": 260,
+			"snapshotFrames": 150,
+			"closes": 0,
+			"leaks": 0,
+			"revocationMs": null,
+			"expectedLatest": 24,
+			"receivedLatest": 24,
+			"snapshotLatency": {
+				"count": 150,
+				"p95": 918,
+				"p99": 2367
+			},
+			"latency": {
+				"cursor": {
+					"count": 3000,
+					"p50": 5.571449999995821,
+					"p95": 14.537586999998894,
+					"p99": 26.463992999997572
+				},
+				"save": {
+					"count": 600,
+					"p50": 18.153314999995928,
+					"p95": 2249.139110999997,
+					"p99": 3446.166409999998
+				},
+				"list": {
+					"count": 600,
+					"p50": 5.808874999998807,
+					"p95": 16.918362999997044,
+					"p99": 28.441134999997303
+				},
+				"refetch": {
+					"count": 260,
+					"p50": 2.7532240000000456,
+					"p95": 22.944094000002224,
+					"p99": 74.44426699999894
+				},
+				"delivery": {
+					"count": 7019,
+					"p50": 25,
+					"p95": 38,
+					"p99": 128
+				},
+				"slowDelivery": {
+					"count": 588,
+					"p50": 1234,
+					"p95": 1436,
+					"p99": 1534
+				},
+				"activity": {
+					"count": 260,
+					"p50": 42,
+					"p95": 1131,
+					"p99": 1151
+				},
+				"reconnect": {
+					"count": 0,
+					"p50": null,
+					"p95": null,
+					"p99": null
+				}
+			},
+			"notifies": 3732,
+			"notifySqlCalls": 1246,
+			"walBytes": 2391792,
+			"ledgerInserts": 100,
+			"presenceRows": 0,
+			"outboxInserts": 600,
+			"queueUsageMax": 0,
+			"dbConnectionsMax": 70,
+			"postgresWaitSamples": {
+				"Client/ClientRead": 11,
+				"CPU/running": 16,
+				"IO/WalSync": 6,
+				"IO/DataFileRead": 1,
+				"LWLock/WALWrite": 83
+			},
+			"podBefore": [
+				{
+					"request": "17117fe9-d08a-42ea-8e6a-2441289bf061",
+					"rss": 161263616,
+					"cpu": {
+						"user": 1072114,
+						"system": 177833
+					},
+					"authPoolWaitingMax": 24,
+					"eventLoopLagMaxMs": 0.16903399999989688,
+					"errors": []
+				},
+				{
+					"request": "31ba0f46-3ff4-4c81-bad3-02d79d16cf15",
+					"rss": 153411584,
+					"cpu": {
+						"user": 965234,
+						"system": 190598
+					},
+					"authPoolWaitingMax": 8,
+					"eventLoopLagMaxMs": 0.20075299999996332,
+					"errors": []
+				}
+			],
+			"podAfter": [
+				{
+					"request": "c5a9e0fa-3c18-4002-bf67-2b09c22c9865",
+					"rss": 194523136,
+					"cpu": {
+						"user": 6749237,
+						"system": 1656357
+					},
+					"authPoolWaitingMax": 24,
+					"eventLoopLagMaxMs": 1.8280199999971956,
+					"errors": []
+				},
+				{
+					"request": "0e31ad54-a759-41c8-9b38-899eb1e4d23e",
+					"rss": 197537792,
+					"cpu": {
+						"user": 6664293,
+						"system": 1708807
+					},
+					"authPoolWaitingMax": 8,
+					"eventLoopLagMaxMs": 2.022302999997919,
+					"errors": []
+				}
+			],
+			"topSqlByTime": [
+				{
+					"query": "select a.tenant,m.space from saas_actors a\n\t\t\t\tjoin saas_memberships m on m.actor=a.id and m.active\n\t\t\t\tjoin saas_bindings b on b.actor=a.id and b.space=m.space and b.active and b.expires>now()\n\t\t\t\tjoin saas_roles r on r.id=b.role and r.permissions @> array[$2,$3]\n\t\t\t\twhere a.id=$1 and a.active",
+					"calls": 13383,
+					"rows": 53532,
+					"executionMs": 1721.5806320000447
+				},
+				{
+					"query": "select count(*) from \"saas_tasks\" where (((\"saas_tasks\".\"tenant\" = $1 and \"saas_tasks\".\"space\" in ($2, $3, $4, $5)) and \"saas_tasks\".\"tenant\" = $6) and (\"saas_tasks\".\"tenant\" = $7 and \"saas_tasks\".\"space\" in ($8, $9, $10, $11)))",
+					"calls": 153,
+					"rows": 153,
+					"executionMs": 1301.6748380000208
+				},
+				{
+					"query": "select \"id\", \"tenant\", \"space\", \"title\", \"status\", \"body\", \"revision\", \"id\", \"created_at\", \"updated_at\" from \"saas_tasks\" where (((\"saas_tasks\".\"tenant\" = $1 and \"saas_tasks\".\"space\" in ($2, $3, $4, $5)) and \"saas_tasks\".\"tenant\" = $6) and (\"saas_tasks\".\"tenant\" = $7 and \"saas_tasks\".\"space\" in ($8, $9, $10, $11))) order by \"saas_tasks\".\"updated_at\" DESC limit $12",
+					"calls": 153,
+					"rows": 3060,
+					"executionMs": 1220.093901999986
+				},
+				{
+					"query": "select a.id from saas_sessions s join saas_actors a on a.id=s.actor where s.token=$1 and s.expires>now() and a.active",
+					"calls": 13383,
+					"rows": 13383,
+					"executionMs": 683.9126039999683
+				},
+				{
+					"query": "with recursive ancestors as (\n\t\t\tselect id,parent_id,deleted from saas_pages where id=$1 and tenant=$2 and space=any($3::int[])\n\t\t\tunion select p.id,p.parent_id,p.deleted from saas_pages p join ancestors a on p.id=a.parent_id\n\t\t) select count(*)>$4 and not bool_or(deleted) as allowed from ancestors",
+					"calls": 11923,
+					"rows": 11923,
+					"executionMs": 616.7749830000557
+				},
+				{
+					"query": "select id,tenant,space,title,status from saas_tasks where tenant=$1 and space=any($2::int[]) order by updated_at desc,id limit $3",
+					"calls": 860,
+					"rows": 17200,
+					"executionMs": 74.53880100000066
+				},
+				{
+					"query": "insert into \"questpie_realtime_log\" (\"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\", \"settled_at\") values (default, default, $1, $2, $3, $4, $5, $6, default, default) returning \"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\", \"settled_at\"",
+					"calls": 600,
+					"rows": 600,
+					"executionMs": 61.89773900000057
+				},
+				{
+					"query": "select \"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\" from \"questpie_realtime_log\" where (\"questpie_realtime_log\".\"txid\" < pg_snapshot_xmin(pg_current_snapshot()) and (\"questpie_realtime_log\".\"txid\", \"questpie_realtime_log\".\"seq\") > ($1::text::xid8, $2::bigint)) order by \"questpie_realtime_log\".\"txid\" asc, \"questpie_realtime_log\".\"seq\" asc limit $3",
+					"calls": 1161,
+					"rows": 1200,
+					"executionMs": 47.94571799999932
+				},
+				{
+					"query": "select count(*) from \"saas_tasks\" where \"saas_tasks\".\"id\" = $1",
+					"calls": 1200,
+					"rows": 1200,
+					"executionMs": 47.538568000000055
+				},
+				{
+					"query": "update \"saas_tasks\" set \"body\" = $1, \"revision\" = $2, \"updated_at\" = $3 where \"saas_tasks\".\"id\" in ($4)",
+					"calls": 600,
+					"rows": 600,
+					"executionMs": 42.753142999999795
+				},
+				{
+					"query": "select \"generation\" from \"questpie_channel_authority_fence\" where (\"questpie_channel_authority_fence\".\"channel_hash\" = $1 and \"questpie_channel_authority_fence\".\"subject\" = $2) limit $3",
+					"calls": 1000,
+					"rows": 1000,
+					"executionMs": 39.09173600000486
+				},
+				{
+					"query": "select \"id\", \"tenant\", \"space\", \"title\", \"status\", \"body\", \"revision\", \"id\", \"created_at\", \"updated_at\" from \"saas_tasks\" where \"saas_tasks\".\"id\" = $1",
+					"calls": 1200,
+					"rows": 1200,
+					"executionMs": 35.42888899999966
+				}
+			],
+			"generator": {
+				"cpu": {
+					"user": 1791616,
+					"system": 1052494
+				},
+				"rss": 168927232,
+				"loadAverage": [2.99, 3.41, 4.3]
+			}
+		},
+		{
+			"label": "250:40",
+			"accessSharing": "default",
+			"users": 250,
+			"pages": 40,
+			"tenants": 20,
+			"pods": 2,
+			"durationMs": 30000,
+			"elapsedMs": 31795,
+			"activePublishers": 50,
+			"ticks": 300,
+			"attempted": 9773,
+			"skipped": 11611,
+			"pendingMax": 356,
+			"statuses": {
+				"cursor:200": 3389,
+				"list:200": 1500,
+				"save:200": 1500,
+				"refetch:200": 3384
+			},
+			"errorMessages": {},
+			"frames": 15974,
+			"presenceFrames": 6,
+			"activityFrames": 3630,
+			"snapshotFrames": 1639,
+			"closes": 0,
+			"leaks": 0,
+			"revocationMs": null,
+			"expectedLatest": 302,
+			"receivedLatest": 302,
+			"snapshotLatency": {
+				"count": 1639,
+				"p95": 1054,
+				"p99": 1096
+			},
+			"latency": {
+				"cursor": {
+					"count": 3389,
+					"p50": 385.8165450000015,
+					"p95": 698.8257680000024,
+					"p99": 780.0113840000049
+				},
+				"save": {
+					"count": 1500,
+					"p50": 601.8726319999987,
+					"p95": 907.5901850000009,
+					"p99": 999.7987880000001
+				},
+				"list": {
+					"count": 1500,
+					"p50": 473.4101489999957,
+					"p95": 756.7651249999981,
+					"p99": 809.3435279999976
+				},
+				"refetch": {
+					"count": 3384,
+					"p50": 573.4457449999973,
+					"p95": 786.7854779999907,
+					"p99": 835.1977690000058
+				},
+				"delivery": {
+					"count": 15387,
+					"p50": 687,
+					"p95": 1256,
+					"p99": 1507
+				},
+				"slowDelivery": {
+					"count": 587,
+					"p50": 1675,
+					"p95": 2268,
+					"p99": 2490
+				},
+				"activity": {
+					"count": 3630,
+					"p50": 867,
+					"p95": 1460,
+					"p99": 2196
+				},
+				"reconnect": {
+					"count": 0,
+					"p50": null,
+					"p95": null,
+					"p99": null
+				}
+			},
+			"notifies": 5483,
+			"notifySqlCalls": 1649,
+			"walBytes": 5691582,
+			"ledgerInserts": 290,
+			"presenceRows": 0,
+			"outboxInserts": 1500,
+			"queueUsageMax": 9.5367431640625e-7,
+			"dbConnectionsMax": 70,
+			"postgresWaitSamples": {
+				"CPU/running": 124,
+				"Client/ClientRead": 37,
+				"IO/WalSync": 17,
+				"LWLock/WALWrite": 40,
+				"IO/WalWrite": 1
+			},
+			"podBefore": [
+				{
+					"request": "47171a15-92df-4c9e-b72d-f500e41e4248",
+					"rss": 184963072,
+					"cpu": {
+						"user": 1729476,
+						"system": 334206
+					},
+					"authPoolWaitingMax": 141,
+					"eventLoopLagMaxMs": 11.207247999999936,
+					"errors": []
+				},
+				{
+					"request": "1e3ba8ae-55c3-4ce6-9592-c1ccb116620c",
+					"rss": 183984128,
+					"cpu": {
+						"user": 1731166,
+						"system": 318059
+					},
+					"authPoolWaitingMax": 115,
+					"eventLoopLagMaxMs": 3.816090999999915,
+					"errors": []
+				}
+			],
+			"podAfter": [
+				{
+					"request": "90ec55ad-df82-4cd4-85d1-0c090dc0a1b1",
+					"rss": 248225792,
+					"cpu": {
+						"user": 14407113,
+						"system": 3438596
+					},
+					"authPoolWaitingMax": 268,
+					"eventLoopLagMaxMs": 13.12241399999948,
+					"errors": []
+				},
+				{
+					"request": "5b7ebeab-2c80-4d60-b8fc-192a2b32735e",
+					"rss": 223137792,
+					"cpu": {
+						"user": 14298283,
+						"system": 3465929
+					},
+					"authPoolWaitingMax": 249,
+					"eventLoopLagMaxMs": 5.797360999997181,
+					"errors": []
+				}
+			],
+			"topSqlByTime": [
+				{
+					"query": "select count(*) from \"saas_tasks\" where (((\"saas_tasks\".\"tenant\" = $1 and \"saas_tasks\".\"space\" in ($2, $3, $4, $5)) and \"saas_tasks\".\"tenant\" = $6) and (\"saas_tasks\".\"tenant\" = $7 and \"saas_tasks\".\"space\" in ($8, $9, $10, $11)))",
+					"calls": 1874,
+					"rows": 1874,
+					"executionMs": 56472.7429480001
+				},
+				{
+					"query": "select a.tenant,m.space from saas_actors a\n\t\t\t\tjoin saas_memberships m on m.actor=a.id and m.active\n\t\t\t\tjoin saas_bindings b on b.actor=a.id and b.space=m.space and b.active and b.expires>now()\n\t\t\t\tjoin saas_roles r on r.id=b.role and r.permissions @> array[$2,$3]\n\t\t\t\twhere a.id=$1 and a.active",
+					"calls": 23111,
+					"rows": 92444,
+					"executionMs": 10229.67388600008
+				},
+				{
+					"query": "select \"id\", \"tenant\", \"space\", \"title\", \"status\", \"body\", \"revision\", \"id\", \"created_at\", \"updated_at\" from \"saas_tasks\" where (((\"saas_tasks\".\"tenant\" = $1 and \"saas_tasks\".\"space\" in ($2, $3, $4, $5)) and \"saas_tasks\".\"tenant\" = $6) and (\"saas_tasks\".\"tenant\" = $7 and \"saas_tasks\".\"space\" in ($8, $9, $10, $11))) order by \"saas_tasks\".\"updated_at\" DESC limit $12",
+					"calls": 1874,
+					"rows": 37480,
+					"executionMs": 7265.320993999978
+				},
+				{
+					"query": "with recursive ancestors as (\n\t\t\tselect id,parent_id,deleted from saas_pages where id=$1 and tenant=$2 and space=any($3::int[])\n\t\t\tunion select p.id,p.parent_id,p.deleted from saas_pages p join ancestors a on p.id=a.parent_id\n\t\t) select count(*)>$4 and not bool_or(deleted) as allowed from ancestors",
+					"calls": 16727,
+					"rows": 16727,
+					"executionMs": 2569.9630329999873
+				},
+				{
+					"query": "select a.id from saas_sessions s join saas_actors a on a.id=s.actor where s.token=$1 and s.expires>now() and a.active",
+					"calls": 23111,
+					"rows": 23111,
+					"executionMs": 2505.9132260000206
+				},
+				{
+					"query": "select \"generation\" from \"questpie_channel_authority_fence\" where (\"questpie_channel_authority_fence\".\"channel_hash\" = $1 and \"questpie_channel_authority_fence\".\"subject\" = $2) limit $3",
+					"calls": 13200,
+					"rows": 13200,
+					"executionMs": 845.189484999994
+				},
+				{
+					"query": "select id,tenant,space,title,status from saas_tasks where tenant=$1 and space=any($2::int[]) order by updated_at desc,id limit $3",
+					"calls": 4884,
+					"rows": 97680,
+					"executionMs": 813.2598009999981
+				},
+				{
+					"query": "select \"generation\" from \"questpie_channel_authority_fence\" where (\"questpie_channel_authority_fence\".\"channel_hash\" = $1 and \"questpie_channel_authority_fence\".\"subject\" = $2) limit $3 for share",
+					"calls": 7260,
+					"rows": 7260,
+					"executionMs": 661.9661350000116
+				},
+				{
+					"query": "insert into \"questpie_realtime_log\" (\"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\", \"settled_at\") values (default, default, $1, $2, $3, $4, $5, $6, default, default) returning \"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\", \"settled_at\"",
+					"calls": 1500,
+					"rows": 1500,
+					"executionMs": 399.2829820000003
+				},
+				{
+					"query": "select \"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\" from \"questpie_realtime_log\" where (\"questpie_realtime_log\".\"txid\" < pg_snapshot_xmin(pg_current_snapshot()) and (\"questpie_realtime_log\".\"txid\", \"questpie_realtime_log\".\"seq\") > ($1::text::xid8, $2::bigint)) order by \"questpie_realtime_log\".\"txid\" asc, \"questpie_realtime_log\".\"seq\" asc limit $3",
+					"calls": 1570,
+					"rows": 3000,
+					"executionMs": 352.7702900000005
+				},
+				{
+					"query": "select count(*) from \"saas_tasks\" where \"saas_tasks\".\"id\" = $1",
+					"calls": 3000,
+					"rows": 3000,
+					"executionMs": 330.30312499999667
+				},
+				{
+					"query": "select \"id\", \"tenant\", \"space\", \"title\", \"status\", \"body\", \"revision\", \"id\", \"created_at\", \"updated_at\" from \"saas_tasks\" where \"saas_tasks\".\"id\" = $1",
+					"calls": 3000,
+					"rows": 3000,
+					"executionMs": 327.0580260000009
+				}
+			],
+			"generator": {
+				"cpu": {
+					"user": 4453058,
+					"system": 3186305
+				},
+				"rss": 180502528,
+				"loadAverage": [15.12, 6.31, 5.24]
+			}
+		},
+		{
+			"label": "1000:100",
+			"accessSharing": "default",
+			"users": 1000,
+			"pages": 100,
+			"tenants": 20,
+			"pods": 2,
+			"durationMs": 30000,
+			"elapsedMs": 33669,
+			"activePublishers": 200,
+			"ticks": 300,
+			"attempted": 15131,
+			"skipped": 57702,
+			"pendingMax": 1918,
+			"statuses": {
+				"cursor:200": 2298,
+				"list:200": 3000,
+				"save:200": 3000,
+				"refetch:200": 6833
+			},
+			"errorMessages": {
+				"sse:Channel access ended": 55
+			},
+			"frames": 18503,
+			"presenceFrames": 1417,
+			"activityFrames": 13012,
+			"snapshotFrames": 512,
+			"closes": 363,
+			"leaks": 0,
+			"revocationMs": null,
+			"expectedLatest": 1900,
+			"receivedLatest": 1179,
+			"snapshotLatency": {
+				"count": 512,
+				"p95": 4071,
+				"p99": 4510
+			},
+			"latency": {
+				"cursor": {
+					"count": 2298,
+					"p50": 2817.5080120000057,
+					"p95": 3708.7419859999936,
+					"p99": 3922.619305
+				},
+				"save": {
+					"count": 3000,
+					"p50": 3400.1994350000023,
+					"p95": 4523.281310999999,
+					"p99": 4784.773769000007
+				},
+				"list": {
+					"count": 3000,
+					"p50": 2982.738547999994,
+					"p95": 3872.3343370000075,
+					"p99": 4050.2850069999986
+				},
+				"refetch": {
+					"count": 6329,
+					"p50": 2914.041511000003,
+					"p95": 3849.7983169999934,
+					"p99": 3930.0974450000067
+				},
+				"delivery": {
+					"count": 17583,
+					"p50": 4102,
+					"p95": 6121,
+					"p99": 7098
+				},
+				"slowDelivery": {
+					"count": 920,
+					"p50": 5122,
+					"p95": 6801,
+					"p99": 7798
+				},
+				"activity": {
+					"count": 13012,
+					"p50": 12576,
+					"p95": 18678,
+					"p99": 20024
+				},
+				"reconnect": {
+					"count": 0,
+					"p50": null,
+					"p95": null,
+					"p99": null
+				}
+			},
+			"notifies": 7159,
+			"notifySqlCalls": 1922,
+			"walBytes": 19833158,
+			"ledgerInserts": 600,
+			"presenceRows": 0,
+			"outboxInserts": 3000,
+			"queueUsageMax": 0,
+			"dbConnectionsMax": 70,
+			"postgresWaitSamples": {
+				"CPU/running": 105,
+				"Client/ClientRead": 30,
+				"IO/WalSync": 21,
+				"LWLock/WALWrite": 65,
+				"LWLock/BufferContent": 5
+			},
+			"podBefore": [
+				{
+					"request": "a86d7f45-adf6-4f94-a86e-8eb7899b0d4b",
+					"rss": 220651520,
+					"cpu": {
+						"user": 4142880,
+						"system": 761550
+					},
+					"authPoolWaitingMax": 788,
+					"eventLoopLagMaxMs": 0.2770060000000285,
+					"errors": []
+				},
+				{
+					"request": "2f040699-478e-4e16-bb51-3aeaa044c0fc",
+					"rss": 235634688,
+					"cpu": {
+						"user": 4061666,
+						"system": 778045
+					},
+					"authPoolWaitingMax": 811,
+					"eventLoopLagMaxMs": 0.2694819999999254,
+					"errors": []
+				}
+			],
+			"podAfter": [
+				{
+					"request": "b0f2e875-0cf5-4066-9011-79367ef5a192",
+					"rss": 360017920,
+					"cpu": {
+						"user": 22747559,
+						"system": 4840934
+					},
+					"authPoolWaitingMax": 1509,
+					"eventLoopLagMaxMs": 17.76343199999974,
+					"errors": [
+						"[Realtime] observation",
+						"[Realtime] observation",
+						"[Realtime] observation",
+						"[Realtime] observation",
+						"[Realtime] observation"
+					]
+				},
+				{
+					"request": "865c313d-2e7c-4644-81da-cc9ccb2f1f30",
+					"rss": 367398912,
+					"cpu": {
+						"user": 22907451,
+						"system": 4708497
+					},
+					"authPoolWaitingMax": 1431,
+					"eventLoopLagMaxMs": 26.629009999996924,
+					"errors": [
+						"[Realtime] observation",
+						"[Realtime] observation",
+						"[Realtime] observation",
+						"[Realtime] observation",
+						"[Realtime] observation"
+					]
+				}
+			],
+			"topSqlByTime": [
+				{
+					"query": "select count(*) from \"saas_tasks\" where (((\"saas_tasks\".\"tenant\" = $1 and \"saas_tasks\".\"space\" in ($2, $3, $4, $5)) and \"saas_tasks\".\"tenant\" = $6) and (\"saas_tasks\".\"tenant\" = $7 and \"saas_tasks\".\"space\" in ($8, $9, $10, $11)))",
+					"calls": 536,
+					"rows": 536,
+					"executionMs": 16503.948177999948
+				},
+				{
+					"query": "select a.tenant,m.space from saas_actors a\n\t\t\t\tjoin saas_memberships m on m.actor=a.id and m.active\n\t\t\t\tjoin saas_bindings b on b.actor=a.id and b.space=m.space and b.active and b.expires>now()\n\t\t\t\tjoin saas_roles r on r.id=b.role and r.permissions @> array[$2,$3]\n\t\t\t\twhere a.id=$1 and a.active",
+					"calls": 25856,
+					"rows": 103424,
+					"executionMs": 8671.441612000803
+				},
+				{
+					"query": "select \"id\", \"tenant\", \"space\", \"title\", \"status\", \"body\", \"revision\", \"id\", \"created_at\", \"updated_at\" from \"saas_tasks\" where (((\"saas_tasks\".\"tenant\" = $1 and \"saas_tasks\".\"space\" in ($2, $3, $4, $5)) and \"saas_tasks\".\"tenant\" = $6) and (\"saas_tasks\".\"tenant\" = $7 and \"saas_tasks\".\"space\" in ($8, $9, $10, $11))) order by \"saas_tasks\".\"updated_at\" DESC limit $12",
+					"calls": 527,
+					"rows": 10540,
+					"executionMs": 5517.300731999985
+				},
+				{
+					"query": "select \"generation\" from \"questpie_channel_authority_fence\" where (\"questpie_channel_authority_fence\".\"channel_hash\" = $1 and \"questpie_channel_authority_fence\".\"subject\" = $2) limit $3",
+					"calls": 82023,
+					"rows": 82023,
+					"executionMs": 4649.703349000039
+				},
+				{
+					"query": "select \"generation\" from \"questpie_channel_authority_fence\" where (\"questpie_channel_authority_fence\".\"channel_hash\" = $1 and \"questpie_channel_authority_fence\".\"subject\" = $2) limit $3 for share",
+					"calls": 25947,
+					"rows": 25947,
+					"executionMs": 2356.470549000005
+				},
+				{
+					"query": "select a.id from saas_sessions s join saas_actors a on a.id=s.actor where s.token=$1 and s.expires>now() and a.active",
+					"calls": 25978,
+					"rows": 25978,
+					"executionMs": 2093.4547460001268
+				},
+				{
+					"query": "with recursive ancestors as (\n\t\t\tselect id,parent_id,deleted from saas_pages where id=$1 and tenant=$2 and space=any($3::int[])\n\t\t\tunion select p.id,p.parent_id,p.deleted from saas_pages p join ancestors a on p.id=a.parent_id\n\t\t) select count(*)>$4 and not bool_or(deleted) as allowed from ancestors",
+					"calls": 13472,
+					"rows": 13472,
+					"executionMs": 1550.933992999986
+				},
+				{
+					"query": "select id,tenant,space,title,status from saas_tasks where tenant=$1 and space=any($2::int[]) order by updated_at desc,id limit $3",
+					"calls": 9133,
+					"rows": 182660,
+					"executionMs": 1084.295975999999
+				},
+				{
+					"query": "update \"saas_tasks\" set \"body\" = $1, \"revision\" = $2, \"updated_at\" = $3 where \"saas_tasks\".\"id\" in ($4)",
+					"calls": 3000,
+					"rows": 3000,
+					"executionMs": 535.0441540000018
+				},
+				{
+					"query": "insert into \"questpie_realtime_log\" (\"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\", \"settled_at\") values (default, default, $1, $2, $3, $4, $5, $6, default, default) returning \"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\", \"settled_at\"",
+					"calls": 3000,
+					"rows": 3000,
+					"executionMs": 475.1360490000035
+				},
+				{
+					"query": "select count(*) from \"saas_tasks\" where \"saas_tasks\".\"id\" = $1",
+					"calls": 6000,
+					"rows": 6000,
+					"executionMs": 425.2619199999983
+				},
+				{
+					"query": "select \"id\", \"tenant\", \"space\", \"title\", \"status\", \"body\", \"revision\", \"id\", \"created_at\", \"updated_at\" from \"saas_tasks\" where \"saas_tasks\".\"id\" = $1",
+					"calls": 6000,
+					"rows": 6000,
+					"executionMs": 374.5245120000004
+				}
+			],
+			"generator": {
+				"cpu": {
+					"user": 8179050,
+					"system": 6769651
+				},
+				"rss": 202391552,
+				"loadAverage": [16.92, 8, 5.86]
+			}
+		},
+		{
+			"label": "250:40:faults",
+			"accessSharing": "default",
+			"users": 250,
+			"pages": 40,
+			"tenants": 20,
+			"pods": 2,
+			"durationMs": 30000,
+			"elapsedMs": 31279,
+			"activePublishers": 50,
+			"ticks": 296,
+			"attempted": 10930,
+			"skipped": 10102,
+			"pendingMax": 337,
+			"statuses": {
+				"cursor:200": 4626,
+				"list:200": 1453,
+				"save:200": 1465,
+				"refetch:200": 3274,
+				"cursor:403": 52,
+				"save:403": 4,
+				"list:403": 4,
+				"refetch:403": 5,
+				"cursor:network": 24,
+				"save:network": 11,
+				"list:network": 23
+			},
+			"errorMessages": {
+				"AbortError: The operation was aborted.": 24,
+				"cursor:{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"Access denied\",\"context\":{\"access\":{\"operation\":\"read\",\"resource\":\"saas\",\"reason\":\"Access denied\"}}}}": 52,
+				"sse:Channel access ended": 1,
+				"save:{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"Access denied\",\"context\":{\"access\":{\"operation\":\"read\",\"resource\":\"saas\",\"reason\":\"Access denied\"}}}}": 4,
+				"list:{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"Access denied\",\"context\":{\"access\":{\"operation\":\"read\",\"resource\":\"saas\",\"reason\":\"Access denied\"}}}}": 4,
+				"refetch:{\"error\":{\"code\":\"FORBIDDEN\",\"message\":\"Access denied\",\"context\":{\"access\":{\"operation\":\"read\",\"resource\":\"saas\",\"reason\":\"Access denied\"}}}}": 5,
+				"TypeError: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()": 130,
+				"Error: stream status 400: {\"error\":{\"code\":\"BAD_REQUEST\",\"message\":\"realtime.noAdmittedTopics\"}}": 42,
+				"TypeError: Unable to connect. Is the computer able to access the url?": 1
+			},
+			"frames": 13836,
+			"presenceFrames": 165,
+			"activityFrames": 3340,
+			"snapshotFrames": 1524,
+			"closes": 197,
+			"leaks": 0,
+			"revocationMs": 111,
+			"expectedLatest": 295,
+			"receivedLatest": 294,
+			"snapshotLatency": {
+				"count": 1524,
+				"p95": 984,
+				"p99": 1090
+			},
+			"latency": {
+				"cursor": {
+					"count": 4702,
+					"p50": 239.2382959999959,
+					"p95": 688.9008369999938,
+					"p99": 775.9797880000115
+				},
+				"save": {
+					"count": 1480,
+					"p50": 580.3706089999905,
+					"p95": 880.4748120000004,
+					"p99": 960.9984399999958
+				},
+				"list": {
+					"count": 1480,
+					"p50": 481.7081540000072,
+					"p95": 729.7660109999997,
+					"p99": 785.2044469999964
+				},
+				"refetch": {
+					"count": 3268,
+					"p50": 578.6615100000054,
+					"p95": 805.3789159999869,
+					"p99": 895.7482460000028
+				},
+				"delivery": {
+					"count": 13293,
+					"p50": 705,
+					"p95": 1299,
+					"p99": 1473
+				},
+				"slowDelivery": {
+					"count": 543,
+					"p50": 1415,
+					"p95": 2268,
+					"p99": 2564
+				},
+				"activity": {
+					"count": 3340,
+					"p50": 873,
+					"p95": 1360,
+					"p99": 2299
+				},
+				"reconnect": {
+					"count": 153,
+					"p50": 1723,
+					"p95": 2143,
+					"p99": 3168
+				}
+			},
+			"notifies": 6691,
+			"notifySqlCalls": 1653,
+			"walBytes": 4529917,
+			"ledgerInserts": 269,
+			"presenceRows": 0,
+			"outboxInserts": 1466,
+			"queueUsageMax": 0,
+			"dbConnectionsMax": 70,
+			"postgresWaitSamples": {
+				"CPU/running": 77,
+				"Client/ClientRead": 29,
+				"IO/WalSync": 12,
+				"LWLock/WALWrite": 9
+			},
+			"podBefore": [
+				{
+					"request": "520917d9-802b-437d-8eef-54b8cc56163e",
+					"rss": 178057216,
+					"cpu": {
+						"user": 2019904,
+						"system": 359935
+					},
+					"authPoolWaitingMax": 174,
+					"eventLoopLagMaxMs": 0.2599439999999049,
+					"errors": []
+				},
+				{
+					"request": "028fdc9f-235f-4f01-8b19-e93e803d2263",
+					"rss": 188407808,
+					"cpu": {
+						"user": 2023881,
+						"system": 342513
+					},
+					"authPoolWaitingMax": 186,
+					"eventLoopLagMaxMs": 14.445559999999887,
+					"errors": []
+				}
+			],
+			"podAfter": [
+				{
+					"request": "126ee35a-fdc7-4eaf-a0cb-f952d50d52bf",
+					"rss": 179068928,
+					"cpu": {
+						"user": 4001390,
+						"system": 1047561
+					},
+					"authPoolWaitingMax": 35,
+					"eventLoopLagMaxMs": 2.781764999999723,
+					"errors": []
+				},
+				{
+					"request": "e3e66457-f26f-416a-aba4-8a28661991c9",
+					"rss": 238747648,
+					"cpu": {
+						"user": 15360766,
+						"system": 3652224
+					},
+					"authPoolWaitingMax": 419,
+					"eventLoopLagMaxMs": 25.000190000002476,
+					"errors": []
+				}
+			],
+			"topSqlByTime": [
+				{
+					"query": "select count(*) from \"saas_tasks\" where (((\"saas_tasks\".\"tenant\" = $1 and \"saas_tasks\".\"space\" in ($2, $3, $4, $5)) and \"saas_tasks\".\"tenant\" = $6) and (\"saas_tasks\".\"tenant\" = $7 and \"saas_tasks\".\"space\" in ($8, $9, $10, $11)))",
+					"calls": 1785,
+					"rows": 1785,
+					"executionMs": 52476.35553299973
+				},
+				{
+					"query": "select a.tenant,m.space from saas_actors a\n\t\t\t\tjoin saas_memberships m on m.actor=a.id and m.active\n\t\t\t\tjoin saas_bindings b on b.actor=a.id and b.space=m.space and b.active and b.expires>now()\n\t\t\t\tjoin saas_roles r on r.id=b.role and r.permissions @> array[$2,$3]\n\t\t\t\twhere a.id=$1 and a.active",
+					"calls": 23176,
+					"rows": 92276,
+					"executionMs": 8577.651363999801
+				},
+				{
+					"query": "select \"id\", \"tenant\", \"space\", \"title\", \"status\", \"body\", \"revision\", \"id\", \"created_at\", \"updated_at\" from \"saas_tasks\" where (((\"saas_tasks\".\"tenant\" = $1 and \"saas_tasks\".\"space\" in ($2, $3, $4, $5)) and \"saas_tasks\".\"tenant\" = $6) and (\"saas_tasks\".\"tenant\" = $7 and \"saas_tasks\".\"space\" in ($8, $9, $10, $11))) order by \"saas_tasks\".\"updated_at\" DESC limit $12",
+					"calls": 1781,
+					"rows": 35620,
+					"executionMs": 8056.63892500013
+				},
+				{
+					"query": "select a.id from saas_sessions s join saas_actors a on a.id=s.actor where s.token=$1 and s.expires>now() and a.active",
+					"calls": 23231,
+					"rows": 23231,
+					"executionMs": 2329.9444239997993
+				},
+				{
+					"query": "with recursive ancestors as (\n\t\t\tselect id,parent_id,deleted from saas_pages where id=$1 and tenant=$2 and space=any($3::int[])\n\t\t\tunion select p.id,p.parent_id,p.deleted from saas_pages p join ancestors a on p.id=a.parent_id\n\t\t) select count(*)>$4 and not bool_or(deleted) as allowed from ancestors",
+					"calls": 16667,
+					"rows": 16667,
+					"executionMs": 1943.8758950000592
+				},
+				{
+					"query": "select \"generation\" from \"questpie_channel_authority_fence\" where (\"questpie_channel_authority_fence\".\"channel_hash\" = $1 and \"questpie_channel_authority_fence\".\"subject\" = $2) limit $3",
+					"calls": 12356,
+					"rows": 12356,
+					"executionMs": 779.1916329999785
+				},
+				{
+					"query": "insert into \"questpie_realtime_log\" (\"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\", \"settled_at\") values (default, default, $1, $2, $3, $4, $5, $6, default, default) returning \"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\", \"settled_at\"",
+					"calls": 1466,
+					"rows": 1466,
+					"executionMs": 679.5914900000009
+				},
+				{
+					"query": "select id,tenant,space,title,status from saas_tasks where tenant=$1 and space=any($2::int[]) order by updated_at desc,id limit $3",
+					"calls": 4716,
+					"rows": 94320,
+					"executionMs": 646.6163479999927
+				},
+				{
+					"query": "select \"generation\" from \"questpie_channel_authority_fence\" where (\"questpie_channel_authority_fence\".\"channel_hash\" = $1 and \"questpie_channel_authority_fence\".\"subject\" = $2) limit $3 for share",
+					"calls": 7008,
+					"rows": 7008,
+					"executionMs": 588.9492239999599
+				},
+				{
+					"query": "select count(*) from \"saas_tasks\" where \"saas_tasks\".\"id\" = $1",
+					"calls": 2937,
+					"rows": 2937,
+					"executionMs": 234.71837800000253
+				},
+				{
+					"query": "select \"id\", \"tenant\", \"space\", \"title\", \"status\", \"body\", \"revision\", \"id\", \"created_at\", \"updated_at\" from \"saas_tasks\" where \"saas_tasks\".\"id\" = $1",
+					"calls": 2935,
+					"rows": 2935,
+					"executionMs": 231.6944759999991
+				},
+				{
+					"query": "select \"seq\", \"txid\", \"resource_type\", \"resource\", \"operation\", \"record_id\", \"locale\", \"payload\", \"created_at\" from \"questpie_realtime_log\" where (\"questpie_realtime_log\".\"txid\" < pg_snapshot_xmin(pg_current_snapshot()) and (\"questpie_realtime_log\".\"txid\", \"questpie_realtime_log\".\"seq\") > ($1::text::xid8, $2::bigint)) order by \"questpie_realtime_log\".\"txid\" asc, \"questpie_realtime_log\".\"seq\" asc limit $3",
+					"calls": 1352,
+					"rows": 2444,
+					"executionMs": 224.83551399999556
+				}
+			],
+			"generator": {
+				"cpu": {
+					"user": 10852801,
+					"system": 8957083
+				},
+				"rss": 187301888,
+				"loadAverage": [15.99, 8.84, 6.23]
+			}
+		}
+	],
+	"implementation": {
+		"runtimeCommit": "da944cdf678fc7bf0113599164afba13004fcfaf",
+		"storage": "disk-backed Docker overlay PostgreSQL17, fsync/synchronous_commit=on, cgroup2CPUs1GiB,shared_buffers128MiB",
+		"generatorHttpLimit": 4096,
+		"fixture": "synthetic indexed sessions/RBAC/ancestors +100k tasks/100k pages; initial list index only, no explicit accessCacheKey",
+		"sourceSha256": {
+			"packages/questpie/bench/saas-app.ts": "63a9e6151b898ed1e11c4edb75b6e6f4357e3fdabed27366b97ebe6eeea4df43",
+			"packages/questpie/bench/saas-pod.ts": "5004b893341af006f30128216c6a8321500cc278fa76d4b28e821a1135956300",
+			"packages/questpie/bench/saas-load.ts": "0bda8e462f4bdd23deb9eaceccb3cc8e552edad4749dd5b171b7eadeb7ec3191"
+		}
+	}
+}

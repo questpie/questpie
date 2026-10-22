@@ -171,3 +171,8 @@ export function runInFreshRequestScope<T>(
 		return result as T;
 	});
 }
+
+/** Infrastructure callbacks must not retain the request that first started them. */
+export function runWithoutRequestScope<T>(callback: () => T): T {
+	return requestScopeStorage.exit(callback);
+}

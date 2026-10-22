@@ -525,7 +525,9 @@ export class SseChannelTransport implements ChannelClientTransport {
 				}
 			} else if (event.type === "channel_ready") {
 				const id = frame.channelSubscriptionId;
-				const entry = [...this.entries.values()].find((item) => item.id === id);
+				const entry =
+					[...this.entries.values()].find((item) => item.id === id) ??
+					this.entryForFrame(frame);
 				if (entry) {
 					this.retryAttempt = 0;
 					entry.readiness.admit();
@@ -541,7 +543,9 @@ export class SseChannelTransport implements ChannelClientTransport {
 				}
 			} else if (event.type === "error") {
 				const id = frame.channelSubscriptionId;
-				const entry = [...this.entries.values()].find((item) => item.id === id);
+				const entry =
+					[...this.entries.values()].find((item) => item.id === id) ??
+					this.entryForFrame(frame);
 				if (entry) {
 					this.failEntry(
 						entry,

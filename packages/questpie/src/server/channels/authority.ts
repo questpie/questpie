@@ -9,10 +9,7 @@ export type ChannelAuthoritySubject = Readonly<{
 
 type ChannelAuthorityContext = Readonly<{
 	principal?: Principal | null;
-	session?: {
-		user?: { id?: unknown };
-		session?: { id?: unknown };
-	} | null;
+	session?: unknown;
 }>;
 
 export function resolveChannelAuthoritySubject(
@@ -22,7 +19,14 @@ export function resolveChannelAuthoritySubject(
 		context.principal && context.principal.kind !== "system"
 			? context.principal.user.id
 			: undefined;
-	const userId = principalUserId ?? context.session?.user?.id;
+	const session = context.session;
+	const user =
+		session && typeof session === "object" && "user" in session
+			? session.user
+			: undefined;
+	const sessionUserId =
+		user && typeof user === "object" && "id" in user ? user.id : undefined;
+	const userId = principalUserId ?? sessionUserId;
 	if (typeof userId === "string" && userId) {
 		return { kind: "user", id: userId };
 	}
@@ -31,7 +35,14 @@ export function resolveChannelAuthoritySubject(
 	if (typeof tokenId === "string" && tokenId) {
 		return { kind: "oauth", id: tokenId };
 	}
-	const sessionId = context.session?.session?.id;
+	const sessionInfo =
+		session && typeof session === "object" && "session" in session
+			? session.session
+			: undefined;
+	const sessionId =
+		sessionInfo && typeof sessionInfo === "object" && "id" in sessionInfo
+			? sessionInfo.id
+			: undefined;
 	return typeof sessionId === "string" && sessionId
 		? { kind: "session", id: sessionId }
 		: null;

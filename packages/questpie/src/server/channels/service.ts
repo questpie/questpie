@@ -406,6 +406,12 @@ export class ChannelsService<
 			(!input.coalesceKey || input.coalesceKey.length > 256)
 		)
 			throw new Error("Invalid ephemeral coalescing key");
+		if (input.coalesceKey !== undefined && !definition.ephemeralOptions) {
+			throw new ChannelRuntimeError(
+				"channel_event_invalid",
+				"Coalescing keys require an ephemeral channel",
+			);
+		}
 		const params = (input.params ?? {}) as ChannelParamsOf<TChannels[TChannel]>;
 		const resolvedName = assertUniqueResolvedChannelName(
 			this.definitions,
@@ -442,6 +448,14 @@ export class ChannelsService<
 			? resolveChannelAuthoritySubject(this.context)
 			: null;
 
+		const publisher = subject
+			? opaqueChannelAuthoritySubject(subject)
+			: isSystemContext(this.context)
+				? "system"
+				: "anonymous";
+		const coalesceKey =
+			input.coalesceKey ??
+			(publisher === "anonymous" ? crypto.randomUUID() : "");
 		return {
 			channel: resolvedName,
 			event,
@@ -451,7 +465,7 @@ export class ChannelsService<
 				? {
 						ephemeral: {
 							options: definition.ephemeralOptions,
-							publisher: `${subject ? opaqueChannelAuthoritySubject(subject) : "system"}:${input.coalesceKey ?? ""}`,
+							publisher: `${publisher}:${coalesceKey}`,
 						},
 					}
 				: {}),
@@ -529,8 +543,12 @@ export class ChannelsService<
 		try {
 			const result = await Promise.race([
 				Promise.resolve(rule({ ...this.context, params })),
-				new Promise<false>((resolve) => {
-					timer = setTimeout(() => resolve(false), timeoutMs);
+				new Promise<false>((resolve, reject) => {
+					timer = setTimeout(() => {
+						if (this.getDefinition(channel).ephemeralOptions)
+							reject(new Error("Channel authorization timed out"));
+						else resolve(false);
+					}, timeoutMs);
 				}),
 			]);
 			return result === true;

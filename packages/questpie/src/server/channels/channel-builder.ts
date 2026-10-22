@@ -20,7 +20,7 @@ export type ExtractChannelParams<TPattern extends string> = Simplify<
 
 export type ChannelEventSchemas = Record<string, z.ZodType>;
 export type EphemeralChannelOptions = Readonly<{
-	/** Latest value per publisher and event, batched per resolved channel. Default 100 ms. */
+	/** Latest value per publisher and event, batched per resolved channel. Default 100 ms; 0 flushes next turn. */
 	coalesceMs?: number;
 	/** Serialized event payload limit, default 1024 bytes, maximum 4096. */
 	maxPayloadBytes?: number;
@@ -254,9 +254,9 @@ export class ChannelBuilder<
 	): ChannelBuilder<TPattern, TEvents, TAuthorization, TPresence, TVisibility> {
 		const coalesceMs = options.coalesceMs ?? 100;
 		const maxPayloadBytes = options.maxPayloadBytes ?? 1024;
-		if (!Number.isInteger(coalesceMs) || coalesceMs < 10 || coalesceMs > 1000) {
+		if (!Number.isInteger(coalesceMs) || coalesceMs < 0 || coalesceMs > 1000) {
 			throw new Error(
-				"Ephemeral coalesceMs must be an integer between 10 and 1000",
+				"Ephemeral coalesceMs must be an integer between 0 and 1000",
 			);
 		}
 		if (

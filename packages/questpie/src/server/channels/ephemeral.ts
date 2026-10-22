@@ -1,3 +1,4 @@
+import { runWithoutRequestScope } from "#questpie/server/config/request-scope.js";
 import type {
 	LocalChannelAuthorization,
 	LocalChannelSubscriptionInput,
@@ -14,15 +15,19 @@ import {
 	InProcessEphemeralBroker,
 	type EphemeralBroker,
 } from "./ephemeral-broker.js";
+import {
+	decodeEphemeralPacket,
+	encodeEphemeralPackets,
+} from "./ephemeral-wire.js";
 import { ChannelSecurityError } from "./security.js";
-
-export const EPHEMERAL_MAX_PACKET_BYTES = 7900;
-const MAX_TOPICS = 100;
+export { EPHEMERAL_MAX_PACKET_BYTES } from "./ephemeral-wire.js";
 const MAX_KEYS = 100;
-const MAX_MEMBERS = 100;
 
 export type EphemeralConfig = {
 	broker?: EphemeralBroker;
+	/** Per-process admission bounds. Defaults 4096 topics and 1000 subscriptions/members per topic. */
+	maxTopics?: number;
+	maxSubscriptionsPerTopic?: number;
 	/** Idle access revocation bound. Delivery also checks access before each batch. Default 1000 ms. */
 	authorizationIntervalMs?: number;
 	/** Presence refresh/expiry. Defaults 10s/30s; lease must exceed heartbeat. */
@@ -63,10 +68,15 @@ type Subscription = {
 };
 type Topic = {
 	subscriptions: Set<Subscription>;
-	members: Map<string, { entry: MemberEntry; expires: number }>;
+	members: Map<
+		string,
+		{ entry: MemberEntry; expires: number; signature: string }
+	>;
+	presence?: { signature: string; frame: Uint8Array };
 };
 type Pending = {
 	entries: Map<string, Entry>;
+	urgent: Map<string, Entry>;
 	due: number;
 };
 
@@ -100,22 +110,35 @@ export class EphemeralChannels {
 	private readonly broker: EphemeralBroker;
 	private readonly topics = new Map<string, Topic>();
 	private readonly pending = new Map<string, Pending>();
+	private readonly eventFrames = new WeakMap<EventEntry, Uint8Array>();
 	private starting?: Promise<void>;
 	private timer?: ReturnType<typeof setInterval>;
 	private stopped = false;
 	private flushing = false;
+	private flushOperation?: Promise<void>;
 	private flushTimer?: ReturnType<typeof setTimeout>;
 	private flushDue = Infinity;
 	private readonly epoch = Date.now();
 	private readonly heartbeatMs: number;
 	private readonly leaseMs: number;
 	private readonly authorizationIntervalMs: number;
+	private readonly maxTopics: number;
+	private readonly maxSubscriptionsPerTopic: number;
+	private closing = false;
 
 	constructor(
 		config: EphemeralConfig = {},
 		private readonly onError: (error: unknown) => void = () => {},
 	) {
 		this.broker = config.broker ?? new InProcessEphemeralBroker();
+		this.maxTopics = config.maxTopics ?? 4096;
+		this.maxSubscriptionsPerTopic = config.maxSubscriptionsPerTopic ?? 1000;
+		if (
+			![this.maxTopics, this.maxSubscriptionsPerTopic].every(
+				(value) => Number.isSafeInteger(value) && value > 0,
+			)
+		)
+			throw new Error("Invalid ephemeral capacity");
 		this.heartbeatMs = config.heartbeatMs ?? 10_000;
 		this.leaseMs = config.leaseMs ?? 30_000;
 		this.authorizationIntervalMs = config.authorizationIntervalMs ?? 1000;
@@ -133,26 +156,31 @@ export class EphemeralChannels {
 	}
 
 	private async start(): Promise<void> {
-		if (this.stopped) throw new Error("Ephemeral runtime is closed");
-		this.starting ??= this.broker
-			.start(
-				(message) => {
-					try {
-						this.receive(parseTypedWire<Packet>(message));
-					} catch (error) {
+		if (this.stopped || this.closing)
+			throw new Error("Ephemeral runtime is closed");
+		this.starting ??= runWithoutRequestScope(() =>
+			this.broker
+				.start(
+					(message) => {
+						try {
+							this.receive(decodeEphemeralPacket<Entry>(message));
+						} catch (error) {
+							this.onError(error);
+						}
+					},
+					(error) => {
 						this.onError(error);
-					}
-				},
-				(error) => {
-					this.onError(error);
-					void this.disconnectAll();
-				},
-			)
-			.catch((error) => {
-				this.starting = undefined;
-				throw error;
-			});
+						void this.disconnectAll();
+					},
+				)
+				.catch((error) => {
+					this.starting = undefined;
+					throw error;
+				}),
+		);
 		await this.starting;
+		if (this.stopped || this.closing)
+			throw new Error("Ephemeral runtime is closed");
 	}
 
 	async publish(
@@ -170,55 +198,76 @@ export class EphemeralChannels {
 			data: parseTypedWire(serializedData),
 		};
 		// Check the complete envelope too: schema/event metadata also consumes NOTIFY's budget.
-		if (
-			bytes(stringifyTypedWire({ channel: input.channel, entries: [entry] })) >
-			EPHEMERAL_MAX_PACKET_BYTES
-		) {
+		try {
+			encodeEphemeralPackets(input.channel, [entry]);
+		} catch {
 			throw new ChannelSecurityError(
 				"channel_payload_too_large",
 				"Ephemeral envelope exceeds limit",
 			);
 		}
 		await this.start();
-		this.enqueue(input.channel, entry, options.coalesceMs);
+		if (!this.enqueue(input.channel, entry, options.coalesceMs))
+			throw new Error("Ephemeral pending topic capacity exceeded");
 		return { eventId };
 	}
 
-	private enqueue(channel: string, entry: Entry, coalesceMs = 100): void {
-		if (this.stopped) return;
+	private enqueue(channel: string, entry: Entry, coalesceMs = 100): boolean {
+		if (this.stopped) return false;
 		let pending = this.pending.get(channel);
 		if (!pending) {
-			if (this.pending.size >= MAX_TOPICS) return;
+			if (this.pending.size >= this.maxTopics) {
+				this.onError(new Error("Ephemeral pending topic capacity exceeded"));
+				return false;
+			}
 			pending = {
 				entries: new Map(),
-				due:
-					this.epoch +
-					(Math.floor((Date.now() - this.epoch) / coalesceMs) + 1) * coalesceMs,
+				urgent: new Map(),
+				due: Infinity,
 			};
 			this.pending.set(channel, pending);
 		}
-		const key = entryKey(entry);
-		if (pending.entries.size >= MAX_KEYS && !pending.entries.has(key)) {
-			// Drop the oldest pending signal under overload, retaining the newest state.
-			pending.entries.delete(pending.entries.keys().next().value!);
+		const urgent = entry.kind !== "event";
+		const entries = urgent ? pending.urgent : pending.entries;
+		if (!urgent && entries.size === 0) {
+			pending.due =
+				coalesceMs === 0
+					? Date.now()
+					: this.epoch +
+						(Math.floor((Date.now() - this.epoch) / coalesceMs) + 1) *
+							coalesceMs;
 		}
-		pending.entries.set(key, entry);
-		this.scheduleFlush(pending.due);
+		const key = entryKey(entry);
+		const limit = urgent ? this.maxSubscriptionsPerTopic + 1 : MAX_KEYS;
+		if (entries.size >= limit && !entries.has(key)) {
+			// Drop the oldest pending signal under overload, retaining the newest state.
+			entries.delete(entries.keys().next().value!);
+		}
+		entries.set(key, entry);
+		this.scheduleFlush(urgent ? Date.now() : pending.due);
+		return true;
 	}
 
 	private scheduleFlush(due?: number): void {
-		if (this.flushing || this.stopped || !this.pending.size) return;
-		due ??= Math.min(...[...this.pending.values()].map((batch) => batch.due));
+		if (this.flushing || this.stopped || this.closing || !this.pending.size)
+			return;
+		due ??= Math.min(
+			...[...this.pending.values()].map((batch) =>
+				batch.urgent.size ? Date.now() : batch.due,
+			),
+		);
 		if (this.flushTimer && this.flushDue <= due) return;
 		if (this.flushTimer) clearTimeout(this.flushTimer);
 		this.flushDue = due;
-		this.flushTimer = setTimeout(
-			() => {
-				this.flushTimer = undefined;
-				this.flushDue = Infinity;
-				void this.flush();
-			},
-			Math.max(1, due - Date.now()),
+		this.flushTimer = runWithoutRequestScope(() =>
+			setTimeout(
+				() => {
+					this.flushTimer = undefined;
+					this.flushDue = Infinity;
+					this.flushOperation = this.flush();
+				},
+				Math.max(1, due - Date.now()),
+			),
 		);
 		this.flushTimer.unref?.();
 	}
@@ -228,32 +277,25 @@ export class EphemeralChannels {
 		this.flushing = true;
 		// Snapshot once: concurrent ingress stays bounded in the next coalescing window.
 		const pending = [...this.pending].filter(
-			([, batch]) => batch.due <= Date.now(),
+			([, batch]) => batch.urgent.size > 0 || batch.due <= Date.now(),
 		);
-		for (const [channel] of pending) this.pending.delete(channel);
 		try {
 			const packets: string[] = [];
 			for (const [channel, batch] of pending) {
-				let entries: Entry[] = [];
-				for (const entry of batch.entries.values()) {
-					const candidate = [...entries, entry];
-					if (
-						entries.length &&
-						bytes(stringifyTypedWire({ channel, entries: candidate })) >
-							EPHEMERAL_MAX_PACKET_BYTES
-					) {
-						packets.push(stringifyTypedWire({ channel, entries }));
-						entries = [];
-					}
-					entries.push(entry);
+				const ready = [...batch.urgent.values()];
+				batch.urgent.clear();
+				if (batch.due <= Date.now()) {
+					ready.push(...batch.entries.values());
+					batch.entries.clear();
+					batch.due = Infinity;
 				}
-				if (entries.length)
-					packets.push(stringifyTypedWire({ channel, entries }));
+				if (!batch.entries.size) this.pending.delete(channel);
+				packets.push(...encodeEphemeralPackets(channel, ready));
 			}
 			if (packets.length) await this.broker.publish(packets);
 		} catch (error) {
+			// Best effort: a failed publish loses this batch; healthy subscriptions stay admitted.
 			this.onError(error);
-			await this.disconnectAll();
 		} finally {
 			this.flushing = false;
 			this.scheduleFlush();
@@ -266,12 +308,12 @@ export class EphemeralChannels {
 		await this.start();
 		let topic = this.topics.get(input.channel);
 		if (!topic) {
-			if (this.topics.size >= MAX_TOPICS)
+			if (this.topics.size >= this.maxTopics)
 				throw new Error("Too many ephemeral topics");
 			topic = { subscriptions: new Set(), members: new Map() };
 			this.topics.set(input.channel, topic);
 		}
-		if (topic.subscriptions.size >= MAX_MEMBERS)
+		if (topic.subscriptions.size >= this.maxSubscriptionsPerTopic)
 			throw new Error("Too many ephemeral subscriptions");
 		const subscription: Subscription = {
 			input,
@@ -283,7 +325,7 @@ export class EphemeralChannels {
 		};
 		topic.subscriptions.add(subscription);
 		try {
-			if (!(await this.authorize(subscription)))
+			if (!(await this.authorize(subscription).catch(() => false)))
 				throw new Error("Channel subscription is denied");
 			await input.onReady?.();
 			if (subscription.closed)
@@ -292,9 +334,11 @@ export class EphemeralChannels {
 			this.renew(subscription);
 			if (input.presence) this.enqueue(input.channel, { kind: "sync" });
 			this.schedule(subscription);
-			this.timer ??= setInterval(
-				() => this.tick(),
-				Math.min(this.authorizationIntervalMs, this.heartbeatMs),
+			this.timer ??= runWithoutRequestScope(() =>
+				setInterval(
+					() => this.tick(),
+					Math.min(this.authorizationIntervalMs, this.heartbeatMs),
+				),
 			);
 			this.timer.unref?.();
 			return () => this.release(subscription);
@@ -309,8 +353,11 @@ export class EphemeralChannels {
 		try {
 			const result: LocalChannelAuthorization = await Promise.race([
 				subscription.input.reauthorize?.() ?? Promise.resolve(true),
-				new Promise<false>((resolve) => {
-					timeout = setTimeout(() => resolve(false), 5000);
+				new Promise<never>((_, reject) => {
+					timeout = setTimeout(
+						() => reject(new Error("Ephemeral authorization timed out")),
+						5000,
+					);
 				}),
 			]);
 			if (subscription.closed) return false;
@@ -328,8 +375,6 @@ export class EphemeralChannels {
 				subscription.input.presence.data = result.presence;
 			}
 			return true;
-		} catch {
-			return false;
 		} finally {
 			if (timeout) clearTimeout(timeout);
 		}
@@ -340,19 +385,24 @@ export class EphemeralChannels {
 		if (!presence || Date.now() - subscription.lastHeartbeat < this.heartbeatMs)
 			return;
 		subscription.lastHeartbeat = Date.now();
-		this.enqueue(presence.channel, {
+		const entry: MemberEntry = {
 			kind: "member",
 			id: presence.connectionId,
 			principal: presence.principalId,
 			data: presence.data,
-		});
+		};
+		// Own membership is known immediately; remote members converge through sync replies.
+		this.receive({ channel: presence.channel, entries: [entry] });
+		this.enqueue(presence.channel, entry);
 	}
 
 	private receive(packet: Packet): void {
 		const topic = this.topics.get(packet.channel);
 		if (!topic || this.stopped) return;
+		let changed = false;
 		for (const entry of packet.entries) {
 			if (entry.kind === "event") {
+				changed = true;
 				for (const sub of topic.subscriptions) {
 					const key = entryKey(entry);
 					if (sub.pending.size < MAX_KEYS || sub.pending.has(key))
@@ -364,20 +414,31 @@ export class EphemeralChannels {
 					this.schedule(sub);
 				}
 			} else {
+				if (entry.kind === "member") {
+					const signature = stringifyTypedWire([entry.principal, entry.data]);
+					const previous = topic.members.get(entry.id);
+					if (previous?.signature === signature) {
+						previous.expires = Date.now() + this.leaseMs;
+						continue;
+					}
+				}
+				changed = true;
+				topic.presence = undefined;
 				if (entry.kind === "leave") topic.members.delete(entry.id);
 				else if (
-					topic.members.size < MAX_MEMBERS ||
+					topic.members.size < this.maxSubscriptionsPerTopic ||
 					topic.members.has(entry.id)
 				) {
 					topic.members.set(entry.id, {
 						entry,
 						expires: Date.now() + this.leaseMs,
+						signature: stringifyTypedWire([entry.principal, entry.data]),
 					});
 				}
 				for (const sub of topic.subscriptions) sub.presenceDirty = true;
 			}
 		}
-		for (const sub of topic.subscriptions) this.schedule(sub);
+		if (changed) for (const sub of topic.subscriptions) this.schedule(sub);
 	}
 
 	private schedule(sub: Subscription): void {
@@ -399,34 +460,42 @@ export class EphemeralChannels {
 			sub.pending.clear();
 			for (const entry of events) {
 				if (sub.closed) return;
-				await sub.input.sink.write(
-					encodeSseEvent("channel_ephemeral", {
+				let frame = this.eventFrames.get(entry);
+				if (!frame) {
+					frame = encodeSseEvent("channel_ephemeral", {
 						channel: sub.input.channel,
 						event: entry.event,
 						eventId: entry.eventId,
 						data: entry.data,
-					}),
-					"latest-snapshot",
-				);
+					});
+					this.eventFrames.set(entry, frame);
+				}
+				await sub.input.sink.write(frame, "ordered-channel-event");
 			}
 			if (sub.presenceDirty && sub.input.presence && !sub.closed) {
 				sub.presenceDirty = false;
-				const members = new Map<string, Record<string, unknown>>();
-				for (const { entry } of this.topics
-					.get(sub.input.channel)
-					?.members.values() ?? [])
-					members.set(entry.principal, entry.data);
-				const snapshot = [...members]
-					.sort(([a], [b]) => a.localeCompare(b))
-					.map(([, data]) => data);
-				const signature = stringifyTypedWire(snapshot);
-				if (signature !== sub.lastPresence) {
-					const result = await sub.input.sink.write(
-						encodeSseEvent("channel_presence", {
+				const topic = this.topics.get(sub.input.channel);
+				if (!topic) return;
+				if (!topic.presence) {
+					const members = new Map<string, Record<string, unknown>>();
+					for (const { entry } of topic.members.values())
+						members.set(entry.principal, entry.data);
+					const snapshot = [...members]
+						.sort(([a], [b]) => a.localeCompare(b))
+						.map(([, data]) => data);
+					topic.presence = {
+						signature: stringifyTypedWire(snapshot),
+						frame: encodeSseEvent("channel_presence", {
 							channel: sub.input.channel,
 							members: snapshot,
 						}),
-						"latest-snapshot",
+					};
+				}
+				const { signature, frame } = topic.presence;
+				if (signature !== sub.lastPresence) {
+					const result = await sub.input.sink.write(
+						frame,
+						"ordered-channel-event",
 					);
 					if (result.status === "accepted") sub.lastPresence = signature;
 					else sub.presenceDirty = true;
@@ -434,7 +503,8 @@ export class EphemeralChannels {
 			}
 		} catch (error) {
 			this.onError(error);
-			await this.revoke(sub);
+			await this.release(sub);
+			await sub.input.sink.close("transport_error");
 		} finally {
 			sub.busy = false;
 			if (sub.pending.size) this.schedule(sub);
@@ -447,6 +517,7 @@ export class EphemeralChannels {
 			for (const [id, member] of topic.members) {
 				if (member.expires <= now) {
 					topic.members.delete(id);
+					topic.presence = undefined;
 					for (const sub of topic.subscriptions) sub.presenceDirty = true;
 				}
 			}
@@ -493,20 +564,32 @@ export class EphemeralChannels {
 	private async disconnectAll(): Promise<void> {
 		await Promise.all(
 			[...this.topics.values()].flatMap((topic) =>
-				[...topic.subscriptions].map((sub) =>
-					this.revoke(sub).catch(this.onError),
-				),
+				[...topic.subscriptions].map(async (sub) => {
+					// A broker blip ends the physical epoch, not the logical channel.
+					// Existing SSE reconnect then re-admits every binding with fresh access.
+					try {
+						await this.release(sub);
+						await sub.input.sink.close("transport_error");
+					} catch (error) {
+						this.onError(error);
+					}
+				}),
 			),
 		);
 	}
 
 	async destroy(): Promise<void> {
-		this.stopped = true;
+		this.closing = true;
 		if (this.timer) clearInterval(this.timer);
 		if (this.flushTimer) clearTimeout(this.flushTimer);
-		this.pending.clear();
 		await this.disconnectAll();
+		// A graceful shutdown broadcasts leaves before closing the broker. Crash recovery still uses TTL.
 		if (this.starting) await this.starting.catch(() => {});
+		await this.flushOperation;
+		await this.flush();
+		this.stopped = true;
+		if (this.flushTimer) clearTimeout(this.flushTimer);
+		this.pending.clear();
 		await this.broker.stop();
 	}
 }

@@ -9,7 +9,7 @@ This skill builds on questpie-core.
 
 # Channels
 
-Channels are typed, ordered application-event streams over the realtime runtime. Use them for chat notifications, progress, typing, or presence. The bounded replay ledger is delivery infrastructure, not durable application history; persist events users must retrieve later in a collection.
+Channels are typed application-event streams over the realtime runtime. Ordinary channels preserve ordered events with bounded replay; ephemeral channels carry replaceable cursors, typing and presence without event/presence rows. Use collections plus live queries for re-readable messages, notifications and lists. The bounded replay ledger is delivery infrastructure, not durable application history; persist events users must retrieve later in a collection.
 
 Ordered events, replay, and presence preserve nested `Date` values over SSE and
 Pusher/Soketi using the same versioned metadata as live queries. ISO-looking
@@ -71,10 +71,80 @@ handles; keep the wire pattern unchanged.
 ```
 
 In collection/global/hook files, use the injected `{ channels }`. Hooks run in
-the owning mutation transaction, so a publish failure rolls back both the
-mutation and ordered channel-ledger append. Never import the generated `app` or
+the owning mutation transaction, so an ordinary channel publish failure rolls
+back both the mutation and ordered channel-ledger append. Ephemeral publishes
+use a separate best-effort broker and are not rolled back with the mutation. Never import the generated `app` or
 defer lookup through ambient `getContext()`; the injected service is
 generated-type-safe and mutation-context aware.
+
+## Ephemeral awareness
+
+Define a separate wire pattern for page or conversation awareness:
+
+```ts title="channels/page.ts"
+import { channel } from "questpie/channels";
+import { z } from "zod";
+
+export default channel("page-awareness-[pageId]")
+	.ephemeral({ coalesceMs: 100, maxPayloadBytes: 1024 })
+	.events({ typing: z.object({ actorId: z.string(), active: z.boolean() }) })
+	.authorize({
+		subscribe: ({ session }) => Boolean(session?.user),
+		publish: false,
+	})
+	.presence(({ session }) => ({ id: session!.user.id }));
+```
+
+Replace the example subscribe rule with the page's read-access check. It runs
+at admission, before each delivery batch and every second while idle, with a
+fresh request context. Return the same denial for missing and inaccessible
+pages. Denial ends that binding and removes presence; a failed or timed-out
+check delivers no unchecked data and reconnects the physical stream.
+
+Publish through an authorized application command after resolving actor identity
+on the server. A system-bound service can publish for agents or multiple actors:
+
+```ts
+await channels
+	.page({ pageId })
+	.publish("typing", { actorId, active: true }, { coalesceKey: actorId });
+```
+
+The server-only key partitions actors independently. Browser publishes cannot
+supply it. Throttle cursor POSTs to about 100 ms; server coalescing limits broker
+fan-out rather than HTTP input. Set `coalesceMs: 0` on a typing topic for next-turn
+flushes. Presence join/leave bypass cursor windows. Subscribe/unsubscribe through
+the existing client API and reuse one app client/SSE connection per tab.
+
+Ephemeral events have diagnostic UUID receipts and no replay/resume. Subscribe
+presence is in memory with 10 s heartbeats and a 30 s lease; own membership is
+known immediately and remote members converge asynchronously. Use ongoing
+`subscribePresence` or `presenceIter` for UI state. The shared SSE topology row
+and lease remain for cross-pod ownership; the lane creates no event, authority
+or presence rows.
+
+The default broker is in-process for PGlite and PostgreSQL NOTIFY for a PostgreSQL
+runtime. For explicit setup, use `new InProcessEphemeralBroker()` from
+`questpie/channels` for one process, or:
+
+```ts
+import { pgNotifyEphemeralBroker } from "questpie/adapters/pg-notify";
+
+realtime: {
+ ephemeral: {
+  broker: pgNotifyEphemeralBroker({ connectionString: process.env.REALTIME_DATABASE_URL! }),
+ },
+}
+```
+
+`pgNotifyEphemeralBroker` constructs a `PgNotifyEphemeralBroker`: one LISTEN
+connection plus one separate autocommit publisher per app process. Supply a
+direct/session-pooled URL; a separately configured durable `changeBroker` does
+not change this URL. Packets stay below 7900 UTF-8 bytes. Event data defaults to
+1024 serialized bytes (maximum configurable 4096); member data is limited to 1024. Pending signals retain 100 keys per topic; deployment admission is
+configurable with `maxTopics` and `maxSubscriptionsPerTopic`. Broker adapters
+implement the small `EphemeralBroker` start/publish/stop contract; a Redis adapter
+can be added later without changing application APIs.
 
 ## Invalidate current delivery authority
 
@@ -180,7 +250,7 @@ The event subscription accumulates messages. The presence query and live-query `
 
 ## Delivery and security
 
-- Events are ordered per resolved channel and never coalesced. Reconnect can replay an id; clients deduplicate it.
+- Ordinary channel events are ordered per resolved channel and never coalesced. Reconnect can replay an id; clients deduplicate it.
 - Falling behind the bounded replay horizon raises an explicit gap. Recover from persisted state or subscribe from now.
 - Payloads must be JSON-serializable and at most 10,000 UTF-8 bytes.
 - Cookie-authenticated authority routes require an exact trusted Origin; configure extra origins under `realtime.channelSecurity.trustedOrigins`.

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "../../src/client/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { channel } from "../../src/server/channels/channel-builder.js";
+import { InProcessEphemeralBroker } from "../../src/server/channels/ephemeral-broker.js";
 import { ChannelTokenBucketLimiter } from "../../src/server/channels/security.js";
 import {
 	questpieChannelEventTable,
@@ -13,6 +14,7 @@ import {
 	questpieChannelAuthorityFenceTable,
 } from "../../src/server/modules/core/integrated/realtime/collection.js";
 import { setChannelPublishLimiterForTests } from "../../src/server/modules/core/routes/channels/_shared.js";
+import { service } from "../../src/server/services/define-service.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
 
@@ -166,3 +168,219 @@ test("HTTP + public client: shared SSE, dates, limits, no ledger/presence rows a
 		await setup.cleanup();
 	}
 }, 15_000);
+
+test("revoking an ephemeral binding ends its client epoch while another channel keeps the shared SSE open", async () => {
+	let allowed = true;
+	const setup = await buildMockApp(
+		{
+			channels: {
+				page: channel("mixed-page-[id]")
+					.events({ cursor: z.number() })
+					.authorize({ subscribe: () => allowed, publish: true })
+					.presence(() => ({ id: "ada" }))
+					.ephemeral(),
+				activity: channel("mixed-activity")
+					.events({ changed: z.number() })
+					.authorize({ subscribe: true, publish: true }),
+			},
+		},
+		{
+			realtime: {
+				retentionDays: 0,
+				ephemeral: { authorizationIntervalMs: 20 },
+			},
+		},
+	);
+	let client: ReturnType<typeof createClient<any>> | undefined;
+	try {
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "ada" },
+				session: { id: "ada-session" },
+			}),
+		});
+		client = createClient<any>({
+			baseURL: "http://localhost",
+			fetch: async (input, init) => handler(new Request(input as string, init)),
+		});
+		const errors: Error[] = [],
+			activity: number[] = [];
+		let pageReady = false,
+			activityReady = false;
+		const page = client.channels.page({ id: "one" });
+		const stopPage = page.subscribe(() => {}, {
+			onReady: () => {
+				pageReady = true;
+			},
+			onError: (error: Error) => errors.push(error),
+		});
+		let members: unknown[] = [];
+		const stopPresence = page.subscribePresence((value: unknown[]) => {
+			members = value;
+		});
+		const stopActivity = client.channels.activity.subscribe(
+			(message: { data: number }) => activity.push(message.data),
+			{
+				onReady: () => {
+					activityReady = true;
+				},
+			},
+		);
+		await until(() => pageReady && activityReady && members.length === 1);
+		expect(await page.presence()).toEqual([{ id: "ada" }]);
+		allowed = false;
+		await until(() => errors.length > 0);
+		await client.channels.activity.publish("changed", 42);
+		await until(() => activity.includes(42));
+		stopPage();
+		stopPresence();
+		stopActivity();
+	} finally {
+		client?.channels.destroy();
+		await setup.cleanup();
+	}
+}, 10000);
+
+test("timer-driven ephemeral authorization owns a fresh disposable service scope", async () => {
+	let allowed = true,
+		created = 0,
+		disposed = 0;
+	const setup = await buildMockApp(
+		{
+			services: {
+				policy: service()
+					.lifecycle("request")
+					.create(() => {
+						created++;
+						return { allowed };
+					})
+					.dispose(() => {
+						disposed++;
+					}),
+			},
+			channels: {
+				page: channel("scoped-page")
+					.events({ cursor: z.number() })
+					.authorize({
+						subscribe: (ctx) => (ctx as any).services.policy.allowed,
+						publish: true,
+					})
+					.ephemeral(),
+			},
+		},
+		{
+			realtime: {
+				retentionDays: 0,
+				ephemeral: { authorizationIntervalMs: 20 },
+			},
+		},
+	);
+	let client: ReturnType<typeof createClient<any>> | undefined;
+	try {
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "ada" },
+				session: { id: "ada-session" },
+			}),
+		});
+		client = createClient<any>({
+			baseURL: "http://localhost",
+			fetch: async (input, init) => handler(new Request(input as string, init)),
+		});
+		let ready = false;
+		const errors: Error[] = [],
+			events: number[] = [];
+		const stop = client.channels.page.subscribe(
+			(message: { data: number }) => events.push(message.data),
+			{
+				onReady: () => {
+					ready = true;
+				},
+				onError: (error: Error) => errors.push(error),
+			},
+		);
+		await until(() => ready);
+		await wait(100);
+		expect(errors).toEqual([]);
+		expect(created).toBeGreaterThan(2);
+		await client.channels.page.publish("cursor", 1);
+		await until(() => events.includes(1));
+		allowed = false;
+		await until(() => errors.length > 0);
+		await until(() => disposed === created);
+		stop();
+	} finally {
+		client?.channels.destroy();
+		await setup.cleanup();
+	}
+}, 10000);
+
+test("a broker blip reconnects the shared SSE without removing logical subscriptions", async () => {
+	class Broker extends InProcessEphemeralBroker {
+		disconnect?: (error: unknown) => void;
+		override async start(
+			onMessage: (message: string) => void,
+			onDisconnect?: (error: unknown) => void,
+		) {
+			this.disconnect = onDisconnect;
+			await super.start(onMessage);
+		}
+	}
+	const broker = new Broker();
+	const setup = await buildMockApp(
+		{
+			channels: {
+				page: channel("reconnecting-page")
+					.events({ cursor: z.number() })
+					.authorize({ subscribe: true, publish: true })
+					.ephemeral(),
+			},
+		},
+		{ realtime: { retentionDays: 0, ephemeral: { broker } } },
+	);
+	let client: ReturnType<typeof createClient<any>> | undefined;
+	try {
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "ada" },
+				session: { id: "ada-session" },
+			}),
+		});
+		client = createClient<any>({
+			baseURL: "http://localhost",
+			fetch: async (input, init) => handler(new Request(input as string, init)),
+		});
+		let ready = 0,
+			notReady = 0;
+		const events: number[] = [],
+			errors: Error[] = [];
+		const stop = client.channels.page.subscribe(
+			(message: { data: number }) => events.push(message.data),
+			{
+				onReady: () => {
+					ready++;
+				},
+				onNotReady: () => {
+					notReady++;
+				},
+				onError: (error: Error) => errors.push(error),
+			},
+		);
+		await until(() => ready === 1);
+		await client.channels.page.publish("cursor", 1);
+		await until(() => events.includes(1));
+		broker.disconnect!(new Error("transient LISTEN loss"));
+		await until(() => ready >= 2);
+		expect(notReady).toBeGreaterThan(0);
+		await client.channels.page.publish("cursor", 2);
+		await until(() => events.includes(2));
+		expect(errors).toEqual([]);
+		stop();
+	} finally {
+		client?.channels.destroy();
+		await setup.cleanup();
+	}
+}, 10000);

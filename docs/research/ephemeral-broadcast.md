@@ -23,7 +23,13 @@ The broker contract has three operations: `start(onMessage, onDisconnect)`,
 Postgres adapter implement the same contract. The Postgres adapter reuses the
 existing notification driver's lifecycle, timeouts and reconnect logic. A Redis
 pub/sub implementation can replace it without changing channel/client APIs;
-none is included.
+none is included. The broker wire contains independent typed entry envelopes so
+packing is linear and preserves Dates without repeatedly serializing a growing
+array. In the 100-topic × 100-key fixture, cold packing takes roughly 45 ms and
+packing prevalidated entries roughly 3 ms, versus roughly 0.8–1 s for the original
+algorithm. Bytes increase about 5%; packet count remains 300 in that fixture.
+[Raw packing evidence](ephemeral-broadcast/packing.json) and
+[reproduction](../../packages/questpie/bench/ephemeral-packing.ts) record the tradeoff.
 
 Latest values are coalesced per resolved channel, publisher/key and event in
 100 ms windows. Packets split below 7900 UTF-8 bytes. All ready packets in one
@@ -39,7 +45,10 @@ Presence joins on subscribe, renews every 10 seconds, leaves on unsubscribe and
 expires after 30 seconds without a heartbeat. New subscribers request live
 members from their peers. Access is checked with a fresh request context before
 each delivery batch and at least every second while idle, failing closed on
-error/timeout. Revoke by changing the access state used by the subscribe rule;
+error/timeout. Policy denial ends the logical binding; infrastructure failure or
+timeout closes the physical SSE epoch and reconnects without delivering the
+unchecked batch. A failed publish drops that best-effort batch without revoking
+healthy subscriptions. Revoke by changing the access state used by the subscribe rule;
 there is no durable authority fence on this lane.
 
 No new tables or migrations are needed. The lane writes no ledger, authority or
@@ -52,6 +61,12 @@ Public usage, exact limits and broker configuration are in
 [ephemeral channels](../../apps/docs/content/docs/client/channels/ephemeral.mdx).
 The [awareness example](../../packages/questpie/examples/ephemeral-awareness.ts)
 is executed by the unit tests, including independent server-resolved actors.
+
+The controlled measurements below predate the preliminary adversarial fixes and
+pin their own source variants. The [audit response](ephemeral-broadcast/audit.md)
+records those fixes; the realistic SaaS fixture adds real HTTP/TCP, session/RBAC
+queries, live projections, durable invalidations and failure injection. Read each
+artifact's source metadata before comparing results.
 
 ## Method
 

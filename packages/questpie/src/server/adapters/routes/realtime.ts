@@ -17,10 +17,14 @@ import {
 	resolveChannelAuthoritySubject,
 } from "../../channels/authority.js";
 import { createChannelServiceContext } from "../../channels/context.js";
-import { ChannelsService } from "../../channels/service.js";
+import {
+	ChannelsService,
+	ChannelRuntimeError,
+} from "../../channels/service.js";
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
 import type { RequestContext } from "../../config/context.js";
 import type { Questpie } from "../../config/questpie.js";
+import { runInFreshRequestScope } from "../../config/request-scope.js";
 import { ApiError } from "../../errors/index.js";
 import { CrdtRealtimeBindingRejectedError } from "../../modules/core/integrated/crdt/realtime-binding.js";
 import {
@@ -2067,34 +2071,47 @@ export async function realtimeSubscribe(
 							...(channel.subject || channel.ephemeral
 								? {
 										subject: channel.subject,
-										reauthorize: async () => {
-											const fresh = await resolveFreshRouteContext();
-											const channels = new ChannelsService(
-												app.config.channels ?? {},
-												app.realtime!,
-												createChannelServiceContext(app, fresh.appContext),
-												app.config.realtime?.channelSecurity,
-											);
-											if (channel.presenceChannel) {
-												const presence = await channels.resolvePresence(
+										reauthorize: () =>
+											runInFreshRequestScope(app, async () => {
+												const fresh = await resolveFreshRouteContext();
+												const channels = new ChannelsService(
+													app.config.channels ?? {},
+													app.realtime!,
+													createChannelServiceContext(app, fresh.appContext),
+													app.config.realtime?.channelSecurity,
+												);
+												if (channel.presenceChannel) {
+													try {
+														const presence = await channels.resolvePresence(
+															channel.channel,
+															channel.params,
+														);
+														return {
+															authorized: true,
+															...(presence && typeof presence === "object"
+																? {
+																		presence: presence as Record<
+																			string,
+																			unknown
+																		>,
+																	}
+																: {}),
+														};
+													} catch (error) {
+														if (
+															error instanceof ChannelRuntimeError &&
+															error.code === "channel_subscribe_denied"
+														)
+															return false;
+														throw error;
+													}
+												}
+												return channels.authorize(
 													channel.channel,
 													channel.params,
+													"subscribe",
 												);
-												return {
-													authorized: true,
-													...(presence && typeof presence === "object"
-														? {
-																presence: presence as Record<string, unknown>,
-															}
-														: {}),
-												};
-											}
-											return channels.authorize(
-												channel.channel,
-												channel.params,
-												"subscribe",
-											);
-										},
+											}),
 										close: async () => {
 											if (edge?.has(channel.id)) {
 												await edge.drop(channel.id);

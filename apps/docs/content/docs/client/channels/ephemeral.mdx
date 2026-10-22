@@ -71,25 +71,25 @@ Each coalescing window retains the newest value for each publisher/key and event
 
 A publish receipt acknowledges a validated update submitted to the best-effort lane. Its `eventId` is an opaque UUID, useful for diagnostics. Events may be superseded or dropped under overload or during a disconnect. Subscribe again to receive new updates and rebuild the roster; ephemeral channels reject replay and resume cursors. Use ordinary Channels when events need ordered replay. When converting a durable channel, give the ephemeral lane a new wire pattern and deploy the matching client; old durable resume cursors are rejected.
 
-Subscribing to an ephemeral presence channel joins it. The server renews active connections every 10 seconds, broadcasts leave on unsubscribe and expires missing heartbeats after 30 seconds. Multiple connections for one principal produce one roster entry. A new subscriber requests the other processes' current members; the roster fills asynchronously and is rebuilt after reconnecting.
+Subscribing to an ephemeral presence channel joins it. The server renews active connections every 10 seconds, broadcasts leave on unsubscribe and expires missing heartbeats after 30 seconds. Multiple connections for one principal produce one roster entry. A new subscriber requests the other processes' current members; the roster fills asynchronously and is rebuilt after reconnecting. The first roster contains the local member and can omit remote members until their replies arrive. Use `subscribePresence` or `presenceIter` for ongoing state; a single `presence()` result is a provisional snapshot.
 
-Access is checked at admission, before each delivery batch and every second while idle, using a fresh request context. A denied, failed or timed-out check ends that logical subscription, clears its pending events and removes its presence. Other subscriptions on the shared stream can continue. With the default authorization timeout, an idle revocation is detected within roughly one second plus up to five seconds for a slow check. Change the subscribe rule's underlying access state to revoke access; durable `invalidateAuthority()` fences are unavailable on this lane.
+Access is checked at admission, before each delivery batch and every second while idle, using a fresh request context. A denied check ends that logical subscription, clears its pending events and removes its presence. Other subscriptions on the shared stream can continue. A failed or timed-out check closes the physical stream without delivering the unchecked batch; the client reconnects and reauthorizes every binding. With the default authorization timeout, an idle revocation is detected within roughly one second plus up to five seconds for a slow check. Change the subscribe rule's underlying access state to revoke access; durable `invalidateAuthority()` fences are unavailable on this lane.
 
 The ephemeral lane issues no ledger, authority-fence or presence writes. The existing shared SSE transport still manages one connection-topology row per stream and renews its lease every 10 seconds. This supports cross-pod subscription changes and fences stale connection owners; it does not scale writes with cursor frequency. Application authorization rules may also read the database. Ephemeral publishing is independent of application write transactions: a later rollback does not undo a cursor or typing hint.
 
 ## Limits
 
-| Boundary      | Limit                                                                         |
-| ------------- | ----------------------------------------------------------------------------- |
-| Event data    | 1024 serialized bytes by default; configure up to 4096 with `maxPayloadBytes` |
-| Presence data | 1024 serialized bytes per connection                                          |
-| Broker packet | 7900 UTF-8 bytes; large channel batches split into packets                    |
-| Pending keys  | 100 per channel; the oldest pending signal is replaced at capacity            |
-| Local topics  | 100 active subscribed topics and 100 pending publish topics per process       |
-| Presence      | 100 connections tracked per channel and process; 100 cached roster members    |
-| Coalescing    | 100 ms by default; integer `coalesceMs` from 10 to 1000                       |
+| Boundary      | Limit                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------ |
+| Event data    | 1024 serialized bytes by default; configure up to 4096 with `maxPayloadBytes`                                |
+| Presence data | 1024 serialized bytes per connection                                                                         |
+| Broker packet | 7900 UTF-8 bytes; large channel batches split into packets                                                   |
+| Pending keys  | 100 per channel; the oldest pending signal is replaced at capacity                                           |
+| Local topics  | 4096 active subscribed topics and 4096 pending publish topics per process (`realtime.ephemeral.maxTopics`)   |
+| Presence      | 1000 local subscriptions and cached roster members per topic (`realtime.ephemeral.maxSubscriptionsPerTopic`) |
+| Coalescing    | 100 ms by default; integer `coalesceMs` from 0 to 1000; 0 flushes on the next event-loop turn                |
 
-The existing channel HTTP origin checks, Zod schemas and per-session/principal rate limits also apply. Limits protect process memory; they are not a distributed rate limiter. This implementation supports SSE.
+The existing channel HTTP origin checks, Zod schemas and per-session/principal rate limits also apply. Pending topic overflow rejects a publish instead of returning a receipt. Topic/subscription admission limits are configurable per process; existing per-principal SSE admission limits still apply. Admitted signals use the bounded FIFO SSE queue so presence and different publishers cannot overwrite each other during topology staging; slow consumers reconnect after that queue fills. Limits protect process memory; they are not a distributed rate limiter. This implementation supports SSE.
 
 ## Choose a broker
 
@@ -111,7 +111,7 @@ export default runtimeConfig({
 });
 ```
 
-Create one app runtime and broker per process. The ephemeral adapter owns one LISTEN connection and a separate autocommit publisher connection, shared by all its topics and subscribers. One SQL call sends all packets ready in a flush. It reuses the existing Postgres driver's reconnect, health-check and timeout behavior. A listener failure ends local subscriptions so clients reconnect and rebuild state. Each application sharing a database should use its own broker channel.
+Create one app runtime and broker per process. The ephemeral adapter owns one LISTEN connection and a separate autocommit publisher connection, shared by all its topics and subscribers. One SQL call sends all packets ready in a flush. It reuses the existing Postgres driver's reconnect, health-check and timeout behavior. A listener failure closes the physical SSE stream so clients reconnect and rebuild state. A publish failure drops the failed best-effort batch; it does not revoke subscriptions. Each application sharing a database should use its own broker channel.
 
 For a single process, select `new InProcessEphemeralBroker()` from `questpie/channels`. This broker exchanges no messages with other processes.
 
