@@ -9166,6 +9166,29 @@ route()
 
 Routes without path params use the route input schema directly. Routes with params use `{ params, input }`. Route policy keys use the route key, not the overridden tool name.
 
+### Product Operation Errors
+
+Throw `ApiError` from shared route operations to return the same product code
+and public details over HTTP and MCP. MCP returns `isError: true`, canonical
+JSON in text content, and the code in `questpie/error` metadata. Error results
+omit `structuredContent` so clients do not validate them against the success
+output schema.
+
+Framework transports format errors automatically. When implementing a custom
+transport, use `formatPublicError` from `questpie/errors`:
+
+```ts
+import { formatPublicError } from "questpie/errors";
+
+const body = { error: formatPublicError(error, { t, locale }) };
+```
+
+The formatter preserves explicit public messages and bounded application
+`context.custom` details. Causes, stacks, invalid field values and database or
+hook diagnostics stay server-side. Unknown exceptions and invalid handler
+output become opaque `INTERNAL_SERVER_ERROR` responses. Route input schema
+failures become `VALIDATION_ERROR` before the handler runs.
+
 ## Resources
 
 Built-in resources:
