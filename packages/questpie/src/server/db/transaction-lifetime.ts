@@ -51,7 +51,13 @@ export function transactionLifetime<T extends object>(
 		},
 		apply(target, receiver, args) {
 			assertActive();
-			return wrapLazyQuery(Reflect.apply(target, receiver, args));
+			return wrapLazyQuery(
+				Reflect.apply(
+					target as (...args: unknown[]) => unknown,
+					receiver,
+					args,
+				),
+			);
 		},
 	});
 	const guardedSession = new Proxy(session, {

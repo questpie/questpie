@@ -117,6 +117,44 @@ Access functions receive `AppContext` with these properties:
 
 `data`/`input` are typed **per operation** by the builder, no casts, no annotations inside the defining collection. For shared rule helpers and every other "I need type X" case, see `references/type-inference.md`.
 
+### Batched Field Read Access
+
+Use `batchRead` for field permissions that need database facts for a page of
+documents. Attach the returned rule to a field with
+`.access({ read: canReadPrivateField })`.
+
+```ts
+import { batchRead } from "questpie";
+import { and, eq, inArray } from "questpie/drizzle";
+import { documentGrants } from "../db/access-grants";
+
+const canReadPrivateField = batchRead<{ id?: string }>(
+	async ({ docs, db, actor }) => {
+		const ids = docs.flatMap(({ id }) => (id ? [id] : []));
+		if (!actor || ids.length === 0) return docs.map(() => false);
+		const facts = await db
+			.select({ documentId: documentGrants.documentId })
+			.from(documentGrants)
+			.where(and(
+				eq(documentGrants.subjectId, actor.subjectId),
+				inArray(documentGrants.documentId, ids),
+			));
+		const allowed = new Set(facts.map(({ documentId }) => documentId));
+		return docs.map(({ id }) => id !== undefined && allowed.has(id));
+	},
+);
+```
+
+The example assumes an application-owned grants table. Each protected field's
+callback runs once for the authorized page, before read output hooks, and returns
+one boolean per document in the same order. Documents contain selected columns;
+handle missing fields explicitly. The supplied `db` follows the current
+transaction, including a query route's read-only snapshot. Load fresh facts on
+each invocation: the framework caches no permission verdict across evaluations.
+Singleton/global reads and write responses dispatch a one-document batch.
+Batching the callback does not optimize queries performed inside a loop; acquire
+the page's facts together and test SQL growth at increasing page sizes.
+
 ### Derived Request Context in Rules
 
 `appConfig({ context })` runs once per HTTP request; its result arrives **flat** on every access rule ctx (collections, globals, routes, field access, transitions), typed by inference:

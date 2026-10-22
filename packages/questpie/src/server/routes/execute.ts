@@ -391,7 +391,7 @@ async function executeQueryRoute<
 		transaction: (
 			run: (tx: unknown) => Promise<{ data: TOutput; upToDate?: string }>,
 		) =>
-			db.transaction(async (owner) => {
+			db.transaction(async (owner: object) => {
 				let active = true;
 				expireQueryTransaction = () => {
 					active = false;
