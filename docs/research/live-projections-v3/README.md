@@ -4,8 +4,14 @@ Research and delivery proposal, 2026-10-22. Runtime changes are not implemented.
 The separate PostgreSQL experiment below ran successfully. QUESTPIE v3 remains
 the production target; v4 is a source of useful contracts, not a prerequisite.
 
+**Target confirmed by the owner:** maintain one product operation/tool set for
+both API callers and agents: identical input, structured result, errors and
+product access rules. The authenticated actor may be Human or Agent; actor type
+and provenance arrive through verified context. They do not select a second
+implementation or a second transport-specific business contract.
+
 **Recommendation:** use one operation contract behind the existing route registry,
-with declared HTTP/MCP projections. For reads that promise bounded query counts,
+with mechanically derived HTTP/MCP carriers. For reads that promise bounded query counts,
 add a planned projection path early: row policies, field decisions, relations
 and aggregates belong to one bounded execution plan. Ordinary handler-based
 queries remain compatible, but cannot promise to prevent arbitrary per-row I/O.
@@ -81,8 +87,10 @@ for await (const state of client.routes.projects.work.post.watch(input, {
 ```
 
 The names above are illustrative. The handler must receive server-resolved
-principal/provenance through its context; a tenant ID or actor ID in the request
-does not establish access. Existing domain checks remain authoritative.
+actor/principal/provenance through its context; a tenant ID or actor ID in the
+request does not establish access. Product checks run through one shared policy
+and executor for both Human and Agent. Actor-specific permissions are evaluated
+by that policy, not by duplicate HTTP and MCP handlers.
 
 New semantic definitions require explicit access and output schemas. Keep wire
 input distinct from parsed Zod output in the client types. Existing unclassified
@@ -174,9 +182,12 @@ not framework implementation or a production migration.
 
 1. **One contract, several projections.** Migrate one read and one domain command
    to a canonical schema/result/error definition using current route adapters.
-   Compare HTTP, typed client and MCP normalized results, refusals and principal
-   provenance; snapshot OpenAPI from the same output schema. Preserve MCP's
-   different cancellation acknowledgement and agent identity handling.
+   Compare HTTP, typed client and MCP structured results, refusals and actor
+   provenance; snapshot OpenAPI from the same output schema. Choose one canonical
+   cancellation acknowledgement for all callers and preserve authenticated run
+   provenance in context. Legacy envelopes are temporary migration shims with
+   retirement gates, not the target architecture. Prefer deleting custom MCP
+   handler files once their operation is projected correctly.
 2. **Semantic and planned execution.** Add query/command capabilities,
    explicit transaction ownership and a bounded read plan including access,
    relations and aggregates. Start with row predicates plus evaluation/batch

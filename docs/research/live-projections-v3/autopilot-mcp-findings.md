@@ -77,25 +77,47 @@ invocation authorization over validated/normalized input. Do not call a
 resource-specific policy with empty discovery params or repeat target lookups in
 both transport wrappers.
 
-## Recommended migration seam
+## Owner-confirmed target and migration seam
 
-Define one canonical operation input/result/error taxonomy and domain executor.
-Resolve authenticated principal/provenance before execution. HTTP and MCP carry
-that operation through thin declared projections: transport scope, compatible
-input normalization, output presentation and error presentation. Names stay
-metadata. Do not duplicate business handlers or schemas to obtain different tool
-names or agent-friendly text.
+Maintain one operation/tool set for both API callers and agents. Each operation
+has the same input schema, structured result/error schema, product authorization
+and executor. Human/Agent differences are facts in verified actor context and
+are interpreted by the same policy. HTTP status and the MCP envelope are carrier
+formatting, not separate business contracts. An agent-specific text sentence
+can be derived purely from the common structured result; it must not introduce
+another database read or mutation.
 
-Prefer pure result presenters. If guidance requires database facts, include a
-named authorized enrichment in the operation's read plan and declared dependency
-set; do not hide extra queries in presentation. Keep side effects in the shared
-command, preserve its receipt/transaction ownership, and authorize target-specific
-input normalization before reading target facts. Compatibility envelopes can
-remain during migration; one operation need not force all existing wire inputs
-to become identical on day one.
+Current distinct cancellation inputs and extra MCP guidance explain the existing
+code, but are not requirements to preserve two contracts indefinitely. Choose
+one canonical acknowledgement shape and machine-readable outcome/recovery data
+for all callers. Keep compatibility adapters only for a bounded migration, then
+remove duplicated tool files, schemas and handlers. Preserve CAS, receipts and
+server-authenticated actor/run provenance throughout.
 
-First migrate assignment and transition with real HTTP/MCP parity cases for a
-human, an agent workload, denial, version conflict, replay and cancellation.
-Check tool names/scopes, refusal provenance and result guidance as well as domain
-state. This separates reusable framework projection hooks from product-owned
-policy without disguising a second command implementation as an adapter.
+The source already supplies the main framework capabilities: shared route
+execution, actor/principal context, route-derived tool names/scopes/workload
+checks, and generic JSON structured output. A custom result presenter is not a
+prerequisite for the owner's unified result contract. The current invocation
+access/input ergonomics deserve improvement, but they are not evidence that
+Autopilot must wait for a new framework before extracting one operation.
+
+Separate framework proof from application migration:
+
+1. Prove one JSON operation invoked through actual HTTP and MCP preserves Human
+   and Agent context, runs the same product policy/executor, and returns the same
+   validated structured result/refusal. Include a workload caller, conflict and
+   replay. This is a framework compatibility gate, not yet an executed test.
+2. Derive route/tool registration and metadata from that canonical definition.
+   Naming and scopes remain declarative; no second hand-maintained tool catalog.
+3. Refactor Autopilot assignment/transition to that contract. Both carriers must
+   invoke one executor; input/result/error definitions live once. Existing domain
+   ownership of receipt recovery and post-commit dispatch remains explicit.
+4. Enforce the result with a catalog/parity check: exactly one canonical
+   operation owns each API/tool registration; no transport-specific business
+   handler or copied schema is allowed. Track removed compatibility shims.
+
+Do not run the product command through an HTTP loopback from MCP. Both carriers
+call the shared executor in-process. Credentials are verified by their transport;
+actor normalization, domain access and business behavior are shared. The larger
+planned-query and LIVE work can follow independently of this application
+refactor once the compatibility gate passes.
