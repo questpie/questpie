@@ -58,7 +58,7 @@ export function useCollectionAuditHistory(
 	const params = new URLSearchParams();
 	if (options?.limit) params.set("limit", String(options.limit));
 
-	const path = `/${collection}/${id}/audit${params.toString() ? `?${params}` : ""}`;
+	const path = `/${collection}/${encodeURIComponent(id)}/audit${params.toString() ? `?${params}` : ""}`;
 	const fetchAudit = useAuditFetcher(path);
 
 	return useQuery<AuditEntry[]>({

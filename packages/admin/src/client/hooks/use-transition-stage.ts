@@ -96,7 +96,7 @@ export function useTransitionStage(
 			const url =
 				mode === "global"
 					? `${basePath}/globals/${resourceName}/transition`
-					: `${basePath}/${resourceName}/${params.id}/transition`;
+					: `${basePath}/${resourceName}/${encodeURIComponent(String(params.id))}/transition`;
 
 			const response = await fetch(url, {
 				method: "POST",

@@ -1674,7 +1674,10 @@ export default function FormView({
 					} else {
 						itemId_ = String(id);
 					}
-					const endpoint = handler.endpoint.replace("{id}", itemId_);
+					const endpoint = handler.endpoint.replace(
+						"{id}",
+						encodeURIComponent(itemId_),
+					);
 					const method = handler.method ? handler.method : "POST";
 					let body: string | undefined;
 					if (handler.body) {
