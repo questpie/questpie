@@ -27,7 +27,10 @@ import {
 	type ChannelParamsOf,
 	type ChannelPresenceOf,
 } from "./channel-builder.js";
-import { serializeEphemeralPayload } from "./ephemeral.js";
+import {
+	isEphemeralAccessDenied,
+	serializeEphemeralPayload,
+} from "./ephemeral.js";
 import {
 	assertChannelPayloadSize,
 	assertUniqueResolvedChannelName,
@@ -553,6 +556,11 @@ export class ChannelsService<
 			]);
 			return result === true;
 		} catch (error) {
+			if (
+				this.getDefinition(channel).ephemeralOptions &&
+				isEphemeralAccessDenied(error)
+			)
+				return false;
 			/* A rule that THREW and a rule that returned false are different
 			   facts. Both fail closed — that part is deliberate and unchanged —
 			   but a bare `return false` here made a TypeError, a typo and a

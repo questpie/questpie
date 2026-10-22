@@ -17,7 +17,10 @@ import {
 	resolveChannelAuthoritySubject,
 } from "../../channels/authority.js";
 import { createChannelServiceContext } from "../../channels/context.js";
-import { EphemeralSubscriptionUnavailableError } from "../../channels/ephemeral.js";
+import {
+	EphemeralSubscriptionUnavailableError,
+	isEphemeralAccessDenied,
+} from "../../channels/ephemeral.js";
 import {
 	ChannelsService,
 	ChannelRuntimeError,
@@ -771,14 +774,17 @@ async function resolveIncrementalTopic(
 	throw new Error("Invalid resource type");
 }
 
-function ephemeralAuthorizationUnavailableResponse(): Response {
+function ephemeralUnavailablePayload(id: string) {
+	return {
+		code: "REALTIME_AUTHORIZATION_UNAVAILABLE",
+		channelSubscriptionId: id,
+		message: `Channel "${id}" authorization is unavailable`,
+	};
+}
+
+function ephemeralAuthorizationUnavailableResponse(id: string): Response {
 	return Response.json(
-		{
-			error: {
-				code: "REALTIME_AUTHORIZATION_UNAVAILABLE",
-				message: "Realtime authorization is unavailable",
-			},
-		},
+		{ error: ephemeralUnavailablePayload(id) },
 		{ status: 503 },
 	);
 }
@@ -835,6 +841,11 @@ async function resolveChannelSubscription(
 			);
 		}
 	} catch (error) {
+		if (definition.ephemeralOptions && isEphemeralAccessDenied(error))
+			throw new ChannelRuntimeError(
+				"channel_subscribe_denied",
+				"Channel subscription is denied",
+			);
 		if (
 			definition.ephemeralOptions &&
 			!(
@@ -842,7 +853,7 @@ async function resolveChannelSubscription(
 				error.code === "channel_subscribe_denied"
 			)
 		)
-			throw new EphemeralSubscriptionUnavailableError(error);
+			throw new EphemeralSubscriptionUnavailableError(error, input.id);
 		throw error;
 	}
 	return {
@@ -1048,7 +1059,7 @@ export async function realtimeSubscribe(
 					}
 				} catch (error) {
 					if (error instanceof EphemeralSubscriptionUnavailableError)
-						return ephemeralAuthorizationUnavailableResponse();
+						return ephemeralAuthorizationUnavailableResponse(desired.id);
 					entryErrors.push({
 						id: typeof desired.id === "string" ? desired.id : "unknown",
 						kind: typeof desired.kind === "string" ? desired.kind : "unknown",
@@ -1437,7 +1448,7 @@ export async function realtimeSubscribe(
 			validatedChannelsById.set(channel.id, channel);
 		} catch (error) {
 			if (error instanceof EphemeralSubscriptionUnavailableError)
-				return ephemeralAuthorizationUnavailableResponse();
+				return ephemeralAuthorizationUnavailableResponse(id);
 			channelErrors.push({
 				id,
 				message: error instanceof Error ? error.message : "Channel rejected",
@@ -2553,6 +2564,14 @@ export async function realtimeSubscribe(
 								admission,
 							);
 						} catch (error) {
+							if (
+								error instanceof EphemeralSubscriptionUnavailableError &&
+								error.channelSubscriptionId
+							)
+								await send(
+									"error",
+									ephemeralUnavailablePayload(error.channelSubscriptionId),
+								);
 							if (error instanceof RealtimeTopologyApplyRejectedError) {
 								for (const entry of error.entries) {
 									await send("error", {
@@ -2591,6 +2610,14 @@ export async function realtimeSubscribe(
 								},
 							);
 						} catch (error) {
+							if (
+								error instanceof RealtimeEdgeBindingStageError &&
+								error.cause instanceof EphemeralSubscriptionUnavailableError
+							)
+								await send(
+									"error",
+									ephemeralUnavailablePayload(error.subscription.id),
+								);
 							const rejection = edgeStageRejection(error);
 							if (rejection) {
 								for (const entry of rejection.entries) {

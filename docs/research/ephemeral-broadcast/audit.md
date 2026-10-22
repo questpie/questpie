@@ -44,3 +44,21 @@ Standards review also moved the three new broker/config exports from the
 internal channel barrel to the public `src/exports/channels.ts` entrypoint.
 The optional suggestion to extract two identical client lookup expressions was
 left unchanged; it was a judgment call, not a documented-standard violation.
+
+The `82fca046` adversarial round confirmed S1, then found S2: a permanently
+throwing ephemeral rule could keep healthy siblings in the same retry loop.
+User-mode CRUD 401/403/404 errors are now recognized as denial through wrapped
+causes. Retryable admission responses and asynchronous failure frames identify
+the logical channel. The shared client temporarily omits only that entry,
+retries it independently and reports a terminal per-channel error after five
+consecutive failures. Successful admission resets the count. The regression
+checks that a durable sibling delivers during a persistent generic rule failure,
+then that the ephemeral entry recovers; another uses the documented user-mode
+`findOne` rule and revokes collection read access. Both were red on `82fca046`.
+
+Targeted S2 proof: the HTTP/manager run passed 25 tests; the client/manager/runtime
+run passed 81 tests (the manager suite overlaps). The separate two-process
+PostgreSQL read-only regression passed. Both core TypeScript configurations, the
+core package build, formatter, targeted lint, skill freshness, any census and
+clone census passed. These checks do not replace CI or the next independent
+exact-head review.

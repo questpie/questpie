@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { z } from "zod";
 
 import { createClient } from "../../src/client/index.js";
+import { collection } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { channel } from "../../src/server/channels/channel-builder.js";
 import { InProcessEphemeralBroker } from "../../src/server/channels/ephemeral-broker.js";
@@ -16,6 +17,7 @@ import {
 import { setChannelPublishLimiterForTests } from "../../src/server/modules/core/routes/channels/_shared.js";
 import { service } from "../../src/server/services/define-service.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
+import { createTestContext } from "../utils/test-context.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -482,3 +484,142 @@ for (const scenario of ["alone", "mixed", "incremental", "timeout"] as const) {
 		}
 	}, 15000);
 }
+
+test("a failed ephemeral entry is isolated while its durable sibling stays live", async () => {
+	let failing = false;
+	const setup = await buildMockApp(
+		{
+			channels: {
+				page: channel("isolated-page")
+					.events({ cursor: z.number() })
+					.authorize({
+						subscribe: () => {
+							if (failing) throw new Error("persistent ACL failure");
+							return true;
+						},
+					})
+					.ephemeral(),
+				activity: channel("isolated-activity")
+					.events({ changed: z.number() })
+					.authorize({ subscribe: true, publish: true }),
+			},
+		},
+		{ realtime: { retentionDays: 0 } },
+	);
+	let client: ReturnType<typeof createClient<any>> | undefined;
+	try {
+		await runTestDbMigrations(setup.app);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "ada" },
+				session: { id: "ada-session" },
+			}),
+		});
+		let unavailable = 0;
+		client = createClient<any>({
+			baseURL: "http://localhost",
+			fetch: async (input, init) => {
+				const response = await handler(new Request(input as string, init));
+				if (response.status === 503) unavailable++;
+				return response;
+			},
+		});
+		let ready = false;
+		const events: number[] = [];
+		client.channels.activity.subscribe(
+			(message: { data: number }) => events.push(message.data),
+			{
+				onReady: () => {
+					ready = true;
+				},
+			},
+		);
+		await until(() => ready);
+		failing = true;
+		const errors: Error[] = [];
+		let pageReady = false;
+		client.channels.page.subscribe(() => {}, {
+			onError: (error: Error) => errors.push(error),
+			onReady: () => {
+				pageReady = true;
+			},
+		});
+		await until(() => unavailable > 0);
+		await client.channels.activity.publish("changed", 42);
+		await until(() => events.includes(42));
+		expect(errors).toEqual([]);
+		failing = false;
+		await until(() => pageReady, 10000);
+		expect(errors).toEqual([]);
+	} finally {
+		client?.channels.destroy();
+		await setup.cleanup();
+	}
+}, 10000);
+
+test("CRUD forbidden in a channel rule revokes only that ephemeral binding", async () => {
+	let readable = true;
+	const setup = await buildMockApp(
+		{
+			collections: {
+				pages: collection("pages")
+					.fields(({ f }) => ({ title: f.text().required() }))
+					.access({ read: () => readable, create: true }),
+			},
+			channels: {
+				page: channel("crud-page-[id]")
+					.events({ cursor: z.number() })
+					.authorize({
+						subscribe: async ({ collections, params }) =>
+							(await collections.pages.findOne({
+								where: { id: params.id },
+							})) !== null,
+					})
+					.ephemeral(),
+				activity: channel("crud-activity")
+					.events({ changed: z.number() })
+					.authorize({ subscribe: true, publish: true }),
+			},
+		},
+		{ realtime: { retentionDays: 0 } },
+	);
+	let client: ReturnType<typeof createClient<any>> | undefined;
+	try {
+		await runTestDbMigrations(setup.app);
+		const page = await setup.app.collections.pages.create(
+			{ title: "Roadmap" },
+			createTestContext({ accessMode: "system" }),
+		);
+		const handler = createFetchHandler(setup.app, {
+			getSession: async () => ({
+				user: { id: "ada" },
+				session: { id: "ada-session" },
+			}),
+		});
+		client = createClient<any>({
+			baseURL: "http://localhost",
+			fetch: async (input, init) => handler(new Request(input as string, init)),
+		});
+		let ready = false;
+		const errors: Error[] = [];
+		const events: number[] = [];
+		client.channels.activity.subscribe((message: { data: number }) =>
+			events.push(message.data),
+		);
+		client.channels.page({ id: page.id }).subscribe(() => {}, {
+			onReady: () => {
+				ready = true;
+			},
+			onError: (error: Error) => errors.push(error),
+		});
+		await until(() => ready);
+		readable = false;
+		await until(() => errors.length === 1);
+		await client.channels.activity.publish("changed", 42);
+		await until(() => events.includes(42));
+		expect(client.channels.channelCount).toBe(1);
+	} finally {
+		client?.channels.destroy();
+		await setup.cleanup();
+	}
+}, 10000);

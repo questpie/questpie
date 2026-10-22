@@ -587,3 +587,218 @@ describe("SSE control session ownership", () => {
 		});
 	}
 });
+
+function unavailable(id: string): Record<string, unknown> {
+	return {
+		code: "REALTIME_AUTHORIZATION_UNAVAILABLE",
+		channelSubscriptionId: id,
+		message: `${id} authorization unavailable`,
+	};
+}
+
+function channelFrame(type: string, id: string): Uint8Array {
+	return encoder.encode(
+		`event: ${type}\ndata: ${JSON.stringify({ channelSubscriptionId: id })}\n\n`,
+	);
+}
+
+describe("SSE per-channel authorization retries", () => {
+	for (const healthySibling of [false, true]) {
+		test(`isolates opening 503 with${healthySibling ? "" : "out"} a healthy sibling and stops after five failures`, async () => {
+			const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+			const opens: { channels: { id: string }[] }[] = [];
+			const controls: { topology: { subscriptions: { id: string }[] } }[] = [];
+			const errors: Error[] = [];
+			const epochEnds: Error[] = [];
+			const healthyErrors: Error[] = [];
+			const healthyEpochEnds: Error[] = [];
+			let failures = 0;
+			const manager = new SseConnectionManager({
+				baseUrl: "http://localhost:3000",
+				withCredentials: true,
+				debounceMs: 0,
+				retryBaseMs: 30,
+				maxRetryMs: 30,
+				random: () => 0,
+				fetcher: async (_input, init) => {
+					const body = JSON.parse(String(init?.body));
+					const entries = body.sessionId
+						? body.topology.subscriptions
+						: body.channels;
+					if (body.sessionId) controls.push(body);
+					else opens.push(body);
+					if (entries.some((entry: { id: string }) => entry.id === "bad")) {
+						failures += 1;
+						return Response.json(
+							{ error: unavailable("bad") },
+							{ status: 503 },
+						);
+					}
+					if (body.sessionId) return Response.json({});
+					return openStream(opens.length, init?.signal, controllers);
+				},
+			});
+			const releaseHealthy = healthySibling
+				? registerChannel(manager, "healthy", healthyErrors, healthyEpochEnds)
+				: () => {};
+			const releaseBad = registerChannel(manager, "bad", errors, epochEnds);
+			try {
+				await waitFor(() => errors.length === 1, 500);
+				await Bun.sleep(40);
+				expect(failures).toBe(5);
+				expect(errors.map((error) => error.message)).toEqual([
+					"bad authorization unavailable",
+				]);
+				expect(epochEnds).toHaveLength(5);
+				expect(healthyErrors).toEqual([]);
+				expect(healthyEpochEnds).toEqual([]);
+				expect(opens.every((body) => body.channels.length > 0)).toBe(true);
+				expect(controllers).toHaveLength(healthySibling ? 1 : 0);
+				if (healthySibling) {
+					expect(opens).toHaveLength(2);
+					expect(opens[1]!.channels).toEqual([
+						{ id: "healthy", channel: "healthy" },
+					]);
+					expect(
+						controls.at(-1)!.topology.subscriptions.map((entry) => entry.id),
+					).toEqual(["healthy"]);
+				}
+			} finally {
+				releaseBad();
+				releaseHealthy();
+			}
+		});
+	}
+
+	test("keeps the healthy physical stream on topology 503, then recovers and resets the failure budget", async () => {
+		const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+		const signals: AbortSignal[] = [];
+		const submissions: string[][] = [];
+		const errors: Error[] = [];
+		const epochEnds: Error[] = [];
+		const healthyEpochEnds: Error[] = [];
+		let remainingFailures = 4;
+		let ready = 0;
+		const manager = new SseConnectionManager({
+			baseUrl: "http://localhost:3000",
+			withCredentials: true,
+			debounceMs: 0,
+			retryBaseMs: 20,
+			maxRetryMs: 20,
+			random: () => 0,
+			fetcher: async (_input, init) => {
+				const body = JSON.parse(String(init?.body));
+				if (!body.sessionId) {
+					signals.push(init!.signal!);
+					return openStream(signals.length, init?.signal, controllers);
+				}
+				const ids = body.topology.subscriptions.map(
+					(entry: { id: string }) => entry.id,
+				);
+				submissions.push(ids);
+				if (ids.includes("bad")) {
+					if (remainingFailures-- > 0) {
+						return Response.json(
+							{ error: unavailable("bad") },
+							{ status: 503 },
+						);
+					}
+					controllers[0]!.enqueue(channelFrame("channel_ready", "bad"));
+				}
+				return Response.json({});
+			},
+		});
+		const releaseHealthy = registerChannel(
+			manager,
+			"healthy",
+			[],
+			healthyEpochEnds,
+		);
+		await waitFor(() => controllers.length === 1);
+		const releaseBad = manager.registerChannel({
+			id: "bad",
+			openPayload: () => ({ id: "bad", channel: "bad" }),
+			desiredPayload: () => ({ kind: "channel", id: "bad", channel: "bad" }),
+			onError: (error) => errors.push(error),
+			onEpochEnd: (error) => epochEnds.push(error),
+			onEvent: (event) => {
+				if (event.type === "channel_ready") ready += 1;
+			},
+		});
+		try {
+			await waitFor(() => ready === 1, 500);
+			expect(epochEnds).toHaveLength(4);
+			expect(errors).toEqual([]);
+			expect(signals).toHaveLength(1);
+			expect(signals[0]!.aborted).toBe(false);
+			expect(healthyEpochEnds).toEqual([]);
+			expect(submissions.slice(0, 8)).toEqual(
+				Array.from({ length: 4 }, () => [
+					["healthy", "bad"],
+					["healthy"],
+				]).flat(),
+			);
+			remainingFailures = 3;
+			controllers[0]!.enqueue(
+				encoder.encode(
+					`event: error\ndata: ${JSON.stringify(unavailable("bad"))}\n\n`,
+				),
+			);
+			await waitFor(() => ready === 2, 500);
+			expect(errors).toEqual([]);
+			expect(epochEnds).toHaveLength(8);
+		} finally {
+			releaseBad();
+			releaseHealthy();
+		}
+	});
+
+	test("omits an SSE-failed channel on physical reopen and cancels its retry on release", async () => {
+		const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+		const opens: { channels: { id: string }[] }[] = [];
+		const controls: unknown[] = [];
+		const errors: Error[] = [];
+		const epochEnds: Error[] = [];
+		const manager = new SseConnectionManager({
+			baseUrl: "http://localhost:3000",
+			withCredentials: true,
+			debounceMs: 0,
+			retryBaseMs: 100,
+			maxRetryMs: 100,
+			random: () => 0,
+			fetcher: async (_input, init) => {
+				const body = JSON.parse(String(init?.body));
+				if (body.sessionId) {
+					controls.push(body);
+					return Response.json({});
+				}
+				opens.push(body);
+				return openStream(opens.length, init?.signal, controllers);
+			},
+		});
+		const releaseHealthy = registerChannel(manager, "healthy", [], []);
+		const releaseBad = registerChannel(manager, "bad", errors, epochEnds);
+		try {
+			await waitFor(() => controllers.length === 1);
+			controllers[0]!.enqueue(
+				encoder.encode(
+					`event: error\ndata: ${JSON.stringify(unavailable("bad"))}\n\n`,
+				),
+			);
+			controllers[0]!.close();
+			await waitFor(() => controllers.length === 2, 500);
+			expect(opens[1]!.channels.map((entry) => entry.id)).toEqual(["healthy"]);
+			expect(errors).toEqual([]);
+			expect(epochEnds).toHaveLength(1);
+			releaseBad();
+			releaseHealthy();
+			const controlCount = controls.length;
+			await Bun.sleep(120);
+			expect(opens).toHaveLength(2);
+			expect(controls).toHaveLength(controlCount);
+		} finally {
+			releaseBad();
+			releaseHealthy();
+		}
+	});
+});

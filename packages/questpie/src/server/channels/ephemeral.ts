@@ -1,4 +1,5 @@
 import { runWithoutRequestScope } from "#questpie/server/config/request-scope.js";
+import { ApiError } from "#questpie/server/errors/base.js";
 import type {
 	LocalChannelAuthorization,
 	LocalChannelSubscriptionInput,
@@ -55,10 +56,26 @@ type Entry =
 	| { kind: "sync" };
 type Packet = { channel: string; entries: Entry[] };
 export class EphemeralSubscriptionUnavailableError extends Error {
-	constructor(cause: unknown) {
+	constructor(
+		cause: unknown,
+		readonly channelSubscriptionId?: string,
+	) {
 		super("Ephemeral subscription is unavailable", { cause });
 		this.name = "EphemeralSubscriptionUnavailableError";
 	}
+}
+
+/** Authorization callbacks can wrap user-mode CRUD denials in rule errors. */
+export function isEphemeralAccessDenied(error: unknown): boolean {
+	for (let depth = 0; depth < 8 && error instanceof Error; depth++) {
+		if (
+			error instanceof ApiError &&
+			[401, 403, 404].includes(error.getHTTPStatus())
+		)
+			return true;
+		error = error.cause;
+	}
+	return false;
 }
 
 type SubscriptionInput = Omit<LocalChannelSubscriptionInput, "stage"> & {
@@ -316,7 +333,10 @@ export class EphemeralChannels {
 		try {
 			await this.start();
 		} catch (error) {
-			throw new EphemeralSubscriptionUnavailableError(error);
+			throw new EphemeralSubscriptionUnavailableError(
+				error,
+				input.channelSubscriptionId,
+			);
 		}
 		let topic = this.topics.get(input.channel);
 		if (!topic) {
@@ -388,7 +408,11 @@ export class EphemeralChannels {
 			}
 			return true;
 		} catch (error) {
-			throw new EphemeralSubscriptionUnavailableError(error);
+			if (isEphemeralAccessDenied(error)) return false;
+			throw new EphemeralSubscriptionUnavailableError(
+				error,
+				subscription.input.channelSubscriptionId,
+			);
 		} finally {
 			if (timeout) clearTimeout(timeout);
 		}

@@ -98,8 +98,7 @@ export default channel("page-awareness-[pageId]")
 Replace the example subscribe rule with the page's read-access check. It runs
 at admission, before each delivery batch and every second while idle, with a
 fresh request context. Return the same denial for missing and inaccessible
-pages. Denial ends that binding and removes presence; a failed or timed-out
-check delivers no unchecked data and reconnects the physical stream.
+pages. Denial, including user-mode CRUD permission errors, ends only that binding and removes presence. A failed or timed-out check delivers no unchecked data. The shared client temporarily excludes that channel from its topology and retries it separately, preserving healthy siblings; its fifth consecutive failure calls only that channel’s onError. Successful channel_ready resets the retry count. A live failure may first reconnect the physical stream.
 
 Publish through an authorized application command after resolving actor identity
 on the server. A system-bound service can publish for agents or multiple actors:
