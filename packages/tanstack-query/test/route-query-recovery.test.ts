@@ -248,6 +248,25 @@ describe("route LIVE error recovery over real SSE", () => {
 				);
 				expect(attempts.get(key)).toBe(before + 1);
 				expect(f.openings).toBe(1);
+				f.unsubscribe();
+				const remounted = new QueryObserver(f.queryClient, f.options);
+				const seen: Observed[] = [];
+				const stopRemount = observe(remounted, seen);
+				try {
+					await waitFor(
+						() =>
+							remounted.getCurrentResult().status === "error" &&
+							remounted.getCurrentResult().fetchStatus === "idle",
+					);
+					expect(
+						seen.filter(
+							({ status, fetchStatus }) =>
+								status === "error" && fetchStatus === "fetching",
+						),
+					).toEqual([]);
+				} finally {
+					stopRemount();
+				}
 			} finally {
 				stop();
 				f.close();

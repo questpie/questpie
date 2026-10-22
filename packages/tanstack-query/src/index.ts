@@ -1344,7 +1344,11 @@ export function createQuestpieQueryOptions<
 												// Retries must not restore data cleared by an invalidation.
 												if (firstAttempt) {
 													firstAttempt = false;
-													query.setState({ ...state, fetchStatus: "fetching" });
+													if (state.data !== undefined)
+														query.setState({
+															...state,
+															fetchStatus: "fetching",
+														});
 												}
 												return fetchFn();
 											};

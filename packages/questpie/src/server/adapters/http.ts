@@ -495,6 +495,19 @@ export const createFetchHandler = (
 										);
 
 										try {
+											let params: Record<string, string>;
+											try {
+												params = Object.fromEntries(
+													Object.entries(match.params).map(([key, value]) => [
+														key,
+														decodeURIComponent(value),
+													]),
+												);
+											} catch {
+												throw ApiError.badRequest(
+													"Invalid route parameter encoding",
+												);
+											}
 											if (isJsonRoute(def)) {
 												const body = await parseRouteBody(request);
 												if (body === null) {
@@ -519,19 +532,19 @@ export const createFetchHandler = (
 													body,
 													routeContext,
 													request,
-													match.params,
+													params,
 												);
 												return complete(smartResponse(result, request));
 											}
 
-											// Raw route — pass matched params through
+											// Raw route — pass decoded params through
 											return complete(
 												await executeRawRouteInternal(
 													appInstance,
 													def,
 													request,
 													routeContext,
-													match.params,
+													params,
 												),
 											);
 										} catch (error) {

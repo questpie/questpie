@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, spyOn } from "bun:test";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { createClient } from "../../src/client/index.js";
 import { collection, route, withTransaction } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import {
@@ -114,6 +115,7 @@ describe("explicit route LIVE", () => {
 				},
 				routes: {
 					"report/[company]:POST": read,
+					"files/[...company]:POST": read,
 					"report/[company]:GET": route()
 						.get()
 						.schema(z.object({}))
@@ -224,6 +226,53 @@ describe("explicit route LIVE", () => {
 		});
 		return events;
 	}
+
+	it.each([
+		["report", "[company]", "a b"],
+		["files", "[...company]", "docs/intro"],
+		["report", "[company]", "%2F"],
+		["report", "[company]", "café"],
+	])(
+		"agrees on HTTP and LIVE params for %s/%s = %s",
+		async (name, parameter, value) => {
+			const client = createClient<any>({
+				baseURL: "http://localhost",
+				basePath: "/api",
+				fetch: async (url, init) => (await handle(new Request(url, init)))!,
+			});
+			const abort = new AbortController();
+			try {
+				await setup.app.collections.live_tasks.create({
+					tenant: value,
+					title: `visible-${value}`,
+				});
+				const input = { tenant: value, at: new Date("2026-10-22T12:00:00Z") };
+				const options = { params: { company: value }, signal: abort.signal };
+				const call = client.routes[name][parameter].post;
+				const http = await call(input, options);
+				const iterator = call.watch(input, options)[Symbol.asyncIterator]();
+				expect((await iterator.next()).value).toEqual(http);
+				expect(http.titles).toEqual([`visible-${value}`]);
+			} finally {
+				abort.abort();
+				client.realtime.destroy();
+			}
+		},
+	);
+
+	it("rejects malformed percent encoding before route access or execution", async () => {
+		const before = computes;
+		const response = await handle(
+			new Request("http://localhost/api/report/%E0%A4%A", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: "{}",
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect((await response.json()).error.code).toBe("BAD_REQUEST");
+		expect(computes).toBe(before);
+	});
 
 	it("uses parsed dependencies once, coherent facts, the target request and typed dates", async () => {
 		const before = transforms;

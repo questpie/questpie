@@ -83,6 +83,10 @@ The client shares its SSE connection with collection realtime, channels and
 collaborative bindings. Abort on unmount. Parameterized routes accept
 `{ params: { entryId } }` in the second argument to both a one-shot call and
 `watch`; missing path parameters fail before opening a request.
+Pass literal parameter values: the client encodes them for the URL, and the HTTP
+adapter decodes them once before access and execution. Catch-all parameters such
+as `[...path]` use `{ params: { path: "docs/intro" } }`; HTTP and LIVE receive the
+same string, including its slash. Malformed URL encoding returns 400.
 
 The TanStack query factory owns the LIVE arm:
 
