@@ -3,6 +3,7 @@ import {
 	mutationOptions,
 	type QueryKey,
 	queryOptions,
+	replaceEqualDeep,
 	experimental_streamedQuery as streamedQuery,
 	type UseMutationOptions,
 	type UseQueryOptions,
@@ -1313,32 +1314,6 @@ export function createQuestpieQueryOptions<
 							};
 							const queryKey = routeKey(segments, input, options);
 							if (realtime) {
-								const stream = streamedQuery({
-									streamFn: ({ signal: querySignal, client: queryClient }) => {
-										const caller = resolveRoute(segments);
-										if (!caller.watch) {
-											throw new Error("Route does not support LIVE queries");
-										}
-										return caller.watch(input, {
-											...options,
-											signal: signal
-												? AbortSignal.any([querySignal, signal])
-												: querySignal,
-											onInvalidate: () => {
-												if (querySignal.aborted || signal?.aborted) return;
-												// A manual update also clears TanStack's cancellation
-												// fallback, so unmount cannot restore protected data.
-												queryClient
-													.getQueryCache()
-													.find({ queryKey, exact: true })
-													?.setData(undefined, { manual: true, updatedAt: 0 });
-											},
-										});
-									},
-									reducer: (_previous: unknown, snapshot: unknown) => snapshot,
-									initialValue: undefined,
-									refetchMode: "append",
-								});
 								return queryOptions({
 									staleTime: 0,
 									refetchOnMount: "always",
@@ -1352,22 +1327,79 @@ export function createQuestpieQueryOptions<
 											: retry === true ||
 													(typeof retry === "number" && count < retry);
 									},
+									behavior: {
+										onFetch: (context, query) => {
+											const state = query.state;
+											// Capture an empty cancellation fallback before fetching.
+											// Snapshot writes below must not replace it with protected data.
+											query.setState({
+												data: undefined,
+												dataUpdatedAt: 0,
+												error: null,
+												status: "pending",
+											});
+											const fetchFn = context.fetchFn;
+											let firstAttempt = true;
+											context.fetchFn = () => {
+												// Retries must not restore data cleared by an invalidation.
+												if (firstAttempt) {
+													firstAttempt = false;
+													query.setState({ ...state, fetchStatus: "fetching" });
+												}
+												return fetchFn();
+											};
+										},
+									},
 									queryFn: async (context) => {
+										const querySignal = context.signal;
+										const watchSignal = signal
+											? AbortSignal.any([querySignal, signal])
+											: querySignal;
+										const query = context.client
+											.getQueryCache()
+											.find({ queryKey, exact: true })!;
+										const clear = () =>
+											query.setState({
+												data: undefined,
+												dataUpdatedAt: 0,
+												error: null,
+												status: "pending",
+											});
 										try {
-											return await stream(context);
+											const caller = resolveRoute(segments);
+											if (!caller.watch)
+												throw new Error("Route does not support LIVE queries");
+											for await (const snapshot of caller.watch(input, {
+												...options,
+												signal: watchSignal,
+												onInvalidate: () => {
+													if (!watchSignal.aborted) clear();
+												},
+											})) {
+												if (watchSignal.aborted) break;
+												const sharing = query.options.structuralSharing;
+												query.setState({
+													data:
+														typeof sharing === "function"
+															? sharing(query.state.data, snapshot)
+															: sharing === false
+																? snapshot
+																: replaceEqualDeep(query.state.data, snapshot),
+													dataUpdatedAt: Date.now(),
+													dataUpdateCount: query.state.dataUpdateCount + 1,
+													error: null,
+													isInvalidated: false,
+													status: "success",
+												});
+											}
+											return query.state.data;
 										} catch (error) {
 											if (
-												!context.signal.aborted &&
+												!watchSignal.aborted &&
 												error instanceof RealtimeTopicRejectedError &&
 												error.details.reason === "access"
-											) {
-												// setQueryData(undefined) is a no-op. A manual update
-												// clears both the data and cancellation fallback.
-												context.client
-													.getQueryCache()
-													.find({ queryKey, exact: true })
-													?.setData(undefined, { manual: true, updatedAt: 0 });
-											}
+											)
+												clear();
 											throw mapRealtimeError(error, errorMap);
 										}
 									},

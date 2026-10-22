@@ -96,6 +96,12 @@ replace the value. Do not invalidate or incrementally patch a LIVE query with
 `setQueryData`. Terminal access denial clears that query's protected cached value;
 other queries continue. Route LIVE currently requires the native SSE transport.
 
+While a temporary failure is waiting for recovery, TanStack reports `pending`
+with no data and keeps fetching on the same watch. Cancelling a LIVE query also
+leaves an empty pending cache, even after a healthy snapshot; remounting starts
+a fresh watch. A loading state can appear when opening a watch over previously
+cached one-shot data.
+
 Wire input stays the schema's `z.input`; the handler, access rule and dependency
 callbacks receive parsed `z.output`. Date snapshots retain their typed-client
 representation. MCP needs a JSON-representable wire schema, such as an ISO string
