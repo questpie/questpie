@@ -108,6 +108,12 @@ type Pending = {
 function bytes(value: string): number {
 	return Buffer.byteLength(value, "utf8");
 }
+
+export function validateEphemeralPresence(data: Record<string, unknown>): void {
+	if (bytes(stringifyTypedWire(data)) > 1024)
+		throw new Error("Ephemeral presence exceeds 1024 bytes");
+}
+
 function entryKey(entry: Entry): string {
 	return entry.kind === "event"
 		? JSON.stringify([entry.key, entry.event])
@@ -328,8 +334,7 @@ export class EphemeralChannels {
 	}
 
 	async subscribe(input: SubscriptionInput): Promise<() => Promise<void>> {
-		if (input.presence && bytes(stringifyTypedWire(input.presence.data)) > 1024)
-			throw new Error("Ephemeral presence exceeds 1024 bytes");
+		if (input.presence) validateEphemeralPresence(input.presence.data);
 		try {
 			await this.start();
 		} catch (error) {

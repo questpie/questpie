@@ -77,3 +77,23 @@ N1/N2 targeted red-to-green proof passed: child HTTP/manager/runtime suites
 contracts, package build, formatting/lint and unchanged browser bundle budget.
 The final client guard preserves resource-kind isolation while treating a
 released channel's addressed retry response as handled.
+
+The `ab3aee1b` Claude round cleared the code and confirmed N1/N2/N3, while CI
+exposed an assertion that assumed retry timers never wake before their deadline.
+The test now checks topology transitions and all five admission attempts, allowing
+an unchanged cooldown snapshot. The reviewer also found non-blocking N4: oversized
+presence or a full per-process topic/subscription limit during opening staging
+could prevent healthy siblings from becoming ready. Presence size is now checked
+in preflight using the runtime's validator. Other ephemeral staging rejections
+send the existing addressed rejection in the ordered class and close normally;
+query, durable and CRDT staging failures retain their existing handling. Three
+public-client regressions were red before this fix and green afterwards.
+
+Retry deadlines are rounded up to whole milliseconds, avoiding redundant topology
+POSTs and fresh rule checks when fractional jitter would wake the timer early.
+The reviewer's six-run fixture on Bun 1.3.13 measured 3 redundant healthy-only
+POSTs over 24 retries before the change, and 0 over 24 afterwards. This is a
+small timing experiment, not a throughput capacity claim. The final targeted
+HTTP/manager/runtime runs passed 57 tests, both core TypeScript configurations
+and the package build passed, and the browser bundle remains within its unchanged
+122.7 KB limit. A new exact-head review and CI are still required.

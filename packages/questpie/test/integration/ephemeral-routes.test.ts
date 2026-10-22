@@ -624,6 +624,107 @@ test("CRUD forbidden in a channel rule revokes only that ephemeral binding", asy
 	}
 }, 10000);
 
+for (const failure of ["presence", "topics", "subscriptions"] as const) {
+	test(`opening ${failure} limit rejects only the ephemeral channel`, async () => {
+		const setup = await buildMockApp(
+			{
+				channels: {
+					page: channel("limited-page-[id]")
+						.events({ cursor: z.number() })
+						.authorize({ subscribe: true, publish: true })
+						.presence(() => ({
+							bio: "x".repeat(failure === "presence" ? 1100 : 1),
+						}))
+						.ephemeral(),
+					activity: channel("limited-activity")
+						.events({ changed: z.number() })
+						.authorize({ subscribe: true, publish: true }),
+				},
+			},
+			{
+				realtime: {
+					retentionDays: 0,
+					ephemeral: {
+						...(failure === "topics" ? { maxTopics: 1 } : {}),
+						...(failure === "subscriptions"
+							? { maxSubscriptionsPerTopic: 1 }
+							: {}),
+					},
+				},
+			},
+		);
+		let client: ReturnType<typeof createClient<any>> | undefined;
+		let keeper: ReturnType<typeof createClient<any>> | undefined;
+		try {
+			await runTestDbMigrations(setup.app);
+			const handler = createFetchHandler(setup.app, {
+				getSession: async () => ({
+					user: { id: "ada" },
+					session: { id: "ada-session" },
+				}),
+			});
+			const options = {
+				baseURL: "http://localhost",
+				fetch: async (input: RequestInfo | URL, init?: RequestInit) =>
+					handler(new Request(input, init)),
+			};
+			if (failure !== "presence") {
+				keeper = createClient<any>(options);
+				let occupied = false;
+				keeper.channels.page({ id: "occupied" }).subscribe(() => {}, {
+					onReady: () => {
+						occupied = true;
+					},
+				});
+				await until(() => occupied);
+			}
+			let opens = 0;
+			client = createClient<any>({
+				...options,
+				fetch: async (input, init) => {
+					if (
+						String(input).endsWith("/realtime") &&
+						init?.body &&
+						!JSON.parse(String(init.body)).sessionId
+					)
+						opens++;
+					return options.fetch(input, init);
+				},
+			});
+			const errors: Error[] = [],
+				siblingErrors: Error[] = [],
+				events: number[] = [];
+			let ready = false;
+			client.channels
+				.page({ id: failure === "subscriptions" ? "occupied" : "other" })
+				.subscribe(() => {}, { onError: (error: Error) => errors.push(error) });
+			client.channels.activity.subscribe(
+				(event: { data: number }) => events.push(event.data),
+				{
+					onReady: () => {
+						ready = true;
+					},
+					onError: (error: Error) => siblingErrors.push(error),
+				},
+			);
+			await until(() => ready && errors.length === 1);
+			expect(errors[0]!.message).toContain(
+				failure === "presence" ? "1024 bytes" : `Too many ephemeral ${failure}`,
+			);
+			await client.channels.activity.publish("changed", 42);
+			await until(() => events.includes(42));
+			expect(siblingErrors).toEqual([]);
+			expect(client.channels.channelCount).toBe(1);
+			expect(opens).toBeLessThanOrEqual(2);
+		} finally {
+			client?.channels.destroy();
+			keeper?.channels.destroy();
+			await wait(50);
+			await setup.cleanup();
+		}
+	}, 10000);
+}
+
 for (const permanent of [false, true]) {
 	test(`HTTP + public client: initial broker start failure ${permanent ? "stops after five failures" : "heals"} without starving a durable sibling`, async () => {
 		let starts = 0;

@@ -297,7 +297,7 @@ export class SseConnectionManager {
 		);
 		this.channelRetries.set(id, {
 			failures,
-			retryAt: Date.now() + Math.max(1, delay),
+			retryAt: Date.now() + Math.max(1, Math.ceil(delay)),
 		});
 		this.topologyGeneration += 1;
 		try {

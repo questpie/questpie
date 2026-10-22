@@ -20,6 +20,7 @@ import { createChannelServiceContext } from "../../channels/context.js";
 import {
 	EphemeralSubscriptionUnavailableError,
 	isEphemeralAccessDenied,
+	validateEphemeralPresence,
 } from "../../channels/ephemeral.js";
 import {
 	ChannelsService,
@@ -856,6 +857,8 @@ async function resolveChannelSubscription(
 			throw new EphemeralSubscriptionUnavailableError(error, input.id);
 		throw error;
 	}
+	if (definition.ephemeralOptions && presence)
+		validateEphemeralPresence(presence);
 	return {
 		id: input.id,
 		channel: input.channel,
@@ -2098,7 +2101,13 @@ export async function realtimeSubscribe(
 					return send("error", rejection ?? { topicId, message });
 				};
 				const sendChannelError = (subscriptionId: string, message: string) =>
-					send("error", { channelSubscriptionId: subscriptionId, message });
+					sessionSink.write(
+						encodeSseEvent("error", {
+							channelSubscriptionId: subscriptionId,
+							message,
+						}),
+						"ordered-channel-event",
+					);
 
 				const closeIfEmpty = () => {
 					if (edge?.size && provisionalCrdtHold) provisionalCrdtHold = false;
@@ -2682,8 +2691,30 @@ export async function realtimeSubscribe(
 						},
 					)
 					.catch(async (error) => {
-						if (!(await sendEphemeralStageError(error))) throw error;
-						// A stream error would discard the addressed retry frame.
+						if (!(await sendEphemeralStageError(error))) {
+							const rejection = edgeStageRejection(error);
+							if (
+								!rejection ||
+								!rejection.entries.every(
+									(entry) =>
+										entry.kind === "channel" &&
+										validatedChannelsById.get(entry.id)?.ephemeral,
+								)
+							)
+								throw error;
+							for (const entry of rejection.entries) {
+								await sessionSink.write(
+									encodeSseEvent("error", {
+										topologyEntryId: entry.id,
+										kind: entry.kind,
+										code: entry.code,
+										message: entry.message,
+									}),
+									"ordered-channel-event",
+								);
+							}
+						}
+						// A stream error would discard the addressed error frame.
 						requestClose();
 					});
 				if (closed) return;
