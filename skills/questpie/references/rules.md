@@ -135,10 +135,12 @@ const canReadPrivateField = batchRead<{ id?: string }>(
 		const facts = await db
 			.select({ documentId: documentGrants.documentId })
 			.from(documentGrants)
-			.where(and(
-				eq(documentGrants.subjectId, actor.subjectId),
-				inArray(documentGrants.documentId, ids),
-			));
+			.where(
+				and(
+					eq(documentGrants.subjectId, actor.subjectId),
+					inArray(documentGrants.documentId, ids),
+				),
+			);
 		const allowed = new Set(facts.map(({ documentId }) => documentId));
 		return docs.map(({ id }) => id !== undefined && allowed.has(id));
 	},
