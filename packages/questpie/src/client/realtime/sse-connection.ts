@@ -11,6 +11,7 @@ export type RealtimeSseEvent = {
 };
 
 type TopologyResource = {
+	id: string;
 	kind: "topic" | "channel" | "crdt";
 	openPayload(): Record<string, unknown>;
 	desiredPayload(): Record<string, unknown>;
@@ -199,6 +200,7 @@ export class SseConnectionManager {
 		const pendingDirtyLanes = new Set<"visible" | "awareness" | undefined>();
 		let dirtyScheduled = false;
 		const release = this.register(input.id, {
+			id: input.id,
 			kind: "crdt",
 			openPayload: () => ({}),
 			desiredPayload: () => ({
@@ -284,16 +286,11 @@ export class SseConnectionManager {
 		const resource = this.resources.get(id);
 		if (resource?.kind !== "channel") return false;
 		const previous = this.channelRetries.get(id);
-		if (previous && previous.retryAt > 0) return true;
+		if (previous?.retryAt) return true;
 		const failures = (previous?.failures ?? 0) + 1;
-		const error = new Error(
-			typeof payload.message === "string"
-				? payload.message
-				: "Channel authorization unavailable",
-		);
-		const maxRetryMs = this.options.maxRetryMs ?? 30_000;
+		const error = new Error(payload.message as string);
 		const delay = Math.min(
-			maxRetryMs,
+			this.options.maxRetryMs ?? 30_000,
 			(this.options.retryBaseMs ?? 1000) *
 				2 ** (failures - 1) *
 				(0.5 + (this.options.random ?? Math.random)()),
@@ -325,32 +322,29 @@ export class SseConnectionManager {
 	private scheduleChannelRetry(): void {
 		if (this.channelRetryTimer) clearTimeout(this.channelRetryTimer);
 		this.channelRetryTimer = null;
-		const pending = [...this.channelRetries.values()].filter(
-			(retry) => retry.retryAt > 0,
-		);
-		if (!pending.length) return;
+		let next = Infinity;
+		for (const { retryAt } of this.channelRetries.values()) {
+			if (retryAt > 0) next = Math.min(next, retryAt);
+		}
+		if (next === Infinity) return;
 		this.channelRetryTimer = setTimeout(
 			() => {
 				this.channelRetryTimer = null;
 				for (const retry of this.channelRetries.values()) {
-					if (retry.retryAt > 0 && retry.retryAt <= Date.now())
-						retry.retryAt = 0;
+					if (retry.retryAt <= Date.now()) retry.retryAt = 0;
 				}
 				this.topologyGeneration += 1;
 				this.applyTopologyChange();
 				this.scheduleChannelRetry();
 			},
-			Math.max(
-				1,
-				Math.min(...pending.map((retry) => retry.retryAt)) - Date.now(),
-			),
+			Math.max(1, next - Date.now()),
 		);
 	}
 
 	private activeResources(): TopologyResource[] {
-		return [...this.resources]
-			.filter(([id]) => !this.channelRetries.get(id)?.retryAt)
-			.map(([, resource]) => resource);
+		return [...this.resources.values()].filter(
+			(resource) => !this.channelRetries.get(resource.id)?.retryAt,
+		);
 	}
 
 	private applyTopologyChange(): void {
@@ -684,25 +678,15 @@ export class SseConnectionManager {
 			}
 			return;
 		}
-		if (event.type === "ping") this.retryAttempt = 0;
-		if (event.type === "ping") return;
-		if (event.type === "error") {
-			try {
-				if (this.retryChannel(JSON.parse(event.data))) {
-					this.reconnectPending = true;
-					return;
-				}
-			} catch {
-				// Malformed errors are ignored by dispatch below.
-			}
+		if (event.type === "ping") {
+			this.retryAttempt = 0;
+			return;
 		}
 		this.dispatch(event);
 	}
 
 	private dispatch(event: RealtimeSseEvent): boolean {
 		try {
-			if (event.type === "error" && this.retryChannel(JSON.parse(event.data)))
-				return true;
 			const payload = JSON.parse(event.data) as {
 				topicId?: unknown;
 				channel?: unknown;
@@ -711,6 +695,10 @@ export class SseConnectionManager {
 				kind?: unknown;
 				message?: unknown;
 			};
+			if (event.type === "error" && this.retryChannel(payload)) {
+				this.reconnectPending = true;
+				return true;
+			}
 			const id =
 				typeof payload.topologyEntryId === "string"
 					? payload.topologyEntryId
@@ -742,10 +730,7 @@ export class SseConnectionManager {
 			if (!resource) return false;
 			if (event.type !== "error" && this.channelRetries.get(id)?.retryAt)
 				return true;
-			if (
-				event.type === "channel_ready" &&
-				!this.channelRetries.get(id)?.retryAt
-			) {
+			if (event.type === "channel_ready") {
 				this.channelRetries.delete(id);
 				this.scheduleChannelRetry();
 			}
