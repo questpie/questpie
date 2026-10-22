@@ -5,6 +5,7 @@ import type {
 	ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext, RequestContext } from "questpie";
+import type { ApiErrorCode } from "questpie/errors";
 import type { z } from "zod";
 
 export type McpTransportKind = "http" | "stdio" | "workload";
@@ -132,7 +133,7 @@ export interface McpExecutionLimits {
 }
 
 export type McpPublicErrorCode =
-	| import("questpie/errors").ApiErrorCode
+	| ApiErrorCode
 	| "access_denied"
 	| "invalid_input"
 	| "input_too_large"

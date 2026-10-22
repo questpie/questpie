@@ -162,10 +162,10 @@ function normalizeTupleDialect(node: Record<string, unknown>): void {
  *   first, so an absent `$schema` is universally, correctly, read as 2020-12).
  * - Drops `additionalProperties: false`, *except inside a `oneOf`/`not`/`if`
  *   subtree*. Ordinarily this is safe to drop everywhere: the MCP SDK
- *   validates tool arguments against the *original* zod schema at call time
- *   (`McpServer#validateToolInput` in `mcp.js`), never against this projected
- *   JSON Schema, so removing the annotation does not change what a call gets
- *   rejected for. But inside `oneOf`, `additionalProperties: false` can be
+ *   validates CRUD/custom arguments against the original Zod schema; route
+ *   tools preserve raw wire input for validation by the shared executor. Neither
+ *   path uses this projected JSON Schema for server-side argument validation,
+ *   so removing the annotation does not change server-side rejection. But inside `oneOf`, `additionalProperties: false` can be
  *   the only thing making two branches mutually exclusive (reproduced:
  *   `z.xor` of two `.strict()` objects with disjoint keys — stripping it from
  *   both branches makes a value that should match exactly one branch match

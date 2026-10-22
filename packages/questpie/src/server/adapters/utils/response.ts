@@ -83,7 +83,7 @@ export const introspectionDeniedError = (
 };
 
 /**
- * Detect if we're in development mode
+ * Detect development mode for callers. Public error redaction is environment-independent.
  */
 export const isDevelopment = () => {
 	try {
@@ -98,6 +98,7 @@ export const isDevelopment = () => {
  */
 export type HandleErrorOptions = {
 	request?: Request;
+	/** @deprecated Public responses always redact diagnostics; retained for compatibility. */
 	isDev?: boolean;
 	app?: Questpie<any>;
 	locale?: string;

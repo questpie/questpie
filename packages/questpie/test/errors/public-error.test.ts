@@ -6,6 +6,28 @@ import { handleError } from "../../src/server/adapters/utils/response.js";
 import { ApiError } from "../../src/server/errors/base.js";
 
 describe("safe public error wire contract", () => {
+	it("redacts ApiError when JSON.stringify supplies a property key to toJSON", () => {
+		const error = ApiError.internal(
+			"private-database-secret",
+			new Error("private-cause"),
+		);
+		const json = JSON.stringify({ error });
+		expect(JSON.parse(json)).toEqual({
+			error: {
+				code: "INTERNAL_SERVER_ERROR",
+				message: "Internal server error",
+			},
+		});
+		for (const secret of [
+			"stack",
+			"cause",
+			"private-database-secret",
+			"private-cause",
+		]) {
+			expect(json).not.toContain(secret);
+		}
+		expect(error.toJSON(true)).toHaveProperty("stack", error.stack);
+	});
 	it("keeps explicit product details but never cause, invalid values or runtime context", async () => {
 		const error = new ApiError({
 			code: "CONFLICT",

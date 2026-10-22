@@ -1,3 +1,4 @@
+export { prepareJsonRoute } from "#questpie/server/routes/execute.js";
 export { route } from "#questpie/server/routes/define-route.js";
 export { RouteBuilder } from "#questpie/server/routes/route-builder.js";
 export * from "#questpie/server/routes/index.js";

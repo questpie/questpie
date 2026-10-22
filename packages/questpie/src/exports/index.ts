@@ -288,6 +288,7 @@ export {
 	type CoreMessageKey,
 	coreBackendMessages,
 } from "#questpie/server/modules/starter/_messages.js";
+export { prepareJsonRoute } from "#questpie/server/routes/execute.js";
 export { route } from "#questpie/server/routes/define-route.js";
 export { routeApp } from "#questpie/server/routes/route-app.js";
 export * from "#questpie/server/routes/index.js";

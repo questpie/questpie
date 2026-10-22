@@ -164,6 +164,27 @@ export async function executeJsonRouteInternal<
 	request?: Request,
 	params?: TParams,
 ): Promise<TOutput> {
+	return prepareJsonRoute(app, definition, input, request, params).execute(
+		context,
+	);
+}
+
+/**
+ * Parse route input once, then execute access, handler and output validation
+ * under the supplied context. Adapters must verify credentials before
+ * preparing application input.
+ */
+export function prepareJsonRoute<
+	TInput,
+	TOutput,
+	TParams extends JsonRouteParams,
+>(
+	app: Questpie<any>,
+	definition: JsonRouteDefinition<TInput, TOutput, TParams>,
+	input: unknown,
+	request?: Request,
+	params?: TParams,
+) {
 	// Output-only routes (`.outputSchema()` with no `.schema()`) are valid JSON
 	// routes with `unknown` input (route-builder.ts) — their `schema` is undefined,
 	// so pass the raw input through rather than crashing on `.parse`.
@@ -175,55 +196,61 @@ export async function executeJsonRouteInternal<
 		if (!result.success) throw ApiError.fromZodError(result.error);
 		parsed = result.data;
 	}
-	const requestContext = unwrapRequestContext(context);
-	const resolvedContext =
-		requestContext ?? (await app.createContext({ accessMode: "system" }));
-	const adapterContext = isRouteAdapterContext(context)
-		? context
-		: toRouteAdapterContext(resolvedContext);
+	return {
+		input: parsed as TInput,
+		execute: async (context?: RouteExecutionContext): Promise<TOutput> => {
+			const requestContext = unwrapRequestContext(context);
+			const resolvedContext =
+				requestContext ?? (await app.createContext({ accessMode: "system" }));
+			const adapterContext = isRouteAdapterContext(context)
+				? context
+				: toRouteAdapterContext(resolvedContext);
 
-	return runWithContext(
-		createRouteStoreContext(app, resolvedContext, adapterContext),
-		async () => {
-			const services = extractAppServices(app, {
-				db: resolvedContext.db ?? app.db,
-				session: resolvedContext.session,
-				locale: resolvedContext.locale,
-				accessMode: resolvedContext.accessMode,
-				principal: resolvedContext.principal,
-			});
+			return runWithContext(
+				createRouteStoreContext(app, resolvedContext, adapterContext),
+				async () => {
+					const services = extractAppServices(app, {
+						db: resolvedContext.db ?? app.db,
+						session: resolvedContext.session,
+						locale: resolvedContext.locale,
+						accessMode: resolvedContext.accessMode,
+						principal: resolvedContext.principal,
+					});
 
-			const allowed = await evaluateRouteAccess(definition.access, {
-				...services,
-				...(resolvedContext["~contextExtensions"] ?? {}),
-				locale: resolvedContext.locale,
-				request,
-				params,
-			});
-			if (!allowed) {
-				throw ApiError.forbidden({
-					operation: "read",
-					resource: "route",
-					reason: "Access denied",
-				});
-			}
+					const allowed = await evaluateRouteAccess(definition.access, {
+						...services,
+						...(resolvedContext["~contextExtensions"] ?? {}),
+						locale: resolvedContext.locale,
+						request,
+						params,
+						input: parsed,
+					});
+					if (!allowed) {
+						throw ApiError.forbidden({
+							operation: "read",
+							resource: "route",
+							reason: "Access denied",
+						});
+					}
 
-			const result = await definition.handler({
-				...(resolvedContext["~contextExtensions"] ?? {}),
-				...services,
-				...resolvedContext,
-				app,
-				input: parsed as TInput,
-				...(request ? { request } : {}),
-				locale: resolvedContext.locale,
-				params: (params ?? {}) as TParams,
-			} as any);
-			if (definition.outputSchema) {
-				return definition.outputSchema.parse(result) as TOutput;
-			}
-			return result as TOutput;
+					const result = await definition.handler({
+						...(resolvedContext["~contextExtensions"] ?? {}),
+						...services,
+						...resolvedContext,
+						app,
+						input: parsed as TInput,
+						...(request ? { request } : {}),
+						locale: resolvedContext.locale,
+						params: (params ?? {}) as TParams,
+					} as any);
+					if (definition.outputSchema) {
+						return definition.outputSchema.parse(result) as TOutput;
+					}
+					return result as TOutput;
+				},
+			);
 		},
-	);
+	};
 }
 
 // ============================================================================
