@@ -1,168 +1,158 @@
-# RFC: named realtime queries
+# Route queries and LIVE projections
 
-Status: proposed, non-blocking, no implementation in Realtime v3.
+The owner accepted this direction on 2026-10-22 after three independent designs
+and an Opus adversarial comparison. This is the implementation contract; the
+new methods below are not available in QUESTPIE 3.39.0.
 
-## Decision to evaluate
+## One operation definition
 
-QUESTPIE should eventually add a server-declared, code-generated realtime query primitive for bounded read models that cannot be expressed safely or efficiently as arbitrary client collection `find` topics.
+Keep `route()` and its existing registry. HTTP, the typed client, OpenAPI and MCP
+derive from the same input, output, public errors, product policy and executor.
+Verified Human or Agent identity and credential restrictions arrive through
+context; neither selects another business handler. There is no new operation
+registry, codegen category or MCP-to-HTTP loopback.
 
-This RFC does not authorize implementation. Generic collection realtime, typed channels, and ordinary refetch remain the supported choices until the API and query-plan contract are ratified.
-
-## Why a distinct primitive
-
-A route owns input validation and access but has request/response lifetime and no declared invalidation plan. A service owns reusable server logic but is not a public typed subscription contract. A collection live query exposes a client-owned query plan, which is intentionally too broad for rankings, personalized graphs, or application-specific materializations.
-
-A named realtime query needs all three:
-
-- validated public or internal arguments;
-- a server-owned query and authorization plan;
-- a declared, reviewable invalidation/candidate plan.
-
-It should therefore be a definition/codegen primitive that may call routes/services internally, not a magic realtime flag on an arbitrary route.
-
-## Strawman API
-
-The example is illustrative syntax, not shipped API:
+Add one semantic capability:
 
 ```ts
-// realtime-queries/activity-feed.ts
-import { realtimeQuery } from "questpie/realtime";
-import { z } from "zod";
+export default route()
+	.post()
+	.schema(workInput)
+	.outputSchema(workOutput)
+	.access(({ input, principal }) => mayReadWork(principal, input))
+	.query({
+		live: {
+			data: ({ companyId }) => ({ tasks: { company: companyId } }),
+			authority: ({ companyId }) => ({ memberships: { company: companyId } }),
+			maxAgeMs: 30_000,
+		},
+	})
+	.meta({ mcp: { expose: true, name: "work.read" } })
+	.handler(({ input, collections }) => readWork(input, collections));
 
-export default realtimeQuery("activity-feed")
-	.input(
-		z.object({
-			scopeId: z.string().max(128),
-			bucketId: z.string().max(128),
-		}),
-	)
-	.public()
-	.identity(({ input, principal, locale }) => ({
-		principalId: principal.user.id,
-		scopeId: input.scopeId,
-		bucketId: input.bucketId,
-		locale,
-	}))
-	.watch(({ input }) => [
-		{ collection: "activityInbox", where: { scopeId: input.scopeId } },
-	])
-	.query(async ({ input, collections }) =>
-		collections.activityInbox.find({
-			where: {
-				scopeId: input.scopeId,
-				bucketId: input.bucketId,
-			},
-			limit: 100,
-		}),
-	);
+await client.routes.work.post(input);
+for await (const state of client.routes.work.post.watch(input, { signal })) {
+	// Replace the displayed authorized projection.
+}
+
+queries.routes.work.post.query(input, { realtime: true });
 ```
 
-Possible generated client:
+Names in the example are illustrative. A tenant argument narrows a query; it
+does not establish authority. Query definitions require input/output schemas
+and explicit access. Access receives parsed input and real path parameters.
+MCP discovery checks exposure and credential eligibility; invocation evaluates
+product access in the shared executor. Query semantics determine the read-only
+annotation. Client wire input and parsed handler input retain their distinct
+Zod types; neither transformations nor output validation run twice.
 
-```ts
-const stop = client.realtimeQueries.activityFeed.subscribe(
-	{ scopeId, bucketId },
-	(result) => render(result.docs),
-);
-```
+Ordinary routes retain their behavior and transaction ownership. Do not add a
+managed `.command()` in this release. Autopilot recovers concurrent receipts
+after rollback and dispatches assignment after commit; an outer transaction
+would change those contracts. Its shared domain executor remains authoritative.
 
-An internal definition would be callable only from trusted server code and would not appear in browser discovery:
+## Consistent reads with efficient CRUD
 
-```ts
-realtimeQuery("rebuild-progress").input(schema).internal();
-```
+Each query evaluation uses one bounded read-only repeatable-read transaction.
+Database-backed context facts, access, handler reads and output validation use
+that transaction. Scoped services are fresh for the evaluation. No omitted
+context silently grants system authority. Invalid server output is a server
+error; a database write in a query is rejected.
 
-## Security model
+Improve the existing CRUD path rather than adding a second planner:
 
-- Public/internal visibility is explicit. Internal is fail-closed and absent from public codegen/discovery.
-- Input is parsed before identity, admission, watch-plan allocation, or query execution.
-- The server derives principal and subscription scope from authenticated request context. A client argument never becomes authority merely because it is named `scopeId`.
-- Query execution uses the normal `AppContext`, collection access, field access, relation hydration, and hooks. No realtime-only access system exists.
-- A watch predicate is a candidate optimization only. It cannot grant rows or replace query authorization.
-- Missing or invalid relation metadata fails closed exactly as it does for normal reads.
-- Public rejection payloads contain the query name, stable reason, and bounded limits, never arguments, identity, watch keys, or results.
+- Relation hydration uses batched data reads without unnecessary counts.
+- To-many `with.limit` applies per parent, after target access, in one batched
+  query per bounded key chunk.
+- `_countWhere` computes conditional authorized child counts in the existing
+  grouped aggregate path.
+- `_ancestors` uses one bounded recursive query, with cycle and depth handling
+  and no disclosure beyond an unreadable ancestor.
+- `batchRead` evaluates field decisions once per batch; row visibility remains
+  a SQL access predicate applied before pagination, totals and cursors.
+- Caller relation filters apply target read access. Trusted server policy
+  predicates remain distinct, so enforcing caller visibility cannot recurse
+  through or weaken the policy that grants access.
 
-## Cache and group identity
+Access rules may depend on the operation input. Do not memoize a permission
+verdict merely by collection, or reuse it across evaluations or principals.
+An evaluation-scoped service may acquire shared authority facts once.
 
-The group key is a canonical tuple:
+Queries reject nested CRUD I/O from per-row field rules, output hooks and
+`afterRead` at the first row. Batch the work explicitly. Arbitrary handler
+JavaScript cannot receive a universal no-N+1 guarantee: cardinality tests at
+10/50/100 roots must assert statement growth, returned/scanned work and actual
+PostgreSQL plans. A production statement cap is not an optimizer and is not
+part of this interface.
 
-1. definition name and version;
-2. validated/canonical arguments selected by the definition;
-3. explicit access-equivalence identity, otherwise stable principal identity;
-4. frozen server subscription scope;
-5. locale, stage, and access mode;
-6. output-affecting definition revision.
+## LIVE execution
 
-Definitions may deliberately omit an argument from identity only when tests prove it cannot change output or authority. Materialized membership/permission id sets are forbidden in the key. Mutable authorization is re-evaluated from current database state.
+Only explicitly declared `.query({ live })` routes are watchable. The query
+factory owns `{ realtime }`; a live arm is never invalidated or patched through
+`setQueryData`. HTTP-only exposure remains possible, including Autopilot's
+Library opening read. MCP content reads still follow its `library.pull` policy.
 
-Changing scope or an identity-bearing argument opens a new group and bootstraps a fresh result. Deployment revision changes force a reset rather than sharing old output across incompatible query code.
+Use the existing shared SSE topology and snapshot scheduling. Resolve declared
+data and authority dependencies before initial computation. They include
+authority read by the app context resolver, empty result ranges and missing
+relations. Equality anchors reduce unrelated tenant wakes; they never grant
+access. Uncaptured data dependencies reject watch admission. Clock and lease
+dependencies require a bounded refresh age.
 
-## Admission and execution
+The durable outbox and reconciliation are the source of convergence. NOTIFY
+is a coalescible wake hint. An initial read subscribes before computing and
+latches changes into one trailing recomputation. Rollbacks produce no durable
+change. Reconnect recomputes and replaces state. No new broker is needed.
 
-Every definition declares or inherits finite:
+Each evaluation refreshes identity and authority. An authority event observed
+during computation invalidates its result before publication. Denial ends that
+logical watch and clears protected client data. Other logical subscriptions
+remain usable. There is no permission cache or cross-principal result sharing.
 
-- subscriptions per principal/session;
-- validated argument bytes;
-- candidate/watch anchors and maximum dependency count;
-- bootstrap rows and serialized bytes;
-- computation concurrency and timeout;
-- refresh/delta queue count and bytes;
-- optional cache lifetime.
+Revocation is bounded by the next drained authority event or configured maximum
+age, including session expiry and authority outside change capture. This does
+not promise linearizable revocation. A stronger fence would have to cover every
+authority writer, not just rows in the realtime log. Measure the stale delivery
+window before deciding whether that additional mechanism is needed.
 
-The initial implementation should support snapshot recomputation only. Native deltas require a separate proof that the server-owned plan maps authoritative row changes into keyed output operations. An arbitrary handler return value is not delta-eligible.
+Route snapshots use the same typed wire representation as one-shot reads, so
+values such as dates keep their type on the same cache key. Bound active watches,
+evaluation concurrency and duration, returned bytes and queued replacement
+snapshots. Measure pool occupancy and work per routed write before widening
+adoption; watch count alone is not a capacity result.
 
-## Delivery boundary
+## Public contracts and budgets
 
-| Need                                                     | Use                                                        |
-| -------------------------------------------------------- | ---------------------------------------------------------- |
-| Bounded normalized collection rows                       | Generic collection realtime                                |
-| Bounded server-owned read model with validated arguments | Future named realtime query                                |
-| Transient fanout, presence, progress, or invalidation    | Typed channel                                              |
-| Personalized ranking/page with no durable push need      | Normal query/refetch                                       |
-| Durable per-recipient feed                               | Materialized inbox collection, optionally generic realtime |
+HTTP and MCP use one safe public error shape. Explicit product errors preserve
+their code and permitted details. Production responses omit causes, stacks,
+database constraint values and internal database context. Input validation and
+server output validation are distinct failures. Verified context extensions
+cannot replace reserved framework identity or service arguments.
 
-A named query is not a substitute for materializing a 100,000-recipient fanout. Its declared watch plan and diagnostics must still surface a high candidate blast.
+The complete final Human MCP catalog must stay below 100,000 UTF-8 bytes;
+Autopilot targets 85,000 bytes. Measure actual projected schemas and metadata,
+fail explicitly on overflow, and identify large contributors. Do not silently
+drop tools or output schemas. Consolidated operations retain one canonical
+schema, including action discriminants, for every carrier.
 
-## Codegen and discovery
+## Required proof
 
-If approved:
+- HTTP, Human MCP and Agent MCP agree on success, receipt replay, conflicts,
+  denials, invalid input and verified provenance; unknown errors disclose no
+  server details.
+- Hidden relation predicates disclose neither values nor counts; trusted policy
+  predicates and explicit system reads retain their intended behavior.
+- Two parents each receive their own top-K authorized children. Ancestors and
+  conditional aggregates preserve row and field access.
+- A commit between two reads produces one coherent snapshot. Query writes fail;
+  existing command receipt recovery and post-commit behavior remain intact.
+- Commit during bootstrap, insertion into an empty result, rollback, missed
+  NOTIFY, reconnect, session expiry and revocation during computation converge
+  without another principal's data or publication from an invalidated epoch.
+- One-shot and LIVE results agree, including typed values. A write burst is
+  coalesced, and realistic load reports data SQL, authority SQL, statement
+  growth, pool occupancy, compute count and latency separately.
 
-- add a plugin-driven `realtimeQueries` category and registry;
-- generate server definition maps and typed public client handles;
-- expose public definitions through bounded introspection/OpenAPI only if existing generic policy allows it;
-- keep internal definitions absent from public artifacts;
-- generate package entrypoints through `tsdown` and `src/exports`, never manual ad-hoc exports.
-
-MCP discovery should follow the same public/internal and capability policy as other generated operations. No automatic MCP tool should be added merely because a realtime definition exists.
-
-## Migration path
-
-1. Keep existing collection live queries unchanged.
-2. Ratify definition identity, watch plan, observability, and public/internal discovery.
-3. Land snapshot-only named queries behind additive codegen.
-4. Migrate only high-cost hand-built collection topics whose server-owned plan is demonstrably bounded.
-5. Consider native deltas per definition in a later RFC.
-
-No wire migration should reinterpret an existing collection topic as a named query.
-
-## Non-goals
-
-- Arbitrary incremental SQL.
-- Running arbitrary client query text or route handlers as subscriptions.
-- Automatic fanout/materialization architecture.
-- Treating client filters or watch plans as access control.
-- Replacing typed channels.
-- Shipping this API as part of the current Realtime v3 delta emitter.
-
-## Acceptance cases before implementation
-
-- Public and internal definitions have non-confusable generated surfaces.
-- Invalid input performs no group allocation, query, or watch registration.
-- Two principals, scopes, locales, or output-affecting arguments cannot collide.
-- Current database-backed membership revocation triggers targeted reset and removes unauthorized output.
-- A watch miss only skips a definitely unrelated change; unknown continues to authoritative execution.
-- Missing/mismatched relational access metadata denies or rejects.
-- Admission bounds bootstrap rows/bytes, compute concurrency, and queues.
-- Diagnostics expose candidates, DB executions, snapshot bytes, resets, and stable reasons without raw argument/identity labels.
-- A 100,000 personalized-relation adversary is reported as high blast rather than marketed as scalable.
-- Collection realtime, named queries, typed channels, and refetch have explicit migration examples and no silent behavior changes.
+Autopilot adoption follows its coordinated chat, read and catalog changes by
+merge, never rebase. Its FE-1 clause changes in the same commit as route-LIVE
+usage. Existing product policy and delivery gates still apply.

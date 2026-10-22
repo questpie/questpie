@@ -320,3 +320,10 @@ export type {
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
 export type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
+
+export type {
+	QueryRouteDefinition,
+	RouteLiveDependencies,
+	RouteLiveOptions,
+	RouteQueryOptions,
+} from "#questpie/server/routes/types.js";

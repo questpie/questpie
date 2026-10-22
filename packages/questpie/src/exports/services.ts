@@ -8,3 +8,10 @@ export { seed } from "#questpie/server/seed/define-seed.js";
 export * from "#questpie/server/seed/index.js";
 export { email } from "#questpie/server/modules/core/integrated/mailer/template.js";
 export { migration } from "#questpie/server/migration/define-migration.js";
+
+export type {
+	QueryRouteDefinition,
+	RouteLiveDependencies,
+	RouteLiveOptions,
+	RouteQueryOptions,
+} from "#questpie/server/routes/types.js";

@@ -487,6 +487,7 @@ export const createFetchHandler = (
 											config,
 											context,
 											{ requestId, traceId },
+											isJsonRoute(def) && def.query !== undefined,
 										);
 										const routeContext = attachInternalHttpBindingConfig(
 											resolved,

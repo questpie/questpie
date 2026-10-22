@@ -567,3 +567,85 @@ describe("Route via HTTP — custom app context extensions reach JSON handlers",
 		});
 	});
 });
+
+describe("Route via HTTP — framework arguments win over colliding context extensions", () => {
+	const seen: Record<string, Record<string, unknown>> = {};
+	// `app` is never an extension here, so it is the framework reference.
+	// `app.collections` builds a new object per read, so it cannot match by identity.
+	const capture = (slot: string, args: Record<string, unknown>) => {
+		const app = args.app as Record<string, unknown>;
+		seen[slot] = {
+			db: args.db === app.db,
+			collections: typeof args.collections === "object",
+			logger: args.logger === app.logger,
+			requesterRunId: args.requesterRunId,
+		};
+	};
+	const inspectJson = route()
+		.post()
+		.schema(z.object({}))
+		.access((args) => {
+			capture("jsonAccess", args as never);
+			return true;
+		})
+		.handler((args) => {
+			capture("jsonHandler", args as never);
+			return {};
+		});
+	const inspectRaw = route()
+		.post()
+		.raw()
+		.access((args) => {
+			capture("rawAccess", args as never);
+			return true;
+		})
+		.handler((args) => {
+			capture("rawHandler", args as never);
+			return new Response(null, { status: 204 });
+		});
+
+	let setup: Awaited<ReturnType<typeof buildMockApp>>;
+
+	beforeEach(async () => {
+		setup = await buildMockApp({
+			routes: { inspectJson, inspectRaw },
+			config: {
+				app: {
+					context: async () => ({
+						db: "extension db",
+						collections: "extension collections",
+						logger: "extension logger",
+						requesterRunId: "verified-run",
+					}),
+				},
+			},
+		});
+	});
+
+	afterEach(async () => {
+		await setup.cleanup();
+	});
+
+	it("keeps framework services in access rules and handlers while passing other extension keys", async () => {
+		const handler = createFetchHandler(setup.app);
+		for (const path of ["/inspect-json", "/inspect-raw"]) {
+			const response = await handler(
+				new Request(`http://localhost${path}`, { method: "POST", body: "{}" }),
+			);
+			expect(response?.status).toBeLessThan(300);
+		}
+
+		const framework = {
+			db: true,
+			collections: true,
+			logger: true,
+			requesterRunId: "verified-run",
+		};
+		expect(seen).toEqual({
+			jsonAccess: framework,
+			jsonHandler: framework,
+			rawAccess: framework,
+			rawHandler: framework,
+		});
+	});
+});
