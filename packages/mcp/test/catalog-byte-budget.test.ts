@@ -502,7 +502,9 @@ describe("MCP catalog UTF-8 byte budget", () => {
 			const exactBytes = bytes(result);
 			expect(exactBytes).toBeLessThan(85_000);
 			expect(result.tools[0].inputSchema).toMatchObject({ required: ["id"] });
-			expect(result.tools[0].inputSchema).not.toHaveProperty("$schema");
+			expect(result.tools[0].inputSchema.$schema).toBe(
+				"http://json-schema.org/draft-07/schema#",
+			);
 			expect(result.tools[0].outputSchema).toMatchObject({
 				required: ["value"],
 			});

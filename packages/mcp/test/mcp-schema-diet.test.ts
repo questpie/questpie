@@ -173,6 +173,17 @@ describe("applyMcpSchemaDiet (unit)", () => {
 		expect(JSON.stringify(schema)).toContain('"format":"uuid"');
 	});
 
+	it("preserves an explicitly declared non-default dialect", () => {
+		const schema = applyMcpSchemaDiet({
+			$schema: "http://json-schema.org/draft-07/schema#",
+			type: "array",
+			items: [{ type: "string" }],
+			additionalItems: false,
+		});
+		expect(schema.$schema).toBe("http://json-schema.org/draft-07/schema#");
+		expect(schema.items).toEqual([{ type: "string" }]);
+	});
+
 	it("preserves draft-07 tuple semantics for the SDK default validator", () => {
 		const closed = applyMcpSchemaDiet({
 			type: "array",
@@ -377,16 +388,20 @@ describe("MCP tools/list schema diet (integration)", () => {
 		return { setup, server };
 	}
 
-	it("removes $schema from every emitted tool schema", async () => {
+	it("declares the non-default draft-07 dialect on emitted tool schemas", async () => {
 		const { setup, server } = await buildFixtureServer();
 		const { client, close } = await connect(server);
 		try {
 			const tools = await client.listTools();
 			expect(tools.tools.length).toBeGreaterThan(0);
 			for (const tool of tools.tools) {
-				expect(JSON.stringify(tool.inputSchema)).not.toContain('"$schema"');
+				expect(tool.inputSchema.$schema).toBe(
+					"http://json-schema.org/draft-07/schema#",
+				);
 				if (tool.outputSchema) {
-					expect(JSON.stringify(tool.outputSchema)).not.toContain('"$schema"');
+					expect(tool.outputSchema.$schema).toBe(
+						"http://json-schema.org/draft-07/schema#",
+					);
 				}
 			}
 		} finally {
