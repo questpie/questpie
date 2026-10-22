@@ -176,3 +176,35 @@ it("does not invoke overridden error serialization or nested detail accessors", 
 	});
 	expect(calls).toBe(0);
 });
+
+it("keeps internal diagnostic messages and translation keys out of public responses", async () => {
+	const cause = new Error("private connection details");
+	for (const error of [
+		ApiError.internal("private SQL", cause),
+		ApiError.internal("private SQL", cause, "private.indexer", {
+			table: "private_table",
+		}),
+	]) {
+		const translated: string[] = [];
+		const response = handleError(error, {
+			isDev: false,
+			locale: "sk",
+			app: {
+				t: (key: string) => {
+					translated.push(key);
+					return "Vnútorná chyba servera";
+				},
+			} as never,
+		});
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({
+			error: {
+				code: "INTERNAL_SERVER_ERROR",
+				message: "Vnútorná chyba servera",
+			},
+		});
+		expect(translated).toEqual(["error.internal"]);
+		expect(error.message).toBe("private SQL");
+		expect(error.cause).toBe(cause);
+	}
+});

@@ -210,8 +210,10 @@ const body = { error: formatPublicError(error, { t, locale }) };
 
 The formatter preserves explicit public messages and bounded application
 `context.custom` details. Causes, stacks, invalid field values and database or
-hook diagnostics stay server-side. Unknown exceptions and invalid handler
-output become opaque `INTERNAL_SERVER_ERROR` responses. Route input schema
+hook diagnostics stay server-side. Internal and hook errors use a generic
+public message even when their diagnostic message has a custom translation key.
+Unknown exceptions and invalid handler output become opaque
+`INTERNAL_SERVER_ERROR` responses. Route input schema
 failures become `VALIDATION_ERROR` before the handler runs.
 
 ## Resources

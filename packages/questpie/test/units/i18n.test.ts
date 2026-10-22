@@ -784,7 +784,7 @@ describe("i18n", () => {
 				expect(error.cause).toBe(cause);
 			});
 
-			test("should render a supplied key through a translate function", () => {
+			test("keeps a supplied diagnostic key server-side and translates the generic public message", () => {
 				const error = ApiError.internal(
 					"Indexer crashed",
 					undefined,
@@ -792,12 +792,14 @@ describe("i18n", () => {
 					{ collection: "posts" },
 				);
 
+				expect(error.message).toBe("Indexer crashed");
+				expect(error.messageKey).toBe("post.internal.indexer");
 				expect(error.toJSON(false, t, "sk").message).toBe(
-					"Indexovanie posts zlyhalo",
+					"Interna chyba servera",
 				);
 			});
 
-			test("should behave exactly as before when no key is given", () => {
+			test("preserves diagnostic data while serializing a generic public message without a custom key", () => {
 				const error = ApiError.internal("Database connection failed");
 
 				expect(error.code).toBe("INTERNAL_SERVER_ERROR");
@@ -805,7 +807,7 @@ describe("i18n", () => {
 				expect(error.messageKey).toBe("error.internal");
 				expect(error.messageParams).toBeUndefined();
 				expect(error.cause).toBeUndefined();
-				expect(error.toJSON(false).message).toBe("Database connection failed");
+				expect(error.toJSON(false).message).toBe("Internal server error");
 				expect(error.toJSON(false, t, "sk").message).toBe(
 					"Interna chyba servera",
 				);
