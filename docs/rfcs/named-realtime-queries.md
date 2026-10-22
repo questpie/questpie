@@ -1,8 +1,9 @@
 # Route queries and LIVE projections
 
 The owner accepted this direction on 2026-10-22 after three independent designs
-and an Opus adversarial comparison. This is the implementation contract; the
-new methods below are not available in QUESTPIE 3.39.0.
+and an Opus adversarial comparison. This records the delivery contract and the
+explicitly deferred work below; the new methods are not available in QUESTPIE
+3.39.0.
 
 ## One operation definition
 
@@ -78,13 +79,10 @@ error; a database write in a query is rejected.
 
 Improve the existing CRUD path rather than adding a second planner:
 
-- Relation hydration uses batched data reads without unnecessary counts.
+- Bounded relation hydration uses batched target reads without a target count.
 - To-many `with.limit` applies per parent, after target access, in one batched
-  query per bounded key chunk.
-- `_countWhere` computes conditional authorized child counts in the existing
-  grouped aggregate path.
-- `_ancestors` uses one bounded recursive query, with cycle and depth handling
-  and no disclosure beyond an unreadable ancestor.
+  target query for the page's parents. Many-to-many still reads junction rows
+  separately; very large link sets need later parameter and plan optimization.
 - `batchRead` evaluates field decisions once per batch; row visibility remains
   a SQL access predicate applied before pagination, totals and cursors.
 - Caller relation filters apply target read access. Trusted server policy
@@ -95,12 +93,12 @@ Access rules may depend on the operation input. Do not memoize a permission
 verdict merely by collection, or reuse it across evaluations or principals.
 An evaluation-scoped service may acquire shared authority facts once.
 
-Queries reject nested CRUD I/O from per-row field rules, output hooks and
-`afterRead` at the first row. Batch the work explicitly. Arbitrary handler
-JavaScript cannot receive a universal no-N+1 guarantee: cardinality tests at
-10/50/100 roots must assert statement growth, returned/scanned work and actual
-PostgreSQL plans. A production statement cap is not an optimizer and is not
-part of this interface.
+Batch per-row database work explicitly. This release does not reject CRUD I/O
+from field rules, output hooks or `afterRead`; a deterministic row-phase guard
+is deferred. Arbitrary handler JavaScript cannot receive a universal no-N+1
+guarantee. Cardinality tests at 10/50/100 roots assert batch policy statement
+growth; PostgreSQL plans and returned/scanned work remain follow-up measurements.
+A production statement cap is not an optimizer and is not part of this interface.
 
 ## LIVE execution
 
@@ -135,8 +133,8 @@ window before deciding whether that additional mechanism is needed.
 Route snapshots use the same typed wire representation as one-shot reads, so
 values such as dates keep their type on the same cache key. Bound active watches,
 evaluation concurrency and duration, returned bytes and queued replacement
-snapshots. Measure pool occupancy and work per routed write before widening
-adoption; watch count alone is not a capacity result.
+snapshots. Pool occupancy and work per routed write are follow-up measurements;
+they do not block the usable API minor. Watch count alone is not a capacity result.
 
 ## Public contracts and budgets
 
@@ -159,16 +157,28 @@ schema, including action discriminants, for every carrier.
   server details.
 - Hidden relation predicates disclose neither values nor counts; trusted policy
   predicates and explicit system reads retain their intended behavior.
-- Two parents each receive their own top-K authorized children. Ancestors and
-  conditional aggregates preserve row and field access.
+- Two parents each receive their own top-K authorized children.
 - A commit between two reads produces one coherent snapshot. Query writes fail;
   existing command receipt recovery and post-commit behavior remain intact.
 - Commit during bootstrap, insertion into an empty result, rollback, missed
   NOTIFY, reconnect, session expiry and revocation during computation converge
   without another principal's data or publication from an invalidated epoch.
 - One-shot and LIVE results agree, including typed values. A write burst is
-  coalesced, and realistic load reports data SQL, authority SQL, statement
-  growth, pool occupancy, compute count and latency separately.
+  coalesced.
+
+## Deferred work
+
+These were design proposals, not capabilities of this release:
+
+- `_countWhere` for conditional authorized child counts in the grouped aggregate
+  path, including row and field access proof.
+- `_ancestors` as one bounded recursive query with cycle/depth handling and no
+  disclosure beyond an unreadable ancestor, including its authorization proof.
+- A row-phase CRUD I/O guard and broader removal of relation count queries.
+- Production PostgreSQL plan, pool and load studies, reporting data SQL,
+  authority SQL, statement growth, scanned work, compute count, stale-delivery
+  windows and latency separately. These run after the usable API minor and
+  inform subsequent tuning patches; no capacity claim follows from this RFC.
 
 Autopilot adoption follows its coordinated chat, read and catalog changes by
 merge, never rebase. Its FE-1 clause changes in the same commit as route-LIVE

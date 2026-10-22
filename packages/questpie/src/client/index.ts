@@ -2172,7 +2172,7 @@ export function createClient<TApp extends QuestpieApp>(
 	const routePath = (segments: string[], params?: Record<string, string>) =>
 		segments
 			.map((segment) => {
-				const parameter = /^\[([^\]]+)\]$/.exec(segment)?.[1];
+				const parameter = /^\[(?:\.\.\.)?([^\]]+)\]$/.exec(segment)?.[1];
 				if (!parameter)
 					return segment.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 				const value = params?.[parameter];

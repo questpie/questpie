@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 
 import { createClient } from "../../src/client/index.js";
 import {
@@ -23,6 +23,48 @@ afterEach(() => {
 });
 
 describe("route LIVE client", () => {
+	it("uses the declared catch-all parameter name for HTTP and LIVE", async () => {
+		let requestedUrl = "";
+		const client = createClient<any>({
+			baseURL: "http://fixture.local",
+			basePath: "/api",
+			useSuperJSON: false,
+			fetch: async (url) => {
+				requestedUrl = String(url);
+				return Response.json({ ok: true });
+			},
+		});
+		clients.push(client);
+		const params = { path: "folder/note ?#" };
+		await client.routes.files["[...path]"].post({}, { params });
+		expect(requestedUrl).toBe(
+			"http://fixture.local/api/files/folder%2Fnote%20%3F%23",
+		);
+		const stream = spyOn(client.realtime, "stream").mockImplementation(
+			async function* () {
+				yield { ok: true };
+			},
+		);
+		try {
+			const watch = client.routes.files["[...path]"].post.watch({}, { params });
+			expect((await watch[Symbol.asyncIterator]().next()).value).toEqual({
+				ok: true,
+			});
+			expect(stream.mock.calls[0]?.[0]).toMatchObject({
+				resource: "files/[...path]",
+				params,
+			});
+			expect(() =>
+				client.routes.files["[...path]"].post.watch(
+					{},
+					{ params: { path: "" } },
+				),
+			).toThrow("Missing route parameter: path");
+		} finally {
+			stream.mockRestore();
+		}
+	});
+
 	it("substitutes path params for the same HTTP route, with locale and cancellation", async () => {
 		let captured: { url: string; init?: RequestInit } | undefined;
 		const client = createClient<any>({
