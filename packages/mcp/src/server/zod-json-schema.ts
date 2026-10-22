@@ -133,9 +133,9 @@ const NEUTRAL_MAYBE_BOOLEAN_SCHEMA_KEYS = [
  * tool schema, without touching example/default/const/enum payloads (those
  * carry caller data, not schema structure, and must never be walked).
  *
- * - Removes the document-level `$schema` pointer without changing tuple
- *   keywords. Tool projections use draft-07 to match the SDK's default AJV
- *   validator; resource schemas retain their original dialect.
+ * - Removes only the default 2020-12 dialect pointer. Other dialects must
+ *   remain explicit: MCP assumes 2020-12 when `$schema` is absent. Tool
+ *   projections use draft-07 to match the SDK's default AJV validator.
  * - Drops `additionalProperties: false`, *except inside a `oneOf`/`not`/`if`
  *   subtree*. Ordinarily this is safe to drop everywhere: the MCP SDK
  *   validates CRUD/custom arguments against the original Zod schema; route
@@ -210,7 +210,9 @@ function walkSchemaNode(
 
 export function applyMcpSchemaDiet<T>(schema: T): T {
 	if (!isPlainObject(schema)) return schema;
-	delete schema.$schema;
+	if (schema.$schema === "https://json-schema.org/draft/2020-12/schema") {
+		delete schema.$schema;
+	}
 	walkSchemaNode(schema);
 	return schema;
 }

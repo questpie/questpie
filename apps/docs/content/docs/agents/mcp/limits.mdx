@@ -134,3 +134,9 @@ outcomes.
 The sink is deliberately narrow. Only one unresolved callback is kept at a
 time, and events that arrive while it is still pending are dropped rather than
 buffered. Do slow work elsewhere.
+
+Tool schemas declare draft-07 explicitly for compatibility with the current SDK's
+validator, including ordered tuples. MCP defaults to 2020-12 when the dialect is
+omitted, so removing this declaration would change schema semantics. Clients must
+support the declared dialect or report it as unsupported. See the
+[MCP schema dialect rules](https://modelcontextprotocol.io/specification/2025-11-25/basic#schema-dialect).
