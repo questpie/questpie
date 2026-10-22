@@ -1324,6 +1324,11 @@ export function createClient<TApp extends QuestpieApp>(
 		: `/${basePath}`;
 	const trimmedBasePath = normalizedBasePath.replace(/\/$/, "");
 	const apiBasePath = trimmedBasePath || "";
+	const encodePathParameter = (value: string) => {
+		if (value === "." || value === "..")
+			throw new Error("Route parameters cannot be dot segments");
+		return encodeURIComponent(value);
+	};
 	const defaultHeaders = config.headers || {};
 	let currentLocale: string | undefined =
 		defaultHeaders["accept-language"] ?? defaultHeaders["Accept-Language"];
@@ -1466,7 +1471,7 @@ export function createClient<TApp extends QuestpieApp>(
 					locale: topic.locale,
 				});
 				return request(
-					`${apiBasePath}/${topic.resource}/${topic.id}${queryString ? `?${queryString}` : ""}`,
+					`${apiBasePath}/${topic.resource}/${encodePathParameter(topic.id)}${queryString ? `?${queryString}` : ""}`,
 				);
 			}
 			const queryString = stringifyQuery({
@@ -1598,7 +1603,7 @@ export function createClient<TApp extends QuestpieApp>(
 							stage: options.stage,
 						});
 
-						const path = `${apiBasePath}/${collectionName}/${where.id}${queryString ? `?${queryString}` : ""}`;
+						const path = `${apiBasePath}/${collectionName}/${encodePathParameter(where.id)}${queryString ? `?${queryString}` : ""}`;
 						return request(path);
 					}
 
@@ -1628,7 +1633,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "PATCH",
 						json:
@@ -1643,7 +1648,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "DELETE",
 						...(expectedRevision === undefined
@@ -1657,7 +1662,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/restore${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
 						...(expectedRevision === undefined
@@ -1671,7 +1676,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}/purge${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/purge${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
 						...(expectedRevision === undefined
@@ -1693,7 +1698,7 @@ export function createClient<TApp extends QuestpieApp>(
 						offset,
 						...options,
 					});
-					const path = `${apiBasePath}/${collectionName}/${id}/versions${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/versions${queryString ? `?${queryString}` : ""}`;
 					return request(path);
 				},
 
@@ -1712,7 +1717,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/revert${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
 						json: { version, versionId, expectedRevision },
@@ -1729,7 +1734,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}/transition${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/transition${queryString ? `?${queryString}` : ""}`;
 					const body = {
 						stage,
 						...(expectedRevision === undefined ? {} : { expectedRevision }),
@@ -2179,7 +2184,7 @@ export function createClient<TApp extends QuestpieApp>(
 				if (typeof value !== "string" || value.length === 0) {
 					throw new Error(`Missing route parameter: ${parameter}`);
 				}
-				return encodeURIComponent(value);
+				return encodePathParameter(value);
 			})
 			.join("/");
 

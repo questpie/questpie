@@ -96,6 +96,20 @@ describe("route LIVE client", () => {
 		expect(() =>
 			client.routes.projects["[projectId]"].workingRuns.post.watch({}),
 		).toThrow("Missing route parameter: projectId");
+		for (const projectId of [".", ".."]) {
+			await expect(
+				client.routes.projects["[projectId]"].workingRuns.post(
+					{},
+					{ params: { projectId } },
+				),
+			).rejects.toThrow("Route parameters cannot be dot segments");
+			expect(() =>
+				client.routes.projects["[projectId]"].workingRuns.post.watch(
+					{},
+					{ params: { projectId } },
+				),
+			).toThrow("Route parameters cannot be dot segments");
+		}
 	});
 
 	it("shares SSE with collections and preserves typed wire data and sibling delivery after denial", async () => {

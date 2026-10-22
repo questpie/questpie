@@ -112,7 +112,11 @@ export function resolveRouteQueryTopic(
 		typeof params !== "object" ||
 		Array.isArray(params) ||
 		Object.values(params).some(
-			(value) => typeof value !== "string" || value.length === 0,
+			(value) =>
+				typeof value !== "string" ||
+				value.length === 0 ||
+				value === "." ||
+				value === "..",
 		) ||
 		entry.params.some((key) => !Object.hasOwn(params, key)) ||
 		Object.keys(params).some((key) => !entry.params.includes(key))

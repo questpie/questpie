@@ -86,7 +86,8 @@ collaborative bindings. Abort on unmount. Parameterized routes accept
 Pass literal parameter values: the client encodes them for the URL, and the HTTP
 adapter decodes them once before access and execution. Catch-all parameters such
 as `[...path]` use `{ params: { path: "docs/intro" } }`; HTTP and LIVE receive the
-same string, including its slash. Malformed URL encoding returns 400.
+same string, including its slash. Malformed URL encoding returns 400. Standalone
+`.` and `..` parameter values are rejected because URLs normalize those segments.
 
 The TanStack query factory owns the LIVE arm:
 

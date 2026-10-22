@@ -154,6 +154,10 @@ The release notes must explain these upgrades:
 - Expect functional product access at invocation, even when a tool is listed.
 - Follow the HTTP error and relation-read migration notes for changed public
   errors, authorized relation predicates and per-parent child bounds.
+- HTTP path parameters are decoded exactly once to agree with MCP and LIVE.
+  Remove application-side extra decoding and pass literal IDs to the typed
+  collection client, which escapes them. Standalone `.` and `..` values are
+  rejected because URL normalization would change the target path.
 
 HTTP and MCP use one safe public error shape. Explicit product errors preserve
 their code and permitted details. Production responses omit causes, stacks,

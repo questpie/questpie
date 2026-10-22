@@ -274,6 +274,37 @@ describe("explicit route LIVE", () => {
 		expect(computes).toBe(before);
 	});
 
+	it.each(["50%off", "a%20b", "a b", "a/b?#"])(
+		"preserves the literal collection id %s through HTTP reads and writes",
+		async (id) => {
+			const row = await setup.app.collections.live_tasks.create({
+				tenant: "encoded-ids",
+				title: id,
+			});
+			await setup.app.db.execute(
+				sql`update live_tasks set id = ${id} where id = ${row.id}`,
+			);
+			const client = createClient<any>({
+				baseURL: "http://localhost",
+				basePath: "/api",
+				fetch: async (url, init) => (await handle(new Request(url, init)))!,
+			});
+			try {
+				expect(
+					await client.collections.live_tasks.findOne({ where: { id } }),
+				).toMatchObject({ id, title: id });
+				expect(
+					await client.collections.live_tasks.updateById({
+						id,
+						data: { title: `updated-${id}` },
+					}),
+				).toMatchObject({ id, title: `updated-${id}` });
+			} finally {
+				client.realtime.destroy();
+			}
+		},
+	);
+
 	it("uses parsed dependencies once, coherent facts, the target request and typed dates", async () => {
 		const before = transforms;
 		const events = await open([
@@ -407,6 +438,8 @@ describe("explicit route LIVE", () => {
 			{ ...topic("bad"), method: "GET" },
 			{ ...topic("bad"), params: {} },
 			{ ...topic("bad"), params: { company: "" } },
+			{ ...topic("bad"), params: { company: "." } },
+			{ ...topic("bad"), params: { company: ".." } },
 		]) {
 			expect(() =>
 				prepareRouteQueryTopic(setup.app, bad as any, context.appContext),
