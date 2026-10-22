@@ -732,12 +732,20 @@ describe("SSE per-channel authorization retries", () => {
 			expect(signals).toHaveLength(1);
 			expect(signals[0]!.aborted).toBe(false);
 			expect(healthyEpochEnds).toEqual([]);
-			expect(submissions.slice(0, 8)).toEqual(
-				Array.from({ length: 4 }, () => [
+			// A timer waking before its deadline may repeat the cooling-down
+			// topology. Assert transitions and retry count, not timer precision.
+			const topologyChanges = submissions.filter(
+				(ids, index) =>
+					index === 0 || ids.join() !== submissions[index - 1]!.join(),
+			);
+			expect(topologyChanges).toEqual([
+				...Array.from({ length: 4 }, () => [
 					["healthy", "bad"],
 					["healthy"],
 				]).flat(),
-			);
+				["healthy", "bad"],
+			]);
+			expect(submissions.filter((ids) => ids.includes("bad"))).toHaveLength(5);
 			remainingFailures = 3;
 			controllers[0]!.enqueue(
 				encoder.encode(
