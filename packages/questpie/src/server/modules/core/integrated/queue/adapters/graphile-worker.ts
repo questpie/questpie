@@ -87,7 +87,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	private fatalError?: Error;
 	private migrationRevision = 0;
 	private auditCursor = "";
-	private retiredCursor = "0";
+	private retiredPass?: { cursor?: string; end: string };
 	private lastAuditAt = 0;
 	private readonly warnedPolicies = new Set<string>();
 	private runner?: WorkerPool;
@@ -776,7 +776,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	}
 
 	private async tickSchedules(): Promise<void> {
-		const retiredCursor = await this.inTransaction(async (execute) => {
+		const retiredPass = await this.inTransaction(async (execute) => {
 			const schedules =
 				await execute(sql`SELECT *, date_trunc('minute', now()) AS current_minute FROM ${this.table("questpie_schedules")}
 				WHERE last_run < date_trunc('minute', now()) FOR UPDATE SKIP LOCKED`);
@@ -822,11 +822,24 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				WHERE d.status IN ('completed', 'failed') AND d.created_at < now() - interval '7 days'
 				AND NOT EXISTS (SELECT FROM ${this.table("jobs")} j WHERE j.id = d.job_id)
 				LIMIT 500)`);
+			// Freeze the pass endpoint so higher arrivals cannot postpone wrapping.
+			let pass = this.retiredPass;
+			if (!pass) {
+				const [last] =
+					await execute(sql`SELECT job_id AS pass_end FROM ${this.table("questpie_retired_jobs")}
+					ORDER BY job_id DESC LIMIT 1`);
+				if (!last) return undefined;
+				pass = { end: String(last.pass_end) };
+			}
+			const lowerBound =
+				pass.cursor === undefined
+					? sql`job_id >= ${"-9223372036854775808"}::bigint`
+					: sql`job_id > ${pass.cursor}::bigint`;
 			// Bound ledger reads before checking native locks, and advance even
 			// across fully locked pages. LATERAL bounds native PK probes as well.
 			const retired = await execute(sql`SELECT r.job_id, j.removable FROM (
 				SELECT job_id FROM ${this.table("questpie_retired_jobs")}
-				WHERE job_id > ${this.retiredCursor}::bigint ORDER BY job_id LIMIT 500
+				WHERE ${lowerBound} AND job_id <= ${pass.end}::bigint ORDER BY job_id LIMIT 500
 			) r LEFT JOIN LATERAL (
 				SELECT (locked_at IS NULL OR locked_at < now() - interval '4 hours') AS removable
 				FROM ${this.table("_private_jobs")} WHERE id = r.job_id LIMIT 1
@@ -845,14 +858,16 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				await execute(sql`DELETE FROM ${this.table("questpie_retired_jobs")} r
 					WHERE r.ctid = ANY(ARRAY(
 						SELECT ctid FROM ${this.table("questpie_retired_jobs")}
-						WHERE job_id > ${this.retiredCursor}::bigint AND job_id <= ${lastId}::bigint
+						WHERE ${lowerBound} AND job_id <= ${lastId}::bigint
 						ORDER BY job_id LIMIT 500
 					)) AND (SELECT j.id FROM ${this.table("_private_jobs")} j WHERE j.id = r.job_id LIMIT 1) IS NULL`);
-				return retired.length === 500 ? lastId : "0";
+				return retired.length === 500 && BigInt(lastId) < BigInt(pass.end)
+					? { cursor: lastId, end: pass.end }
+					: undefined;
 			}
-			return "0";
+			return undefined;
 		});
-		this.retiredCursor = retiredCursor;
+		this.retiredPass = retiredPass;
 	}
 
 	private armSchedules(): void {
