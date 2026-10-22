@@ -42,81 +42,72 @@ function advertisedSchema(json: Record<string, unknown>) {
 function routeSchemas(route: IntrospectedRoute) {
 	if (!isJsonRoute(route.definition)) throw new Error("MCP route must be JSON");
 	const definition = route.definition;
+	const project = (schema: z.ZodType, io: "input" | "output") => {
+		let encodedDate = false;
+		const json = z.toJSONSchema(schema, {
+			io,
+			reused: "ref",
+			target: "draft-7",
+			unrepresentable:
+				io === "output"
+					? ({ zodSchema }) => {
+							if (zodSchema._zod.def.type !== "date") return "throw";
+							encodedDate = true;
+							return { type: "string", format: "date-time" };
+						}
+					: "throw",
+		});
+		// Older converters can ignore the Date encoding callback and emit {}.
+		if (io === "output" && !encodedDate)
+			z.toJSONSchema(schema, { io, target: "draft-7" });
+		return json;
+	};
 	let input: Record<string, unknown>;
 	let output: Record<string, unknown> | undefined;
-	let encodedDateOutput = false;
+	let wrapped: boolean;
+	let wrappedOutput: boolean;
 	try {
 		input = definition.schema
-			? z.toJSONSchema(definition.schema, {
-					io: "input",
-					reused: "ref",
-					target: "draft-7",
-				})
+			? project(definition.schema, "input")
 			: { type: "object", properties: {} };
+		wrapped = route.params.length > 0 || input.type !== "object";
+		if (wrapped) {
+			// Convert the envelope as a whole, so root-recursive refs retain their
+			// meaning beneath input rather than accidentally referring to the envelope.
+			input = project(
+				z
+					.object({
+						...(route.params.length
+							? {
+									params: z
+										.object(
+											Object.fromEntries(
+												route.params.map((param) => [param, z.string()]),
+											),
+										)
+										.strict(),
+								}
+							: {}),
+						input: definition.schema ?? z.unknown(),
+					})
+					.strict(),
+				"input",
+			);
+		}
 		output = definition.outputSchema
-			? z.toJSONSchema(definition.outputSchema, {
-					io: "output",
-					reused: "ref",
-					target: "draft-7",
-					// Domain Date output has an ISO JSON wire encoding. Date input
-					// still needs an explicit ISO string schema piped into coercion.
-					unrepresentable: ({ zodSchema }) => {
-						// eslint-disable-next-line no-underscore-dangle -- inspect the Zod schema kind.
-						if (zodSchema._zod.def.type !== "date") return "throw";
-						encodedDateOutput = true;
-						return { type: "string", format: "date-time" };
-					},
-				})
+			? project(definition.outputSchema, "output")
 			: undefined;
-		// Older supported Zod versions do not invoke an unrepresentable handler.
-		// Requiring strict conversion in that case prevents their implicit {} fallback.
-		if (definition.outputSchema && !encodedDateOutput) {
-			z.toJSONSchema(definition.outputSchema, { io: "output" });
+		wrappedOutput = !!output && output.type !== "object";
+		if (definition.outputSchema && wrappedOutput) {
+			output = project(
+				z.object({ value: definition.outputSchema }).strict(),
+				"output",
+			);
 		}
 	} catch {
 		throw new Error(
 			`MCP route ${route.path} has a schema that cannot be represented as JSON Schema`,
 		);
-	}
-	const wrapped = route.params.length > 0 || input.type !== "object";
-	if (wrapped) {
-		const { $defs, definitions, $schema, ...body } = input;
-		input = {
-			...($schema ? { $schema } : {}),
-			...($defs ? { $defs } : {}),
-			...(definitions ? { definitions } : {}),
-			type: "object",
-			properties: {
-				...(route.params.length
-					? {
-							params: {
-								type: "object",
-								properties: Object.fromEntries(
-									route.params.map((param) => [param, { type: "string" }]),
-								),
-								required: route.params,
-								additionalProperties: false,
-							},
-						}
-					: {}),
-				input: body,
-			},
-			required: [...(route.params.length ? ["params"] : []), "input"],
-			additionalProperties: false,
-		};
-	}
-	const wrappedOutput = !!output && output.type !== "object";
-	if (output && wrappedOutput) {
-		const { $defs, definitions, $schema, ...body } = output;
-		output = {
-			...($schema ? { $schema } : {}),
-			...($defs ? { $defs } : {}),
-			...(definitions ? { definitions } : {}),
-			type: "object",
-			properties: { value: body },
-			required: ["value"],
-			additionalProperties: false,
-		};
 	}
 	return {
 		inputSchema: advertisedSchema(input),

@@ -6,6 +6,10 @@
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
+import { types as nodeTypes } from "node:util";
+
+import { ZodError } from "zod";
+
 import { extractAppServices } from "#questpie/server/config/app-context.js";
 import {
 	type RequestContext,
@@ -192,7 +196,14 @@ export function prepareJsonRoute<
 	// handler or by output validation stays raw, so it is reported as a server error.
 	let parsed = input;
 	if (definition.schema) {
-		const result = definition.schema.safeParse(input);
+		let result: ReturnType<typeof definition.schema.safeParse>;
+		try {
+			result = definition.schema.safeParse(input);
+		} catch (error) {
+			if (!nodeTypes.isProxy(error) && error instanceof ZodError)
+				throw ApiError.fromZodError(error);
+			throw error;
+		}
 		if (!result.success) throw ApiError.fromZodError(result.error);
 		parsed = result.data;
 	}

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { handleError } from "../../src/server/adapters/utils/response.js";
 import { ApiError } from "../../src/server/errors/base.js";
+import { formatPublicError } from "../../src/server/errors/public.js";
 
 describe("safe public error wire contract", () => {
 	it("redacts ApiError when JSON.stringify supplies a property key to toJSON", () => {
@@ -130,6 +131,139 @@ describe("safe public error wire contract", () => {
 		expect(body.error.fieldErrors[0].path.length).toBeLessThanOrEqual(256);
 		expect(body.error.fieldErrors[0].message.length).toBeLessThanOrEqual(200);
 		expect(JSON.stringify(body)).not.toContain("secret");
+	});
+	it("keeps field feedback when a real Zod union issue exceeds the snapshot budget", () => {
+		const branch = (prefix: string) =>
+			z.object(
+				Object.fromEntries(
+					Array.from({ length: 10 }, (_, i) => [`${prefix}${i}`, z.string()]),
+				),
+			);
+		const result = z
+			.object({
+				target: z.union([
+					branch("email"),
+					branch("sms"),
+					branch("push"),
+					branch("hook"),
+					branch("chat"),
+				]),
+			})
+			.safeParse({ target: {} });
+		expect(result.success).toBe(false);
+		if (result.success) throw new Error("expected invalid union");
+		const error = ApiError.fromZodError(result.error);
+		for (const options of [{}, { t: (key: string) => key }]) {
+			const formatted = formatPublicError(error, options);
+			expect(formatted.code).toBe("VALIDATION_ERROR");
+			expect(formatted.fieldErrors).toEqual([
+				{ path: "target", message: result.error.issues[0]!.message },
+			]);
+			expect(Buffer.byteLength(JSON.stringify(formatted))).toBeLessThan(8192);
+		}
+	});
+	it("keeps bounded plain feedback when refinement or translation params are oversized", () => {
+		const deep = Array.from({ length: 12 }).reduce<Record<string, unknown>>(
+			(nested) => ({ nested }),
+			{ secret: "private-refinement-input" },
+		);
+		const result = z
+			.object({
+				title: z.string().refine(() => false, {
+					message: "Choose another title",
+					params: deep,
+				}),
+			})
+			.safeParse({ title: "private-input" });
+		if (result.success) throw new Error("expected invalid refinement");
+		const error = ApiError.fromZodError(result.error);
+		for (const params of [
+			{ field: "title" },
+			{ blob: "private-param".repeat(1000) },
+		]) {
+			error.fieldErrors![0]!.messageParams = params;
+			const formatted = formatPublicError(error, { t: (key: string) => key });
+			expect(formatted.fieldErrors).toEqual([
+				{ path: "title", message: "Choose another title" },
+			]);
+			expect(JSON.stringify(formatted)).not.toContain("private-");
+		}
+	});
+	it("bounds the serialized bytes of oversized field paths and messages", () => {
+		const formatted = formatPublicError(
+			ApiError.badRequest(
+				"Bad request",
+				Array.from({ length: 20 }, () => ({
+					path: "\u0000".repeat(9000),
+					message: "\u0000".repeat(9000),
+					value: "private-input",
+				})),
+			),
+		);
+		expect(formatted.fieldErrors).toHaveLength(8);
+		for (const field of formatted.fieldErrors!) {
+			expect(field.path).toHaveLength(256);
+			expect(field.message).toHaveLength(200);
+		}
+		// JSON can escape each bounded character into six bytes.
+		expect(Buffer.byteLength(JSON.stringify(formatted))).toBeLessThan(23_000);
+		expect(JSON.stringify(formatted)).not.toContain("private-input");
+	});
+	it("does not read inherited field metadata, accessors or proxies while preserving plain feedback", () => {
+		let calls = 0;
+		const trap = () => {
+			calls++;
+			throw new Error("private-detail");
+		};
+		const inherited = { path: "title", message: "Choose another title" };
+		Object.setPrototypeOf(inherited, {
+			get validationIssue() {
+				return trap();
+			},
+			get messageParams() {
+				return trap();
+			},
+		});
+		const accessor = Object.defineProperty(
+			{ path: "slug", message: "Try again" },
+			"validationIssue",
+			{
+				get: trap,
+			},
+		);
+		const nested = {
+			path: "name",
+			message: "Try again",
+			validationIssue: Object.defineProperty({}, "code", {
+				enumerable: true,
+				get: trap,
+			}),
+			messageParams: new Proxy(
+				{},
+				{ get: trap, getPrototypeOf: trap, ownKeys: trap },
+			),
+		};
+		const proxy = new Proxy(
+			{ path: "private-path", message: "private-message" },
+			{
+				get: trap,
+				getPrototypeOf: trap,
+				getOwnPropertyDescriptor: trap,
+			},
+		);
+		const formatted = formatPublicError(
+			ApiError.badRequest("Bad request", [inherited, accessor, nested, proxy]),
+			{
+				t: (key: string) => key,
+			},
+		);
+		expect(formatted.fieldErrors).toEqual([
+			{ path: "title", message: "Choose another title" },
+			{ path: "slug", message: "Try again" },
+			{ path: "name", message: "Try again" },
+		]);
+		expect(calls).toBe(0);
+		expect(JSON.stringify(formatted)).not.toContain("private-");
 	});
 });
 

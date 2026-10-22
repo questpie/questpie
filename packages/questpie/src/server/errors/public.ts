@@ -84,15 +84,19 @@ export function formatPublicError(
 		const length = Math.min(Number(errorDataProperty(fields, "length")), 8);
 		for (let i = 0; i < length; i++) {
 			const field = errorDataProperty(fields, String(i));
-			fieldData.push(
-				boundedData({
-					path: errorDataProperty(field, "path"),
-					message: errorDataProperty(field, "message"),
-					messageKey: errorDataProperty(field, "messageKey"),
-					messageParams: errorDataProperty(field, "messageParams"),
-					validationIssue: errorDataProperty(field, "validationIssue"),
-				}),
-			);
+			const path = errorDataProperty(field, "path");
+			const message = errorDataProperty(field, "message");
+			// Optional localization data must not discard the bounded plain feedback.
+			fieldData.push({
+				path: typeof path === "string" ? path.slice(0, 256) : undefined,
+				message:
+					typeof message === "string" ? message.slice(0, 200) : undefined,
+				messageKey: boundedData(errorDataProperty(field, "messageKey")),
+				messageParams: boundedData(errorDataProperty(field, "messageParams")),
+				validationIssue: boundedData(
+					errorDataProperty(field, "validationIssue"),
+				),
+			});
 		}
 	}
 	const fieldErrors = fieldData
