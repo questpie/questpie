@@ -2074,6 +2074,21 @@ export async function realtimeSubscribe(
 					);
 				};
 
+				const sendEphemeralUnavailable = (id: string) =>
+					sessionSink.write(
+						encodeSseEvent("error", ephemeralUnavailablePayload(id)),
+						"ordered-channel-event",
+					);
+				const sendEphemeralStageError = async (error: unknown) => {
+					if (
+						!(error instanceof RealtimeEdgeBindingStageError) ||
+						!(error.cause instanceof EphemeralSubscriptionUnavailableError)
+					)
+						return false;
+					await sendEphemeralUnavailable(error.subscription.id);
+					return true;
+				};
+
 				// Send per-topic error
 				const sendTopicError = (
 					topicId: string,
@@ -2568,10 +2583,7 @@ export async function realtimeSubscribe(
 								error instanceof EphemeralSubscriptionUnavailableError &&
 								error.channelSubscriptionId
 							)
-								await send(
-									"error",
-									ephemeralUnavailablePayload(error.channelSubscriptionId),
-								);
+								await sendEphemeralUnavailable(error.channelSubscriptionId);
 							if (error instanceof RealtimeTopologyApplyRejectedError) {
 								for (const entry of error.entries) {
 									await send("error", {
@@ -2610,14 +2622,7 @@ export async function realtimeSubscribe(
 								},
 							);
 						} catch (error) {
-							if (
-								error instanceof RealtimeEdgeBindingStageError &&
-								error.cause instanceof EphemeralSubscriptionUnavailableError
-							)
-								await send(
-									"error",
-									ephemeralUnavailablePayload(error.subscription.id),
-								);
+							await sendEphemeralStageError(error);
 							const rejection = edgeStageRejection(error);
 							if (rejection) {
 								for (const entry of rejection.entries) {
@@ -2651,30 +2656,37 @@ export async function realtimeSubscribe(
 						versions: [2],
 					},
 				});
-				await edge.apply(
-					{
-						topology: initialTopology,
-						ownerGeneration: topologySession.generation,
-						signal: topologySession.signal,
-					},
-					async (subscription) => {
-						if (subscription.kind === "query") {
-							return subscribeTopic(
-								validatedTopicsById.get(subscription.id)!,
-								resolved.appContext,
-							);
-						}
-						if (subscription.kind === "channel") {
-							return subscribeChannel(
-								validatedChannelsById.get(subscription.id)!,
-							);
-						}
-						if (subscription.kind === "crdt") {
-							return subscribeCrdt(subscription);
-						}
-						return { activate: () => {}, close: () => {} };
-					},
-				);
+				await edge
+					.apply(
+						{
+							topology: initialTopology,
+							ownerGeneration: topologySession.generation,
+							signal: topologySession.signal,
+						},
+						async (subscription) => {
+							if (subscription.kind === "query") {
+								return subscribeTopic(
+									validatedTopicsById.get(subscription.id)!,
+									resolved.appContext,
+								);
+							}
+							if (subscription.kind === "channel") {
+								return subscribeChannel(
+									validatedChannelsById.get(subscription.id)!,
+								);
+							}
+							if (subscription.kind === "crdt") {
+								return subscribeCrdt(subscription);
+							}
+							return { activate: () => {}, close: () => {} };
+						},
+					)
+					.catch(async (error) => {
+						if (!(await sendEphemeralStageError(error))) throw error;
+						// A stream error would discard the addressed retry frame.
+						requestClose();
+					});
+				if (closed) return;
 
 				// Send initial errors for invalid topics
 				for (const error of topicErrors) {

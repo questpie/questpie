@@ -284,7 +284,7 @@ export class SseConnectionManager {
 			return false;
 		const id = payload.channelSubscriptionId;
 		const resource = this.resources.get(id);
-		if (resource?.kind !== "channel") return false;
+		if (resource?.kind !== "channel") return !resource;
 		const previous = this.channelRetries.get(id);
 		if (previous?.retryAt) return true;
 		const failures = (previous?.failures ?? 0) + 1;

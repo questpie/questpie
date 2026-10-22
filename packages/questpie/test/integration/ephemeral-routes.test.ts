@@ -623,3 +623,114 @@ test("CRUD forbidden in a channel rule revokes only that ephemeral binding", asy
 		await setup.cleanup();
 	}
 }, 10000);
+
+for (const permanent of [false, true]) {
+	test(`HTTP + public client: initial broker start failure ${permanent ? "stops after five failures" : "heals"} without starving a durable sibling`, async () => {
+		let starts = 0;
+		class FailingStartBroker extends InProcessEphemeralBroker {
+			override async start(onMessage: (message: string) => void) {
+				starts++;
+				if (permanent || starts === 1) throw new Error("LISTEN unavailable");
+				await super.start(onMessage);
+			}
+		}
+		const setup = await buildMockApp(
+			{
+				channels: {
+					page: channel("opening-page")
+						.events({ cursor: z.number() })
+						.authorize({ subscribe: true, publish: true })
+						.ephemeral(),
+					activity: channel("opening-activity")
+						.events({ changed: z.number() })
+						.authorize({ subscribe: true, publish: true }),
+				},
+			},
+			{
+				realtime: {
+					retentionDays: 0,
+					ephemeral: { broker: new FailingStartBroker() },
+				},
+			},
+		);
+		let client: ReturnType<typeof createClient<any>> | undefined;
+		let server: ReturnType<typeof Bun.serve> | undefined;
+		try {
+			await runTestDbMigrations(setup.app);
+			const handler = createFetchHandler(setup.app, {
+				getSession: async () => ({
+					user: { id: "ada" },
+					session: { id: "ada-session" },
+				}),
+			});
+			const opens: string[][] = [];
+			server = Bun.serve({
+				port: 0,
+				fetch: async (request) => {
+					if (new URL(request.url).pathname === "/realtime") {
+						const body = await request.clone().json();
+						if (!body.sessionId)
+							opens.push(
+								body.channels.map(
+									(entry: { channel: string }) => entry.channel,
+								),
+							);
+					}
+					return handler(request);
+				},
+			});
+			client = createClient<any>({ baseURL: server.url.origin });
+			const errors: Error[] = [],
+				siblingErrors: Error[] = [];
+			const events: number[] = [],
+				pageEvents: number[] = [];
+			let siblingReady = 0,
+				pageReady = 0;
+			client.channels.page.subscribe(
+				(event: { data: number }) => pageEvents.push(event.data),
+				{
+					onReady: () => {
+						pageReady++;
+					},
+					onError: (error: Error) => errors.push(error),
+				},
+			);
+			client.channels.activity.subscribe(
+				(event: { data: number }) => events.push(event.data),
+				{
+					onReady: () => {
+						siblingReady++;
+					},
+					onError: (error: Error) => siblingErrors.push(error),
+				},
+			);
+			await until(() => siblingReady > 0);
+			expect(opens[0]).toEqual(["page", "activity"]);
+			expect(opens[1]).toEqual(["activity"]);
+			await client.channels.activity.publish("changed", 42);
+			await until(() => events.includes(42));
+			if (permanent) {
+				await until(() => errors.length === 1, 30000);
+				await wait(100);
+				expect(starts).toBe(5);
+				expect(pageReady).toBe(0);
+				expect(errors[0]!.message).toContain("unavailable");
+				expect(client.channels.channelCount).toBe(1);
+			} else {
+				await until(() => pageReady === 1, 5000);
+				await client.channels.page.publish("cursor", 7);
+				await until(() => pageEvents.includes(7));
+				expect(starts).toBe(2);
+				expect(errors).toEqual([]);
+				expect(client.channels.channelCount).toBe(2);
+			}
+			await client.channels.activity.publish("changed", 43);
+			await until(() => events.includes(43));
+			expect(siblingErrors).toEqual([]);
+		} finally {
+			client?.channels.destroy();
+			await server?.stop(true);
+			await setup.cleanup();
+		}
+	}, 40000);
+}

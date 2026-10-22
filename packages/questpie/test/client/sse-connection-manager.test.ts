@@ -802,3 +802,90 @@ describe("SSE per-channel authorization retries", () => {
 		}
 	});
 });
+
+for (const addressed of ["released", "unknown", "query"] as const) {
+	test(`in-flight topology 503 for ${addressed} id preserves resource-kind isolation`, async () => {
+		const controllers: ReadableStreamDefaultController<Uint8Array>[] = [];
+		const signals: AbortSignal[] = [];
+		const errors: Error[] = [],
+			epochEnds: Error[] = [],
+			healthyEpochEnds: Error[] = [];
+		const submissions: string[][] = [];
+		let releaseResponse!: () => void;
+		const responseGate = new Promise<void>((resolve) => {
+			releaseResponse = resolve;
+		});
+		const manager = new SseConnectionManager({
+			baseUrl: "http://localhost:3000",
+			withCredentials: true,
+			debounceMs: 0,
+			retryBaseMs: 20,
+			maxRetryMs: 20,
+			random: () => 0,
+			fetcher: async (_input, init) => {
+				const body = JSON.parse(String(init?.body));
+				if (!body.sessionId) {
+					signals.push(init!.signal!);
+					return openStream(signals.length, init?.signal, controllers);
+				}
+				const ids = body.topology.subscriptions.map(
+					(entry: { id: string }) => entry.id,
+				);
+				submissions.push(ids);
+				if (submissions.length === 1) {
+					await responseGate;
+					return Response.json(
+						{
+							error: unavailable(addressed === "released" ? "bad" : addressed),
+						},
+						{ status: 503 },
+					);
+				}
+				return Response.json({});
+			},
+		});
+		const releaseHealthy = registerChannel(
+			manager,
+			"healthy",
+			[],
+			healthyEpochEnds,
+		);
+		await waitFor(() => controllers.length === 1);
+		const releaseQuery =
+			addressed === "query"
+				? manager.registerTopic({
+						id: "query",
+						openPayload: () => ({ id: "query", resource: "posts" }),
+						desiredPayload: () => ({
+							kind: "query",
+							id: "query",
+							resource: "posts",
+						}),
+						onEvent: () => {},
+						onError: (error) => errors.push(error),
+					})
+				: () => {};
+		const releaseBad = registerChannel(manager, "bad", errors, epochEnds);
+		try {
+			await waitFor(() => submissions.length === 1);
+			releaseBad();
+			releaseResponse();
+			if (addressed === "query") {
+				await waitFor(() => signals[0]!.aborted);
+			} else {
+				await Bun.sleep(60);
+				expect(signals).toHaveLength(1);
+				expect(signals[0]!.aborted).toBe(false);
+				expect(healthyEpochEnds).toEqual([]);
+				expect(errors).toEqual([]);
+				expect(epochEnds).toEqual([]);
+				expect(submissions[1]).toEqual(["healthy"]);
+			}
+		} finally {
+			releaseResponse();
+			releaseBad();
+			releaseQuery();
+			releaseHealthy();
+		}
+	});
+}

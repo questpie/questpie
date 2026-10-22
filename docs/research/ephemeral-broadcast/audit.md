@@ -62,3 +62,18 @@ PostgreSQL read-only regression passed. Both core TypeScript configurations, the
 core package build, formatter, targeted lint, skill freshness, any census and
 clone census passed. These checks do not replace CI or the next independent
 exact-head review.
+
+Claude exact-head review of `a40b44a6` cleared merge and confirmed S2 recovery,
+including persistent exceptions, initial mixed admission, live failure and
+user-mode CRUD denial. It also identified non-blocking N1 (failed broker startup
+during initial edge staging lacks the addressed retry frame), N2 (a released
+binding's in-flight 503 can abort a healthy epoch once), and N3 (publish denial
+and prolonged-outage retry exhaustion need clearer documentation). We chose to
+fix N1/N2 before release, with regressions, and clarify N3. These follow-ups
+require a new exact-head review; the earlier clearance is not transferred.
+
+N1/N2 targeted red-to-green proof passed: child HTTP/manager/runtime suites
+54/54, final parent HTTP/manager verification 30/30, both core TypeScript
+contracts, package build, formatting/lint and unchanged browser bundle budget.
+The final client guard preserves resource-kind isolation while treating a
+released channel's addressed retry response as handled.
