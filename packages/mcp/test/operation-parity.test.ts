@@ -6,9 +6,9 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ApiError, route } from "questpie";
+import { createFetchHandler } from "questpie/http";
 import { z } from "zod";
 
-import { createFetchHandler } from "../../questpie/src/server/adapters/http.js";
 import {
 	createMcpServer,
 	createWorkloadMcpServer,

@@ -7,7 +7,8 @@ import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv
 import { collection } from "questpie";
 import { z } from "zod";
 
-import { blocks } from "../../admin/src/server/fields/blocks.js";
+import { blocks } from "@questpie/admin/fields";
+
 import { buildMockApp } from "../../questpie/test/utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../../questpie/test/utils/test-db.js";
 import {

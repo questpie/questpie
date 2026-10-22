@@ -75,6 +75,7 @@
 	},
 	"devDependencies": {
 		"@better-auth/oauth-provider": "^1.7.4",
+		"@questpie/admin": "workspace:*",
 		"better-auth": "^1.7.4",
 		"bun-types": "latest",
 		"tsdown": "^0.18.3"
