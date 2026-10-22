@@ -6,7 +6,10 @@
  */
 
 import type { GetAuthHeaders } from "../auth.js";
-import type { TopicConfig } from "./multiplexer.js";
+import {
+	RealtimeQueryUnavailableError,
+	type TopicConfig,
+} from "./multiplexer.js";
 import type { PusherConnectionManager } from "./pusher-connection.js";
 import {
 	createRealtimeClientSession,
@@ -358,6 +361,7 @@ export type RealtimeAPI = {
 		topic: TopicConfig,
 		signal?: AbortSignal,
 		customId?: string,
+		onInvalidate?: () => void,
 	) => AsyncGenerator<TData, void, unknown>;
 
 	/** Create an AsyncGenerator over the shared snapshot/delta wire union. */
@@ -406,6 +410,7 @@ export async function* sseEventStream<TData>(options: {
 	topic: TopicConfig;
 	signal?: AbortSignal;
 	customId?: string;
+	onInvalidate?: () => void;
 }): AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown> {
 	const { multiplexer, topic, signal, customId } = options;
 
@@ -437,6 +442,14 @@ export async function* sseEventStream<TData>(options: {
 	// Error callback - rejects the waiting promise so the generator throws
 	// instead of waiting forever (prevents infinite loading on server errors)
 	const onError = (error: Error) => {
+		if (closed || signal?.aborted) return;
+		if (error instanceof RealtimeQueryUnavailableError) {
+			queue.length = 0;
+			queueHead = 0;
+			queuedBytes = 0;
+			options.onInvalidate?.();
+			return;
+		}
 		pendingError = error;
 		rejectNext?.(error);
 	};
@@ -726,12 +739,14 @@ export function createRealtimeAPI(opts: {
 		topic: TopicConfig,
 		signal?: AbortSignal,
 		customId?: string,
+		onInvalidate?: () => void,
 	): AsyncGenerator<RealtimeStreamEvent<TData>, void, unknown> => {
 		const raw = sseEventStream<TData>({
 			multiplexer: eventFacade,
 			topic,
 			signal,
 			customId,
+			onInvalidate,
 		});
 		return isFindTopic(topic)
 			? (deriveFindDeltas(raw as any) as AsyncGenerator<
@@ -768,10 +783,15 @@ export function createRealtimeAPI(opts: {
 				onError,
 			);
 		},
-		stream<TData>(topic: TopicConfig, signal?: AbortSignal, customId?: string) {
+		stream<TData>(
+			topic: TopicConfig,
+			signal?: AbortSignal,
+			customId?: string,
+			onInvalidate?: () => void,
+		) {
 			return materializeRealtimeStream(
 				topic,
-				streamEvents<TData>(topic, signal, customId),
+				streamEvents<TData>(topic, signal, customId, onInvalidate),
 			);
 		},
 		streamEvents,

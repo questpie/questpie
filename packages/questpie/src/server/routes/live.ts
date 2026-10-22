@@ -111,7 +111,9 @@ export function resolveRouteQueryTopic(
 		!params ||
 		typeof params !== "object" ||
 		Array.isArray(params) ||
-		Object.values(params).some((value) => typeof value !== "string") ||
+		Object.values(params).some(
+			(value) => typeof value !== "string" || value.length === 0,
+		) ||
 		entry.params.some((key) => !Object.hasOwn(params, key)) ||
 		Object.keys(params).some((key) => !entry.params.includes(key))
 	)
@@ -129,10 +131,11 @@ export function resolveRouteQueryTopic(
 	);
 	url.pathname = url.pathname.replace(/\/realtime\/?$/, "") + path;
 	url.search = "";
-	if (topic.locale) url.searchParams.set("locale", topic.locale);
+	const headers = new Headers(sourceRequest.headers);
+	if (topic.locale) headers.set("accept-language", topic.locale);
 	const request = new Request(url, {
 		method: topic.method,
-		headers: sourceRequest.headers,
+		headers,
 		signal: sourceRequest.signal,
 	});
 	return { topic, definition, live: definition.query.live, request, params };

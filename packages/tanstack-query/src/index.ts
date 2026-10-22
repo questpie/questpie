@@ -1252,7 +1252,7 @@ export function createQuestpieQueryOptions<
 	) => Promise<unknown>) & {
 		watch?: (
 			input: unknown,
-			options?: RouteCallOptions,
+			options?: RouteCallOptions & { onInvalidate?: () => void },
 		) => AsyncIterable<unknown>;
 	};
 	const resolveRoute = (segments: string[]): RouteCaller => {
@@ -1314,7 +1314,7 @@ export function createQuestpieQueryOptions<
 							const queryKey = routeKey(segments, input, options);
 							if (realtime) {
 								const stream = streamedQuery({
-									streamFn: ({ signal: querySignal }) => {
+									streamFn: ({ signal: querySignal, client: queryClient }) => {
 										const caller = resolveRoute(segments);
 										if (!caller.watch) {
 											throw new Error("Route does not support LIVE queries");
@@ -1324,6 +1324,15 @@ export function createQuestpieQueryOptions<
 											signal: signal
 												? AbortSignal.any([querySignal, signal])
 												: querySignal,
+											onInvalidate: () => {
+												if (querySignal.aborted || signal?.aborted) return;
+												// A manual update also clears TanStack's cancellation
+												// fallback, so unmount cannot restore protected data.
+												queryClient
+													.getQueryCache()
+													.find({ queryKey, exact: true })
+													?.setData(undefined, { manual: true, updatedAt: 0 });
+											},
 										});
 									},
 									reducer: (_previous: unknown, snapshot: unknown) => snapshot,
@@ -1352,12 +1361,12 @@ export function createQuestpieQueryOptions<
 												error instanceof RealtimeTopicRejectedError &&
 												error.details.reason === "access"
 											) {
-												// setQueryData(undefined) is a no-op. Clear only this
-												// query after its stream has stopped, before surfacing denial.
+												// setQueryData(undefined) is a no-op. A manual update
+												// clears both the data and cancellation fallback.
 												context.client
 													.getQueryCache()
 													.find({ queryKey, exact: true })
-													?.setState({ data: undefined, dataUpdatedAt: 0 });
+													?.setData(undefined, { manual: true, updatedAt: 0 });
 											}
 											throw mapRealtimeError(error, errorMap);
 										}

@@ -7,7 +7,9 @@
 
 import type { HttpMethod } from "../../server/routes/types.js";
 import {
+	isRealtimeQueryUnavailablePayload,
 	isRealtimeTopicRejectedPayload,
+	type RealtimeQueryUnavailablePayload,
 	type RealtimeTopicRejectedPayload,
 } from "../../shared/realtime-error.js";
 import {
@@ -102,10 +104,22 @@ export class RealtimeTopicRejectedError extends Error {
 	}
 }
 
+export class RealtimeQueryUnavailableError extends Error {
+	readonly code = "REALTIME_QUERY_UNAVAILABLE";
+	readonly retryable = true;
+
+	constructor(readonly payload: RealtimeQueryUnavailablePayload) {
+		super(payload.message);
+		this.name = "RealtimeQueryUnavailableError";
+	}
+}
+
 function toRealtimeError(payload: unknown): Error | null {
-	return isRealtimeTopicRejectedPayload(payload)
-		? new RealtimeTopicRejectedError(payload)
-		: null;
+	if (isRealtimeTopicRejectedPayload(payload))
+		return new RealtimeTopicRejectedError(payload);
+	if (isRealtimeQueryUnavailablePayload(payload))
+		return new RealtimeQueryUnavailableError(payload);
+	return null;
 }
 
 type ControlSession = {
@@ -613,10 +627,11 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				const admissionErrors =
 					payload?.errors
 						?.map(toRealtimeError)
-						.filter((error) => error !== null) ?? [];
+						.filter((error) => error instanceof RealtimeTopicRejectedError) ??
+					[];
 				if (admissionErrors.length > 0) {
 					for (const error of admissionErrors) {
-						this.rejectTopic(error as RealtimeTopicRejectedError);
+						this.rejectTopic(error);
 					}
 					return;
 				}
@@ -770,7 +785,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				} else if (topicId) {
 					this.notifyTopicError(
 						topicId,
-						new Error(raw.message ?? "Realtime topic failed"),
+						error ?? new Error(raw.message ?? "Realtime topic failed"),
 					);
 				}
 				// An error with no routable id is a connection/protocol fault, not a

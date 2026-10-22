@@ -25,6 +25,7 @@ import {
 import { attachInternalAdapterContext } from "#questpie/server/config/internal-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import { runInFreshRequestScope } from "#questpie/server/config/request-scope.js";
+import { transactionLifetime } from "#questpie/server/db/transaction-lifetime.js";
 import { ApiError } from "#questpie/server/errors/index.js";
 import { captureRealtimeWatermark } from "#questpie/server/modules/core/integrated/realtime/snapshot.js";
 
@@ -385,10 +386,26 @@ async function executeQueryRoute<
 		);
 	}
 
+	let expireQueryTransaction: (() => void) | undefined;
 	const snapshot = {
 		transaction: (
 			run: (tx: unknown) => Promise<{ data: TOutput; upToDate?: string }>,
-		) => db.transaction(run, QUERY_SNAPSHOT),
+		) =>
+			db.transaction(async (owner) => {
+				let active = true;
+				expireQueryTransaction = () => {
+					active = false;
+				};
+				const view = transactionLifetime(owner, () => {
+					if (!active || request?.signal.aborted)
+						throw new Error("Query transaction is no longer active");
+				});
+				try {
+					return await run(view);
+				} finally {
+					active = false;
+				}
+			}, QUERY_SNAPSHOT),
 	};
 	return withTransaction(snapshot, (tx) =>
 		runInFreshRequestScope(app, async () => {
@@ -399,7 +416,7 @@ async function executeQueryRoute<
 					: undefined;
 				if (captureWatermark)
 					await tx.execute(
-						sql`select set_config('statement_timeout', '30000', true)`,
+						sql`select set_config('statement_timeout', least(nullif(setting::bigint, 0), 30000)::text, true) from pg_settings where name = 'statement_timeout'`,
 					);
 				const snapshotContext = (await deriveRequestContextOnDb(
 					app,
@@ -439,8 +456,10 @@ async function executeQueryRoute<
 			let timer: ReturnType<typeof setTimeout>;
 			let onAbort: () => void;
 			const deadline = new Promise<never>((_, reject) => {
-				onAbort = () =>
+				onAbort = () => {
+					expireQueryTransaction?.();
 					reject(signal.reason ?? new Error("Route query cancelled"));
+				};
 				signal.addEventListener("abort", onAbort, { once: true });
 				timer = setTimeout(
 					() => controller.abort(new Error("Route query exceeded 30000ms")),

@@ -320,8 +320,8 @@ export class RouteBuilder<
 	 * database write fails. Requires `.schema()`, `.outputSchema()` and
 	 * `.access()`; cannot be combined with `.raw()`.
 	 *
-	 * `live` only declares what a future watch depends on. Routes cannot be
-	 * watched yet.
+	 * `live` declares dependencies for an explicit watch over the shared SSE
+	 * transport. Without it the query supports one-shot execution only.
 	 */
 	query(options: {
 		live: RouteLiveOptions<InputOf<TSchema>>;

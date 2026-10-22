@@ -289,6 +289,102 @@ describe("coherent route scheduler", () => {
 			next();
 		}
 	});
+	it("an age deadline queues a recheck without discarding active authorized work", async () => {
+		let ageTick!: () => void;
+		const ticker = spyOn(
+			sharedSseKeepAliveTicker,
+			"register",
+		).mockImplementation((_interval, onPing) => {
+			ageTick = () => onPing(new Uint8Array());
+			return () => {};
+		});
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source);
+		const started = deferred();
+		const release = deferred();
+		const secondStarted = deferred();
+		const secondRelease = deferred();
+		let calls = 0;
+		let invalidations = 0;
+		const frames: unknown[] = [];
+		const close = scheduler.subscribe({
+			...base(
+				async () => {
+					if (++calls === 1) {
+						started.resolve();
+						await release.promise;
+						return { data: "authorized-first", upToDate: "1" };
+					}
+					secondStarted.resolve();
+					await secondRelease.promise;
+					return { data: "authorized-next", upToDate: "2" };
+				},
+				(frame) => {
+					frames.push(decode(frame).data);
+				},
+			),
+			onInvalidate: () => {
+				invalidations++;
+			},
+		});
+		try {
+			await started.promise;
+			ageTick();
+			expect(invalidations).toBe(1);
+			release.resolve();
+			await secondStarted.promise;
+			expect(frames).toEqual(["authorized-first"]);
+			expect(calls).toBe(2);
+		} finally {
+			release.resolve();
+			secondRelease.resolve();
+			close();
+			ticker.mockRestore();
+		}
+	});
+	it("absorbs queued authority and data wakes before starting a fresh coherent evaluation", async () => {
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source, 1);
+		const occupied = deferred();
+		const release = deferred();
+		const frames: unknown[] = [];
+		let calls = 0;
+		const blocker = scheduler.subscribe({
+			...base(
+				async () => {
+					occupied.resolve();
+					await release.promise;
+					return { data: "blocker", upToDate: "1" };
+				},
+				() => {},
+			),
+			dependencies: [],
+		});
+		await occupied.promise;
+		const close = scheduler.subscribe(
+			base(
+				async () => ({ data: ++calls, upToDate: "10" }),
+				(frame) => {
+					frames.push(decode(frame));
+				},
+			),
+		);
+		try {
+			await tick();
+			source.emit("authority", 8);
+			source.emit("data", 9);
+			release.resolve();
+			await tick();
+			await tick();
+			expect(calls).toBe(1);
+			expect(frames).toHaveLength(1);
+			expect(frames[0]).toMatchObject({ data: 1, seq: 9, upToDate: "10" });
+		} finally {
+			release.resolve();
+			close();
+			blocker();
+		}
+	});
 	it("uses the shared ticker for maximum-age authority evaluation and removes its registration", async () => {
 		const source = new Source();
 		const scheduler = new RealtimeRefreshScheduler(source);

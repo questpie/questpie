@@ -881,17 +881,42 @@ function subscribeRouteQuery(options: {
 	};
 	const fail = (error: unknown) => {
 		if (!active()) return;
+		const denied =
+			isPermanentAccessError(error) ||
+			(error instanceof ApiError && error.code === "NOT_FOUND");
+		const invalid =
+			error instanceof RealtimeTopicAdmissionError ||
+			error instanceof RealtimeSnapshotBufferOverflowError ||
+			(error instanceof ApiError &&
+				(error.code === "BAD_REQUEST" || error.code === "VALIDATION_ERROR"));
+		if (!denied && !invalid) {
+			// Like collection queries, retry only on the next dependency/age wake.
+			// Drop the client's old snapshot while fresh authority is unavailable.
+			void output
+				.write(
+					encodeSseEvent("error", {
+						code: "REALTIME_QUERY_UNAVAILABLE",
+						topicId: topic.id,
+						message: "Route query is temporarily unavailable",
+						retryable: true,
+					}),
+					"latest-snapshot",
+				)
+				.catch(options.onTransportError);
+			return;
+		}
 		closed = true;
 		cancellation.abort();
 		unsubscribe();
 		invalidate();
-		const payload = routeTopicRejection(
-			topic,
-			isPermanentAccessError(error) ? "access" : "operation_shape",
-			isPermanentAccessError(error)
-				? "Route query access denied"
-				: "Route query is unavailable",
-		).payload;
+		const payload =
+			error instanceof RealtimeTopicAdmissionError
+				? error.payload
+				: routeTopicRejection(
+						topic,
+						denied ? "access" : "operation_shape",
+						denied ? "Route query access denied" : "Route query is unavailable",
+					).payload;
 		void output
 			.dispose()
 			.then(() =>

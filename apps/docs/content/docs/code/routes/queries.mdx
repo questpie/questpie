@@ -59,6 +59,9 @@ service or imported root `app.db` can read outside the snapshot. Explicit contex
 facts supplied by a programmatic caller remain that caller's responsibility;
 the framework does not infer how to refresh them. Query execution requires an
 explicit user or system context and refuses an existing transaction.
+Do not open nested transactions inside a query or retain its database handle.
+The handle rejects new statements after the evaluation completes or is cancelled,
+including prepared queries created before cancellation.
 
 Do not write, enqueue effects or call external services from a query. PostgreSQL
 rejects database writes. Ordinary mutation routes retain ownership of their
@@ -118,12 +121,21 @@ or a maximum-age refresh, rather than a linearizable fence. Missed notifications
 recover through the existing outbox reconciliation. The refresh queue and running
 computation add time to this bound. Declare expiry-sensitive reads with an
 appropriate `maxAgeMs` (default 60 seconds).
+A maximum-age deadline requests another fresh evaluation and removes pending old
+snapshots. It does not cancel work already evaluating authority. Actual declared
+authority changes still discard that work before publication.
 
 Once a transaction is acquired, its evaluation callback has a 30-second deadline
-and PostgreSQL statements have a 30-second timeout. Queueing, identity refresh,
+and PostgreSQL statements have a timeout of at most 30 seconds; stricter database
+limits are preserved. Queueing, identity refresh,
 pool acquisition and cleanup can add time to a refresh. Application JavaScript must cooperate with `request.signal`; a deadline
 cannot stop arbitrary JavaScript. Raw SQL writes without change capture do not
 produce invalidations.
+
+A temporary evaluation failure clears the affected cached snapshot and keeps the
+watch subscribed. The next dependency event or maximum-age refresh retries it.
+`NOT_FOUND`, `FORBIDDEN` and `UNAUTHORIZED` end that watch with the same access
+denial and clear its cache; sibling subscriptions continue.
 
 ## Keep query growth bounded
 

@@ -548,7 +548,9 @@ export class RealtimeRefreshScheduler {
 					input.maxAgeMs ?? 60_000,
 					() => {
 						if (group!.disposed) return;
-						group!.authorityEpoch++;
+						// A deadline requests fresh authorization, but is not evidence
+						// of an authority change. Invalidating active evaluations on
+						// every tick can starve work that takes longer than maxAge.
 						group!.lastFrame = undefined;
 						group!.lastHash = undefined;
 						group!.onInvalidate?.();
@@ -1231,13 +1233,22 @@ export class RealtimeRefreshScheduler {
 					operation,
 					subscribers: group.subscribers.size,
 				});
-				const epoch = group.authorityEpoch;
-				const seq = group.lastSeq;
+				let epoch = group.authorityEpoch;
+				let seq = group.lastSeq;
 				let upToDate = await group.captureWatermark?.();
 				this.observe({ type: "routing.authoritative_db", operation });
 				let computed: unknown;
 				try {
-					computed = await this.runBounded(group.compute);
+					computed = await this.runBounded(() => {
+						if (group.coherent) {
+							// The owned snapshot begins after this queue wait. It
+							// includes earlier commits; only later wakes need a rerun.
+							epoch = group.authorityEpoch;
+							seq = group.lastSeq;
+							group.refreshQueued = false;
+						}
+						return group.compute();
+					});
 				} catch (error) {
 					if (group.disposed) return;
 					if (epoch !== group.authorityEpoch) continue;

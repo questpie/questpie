@@ -352,7 +352,10 @@ type JsonRouteCaller<TDef extends JsonRouteDefinition<any, any, any>> = ((
 		? {
 				watch: (
 					input: InferRouteWireInput<TDef>,
-					options?: JsonRouteCallOptions<InferRouteParams<TDef>>,
+					options?: JsonRouteCallOptions<InferRouteParams<TDef>> & {
+						/** Discard cached data while the watch waits for recovery. */
+						onInvalidate?: () => void;
+					},
 				) => AsyncIterable<InferRouteOutput<TDef>>;
 			}
 		: {});
@@ -2216,7 +2219,10 @@ export function createClient<TApp extends QuestpieApp>(
 				},
 			);
 		};
-		call.watch = (input: unknown, options: JsonRouteCallOptions = {}) => {
+		call.watch = (
+			input: unknown,
+			options: JsonRouteCallOptions & { onInvalidate?: () => void } = {},
+		) => {
 			// Validate the same required path parameters before opening a watch.
 			routePath(segments, options.params);
 			return realtimeApi.stream(
@@ -2232,6 +2238,8 @@ export function createClient<TApp extends QuestpieApp>(
 						: {}),
 				},
 				options.signal,
+				undefined,
+				options.onInvalidate,
 			);
 		};
 		return call;

@@ -8,6 +8,7 @@ import { createFetchHandler } from "../../src/server/adapters/http.js";
 import {
 	createAdapterContext,
 	refreshAdapterContext,
+	resolveLocale,
 } from "../../src/server/adapters/utils/context.js";
 import { rowsOf } from "../../src/server/db/driver-result.js";
 import { prepareJsonRoute } from "../../src/server/routes/execute.js";
@@ -356,11 +357,46 @@ describe("explicit route LIVE", () => {
 			{ ...topic("bad"), mode: "delta" },
 			{ ...topic("bad"), method: "GET" },
 			{ ...topic("bad"), params: {} },
+			{ ...topic("bad"), params: { company: "" } },
 		]) {
 			expect(() =>
 				prepareRouteQueryTopic(setup.app, bad as any, context.appContext),
 			).toThrow();
 		}
+	});
+
+	it("resolves LIVE locale through the same Accept-Language header as HTTP", async () => {
+		const context = await createAdapterContext(
+			setup.app,
+			new Request("http://localhost/api/realtime"),
+			config,
+		);
+		const prepared = prepareRouteQueryTopic(
+			setup.app,
+			{ ...topic("locale"), locale: "sk, en;q=0.8" },
+			context.appContext,
+		);
+		expect(prepared.request.headers.get("accept-language")).toBe(
+			"sk, en;q=0.8",
+		);
+		expect(new URL(prepared.request.url).searchParams.has("locale")).toBe(
+			false,
+		);
+		const target = await createAdapterContext(
+			setup.app,
+			prepared.request,
+			config,
+		);
+		expect(await resolveLocale(setup.app, prepared.request, config)).toBe("sk");
+		const http = await createAdapterContext(
+			setup.app,
+			new Request("http://localhost/api/report/tenant-a", {
+				method: "POST",
+				headers: { "accept-language": "sk, en;q=0.8" },
+			}),
+			config,
+		);
+		expect(target.appContext.locale).toBe(http.appContext.locale);
 	});
 
 	it("defers refreshed database facts to the transaction and rejects query writes", async () => {
@@ -398,15 +434,15 @@ describe("explicit route LIVE", () => {
 		const fresh = await refreshAdapterContext(context, {
 			deferContextExtensions: true,
 		});
-		const statements: unknown[] = [];
+		const statements: string[] = [];
 		const original = setup.app.db.transaction.bind(setup.app.db);
 		const transaction = spyOn(setup.app.db, "transaction").mockImplementation(
 			(run: any, options: any) =>
 				original(async (tx: any) => {
-					const execute = tx.execute.bind(tx);
-					tx.execute = (query: any) => {
-						statements.push(query);
-						return execute(query);
+					const prepare = tx.session.prepareQuery;
+					tx.session.prepareQuery = function (...args: any[]) {
+						statements.push(args[0].sql);
+						return prepare.apply(this, args);
 					};
 					return run(tx);
 				}, options),
@@ -420,10 +456,7 @@ describe("explicit route LIVE", () => {
 				.query()
 				.handler(() => ({}));
 			await prepareJsonRoute(setup.app, probe, {}).snapshot(fresh.appContext);
-			const { PgDialect } = await import("drizzle-orm/pg-core");
-			const queries = statements.map(
-				(query) => new PgDialect().sqlToQuery(query as any).sql,
-			);
+			const queries = statements;
 			expect(queries[0]).toContain("pg_snapshot_xmin(pg_current_snapshot())");
 			expect(queries[1]).toContain("statement_timeout");
 			expect(queries[2]).toContain("transaction_isolation");
