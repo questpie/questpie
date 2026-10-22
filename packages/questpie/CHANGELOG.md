@@ -1,5 +1,11 @@
 # questpie
 
+## 3.38.1
+
+### Patch Changes
+
+- [#419](https://github.com/questpie/questpie/pull/419) [`310f9b9`](https://github.com/questpie/questpie/commit/310f9b9c47b7505bae91509f13c17493395ae97c) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fix Graphile Worker retired-job cleanup starvation when 500 or more retired jobs remain locked. Cleanup advances through primary-key pages of at most 500 ledger rows per tick, completing unlocked or stale-lock jobs and removing orphans within that page. Each pass includes every bigint ID, freezes its highest ID and wraps at that endpoint, so locked jobs and rows inserted behind the cursor are revisited even while higher IDs keep arriving.
+
 ## 3.38.0
 
 ### Minor Changes
