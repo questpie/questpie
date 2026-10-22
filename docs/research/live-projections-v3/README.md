@@ -4,13 +4,18 @@ Research and delivery proposal, 2026-10-22. Runtime changes are not implemented.
 The separate PostgreSQL experiment below ran successfully. QUESTPIE v3 remains
 the production target; v4 is a source of useful contracts, not a prerequisite.
 
-**Recommendation:** deepen the existing route execution module. Add semantic
-query/command definitions and an opted-in watch for query results. Keep one
-definition for input, output, access, domain execution and documentation, then
-derive typed client, HTTP, OpenAPI and MCP projections. Preserve transport-specific
-identity, scopes and compatibility envelopes. An internal transport-neutral
-executor is useful; a second public operation registry is unnecessary for this
-first delivery.
+**Recommendation:** use one operation contract behind the existing route registry,
+with declared HTTP/MCP projections. For reads that promise bounded query counts,
+add a planned projection path early: row policies, field decisions, relations
+and aggregates belong to one bounded execution plan. Ordinary handler-based
+queries remain compatible, but cannot promise to prevent arbitrary per-row I/O.
+Use the existing executor/CRUD machinery; do not import the v4 compiler wholesale.
+
+The owner's follow-up specifically requires eliminating duplicated commands and
+making accidental relation/access N+1 difficult by construction. That makes the
+small planned-read module part of the first delivery, not a deferred optimization.
+See [why custom MCP tools exist](./autopilot-mcp-findings.md) and
+[query/access do’s and don’ts](./query-guidelines.md).
 
 ## What the three designs establish
 
@@ -24,10 +29,10 @@ JavaScript does not expose a complete dependency graph automatically.
 typed relational plan. That gives execution room to batch related lookups,
 lower authorized aggregates and check structural dependencies. It also creates
 an AST, planner and type system alongside existing CRUD. A 40-row task summary
-is a good experiment for this design; adopting it as the default would require
-proof of SQL and policy parity, not just pleasant syntax. Keep it as a possible
-later specialized read module if handler-based queries remain a measured
-bottleneck.
+is a good experiment for this design. Deliver a bounded subset early for the
+strict projection path, with proof of SQL and policy parity. A full relational
+language and optimizer are separate work; batch relations, authorized aggregates
+and policy expressions over existing CRUD are the first required capabilities.
 
 [C: operation catalog](./operation-catalog-design.md) makes execute/watch
 independent of URLs and keeps ordinary CRUD handlers. This best expresses the
@@ -84,6 +89,14 @@ input distinct from parsed Zod output in the client types. Existing unclassified
 routes retain their behavior. Query handlers run read-only; commands cannot be
 watched. MCP exposure stays explicit and adds its own scope restrictions.
 Derive read-only hints from semantic kind; do not invent idempotency hints.
+
+The strict read variant produces a synchronous declarative plan rather than an
+async per-row handler. The planner can therefore collect relation keys and
+policy dependencies before issuing SQL. Opaque callback policies require a
+batch/evaluation stage or are rejected for this mode; there is no silent slower
+fallback. Query count is bounded by plan stages and explicit key chunks, with
+SQL/row budgets checked at representative cardinalities. An ordinary route can
+still execute arbitrary code and does not receive that guarantee.
 
 For new managed commands, validate output before committing writes and durable
 queue intent. The explicit `transaction: "handler"` compatibility mode preserves
@@ -154,8 +167,11 @@ not framework implementation or a production migration.
    Compare HTTP, typed client and MCP normalized results, refusals and principal
    provenance; snapshot OpenAPI from the same output schema. Preserve MCP's
    different cancellation acknowledgement and agent identity handling.
-2. **Semantic execution.** Add mutually exclusive query/command capabilities,
-   explicit transaction ownership and client type contracts. Promote the
+2. **Semantic and planned execution.** Add query/command capabilities,
+   explicit transaction ownership and a bounded read plan including access,
+   relations and aggregates. Start with row predicates plus evaluation/batch
+   policies; check that 10/50/100 roots do not introduce per-row SQL. Add client
+   type contracts and promote the
    snapshot/rollback experiment into meaningful framework integration tests.
    Prove invalid output rollback and Autopilot duplicate-receipt recovery.
 3. **One derived live route.** Explicit dependencies, full snapshots, shared SSE,
