@@ -155,6 +155,7 @@ describe.each(["bun-sql", "node-postgres"] as const)(
 					},
 				},
 			);
+			await setup.app.db.execute(sql`create extension if not exists pg_trgm`);
 			await runTestDbMigrations(setup.app);
 			leftId = (
 				await setup.app.collections.query_snapshot_left.create({ value: 1 })
@@ -162,7 +163,7 @@ describe.each(["bun-sql", "node-postgres"] as const)(
 			rightId = (
 				await setup.app.collections.query_snapshot_right.create({ value: 1 })
 			).id;
-		});
+		}, 30_000);
 
 		afterAll(async () => {
 			if (!setup) return;

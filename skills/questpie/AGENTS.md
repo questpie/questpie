@@ -3998,6 +3998,17 @@ export default route()
 	});
 ```
 
+### Preparing an invocation
+
+Transport adapters can use `prepareJsonRoute` from `questpie/services` after
+verifying credentials. It parses the route's wire input once and returns
+`{ input, execute(context) }`. Preparation does not run product access, the
+handler, or output validation; execution runs those under the verified context.
+Use `input` for dependency preparation and call `execute` without parsing again.
+Application routes normally use the HTTP/MCP adapters instead of this lower-level
+helper. Pass an explicit user context when executing for a caller; standalone
+ordinary route execution otherwise retains its system-mode default.
+
 ### Handler Context
 
 Every handler (route, raw route, job, service, email) receives the same base `AppContext`:
@@ -9185,8 +9196,10 @@ const body = { error: formatPublicError(error, { t, locale }) };
 
 The formatter preserves explicit public messages and bounded application
 `context.custom` details. Causes, stacks, invalid field values and database or
-hook diagnostics stay server-side. Unknown exceptions and invalid handler
-output become opaque `INTERNAL_SERVER_ERROR` responses. Route input schema
+hook diagnostics stay server-side. Internal and hook errors use a generic
+public message even when their diagnostic message has a custom translation key.
+Unknown exceptions and invalid handler output become opaque
+`INTERNAL_SERVER_ERROR` responses. Route input schema
 failures become `VALIDATION_ERROR` before the handler runs.
 
 ## Resources

@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import {
-	executeJsonRoute,
+	prepareJsonRoute,
 	isJsonRoute,
 	type IntrospectedRoute,
 } from "questpie";
@@ -47,12 +47,17 @@ function routeSchemas(route: IntrospectedRoute) {
 	let encodedDateOutput = false;
 	try {
 		input = definition.schema
-			? z.toJSONSchema(definition.schema, { io: "input", reused: "ref" })
+			? z.toJSONSchema(definition.schema, {
+					io: "input",
+					reused: "ref",
+					target: "draft-7",
+				})
 			: { type: "object", properties: {} };
 		output = definition.outputSchema
 			? z.toJSONSchema(definition.outputSchema, {
 					io: "output",
 					reused: "ref",
+					target: "draft-7",
 					// Domain Date output has an ISO JSON wire encoding. Date input
 					// still needs an explicit ISO string schema piped into coercion.
 					unrepresentable: ({ zodSchema }) => {
@@ -75,9 +80,11 @@ function routeSchemas(route: IntrospectedRoute) {
 	}
 	const wrapped = route.params.length > 0 || input.type !== "object";
 	if (wrapped) {
-		const { $defs, ...body } = input;
+		const { $defs, definitions, $schema, ...body } = input;
 		input = {
+			...($schema ? { $schema } : {}),
 			...($defs ? { $defs } : {}),
+			...(definitions ? { definitions } : {}),
 			type: "object",
 			properties: {
 				...(route.params.length
@@ -100,9 +107,11 @@ function routeSchemas(route: IntrospectedRoute) {
 	}
 	const wrappedOutput = !!output && output.type !== "object";
 	if (output && wrappedOutput) {
-		const { $defs, ...body } = output;
+		const { $defs, definitions, $schema, ...body } = output;
 		output = {
+			...($schema ? { $schema } : {}),
 			...($defs ? { $defs } : {}),
+			...(definitions ? { definitions } : {}),
 			type: "object",
 			properties: { value: body },
 			required: ["value"],
@@ -158,6 +167,12 @@ export async function registerRouteTools(
 		const route = catalogEntry.route;
 		const definition = route.definition;
 		if (!isJsonRoute(definition)) continue;
+		const access = definition.access;
+		if (
+			access === false ||
+			(typeof access === "object" && access?.execute === false)
+		)
+			continue;
 		const mcpMeta = route.meta?.mcp;
 		if (!mcpMeta) continue;
 		const policy = catalogEntry.policy;
@@ -265,18 +280,27 @@ export async function registerRouteTools(
 									signal,
 								},
 							);
+							let prepared: ReturnType<typeof prepareJsonRoute>;
+							try {
+								const invocation = routeInvocation(route, input, wrapped);
+								prepared = prepareJsonRoute(
+									scope.app,
+									definition,
+									invocation.input,
+									executionRequest,
+									invocation.params,
+								);
+							} catch (error) {
+								throw new McpProductError(
+									error,
+									{ t: scope.app.t, locale: ctx.locale },
+									correlationId,
+								);
+							}
 							const invoke = async () => {
 								let result: unknown;
 								try {
-									const invocation = routeInvocation(route, input, wrapped);
-									result = await executeJsonRoute(
-										scope.app,
-										definition,
-										invocation.input,
-										requestContext,
-										executionRequest,
-										invocation.params,
-									);
+									result = await prepared.execute(requestContext);
 								} catch (error) {
 									throw new McpProductError(
 										error,

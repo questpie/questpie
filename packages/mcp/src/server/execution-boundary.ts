@@ -4,7 +4,6 @@ import { types as nodeTypes } from "node:util";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext, RequestContext } from "questpie";
 import {
-	ApiError,
 	CMS_ERROR_CODES,
 	formatPublicError,
 	type ApiErrorShape,
@@ -461,11 +460,7 @@ function publicMessage(code: McpPublicErrorCode, detail?: string): string {
 	return detail ? `MCP operation failed: ${detail}` : "MCP operation failed";
 }
 
-function classifyError(
-	error: unknown,
-	correlationId: string,
-	options: PublicErrorOptions = {},
-): McpPublicError {
+function classifyError(error: unknown, correlationId: string): McpPublicError {
 	if (
 		!!error &&
 		(typeof error === "object" || typeof error === "function") &&
@@ -474,8 +469,6 @@ function classifyError(
 		return new McpPublicError("internal", correlationId);
 	}
 	if (error instanceof McpPublicError) return error;
-	if (error instanceof ApiError)
-		return new McpProductError(error, options, correlationId);
 	if (error instanceof McpAccessDeniedError || isLegacyAccessDenied(error)) {
 		return new McpPublicError("access_denied", correlationId);
 	}
@@ -564,11 +557,8 @@ function safeRequestId(value: string | number): string | number | undefined {
 	return /^[\w.:-]{1,128}$/.test(value) ? value : undefined;
 }
 
-export function toMcpToolError(
-	error: unknown,
-	options: PublicErrorOptions = {},
-): CallToolResult {
-	const resolved = classifyError(error, randomUUID(), options);
+export function toMcpToolError(error: unknown): CallToolResult {
+	const resolved = classifyError(error, randomUUID());
 	if (resolved instanceof McpProductError) {
 		return {
 			isError: true,
@@ -766,7 +756,8 @@ export class McpExecutionBoundary {
 				durationMs: Date.now() - startedAt,
 				outcome: "rejected",
 				code: publicError.code,
-				...(publicError.code === "internal"
+				...(publicError.code === "internal" ||
+				publicError.code === "INTERNAL_SERVER_ERROR"
 					? { internalError: diagnosticError(rawError) }
 					: {}),
 			});

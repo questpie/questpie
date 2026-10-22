@@ -9,9 +9,14 @@ import { z } from "zod";
 
 import { buildMockApp } from "../../questpie/test/utils/mocks/mock-app-builder.js";
 import {
+	createMockUser,
+	createTestContext,
+} from "../../questpie/test/utils/test-context.js";
+import {
 	createMcpServer,
 	createWorkloadMcpServer,
 	mcpTool,
+	mcpPrompts,
 } from "../src/exports/index.js";
 import { installSchemaDietListToolsHandler } from "../src/server/create-server.js";
 
@@ -93,12 +98,168 @@ describe("MCP catalog UTF-8 byte budget", () => {
 				const list = result.tools.find(
 					({ name }) => name === "collections.posts.list",
 				);
-				expect(list?.inputSchema.$defs).toBeDefined();
+				expect(list?.inputSchema.definitions).toBeDefined();
 			} finally {
 				await close();
 			}
 		} finally {
 			await setup.cleanup();
+		}
+	});
+
+	it.each(["development", "test", "production"])(
+		"serves resources and prompts with zero OAuth-visible tools in %s",
+		async (env) => {
+			const originalEnv = process.env.NODE_ENV;
+			const setup = await buildMockApp({
+				mcpPrompts: {
+					help: mcpPrompts("help", {
+						access: true,
+						scopes: false,
+						list: async () => [{ name: "help" }],
+						get: async () => ({ messages: [] }),
+					}),
+				},
+				collections: Object.fromEntries(
+					["locked", "open"].map((name) => [
+						name,
+						collection(name)
+							.fields(({ f }) => ({ title: f.text(255) }))
+							.access({ read: true }),
+					]),
+				),
+				config: {
+					mcp: {
+						crud: {
+							collections: {
+								locked: { operations: { list: true } },
+								open: { operations: { list: true } },
+							},
+						},
+						resources: { collections: { open: true } },
+					},
+				},
+			});
+			const user = createMockUser();
+			const ctx = createTestContext({
+				accessMode: "user",
+				principal: {
+					kind: "oauth",
+					user,
+					clientId: "empty",
+					scopes: [],
+					tokenId: "empty",
+				},
+			});
+			try {
+				process.env.NODE_ENV = env;
+				const server = await createMcpServer(setup.app, {
+					transport: "http",
+					ctx,
+				});
+				const { client, close } = await connect(server);
+				try {
+					expect(await client.listTools()).toEqual({ tools: [] });
+					expect(
+						(await client.listResources()).resources.length,
+					).toBeGreaterThan(0);
+					expect(
+						(
+							await client.readResource({
+								uri: "questpie://schema/collections",
+							})
+						).contents.length,
+					).toBe(1);
+					expect((await client.listPrompts()).prompts).toEqual([
+						{ name: "help" },
+					]);
+					expect((await client.getPrompt({ name: "help" })).messages).toEqual(
+						[],
+					);
+				} finally {
+					await close();
+				}
+			} finally {
+				process.env.NODE_ENV = originalEnv;
+				await setup.cleanup();
+			}
+		},
+	);
+
+	it.each([3, 4])(
+		"fits %s collections with twelve fields without dropping read tools",
+		async (count) => {
+			const collections = Object.fromEntries(
+				Array.from({ length: count }, (_, i) => [
+					`c${i}`,
+					collection(`c${i}`)
+						.fields(({ f }) =>
+							Object.fromEntries(
+								Array.from({ length: 12 }, (_, j) => [
+									`field${j}`,
+									f.text(255),
+								]),
+							),
+						)
+						.access({ read: true }),
+				]),
+			);
+			const setup = await buildMockApp({
+				collections,
+				config: {
+					mcp: {
+						crud: {
+							collections: Object.fromEntries(
+								Object.keys(collections).map((name) => [
+									name,
+									{ operations: { list: true, count: true, get: true } },
+								]),
+							),
+						},
+					},
+				},
+			});
+			try {
+				const server = await createMcpServer(setup.app, {
+					transport: "http",
+					ctx: createTestContext({
+						accessMode: "user",
+						principal: {
+							kind: "oauth",
+							user: createMockUser(),
+							clientId: "read",
+							tokenId: "read",
+							scopes: ["collections:read"],
+						},
+					}),
+				});
+				const { client, close } = await connect(server);
+				try {
+					const result = await client.listTools();
+					expect(result.tools.length).toBe(count * 3);
+					expect(bytes(result)).toBeLessThan(85_000);
+				} finally {
+					await close();
+				}
+			} finally {
+				await setup.cleanup();
+			}
+		},
+	);
+
+	it("rejects a discovery cursor as InvalidParams", async () => {
+		const server = new McpServer({ name: "cursor", version: "1" });
+		server.registerTool("read", { inputSchema: z.object({}) }, async () => ({
+			content: [],
+		}));
+		installSchemaDietListToolsHandler(server);
+		const { client, close } = await connect(server);
+		try {
+			await expect(
+				client.listTools({ cursor: "invalid" }),
+			).rejects.toMatchObject({ code: -32602 });
+		} finally {
+			await close();
 		}
 	});
 
@@ -212,6 +373,9 @@ describe("MCP catalog UTF-8 byte budget", () => {
 				"first",
 				"last",
 			]);
+			await expect(
+				client.listTools({ cursor: "invalid" }),
+			).rejects.toMatchObject({ code: -32602 });
 			allowLarge = true;
 			await expect(client.listTools()).rejects.toThrow(
 				/catalog byte budget exceeded.*85000/i,
@@ -338,7 +502,9 @@ describe("MCP catalog UTF-8 byte budget", () => {
 			const exactBytes = bytes(result);
 			expect(exactBytes).toBeLessThan(85_000);
 			expect(result.tools[0].inputSchema).toMatchObject({ required: ["id"] });
-			expect(result.tools[0].inputSchema).not.toHaveProperty("$schema");
+			expect(result.tools[0].inputSchema.$schema).toBe(
+				"http://json-schema.org/draft-07/schema#",
+			);
 			expect(result.tools[0].outputSchema).toMatchObject({
 				required: ["value"],
 			});

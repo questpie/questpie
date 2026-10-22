@@ -96,7 +96,7 @@ const deniedRoute = route()
 
 const dateRoute = route()
 	.post()
-	.schema(z.object({ at: z.iso.datetime().pipe(z.coerce.date()) }))
+	.schema(z.object({ at: z.coerce.date() }))
 	.outputSchema(z.object({ iso: z.string() }))
 	.meta({ mcp: { expose: true, name: "dates.parse" } })
 	.handler(async ({ input }) => ({ iso: input.at.toISOString() }));
@@ -389,7 +389,7 @@ describe("@questpie/mcp server", () => {
 			expect(toolNames).not.toContain("collections.privateNotes.list");
 			expect(toolNames).not.toContain("routes.reports.unannotated");
 			expect(toolNames).not.toContain("raw.exposed");
-			expect(toolNames).toContain("routes.reports.denied");
+			expect(toolNames).not.toContain("routes.reports.denied");
 
 			const resources = await client.listResources();
 			const resourceUris = resources.resources.map((resource) => resource.uri);

@@ -69,17 +69,21 @@ form wants. It returns `{}` when there were no field errors.
 `isCode(code)` compares against these. Its argument is typed to the union
 below, so a misspelt code is a compile error rather than a silent `false`.
 
-| Code                                  | Status |
-| ------------------------------------- | ------ |
-| `BAD_REQUEST`, `VALIDATION_ERROR`     | 400    |
-| `UNAUTHORIZED`                        | 401    |
-| `FORBIDDEN`                           | 403    |
-| `NOT_FOUND`                           | 404    |
-| `CONFLICT`                            | 409    |
-| `PRECONDITION_FAILED`                 | 412    |
-| `UNPROCESSABLE_CONTENT`               | 422    |
-| `INTERNAL_SERVER_ERROR`, `HOOK_ERROR` | 500    |
-| `NOT_IMPLEMENTED`                     | 501    |
+| Code                              | Status |
+| --------------------------------- | ------ |
+| `BAD_REQUEST`, `VALIDATION_ERROR` | 400    |
+| `UNAUTHORIZED`                    | 401    |
+| `FORBIDDEN`                       | 403    |
+| `NOT_FOUND`                       | 404    |
+| `CONFLICT`                        | 409    |
+| `PRECONDITION_FAILED`             | 412    |
+| `UNPROCESSABLE_CONTENT`           | 422    |
+| `INTERNAL_SERVER_ERROR`           | 500    |
+| `NOT_IMPLEMENTED`                 | 501    |
+
+Hook failures are exposed as `INTERNAL_SERVER_ERROR`; the server retains their
+original diagnostic code. Public validation errors contain at most eight field
+entries and omit causes, stacks, and invalid values in all environments.
 
 `VALIDATION_ERROR` is the usual source of `fieldErrors`, but not the only one.
 A `BAD_REQUEST` can carry them, and a unique-constraint clash arrives as a

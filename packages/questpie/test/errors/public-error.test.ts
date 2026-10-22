@@ -6,6 +6,28 @@ import { handleError } from "../../src/server/adapters/utils/response.js";
 import { ApiError } from "../../src/server/errors/base.js";
 
 describe("safe public error wire contract", () => {
+	it("redacts ApiError when JSON.stringify supplies a property key to toJSON", () => {
+		const error = ApiError.internal(
+			"private-database-secret",
+			new Error("private-cause"),
+		);
+		const json = JSON.stringify({ error });
+		expect(JSON.parse(json)).toEqual({
+			error: {
+				code: "INTERNAL_SERVER_ERROR",
+				message: "Internal server error",
+			},
+		});
+		for (const secret of [
+			"stack",
+			"cause",
+			"private-database-secret",
+			"private-cause",
+		]) {
+			expect(json).not.toContain(secret);
+		}
+		expect(error.toJSON(true)).toHaveProperty("stack", error.stack);
+	});
 	it("keeps explicit product details but never cause, invalid values or runtime context", async () => {
 		const error = new ApiError({
 			code: "CONFLICT",
@@ -175,4 +197,36 @@ it("does not invoke overridden error serialization or nested detail accessors", 
 		error: { code: "CONFLICT", message: "Try again" },
 	});
 	expect(calls).toBe(0);
+});
+
+it("keeps internal diagnostic messages and translation keys out of public responses", async () => {
+	const cause = new Error("private connection details");
+	for (const error of [
+		ApiError.internal("private SQL", cause),
+		ApiError.internal("private SQL", cause, "private.indexer", {
+			table: "private_table",
+		}),
+	]) {
+		const translated: string[] = [];
+		const response = handleError(error, {
+			isDev: false,
+			locale: "sk",
+			app: {
+				t: (key: string) => {
+					translated.push(key);
+					return "Vnútorná chyba servera";
+				},
+			} as never,
+		});
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({
+			error: {
+				code: "INTERNAL_SERVER_ERROR",
+				message: "Vnútorná chyba servera",
+			},
+		});
+		expect(translated).toEqual(["error.internal"]);
+		expect(error.message).toBe("private SQL");
+		expect(error.cause).toBe(cause);
+	}
 });

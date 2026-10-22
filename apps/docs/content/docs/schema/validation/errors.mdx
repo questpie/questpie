@@ -1,6 +1,6 @@
 ---
 title: Validation errors
-description: A rejected write comes back as one HTTP 400 body with a field error per Zod issue, and a hook can raise the same shape for rules a single field schema cannot see.
+description: A rejected write comes back as one HTTP 400 body with up to eight field errors, and a hook can raise the same shape for rules a single field schema cannot see.
 kind: guide
 package: questpie
 ---
@@ -10,8 +10,8 @@ typed client reads it, and how you raise a failure of your own.
 
 ## The body
 
-A failed parse becomes an `ApiError` with code `VALIDATION_ERROR`, which maps to
-HTTP 400. The response wraps it under an `error` key:
+A failed collection input parse or route input-schema parse becomes an `ApiError`
+with code `VALIDATION_ERROR`, which maps to HTTP 400. The response wraps it under an `error` key:
 
 ```json
 {
@@ -32,8 +32,17 @@ HTTP 400. The response wraps it under an `error` key:
 | ------------- | --------------------------------------------------------------------------------- |
 | `code`        | `VALIDATION_ERROR` from a schema parse, `BAD_REQUEST` from `ApiError.badRequest`. |
 | `message`     | A summary line. QUESTPIE translates it when the error carries a translation key.  |
-| `fieldErrors` | One entry per Zod issue, each with a dotted `path` and its own `message`.         |
-| `cause`       | The raw Zod issues as a string. `stack` joins it in development.                  |
+| `fieldErrors` | Up to eight entries, each with a dotted `path` and its own `message`.             |
+
+Public responses omit causes, stack traces, invalid values, and database or hook
+diagnostics in every environment. Internal and hook failures use the generic
+`INTERNAL_SERVER_ERROR` code and message; log the original error server-side for
+diagnostics. Only app-authored safe context is eligible for a public error.
+
+A `ZodError` thrown by a route handler or its output validation is an internal
+server failure (HTTP 500), rather than a client input error. When parsing client
+input yourself, explicitly throw `ApiError.fromZodError(error)` for input
+validation failures. Do not apply that conversion to output validation.
 
 Nothing is written when the parse fails. No row, no `beforeChange`, no
 `afterChange`.
