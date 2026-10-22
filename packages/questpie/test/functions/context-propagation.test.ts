@@ -21,7 +21,10 @@ import {
 	runWithContext,
 	tryGetContext,
 } from "../../src/server/config/context.js";
-import { executeJsonRoute } from "../../src/server/routes/execute.js";
+import {
+	executeJsonRoute,
+	executeRawRoute,
+} from "../../src/server/routes/execute.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -264,6 +267,71 @@ describe("executeJsonRoute — context propagation via runWithContext", () => {
 
 		expect(result.hasRequest).toBe(false);
 		expect(capturedRequest).toBeUndefined();
+	});
+
+	it("passes verified context extensions flat to JSON handlers without replacing framework arguments", async () => {
+		let policyRunId: unknown;
+		const verified = {
+			requesterRunId: "verified-run",
+			input: { title: "extension input" },
+			params: { taskId: "extension task" },
+			app: "extension app",
+			db: "extension db",
+			accessMode: "system",
+		};
+		const rename = route()
+			.post()
+			.params<{ taskId: string }>()
+			.schema(z.object({ title: z.string() }).strict())
+			.access((args) => {
+				policyRunId = Reflect.get(args, "requesterRunId");
+				return true;
+			})
+			.handler((args) => {
+				expect(args.app).toBe(setup.app);
+				expect(args.db).toBe(setup.app.db);
+				expect(args.accessMode).toBe("user");
+				expect(args.params).toEqual({ taskId: "task-1" });
+				return {
+					title: args.input.title,
+					requesterRunId: Reflect.get(args, "requesterRunId"),
+				};
+			});
+
+		const result = await executeJsonRoute(
+			setup.app,
+			rename,
+			{ title: "Renamed" },
+			{ accessMode: "user", "~contextExtensions": verified },
+			undefined,
+			{ taskId: "task-1" },
+		);
+
+		expect(policyRunId).toBe("verified-run");
+		expect(result).toEqual({
+			title: "Renamed",
+			requesterRunId: "verified-run",
+		});
+	});
+
+	it("passes verified context extensions flat to raw handlers", async () => {
+		const inspect = route()
+			.post()
+			.raw()
+			.handler((args) =>
+				Response.json({ requesterRunId: Reflect.get(args, "requesterRunId") }),
+			);
+		const response = await executeRawRoute(
+			setup.app,
+			inspect,
+			new Request("http://localhost/inspect", { method: "POST" }),
+			{
+				accessMode: "user",
+				"~contextExtensions": { requesterRunId: "verified-run" },
+			},
+		);
+
+		expect(await response.json()).toEqual({ requesterRunId: "verified-run" });
 	});
 });
 

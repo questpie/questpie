@@ -202,6 +202,7 @@ export async function executeJsonRouteInternal<
 			}
 
 			const result = await definition.handler({
+				...(resolvedContext["~contextExtensions"] ?? {}),
 				...services,
 				...resolvedContext,
 				app,
@@ -283,6 +284,7 @@ export async function executeRawRouteInternal(
 			}
 
 			return definition.handler({
+				...(resolvedContext["~contextExtensions"] ?? {}),
 				...services,
 				...resolvedContext,
 				app,
