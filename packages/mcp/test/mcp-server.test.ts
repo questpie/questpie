@@ -96,7 +96,7 @@ const deniedRoute = route()
 
 const dateRoute = route()
 	.post()
-	.schema(z.object({ at: z.coerce.date() }))
+	.schema(z.object({ at: z.iso.datetime().pipe(z.coerce.date()) }))
 	.outputSchema(z.object({ iso: z.string() }))
 	.meta({ mcp: { expose: true, name: "dates.parse" } })
 	.handler(async ({ input }) => ({ iso: input.at.toISOString() }));
@@ -689,6 +689,17 @@ describe("@questpie/mcp server", () => {
 			expect(dateRouteResult.structuredContent).toEqual({
 				iso: "2026-05-08T12:00:00.000Z",
 			});
+			const dateSchema = (await client.listTools()).tools.find(
+				(tool) => tool.name === "dates.parse",
+			)!.inputSchema;
+			expect((dateSchema.properties!.at as Record<string, unknown>).type).toBe(
+				"string",
+			);
+			const invalidDate = await client.callTool({
+				name: "dates.parse",
+				arguments: { at: 5 },
+			});
+			expect(invalidDate.isError).toBe(true);
 		} finally {
 			await close();
 		}
