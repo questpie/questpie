@@ -2,6 +2,8 @@
 "@questpie/mcp": minor
 ---
 
-Enforce a hard UTF-8 byte budget below 100,000 bytes on the complete advertised MCP tools catalog, including schemas and metadata after projection. Set execution.maxCatalogBytes to a lower threshold to reserve headroom. An oversized catalog fails explicitly with its largest contributors; tools and output schemas are never silently dropped. This applies to HTTP, workload, and trusted-maintenance stdio discovery. Schema-diet installation failures now fail closed in production so the budget cannot be bypassed.
+Breaking behavior change: the previously unbounded MCP tools catalog must now be strictly less than 100,000 UTF-8 bytes, including the complete result wrapper, schemas, and metadata after visibility and schema projection. Oversized catalogs fail explicitly with their largest contributors. No tools or required input/output schemas are silently removed, and pagination cannot bypass the limit. This applies to HTTP, workload, and trusted-maintenance stdio discovery.
 
-Generated CRUD tool schemas now preserve Zod's shared definitions as references through SDK discovery, reducing repeated schema bytes while keeping server validation and the complete tool set intact.
+Migration: measure your complete tools/list response and target less than 85,000 UTF-8 bytes to leave headroom. Reduce verbose descriptions or explicitly configure which tools your release exposes if it exceeds the limit. Set execution.maxCatalogBytes to 85,000 (or a stricter threshold) to enforce that margin; the 100,000-byte ceiling cannot be raised.
+
+Generated CRUD discovery now uses cached canonical schema projections with shared references instead of merging JSON Schema dialects through Zod metadata. Server-side Zod validation, the complete visible tool set, and output schemas remain intact. Principals with zero visible tools receive an empty list and can still use authorized resources and prompts. Schema-diet installation fails closed in every environment if SDK internals prevent budget enforcement, and unsupported tools/list cursors return InvalidParams (-32602).

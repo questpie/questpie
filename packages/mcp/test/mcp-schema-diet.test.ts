@@ -515,7 +515,10 @@ describe("installSchemaDietListToolsHandler failure handling", () => {
 	let loggedErrors: unknown[][];
 
 	function fakeServer(overrides: Record<string, unknown>): McpServer {
-		return { server: { ...overrides } } as unknown as McpServer;
+		return {
+			_registeredTools: { tool: {} },
+			server: { ...overrides },
+		} as unknown as McpServer;
 	}
 
 	beforeEach(() => {
@@ -531,6 +534,18 @@ describe("installSchemaDietListToolsHandler failure handling", () => {
 		process.env.NODE_ENV = originalNodeEnv;
 		console.error = originalConsoleError;
 	});
+
+	it.each(["test", "production"])(
+		"fails closed in %s when the SDK registered-tool map is unavailable",
+		(env) => {
+			process.env.NODE_ENV = env;
+			const server = fakeServer({ _requestHandlers: new Map() });
+			Reflect.deleteProperty(server, "_registeredTools");
+			expect(() => installSchemaDietListToolsHandler(server)).toThrow(
+				/registered-tool map/,
+			);
+		},
+	);
 
 	it("throws outside production when the SDK's request-handler map is missing", () => {
 		process.env.NODE_ENV = "test";

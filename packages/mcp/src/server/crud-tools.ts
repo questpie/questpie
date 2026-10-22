@@ -35,7 +35,7 @@ import {
 	executeWorkloadTool,
 	registerWorkloadDiscoveryTool,
 } from "./workload-boundary.js";
-import { toToolInputJsonSchema, withMcpSchemaRefs } from "./zod-json-schema.js";
+import { toToolInputJsonSchema } from "./zod-json-schema.js";
 
 const idSchema = z.union([z.string(), z.number()]);
 
@@ -467,12 +467,24 @@ async function shouldRegister(
 	);
 }
 
+// The release owns the immutable catalog; schemas depend only on that snapshot,
+// never on caller authority. Reuse them across stateless HTTP server instances.
+const catalogSchemas = new WeakMap<
+	ResolvedMcpCatalog,
+	Map<string, z.ZodTypeAny>
+>();
+
 export async function registerCrudTools(
 	server: McpServer,
 	scope: RuntimeScope,
 	config: McpConfig,
 	catalog: ResolvedMcpCatalog,
 ) {
+	let schemas = catalogSchemas.get(catalog);
+	if (!schemas) {
+		schemas = new Map();
+		catalogSchemas.set(catalog, schemas);
+	}
 	const maxLimit = config.crud?.maxLimit ?? 100;
 	const collections = scope.app.getCollections() as Record<string, any>;
 	const globals = scope.app.getGlobals() as Record<string, any>;
@@ -485,11 +497,6 @@ export async function registerCrudTools(
 		for (const operation of COLLECTION_OPERATIONS) {
 			if (!catalogEntry.operations.includes(operation.name)) continue;
 			const toolName = `collections.${name}.${operation.name}`;
-			const inputSchema = collectionOperationSchema(
-				operation.name,
-				collection,
-				policy,
-			);
 			const annotations = {
 				readOnlyHint: operation.kind === "read",
 				destructiveHint: operation.kind === "delete",
@@ -532,11 +539,16 @@ export async function registerCrudTools(
 				continue;
 			}
 
+			const inputSchema =
+				schemas.get(toolName) ??
+				collectionOperationSchema(operation.name, collection, policy);
+			schemas.set(toolName, inputSchema);
+
 			server.registerTool(
 				toolName,
 				{
 					description: policy.description ?? operation.description(name),
-					inputSchema: withMcpSchemaRefs(inputSchema, "input"),
+					inputSchema,
 					annotations,
 				},
 				async (input: any, extra: any) => {
@@ -627,7 +639,6 @@ export async function registerCrudTools(
 		for (const operation of GLOBAL_OPERATIONS) {
 			if (!catalogEntry.operations.includes(operation.name)) continue;
 			const toolName = `globals.${name}.${operation.name}`;
-			const inputSchema = globalOperationSchema(operation.name, global, policy);
 			const annotations = {
 				readOnlyHint: operation.kind === "read",
 				idempotentHint: operation.name === "update",
@@ -668,11 +679,16 @@ export async function registerCrudTools(
 				continue;
 			}
 
+			const inputSchema =
+				schemas.get(toolName) ??
+				globalOperationSchema(operation.name, global, policy);
+			schemas.set(toolName, inputSchema);
+
 			server.registerTool(
 				toolName,
 				{
 					description: policy.description ?? operation.description(name),
-					inputSchema: withMcpSchemaRefs(inputSchema, "input"),
+					inputSchema,
 					annotations,
 				},
 				async (input: any, extra: any) => {
@@ -749,4 +765,5 @@ export async function registerCrudTools(
 			}
 		}
 	}
+	return schemas;
 }

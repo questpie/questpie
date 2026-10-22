@@ -2,12 +2,14 @@
 import { ToolSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-/** Preserve shared schema nodes when the SDK converts with its inline default. */
-export function withMcpSchemaRefs<T extends z.ZodType>(
-	schema: T,
-	io: "input" | "output",
-): T {
-	return schema.meta(z.toJSONSchema(schema, { io, reused: "ref" }));
+const inputProjections = new WeakMap<z.ZodTypeAny, Tool["inputSchema"]>();
+
+function freezeProjection<T>(value: T): T {
+	if (value && typeof value === "object" && !Object.isFrozen(value)) {
+		for (const child of Object.values(value)) freezeProjection(child);
+		Object.freeze(value);
+	}
+	return value;
 }
 
 export function jsonSchemaCompatibleSchema(
@@ -240,13 +242,19 @@ export function applyMcpSchemaDiet<T>(schema: T): T {
 export function toToolInputJsonSchema(
 	schema: z.ZodTypeAny | undefined,
 ): Tool["inputSchema"] {
+	const cached = schema && inputProjections.get(schema);
+	if (cached) return cached;
 	const parsed = ToolSchema.shape.inputSchema.safeParse(toJsonSchema(schema));
-	return parsed.success
-		? parsed.data
-		: {
-				type: "object",
-				properties: {},
-			};
+	const projection = freezeProjection<Tool["inputSchema"]>(
+		parsed.success
+			? parsed.data
+			: {
+					type: "object",
+					properties: {},
+				},
+	);
+	if (schema) inputProjections.set(schema, projection);
+	return projection;
 }
 
 export function toToolOutputJsonSchema(

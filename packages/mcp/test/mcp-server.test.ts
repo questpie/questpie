@@ -96,7 +96,7 @@ const deniedRoute = route()
 
 const dateRoute = route()
 	.post()
-	.schema(z.object({ at: z.iso.datetime().pipe(z.coerce.date()) }))
+	.schema(z.object({ at: z.coerce.date() }))
 	.outputSchema(z.object({ iso: z.string() }))
 	.meta({ mcp: { expose: true, name: "dates.parse" } })
 	.handler(async ({ input }) => ({ iso: input.at.toISOString() }));
