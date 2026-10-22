@@ -30,6 +30,57 @@ predicate.
 Field rules only allow or deny. They cannot return a row filter, because the row
 has already been decided by then.
 
+## Batch read decisions
+
+Use `batchRead` when a field policy needs facts for several rows. The callback
+runs once per protected field path for the authorized page, before output hooks
+and `afterRead`. Return one boolean for every document, in the same order.
+
+This example uses an application-owned `documentGrants` table:
+
+```ts
+import { batchRead } from "questpie";
+import { and, eq, inArray } from "drizzle-orm";
+import { documentGrants } from "../schema/document-grants";
+
+const canReadNote = batchRead<{ id: string }>(async ({ docs, db, actor }) => {
+	if (!actor) return docs.map(() => false);
+	const grants = await db
+		.select({ documentId: documentGrants.documentId })
+		.from(documentGrants)
+		.where(
+			and(
+				eq(documentGrants.subjectId, actor.subjectId),
+				inArray(
+					documentGrants.documentId,
+					docs.map((doc) => doc.id),
+				),
+			),
+		);
+	const allowed = new Set(grants.map((grant) => grant.documentId));
+	return docs.map((doc) => allowed.has(doc.id));
+});
+
+// Inside a collection's fields callback:
+// internalNote: f.text().access({ read: canReadNote })
+```
+
+Use the supplied `db` for fact lookups. Inside a `.query()` evaluation it is the
+same read-only snapshot as the row read. An imported root `app.db` escapes that
+snapshot. Facts are loaded afresh for every read; no permission verdict is
+reused across inputs, principals or LIVE evaluations.
+
+Documents contain the selected columns, so do not assume an omitted field is
+available. Related collections evaluate their own policies on their own pages.
+Globals and write responses dispatch a one-document batch. System reads retain
+the existing access bypass. Aggregates cannot evaluate a row-dependent batch
+field rule and remain rejected.
+
+Batching the callback does not optimize a loop inside it. Fetch facts with one
+bounded set query, then decide in memory. Keep SQL row visibility in the row
+access rule: field decisions run after pagination and cannot repair row counts
+or cursors by hiding records.
+
 ## What a denial does
 
 | Flag            | When it resolves to `false`                                         |

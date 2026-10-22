@@ -119,6 +119,12 @@ export * from "#questpie/server/config/types.js";
 export * from "#questpie/server/errors/index.js";
 // Field builder system (expanded from fields/index.ts barrel)
 export {
+	batchRead,
+	type BatchReadCallback,
+	type BatchReadContext,
+	type BatchReadRule,
+} from "#questpie/server/fields/batch-read.js";
+export {
 	type BuiltinFields,
 	createFieldBuilder,
 	createFieldsCallbackContext,

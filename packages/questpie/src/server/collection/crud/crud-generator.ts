@@ -81,6 +81,7 @@ import {
 } from "#questpie/server/collection/crud/relation-resolvers/index.js";
 import {
 	executeAccessRule,
+	getBatchRestrictedReadFields,
 	getRequestFromContext,
 	getRestrictedReadFields,
 	matchesAccessConditions,
@@ -1556,6 +1557,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					await this.resolveRelations(rows, options.with, normalized);
 				}
 
+				const batchRestrictedFields = findOptions?.skipFieldFiltering
+					? undefined
+					: await getBatchRestrictedReadFields(rows, normalized, {
+							app: this.app,
+							db,
+							fieldAccess: this.getFieldAccessRules(),
+						});
+
 				// Filter fields and run output hooks in parallel per row.
 				// `skipOutputHooks` is set by `_executeUpdate`'s in-tx refetch to
 				// avoid recursing into other collections (e.g. blocks prefetch)
@@ -1564,9 +1573,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// parallel load. Output hooks + afterRead are re-run by the
 				// caller after the tx commits.
 				await Promise.all(
-					rows.map(async (row: any) => {
+					rows.map(async (row: any, index: number) => {
 						if (!findOptions?.skipFieldFiltering) {
-							await this.filterFieldsForRead(row, normalized);
+							await this.filterFieldsForRead(
+								row,
+								normalized,
+								batchRestrictedFields?.[index],
+							);
 						}
 						if (!findOptions?.skipOutputHooks) {
 							await this.runFieldOutputHooks(row, "read", normalized, db);
@@ -5245,17 +5258,19 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	private async filterFieldsForRead(
 		result: any,
 		context: CRUDContext,
+		batchRestrictedFields?: string[],
 	): Promise<void> {
 		if (!result) return;
 
 		const db = this.getDb(context);
 		const fieldAccess = this.getFieldAccessRules();
 
-		const fieldsToRemove = await getRestrictedReadFields(result, context, {
-			app: this.app,
-			db,
-			fieldAccess,
-		});
+		const fieldsToRemove = await getRestrictedReadFields(
+			result,
+			context,
+			{ app: this.app, db, fieldAccess },
+			batchRestrictedFields,
+		);
 
 		removeRestrictedReadFields(result, fieldsToRemove);
 	}
