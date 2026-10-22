@@ -26,8 +26,14 @@ const FRESH_ADAPTER_CONTEXT = Symbol.for(
 	"questpie.internal.freshAdapterContext",
 );
 
+type RefreshContextOptions = {
+	request?: Request;
+	deferContextExtensions?: boolean;
+};
 type RefreshableAdapterContext = AdapterContext & {
-	[FRESH_ADAPTER_CONTEXT]?: () => Promise<AdapterContext>;
+	[FRESH_ADAPTER_CONTEXT]?: (
+		options?: RefreshContextOptions,
+	) => Promise<AdapterContext>;
 };
 
 /**
@@ -90,7 +96,7 @@ export async function deriveRequestContextOnDb(
 
 function attachFreshAdapterContext(
 	context: AdapterContext,
-	resolveFresh: () => Promise<AdapterContext>,
+	resolveFresh: (options?: RefreshContextOptions) => Promise<AdapterContext>,
 ): AdapterContext {
 	Object.defineProperty(context, FRESH_ADAPTER_CONTEXT, {
 		value: resolveFresh,
@@ -147,12 +153,14 @@ export function createIsolatedAdapterContextResolver<
 						session,
 						appContext,
 					},
-					() =>
+					(options) =>
 						createAdapterContextInternal(
 							app,
-							authorityRequest,
-							{ accessMode },
+							options?.request ?? authorityRequest,
+							{ accessMode, extendContext: () => ({ actor }) },
 							observability,
+							undefined,
+							options?.deferContextExtensions,
 						),
 				);
 			}));
@@ -161,6 +169,7 @@ export function createIsolatedAdapterContextResolver<
 /** @internal Re-run session resolution and app context derivation for a route. */
 export function refreshAdapterContext(
 	context: AdapterContext,
+	options?: RefreshContextOptions,
 ): Promise<AdapterContext> {
 	const resolveFresh = (context as RefreshableAdapterContext)[
 		FRESH_ADAPTER_CONTEXT
@@ -168,7 +177,7 @@ export function refreshAdapterContext(
 	if (!resolveFresh) {
 		throw new Error("Fresh adapter context is unavailable");
 	}
-	return resolveFresh();
+	return resolveFresh(options);
 }
 
 export const resolveSession = async <
@@ -309,14 +318,14 @@ const createAdapterContextInternal = async <
 				? { traceId: appContext.traceId }
 				: {}),
 		},
-		() =>
+		(options) =>
 			createAdapterContextInternal(
 				app,
-				request,
+				options?.request ?? request,
 				config,
 				observability,
 				oauthAudience,
-				deferContextExtensions,
+				options?.deferContextExtensions ?? deferContextExtensions,
 			),
 	);
 };

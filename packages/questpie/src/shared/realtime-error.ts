@@ -1,4 +1,4 @@
-export type RealtimeTopicOperation = "find" | "count" | "get";
+export type RealtimeTopicOperation = "find" | "count" | "get" | "query";
 
 /**
  * Every reason a topic can be refused. This must stay the same set the server
@@ -86,7 +86,8 @@ export function isRealtimeTopicRejectedPayload(
 		typeof payload.resource === "string" &&
 		(payload.operation === "find" ||
 			payload.operation === "count" ||
-			payload.operation === "get") &&
+			payload.operation === "get" ||
+			payload.operation === "query") &&
 		payload.retryable === false &&
 		Boolean(payload.details) &&
 		REALTIME_TOPIC_REJECTION_REASONS.has(payload.details?.reason as string)

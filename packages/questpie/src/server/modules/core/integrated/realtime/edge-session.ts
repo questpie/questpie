@@ -69,6 +69,7 @@ export class RealtimeBindingOutputGate implements ClientSink {
 	readonly clientChannel?: string;
 	private state: "pending" | "active" | "closed" = "pending";
 	private latest: Uint8Array | null = null;
+	private snapshotGeneration = 0;
 	private ordered: PendingOutput[] = [];
 	private bufferedOrderedEvents = 0;
 	private bufferedBytes = 0;
@@ -106,7 +107,14 @@ export class RealtimeBindingOutputGate implements ClientSink {
 			return Promise.resolve({ status: "accepted", bufferedBytes: null });
 		}
 		if (this.state === "active") {
-			return this.run(() => this.sink.write(frame, delivery));
+			const generation = this.snapshotGeneration;
+			return this.run(() =>
+				this.state === "active" &&
+				(delivery !== "latest-snapshot" ||
+					generation === this.snapshotGeneration)
+					? this.sink.write(frame, delivery)
+					: Promise.resolve({ status: "accepted", bufferedBytes: null }),
+			);
 		}
 		try {
 			this.buffer(frame, delivery);
@@ -166,6 +174,7 @@ export class RealtimeBindingOutputGate implements ClientSink {
 	activate(): void {
 		if (this.state !== "pending") return;
 		this.state = "active";
+		const generation = this.snapshotGeneration;
 		const latest = this.latest;
 		const ordered = this.ordered;
 		this.latest = null;
@@ -173,11 +182,21 @@ export class RealtimeBindingOutputGate implements ClientSink {
 		this.bufferedOrderedEvents = 0;
 		this.bufferedBytes = 0;
 		void this.run(async () => {
-			if (latest) await this.sink.write(latest, "latest-snapshot");
+			if (this.state !== "active") return;
+			if (latest && generation === this.snapshotGeneration)
+				await this.sink.write(latest, "latest-snapshot");
 			for (const output of ordered) {
+				if (this.state !== "active") return;
 				await this.sink.write(output.frame, output.delivery);
 			}
 		}).catch((error) => this.options.onError(error));
+	}
+
+	/** An authority change makes every unpublished snapshot unusable. */
+	discardSnapshots(): void {
+		this.snapshotGeneration++;
+		if (this.latest) this.bufferedBytes -= this.latest.byteLength;
+		this.latest = null;
 	}
 
 	async dispose(): Promise<void> {

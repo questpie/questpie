@@ -36,24 +36,24 @@ export type RealtimeObservation =
 	  }
 	| {
 			type: "refresh.started";
-			operation: "find" | "count" | "get";
+			operation: "find" | "count" | "get" | "query";
 			subscribers: number;
 	  }
 	| {
 			type: "refresh.completed";
-			operation: "find" | "count" | "get";
+			operation: "find" | "count" | "get" | "query";
 			subscribers: number;
 			durationMs: number;
 			frameBytes: number;
 	  }
 	| {
 			type: "refresh.suppressed";
-			operation: "find" | "count" | "get";
+			operation: "find" | "count" | "get" | "query";
 			subscribers: number;
 	  }
 	| {
 			type: "refresh.failed";
-			operation: "find" | "count" | "get";
+			operation: "find" | "count" | "get" | "query";
 			subscribers: number;
 	  }
 	| {
@@ -95,7 +95,7 @@ export type RealtimeObservation =
 	  }
 	| {
 			type: "routing.authoritative_db";
-			operation: "find" | "count" | "get";
+			operation: "find" | "count" | "get" | "query";
 	  }
 	| {
 			type: "delivery.classified";
@@ -123,7 +123,7 @@ export type RealtimeObservation =
 			 */
 			reason: RealtimeTopicRejectionReason;
 			resource?: string;
-			operation?: "find" | "count" | "get";
+			operation?: "find" | "count" | "get" | "query";
 			requestedLimit?: number;
 			configuredLimit?: number;
 			observed?: number;
@@ -388,7 +388,9 @@ export class RealtimeObservability implements RealtimeObserver {
 }
 
 export function realtimeOperation(
-	operation: "find" | "count" | "get" | undefined,
-): "find" | "count" | "get" {
-	return operation === "count" || operation === "get" ? operation : "find";
+	operation: "find" | "count" | "get" | "query" | undefined,
+): "find" | "count" | "get" | "query" {
+	return operation === "count" || operation === "get" || operation === "query"
+		? operation
+		: "find";
 }

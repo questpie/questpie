@@ -10,7 +10,10 @@ import { z } from "zod";
 
 import { collection, route, withTransaction } from "../../src/exports/index.js";
 import { rowsOf } from "../../src/server/db/driver-result.js";
-import { executeJsonRoute } from "../../src/server/routes/execute.js";
+import {
+	executeJsonRoute,
+	prepareJsonRoute,
+} from "../../src/server/routes/execute.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../utils/test-db";
 
@@ -101,6 +104,7 @@ describe.each(["bun-sql", "node-postgres"] as const)(
 		async function commitBetweenReads(
 			definition: typeof pairQuery,
 			value: number,
+			coherent = false,
 		) {
 			const firstRead = deferred();
 			const committed = deferred();
@@ -109,7 +113,14 @@ describe.each(["bun-sql", "node-postgres"] as const)(
 				await committed.promise;
 			};
 			try {
-				const evaluation = executeJsonRoute(setup.app, definition, {}, user);
+				const evaluation = coherent
+					? prepareJsonRoute(setup.app, definition, {})
+							.snapshot(user)
+							.then((snapshot) => {
+								expect(snapshot.upToDate).toMatch(/^\d+$/);
+								return snapshot.data;
+							})
+					: executeJsonRoute(setup.app, definition, {}, user);
 				await firstRead.promise;
 				await withTransaction(setup.app.db, async (tx) => {
 					await setup.app.collections.query_snapshot_left.updateById(
@@ -180,6 +191,14 @@ describe.each(["bun-sql", "node-postgres"] as const)(
 			});
 		});
 
+		it("keeps LIVE data and its captured watermark in the same old/old snapshot", async () => {
+			expect(await commitBetweenReads(pairQuery, 4, true)).toEqual({
+				left: 3,
+				right: 3,
+				settings: "repeatable read/on",
+			});
+		});
+
 		it("rejects writes as read_only_sql_transaction", async () => {
 			const failure = await executeJsonRoute(setup.app, writes, {}, user).catch(
 				(error: unknown) =>
@@ -193,7 +212,7 @@ describe.each(["bun-sql", "node-postgres"] as const)(
 						where: { id: leftId },
 					})
 				)?.value,
-			).toBe(3);
+			).toBe(4);
 		});
 	},
 );

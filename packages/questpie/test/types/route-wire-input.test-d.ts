@@ -160,3 +160,20 @@ route()
 	.outputSchema(z.object({ total: z.number() }))
 	// @ts-expect-error input typing must not weaken output validation
 	.handler(() => ({ total: "12" }));
+
+const snapshots = client.routes.live.post.watch(wire, {
+	params: { companyId: "company-1" },
+	locale: "sk",
+});
+type _snapshotOutput = Expect<
+	Equal<typeof snapshots, AsyncIterable<{ total: number }>>
+>;
+client.routes.companies["[companyId]"].work.post.watch(wire, {
+	params: { companyId: "company-1" },
+});
+// @ts-expect-error ordinary routes have no watch capability
+client.routes.plain.post.watch(wire);
+// @ts-expect-error LIVE uses the original wire input, not the parsed Date
+client.routes.live.post.watch({ ...wire, at: new Date() });
+// @ts-expect-error parameters use the registered route's names
+client.routes.live.post.watch(wire, { params: { wrong: "company-1" } });

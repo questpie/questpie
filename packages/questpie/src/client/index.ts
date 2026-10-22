@@ -2,6 +2,7 @@ import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
 	HttpMethod,
 	InferRouteOutput,
+	InferRouteParams,
 	InferRouteWireInput,
 	JsonRouteDefinition,
 	RawRouteDefinition,
@@ -337,9 +338,24 @@ export type QuestpieClientConfig<TApp extends QuestpieApp = QuestpieApp> = {
 /**
  * Caller for a JSON route — sends input, returns typed output.
  */
-type JsonRouteCaller<TDef extends JsonRouteDefinition<any, any, any>> = (
+type JsonRouteCallOptions<TParams = Record<string, string>> = {
+	params?: TParams;
+	locale?: string;
+	signal?: AbortSignal;
+};
+
+type JsonRouteCaller<TDef extends JsonRouteDefinition<any, any, any>> = ((
 	input: InferRouteWireInput<TDef>,
-) => Promise<InferRouteOutput<TDef>>;
+	options?: JsonRouteCallOptions<InferRouteParams<TDef>>,
+) => Promise<InferRouteOutput<TDef>>) &
+	(TDef extends { readonly query: { readonly live: object } }
+		? {
+				watch: (
+					input: InferRouteWireInput<TDef>,
+					options?: JsonRouteCallOptions<InferRouteParams<TDef>>,
+				) => AsyncIterable<InferRouteOutput<TDef>>;
+			}
+		: {});
 
 /**
  * Caller for a raw route — returns raw Response.
@@ -1427,6 +1443,9 @@ export function createClient<TApp extends QuestpieApp>(
 	const refetchRealtimeTopic = async (
 		topic: Parameters<RealtimeAPI["subscribe"]>[0],
 	): Promise<unknown> => {
+		if (topic.resourceType === "route") {
+			throw new Error("Route LIVE queries require server SSE snapshots");
+		}
 		if (topic.resourceType === "collection") {
 			if (topic.operation === "count") {
 				const queryString = stringifyQuery({
@@ -2146,69 +2165,89 @@ export function createClient<TApp extends QuestpieApp>(
 		},
 	};
 
-	/** Convert camelCase to kebab-case for URL paths */
-	const camelToKebab = (s: string) =>
-		s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+	/** Convert registry keys to URL paths, substituting literal path parameters. */
+	const routePath = (segments: string[], params?: Record<string, string>) =>
+		segments
+			.map((segment) => {
+				const parameter = /^\[([^\]]+)\]$/.exec(segment)?.[1];
+				if (!parameter)
+					return segment.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+				const value = params?.[parameter];
+				if (typeof value !== "string" || value.length === 0) {
+					throw new Error(`Missing route parameter: ${parameter}`);
+				}
+				return encodeURIComponent(value);
+			})
+			.join("/");
 
-	/**
-	 * Routes API — nested proxy that maps route keys to callable endpoints.
-	 *
-	 * Route paths use slash-separated segments accessed via dot notation:
-	 *   `routes/admin/stats.post.ts` → `client.routes.admin.stats.post(input)`
-	 *
-	 * For routes with method suffix:
-	 *   `admin/stats:GET` → `client.routes.admin.stats.get(input)`
-	 * Traversing deeper builds the URL path.
-	 * Segment names are converted from camelCase to kebab-case for URLs.
-	 */
-	const createRouteProxy = (segments: string[]): any => {
-		const path = segments.map(camelToKebab).join("/");
-		const callable = async (input?: any) => {
-			return request(`${apiBasePath}/${path}`, {
-				method: "POST",
-				json: input,
-			});
+	const routeCaller = (segments: string[], method: string) => {
+		const call = async (
+			input?: unknown,
+			options: JsonRouteCallOptions = {},
+		) => {
+			const path = routePath(segments, options.params);
+			if (
+				(config.rawRoutes as Readonly<Record<string, true>> | undefined)?.[
+					`${segments.join("/")}:${method}`
+				]
+			) {
+				return (await import("./raw-route.js")).callRawRoute(
+					fetcher,
+					`${config.baseURL}${apiBasePath}/${path}`,
+					method,
+					(input ?? {}) as RouteCallOptions,
+					defaultHeaders,
+					config.getAuthHeaders,
+				);
+			}
+			const queryString =
+				method === "GET" && input
+					? stringifyQuery(input as Record<string, unknown>)
+					: "";
+			return request(
+				`${apiBasePath}/${path}${queryString ? `?${queryString}` : ""}`,
+				{
+					method,
+					...(method === "GET" ? {} : { json: input }),
+					...(options.locale
+						? { headers: { "accept-language": options.locale } }
+						: {}),
+					...(options.signal ? { signal: options.signal } : {}),
+				},
+			);
 		};
+		call.watch = (input: unknown, options: JsonRouteCallOptions = {}) => {
+			// Validate the same required path parameters before opening a watch.
+			routePath(segments, options.params);
+			return realtimeApi.stream(
+				{
+					resourceType: "route",
+					resource: segments.join("/"),
+					method: method as HttpMethod,
+					operation: "query",
+					input,
+					...(options.params ? { params: options.params } : {}),
+					...((options.locale ?? currentLocale)
+						? { locale: options.locale ?? currentLocale }
+						: {}),
+				},
+				options.signal,
+			);
+		};
+		return call;
+	};
 
-		return new Proxy(callable, {
+	const createRouteProxy = (segments: string[]): any => {
+		return new Proxy(routeCaller(segments, "POST"), {
 			get(_, prop) {
 				if (prop === "then") return undefined;
-				if (prop === "url") return `${config.baseURL}${apiBasePath}/${path}`;
+				if (prop === "url")
+					return `${config.baseURL}${apiBasePath}/${routePath(segments)}`;
 				if (typeof prop !== "string") return undefined;
-
-				// HTTP method names at leaf → method-specific caller
 				const method = prop.toUpperCase();
 				if (/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)$/.test(method)) {
-					return async (input?: any) => {
-						if (
-							(
-								config.rawRoutes as Readonly<Record<string, true>> | undefined
-							)?.[`${segments.join("/")}:${method}`]
-						) {
-							return (await import("./raw-route.js")).callRawRoute(
-								fetcher,
-								`${config.baseURL}${apiBasePath}/${path}`,
-								method,
-								input ?? {},
-								defaultHeaders,
-								config.getAuthHeaders,
-							);
-						}
-						if (method === "GET" && input) {
-							const queryString = stringifyQuery(input);
-							return request(
-								`${apiBasePath}/${path}${queryString ? `?${queryString}` : ""}`,
-								{ method: "GET" },
-							);
-						}
-						return request(`${apiBasePath}/${path}`, {
-							method,
-							json: input,
-						});
-					};
+					return routeCaller(segments, method);
 				}
-
-				// Otherwise, deeper nesting
 				return createRouteProxy([...segments, prop]);
 			},
 		});

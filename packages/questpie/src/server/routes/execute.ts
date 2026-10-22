@@ -6,7 +6,7 @@
  * @see QUE-158 (Unified route() builder + URL flattening)
  */
 
-import { is } from "drizzle-orm";
+import { is, sql } from "drizzle-orm";
 import { PgTransaction, type PgTransactionConfig } from "drizzle-orm/pg-core";
 
 import { deriveRequestContextOnDb } from "#questpie/server/adapters/utils/context.js";
@@ -23,6 +23,7 @@ import { attachInternalAdapterContext } from "#questpie/server/config/internal-c
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import { runInFreshRequestScope } from "#questpie/server/config/request-scope.js";
 import { ApiError } from "#questpie/server/errors/index.js";
+import { captureRealtimeWatermark } from "#questpie/server/modules/core/integrated/realtime/snapshot.js";
 
 import type {
 	JsonRouteDefinition,
@@ -190,6 +191,27 @@ export async function executeJsonRouteInternal<
 	request?: Request,
 	params?: TParams,
 ): Promise<TOutput> {
+	return prepareJsonRoute(app, definition, input, request, params).execute(
+		context,
+	);
+}
+
+/**
+ * Parse route input once, then execute access, handler and output validation
+ * under the supplied context. Query executions retain their own snapshot.
+ * Adapters must verify credentials before preparing application input.
+ */
+export function prepareJsonRoute<
+	TInput,
+	TOutput,
+	TParams extends JsonRouteParams,
+>(
+	app: Questpie<any>,
+	definition: JsonRouteDefinition<TInput, TOutput, TParams>,
+	input: unknown,
+	request?: Request,
+	params?: TParams,
+) {
 	// Output-only routes (`.outputSchema()` with no `.schema()`) are valid JSON
 	// routes with `unknown` input (route-builder.ts) — their `schema` is undefined,
 	// so pass the raw input through rather than crashing on `.parse`.
@@ -201,35 +223,60 @@ export async function executeJsonRouteInternal<
 		if (!result.success) throw ApiError.fromZodError(result.error);
 		parsed = result.data;
 	}
-	const requestContext = unwrapRequestContext(context);
-	if (definition.query) {
-		return executeQueryRoute(
-			app,
-			definition,
-			parsed as TInput,
-			requestContext,
-			request,
-			params,
-		);
-	}
-	const resolvedContext =
-		requestContext ?? (await app.createContext({ accessMode: "system" }));
-	const adapterContext = isRouteAdapterContext(context)
-		? context
-		: toRouteAdapterContext(resolvedContext);
-
-	return runWithContext(
-		createRouteStoreContext(app, resolvedContext, adapterContext),
-		() =>
-			runJsonRoute(
+	return {
+		input: parsed as TInput,
+		snapshot: (
+			context: RouteExecutionContext,
+		): Promise<{ data: TOutput; upToDate: string }> => {
+			if (!definition.query)
+				throw new Error("Only query routes have coherent snapshots");
+			const requestContext = unwrapRequestContext(context);
+			return executeQueryRoute(
 				app,
 				definition,
 				parsed as TInput,
-				resolvedContext,
-				request,
+				requestContext,
+				requestContext?.request instanceof Request
+					? requestContext.request
+					: request,
 				params,
-			),
-	);
+				true,
+			) as Promise<{ data: TOutput; upToDate: string }>;
+		},
+		execute: async (context?: RouteExecutionContext): Promise<TOutput> => {
+			const requestContext = unwrapRequestContext(context);
+			if (definition.query) {
+				return (
+					await executeQueryRoute(
+						app,
+						definition,
+						parsed as TInput,
+						requestContext,
+						request,
+						params,
+					)
+				).data;
+			}
+			const resolvedContext =
+				requestContext ?? (await app.createContext({ accessMode: "system" }));
+			const adapterContext = isRouteAdapterContext(context)
+				? context
+				: toRouteAdapterContext(resolvedContext);
+
+			return runWithContext(
+				createRouteStoreContext(app, resolvedContext, adapterContext),
+				() =>
+					runJsonRoute(
+						app,
+						definition,
+						parsed as TInput,
+						resolvedContext,
+						request,
+						params,
+					),
+			);
+		},
+	};
 }
 
 /** Access, handler and output validation of one JSON route evaluation. */
@@ -254,6 +301,7 @@ async function runJsonRoute<TInput, TOutput, TParams extends JsonRouteParams>(
 	const allowed = await evaluateRouteAccess(definition.access, {
 		...extensions,
 		...services,
+		actor: context.actor,
 		locale: context.locale,
 		request,
 		params,
@@ -311,7 +359,8 @@ async function executeQueryRoute<
 	context: RequestContext | undefined,
 	request?: Request,
 	params?: TParams,
-): Promise<TOutput> {
+	captureWatermark = false,
+): Promise<{ data: TOutput; upToDate?: string }> {
 	if (context?.accessMode !== "user" && context?.accessMode !== "system") {
 		throw new Error(
 			"[QUESTPIE] Query routes require a request context with an explicit accessMode",
@@ -327,32 +376,75 @@ async function executeQueryRoute<
 	}
 
 	const snapshot = {
-		transaction: (run: (tx: unknown) => Promise<TOutput>) =>
-			db.transaction(run, QUERY_SNAPSHOT),
+		transaction: (
+			run: (tx: unknown) => Promise<{ data: TOutput; upToDate?: string }>,
+		) => db.transaction(run, QUERY_SNAPSHOT),
 	};
 	return withTransaction(snapshot, (tx) =>
 		runInFreshRequestScope(app, async () => {
-			const snapshotContext = (await deriveRequestContextOnDb(
-				app,
-				context,
-				tx,
-			)) ?? { ...context, db: tx };
-			return runWithContext(
-				createRouteStoreContext(
+			const evaluate = async (evaluationRequest = request) => {
+				// The visibility watermark must establish the snapshot before facts or reads.
+				const upToDate = captureWatermark
+					? await captureRealtimeWatermark({ db: tx })
+					: undefined;
+				if (captureWatermark)
+					await tx.execute(
+						sql`select set_config('statement_timeout', '30000', true)`,
+					);
+				const snapshotContext = (await deriveRequestContextOnDb(
 					app,
-					snapshotContext,
-					toRouteAdapterContext(snapshotContext),
-				),
-				() =>
-					runJsonRoute(
+					{
+						...context,
+						...(evaluationRequest ? { request: evaluationRequest } : {}),
+					},
+					tx,
+				)) ?? { ...context, db: tx };
+				const data = await runWithContext(
+					createRouteStoreContext(
 						app,
-						definition,
-						input,
 						snapshotContext,
-						request,
-						params,
+						toRouteAdapterContext(snapshotContext),
 					),
-			);
+					() =>
+						runJsonRoute(
+							app,
+							definition,
+							input,
+							snapshotContext,
+							evaluationRequest,
+							params,
+						),
+				);
+				return { data, ...(upToDate === undefined ? {} : { upToDate }) };
+			};
+			if (!captureWatermark) return evaluate();
+			// Bound the transaction callback even if application JavaScript stalls.
+			// PostgreSQL statement_timeout also bounds an outstanding SQL statement;
+			// arbitrary JavaScript must cooperate with request.signal to stop its work.
+			const controller = new AbortController();
+			const signal = request
+				? AbortSignal.any([request.signal, controller.signal])
+				: controller.signal;
+			if (signal.aborted) return Promise.reject(signal.reason);
+			let timer: ReturnType<typeof setTimeout>;
+			let onAbort: () => void;
+			const deadline = new Promise<never>((_, reject) => {
+				onAbort = () =>
+					reject(signal.reason ?? new Error("Route query cancelled"));
+				signal.addEventListener("abort", onAbort, { once: true });
+				timer = setTimeout(
+					() => controller.abort(new Error("Route query exceeded 30000ms")),
+					30_000,
+				);
+				if (signal.aborted) onAbort();
+			});
+			return Promise.race([
+				evaluate(request ? new Request(request, { signal }) : undefined),
+				deadline,
+			]).finally(() => {
+				clearTimeout(timer!);
+				signal.removeEventListener("abort", onAbort!);
+			});
 		}),
 	);
 }

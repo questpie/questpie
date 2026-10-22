@@ -65,8 +65,7 @@ export type RouteLiveDependencies = Readonly<
 >;
 
 /**
- * LIVE declaration of a query route. It is metadata only: routes cannot be
- * watched yet.
+ * Server-owned data and authority dependencies for watching a query route.
  */
 export interface RouteLiveOptions<TInput = unknown> {
 	/** Data the result reads, derived from the parsed input. */

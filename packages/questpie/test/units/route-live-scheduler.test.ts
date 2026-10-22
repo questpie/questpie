@@ -1,0 +1,375 @@
+import { describe, expect, it, spyOn } from "bun:test";
+
+import { ApiError } from "../../src/server/errors/index.js";
+import { RealtimeBindingOutputGate } from "../../src/server/modules/core/integrated/realtime/edge-session.js";
+import {
+	RealtimeRefreshScheduler,
+	type CoherentRefreshSubscriptionInput,
+} from "../../src/server/modules/core/integrated/realtime/refresh-scheduler.js";
+import { SseLatestSnapshotWriter } from "../../src/server/modules/core/integrated/realtime/sse-client-transport.js";
+import { sharedSseKeepAliveTicker } from "../../src/server/modules/core/integrated/realtime/sse-keep-alive.js";
+import type { ClientSink } from "../../src/server/modules/core/integrated/realtime/transport.js";
+import type {
+	RealtimeChangeEvent,
+	RealtimeTopics,
+} from "../../src/server/modules/core/integrated/realtime/types.js";
+import { parseCompatibleTypedEventWire } from "../../src/shared/typed-wire.js";
+
+const tick = () => Bun.sleep(5);
+function deferred() {
+	let resolve!: () => void;
+	const promise = new Promise<void>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
+const decode = (frame: Uint8Array) =>
+	parseCompatibleTypedEventWire<any>(
+		new TextDecoder().decode(frame).split("\ndata: ")[1]!.trim(),
+	);
+class Source {
+	listeners = new Map<(event: RealtimeChangeEvent) => void, RealtimeTopics>();
+	async getLatestSeq() {
+		return 4;
+	}
+	subscribe(
+		listener: (event: RealtimeChangeEvent) => void,
+		topic: RealtimeTopics,
+	) {
+		this.listeners.set(listener, topic);
+		return () => {
+			this.listeners.delete(listener);
+		};
+	}
+	emit(resource: string, seq = 9) {
+		for (const [listener, topic] of this.listeners)
+			if (topic.resource === resource)
+				listener({
+					seq,
+					resource,
+					resourceType: "collection",
+					operation: "update",
+					createdAt: new Date(),
+				});
+	}
+}
+const base = (
+	compute: CoherentRefreshSubscriptionInput["compute"],
+	onFrame: CoherentRefreshSubscriptionInput["onFrame"],
+): CoherentRefreshSubscriptionInput => ({
+	kind: "coherent",
+	key: "same-key",
+	topicId: "route",
+	dependencies: [
+		{
+			topic: { resourceType: "collection", resource: "data" },
+			authority: false,
+		},
+		{
+			topic: { resourceType: "collection", resource: "authority" },
+			authority: true,
+		},
+	],
+	compute,
+	onFrame,
+	onError: (error) => {
+		throw error;
+	},
+	onInvalidate: () => {},
+});
+
+describe("coherent route scheduler", () => {
+	it("subscribes before reading, latches a bootstrap commit, and stamps the captured sequence/watermark", async () => {
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source);
+		const started = deferred();
+		const release = deferred();
+		const frames: any[] = [];
+		let calls = 0;
+		const close = scheduler.subscribe(
+			base(
+				async () => {
+					expect(source.listeners.size).toBe(2);
+					calls++;
+					if (calls === 1) {
+						started.resolve();
+						await release.promise;
+						return { data: "old", upToDate: "100" };
+					}
+					return { data: "new", upToDate: "200" };
+				},
+				(frame) => {
+					frames.push(decode(frame));
+				},
+			),
+		);
+		try {
+			await started.promise;
+			source.emit("data", 9);
+			release.resolve();
+			await tick();
+			await tick();
+			expect(calls).toBe(2);
+			expect(
+				frames.map((frame) => [frame.data, frame.seq, frame.upToDate]),
+			).toEqual([
+				["old", 4, "100"],
+				["new", 9, "200"],
+			]);
+		} finally {
+			release.resolve();
+			close();
+		}
+	});
+	it("discards blocked protected computation after authority revoke, then reports denial while a sibling delivers", async () => {
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source);
+		const started = deferred();
+		const release = deferred();
+		const frames: any[] = [];
+		const errors: unknown[] = [];
+		let calls = 0;
+		let invalidations = 0;
+		const close = scheduler.subscribe({
+			...base(
+				async () => {
+					if (++calls === 1) {
+						started.resolve();
+						await release.promise;
+						return { data: "protected", upToDate: "100" };
+					}
+					throw ApiError.forbidden({ operation: "read", resource: "route" });
+				},
+				(frame) => {
+					frames.push(decode(frame));
+				},
+			),
+			onError: (error) => {
+				errors.push(error);
+			},
+			onInvalidate: () => {
+				invalidations++;
+			},
+		});
+		const sibling: any[] = [];
+		const closeSibling = scheduler.subscribe({
+			...base(
+				async () => ({ data: "sibling", upToDate: "101" }),
+				(frame) => {
+					sibling.push(decode(frame));
+				},
+			),
+			dependencies: [
+				{
+					topic: { resourceType: "collection", resource: "sibling" },
+					authority: false,
+				},
+			],
+		});
+		try {
+			await started.promise;
+			source.emit("authority");
+			expect(invalidations).toBe(1);
+			release.resolve();
+			await tick();
+			await tick();
+			expect(frames).toEqual([]);
+			expect(errors).toHaveLength(1);
+			expect(sibling[0].data).toBe("sibling");
+		} finally {
+			release.resolve();
+			close();
+			closeSibling();
+		}
+	});
+	it("checks the authority epoch again after asynchronous hashing", async () => {
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source);
+		const hashing = deferred();
+		const release = deferred();
+		const frames: any[] = [];
+		let calls = 0;
+		let hashes = 0;
+		const original = crypto.subtle.digest.bind(crypto.subtle);
+		const digest = spyOn(crypto.subtle, "digest").mockImplementation(
+			async (...args: Parameters<typeof original>) => {
+				if (++hashes === 1) {
+					hashing.resolve();
+					await release.promise;
+				}
+				return original(...args);
+			},
+		);
+		const close = scheduler.subscribe(
+			base(
+				async () => ({
+					data: ++calls === 1 ? "stale" : "fresh",
+					upToDate: String(calls),
+				}),
+				(frame) => {
+					frames.push(decode(frame));
+				},
+			),
+		);
+		try {
+			await hashing.promise;
+			source.emit("authority");
+			release.resolve();
+			await tick();
+			await tick();
+			expect(frames.map((frame) => frame.data)).toEqual(["fresh"]);
+		} finally {
+			release.resolve();
+			close();
+			digest.mockRestore();
+		}
+	});
+	it("hashes typed payloads without conflating Date and its ISO string", async () => {
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source);
+		const frames: any[] = [];
+		let calls = 0;
+		const at = new Date("2026-10-22T12:00:00Z");
+		const close = scheduler.subscribe(
+			base(
+				async () => ({
+					data: calls++ === 0 ? at : at.toISOString(),
+					upToDate: "100",
+				}),
+				(frame) => {
+					frames.push(decode(frame));
+				},
+			),
+		);
+		try {
+			await tick();
+			source.emit("data");
+			await tick();
+			expect(frames).toHaveLength(2);
+			expect(frames[0].data).toBeInstanceOf(Date);
+			expect(typeof frames[1].data).toBe("string");
+		} finally {
+			close();
+		}
+	});
+	it("isolates equal route keys per binding and recomputes on reconnect", async () => {
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source);
+		const frames: string[] = [];
+		let calls = 0;
+		const close = scheduler.subscribe(
+			base(
+				async () => {
+					calls++;
+					return { data: "first-principal", upToDate: "1" };
+				},
+				(frame) => {
+					frames.push(decode(frame).data);
+				},
+			),
+		);
+		await tick();
+		const next = scheduler.subscribe(
+			base(
+				async () => {
+					calls++;
+					return { data: "second-principal", upToDate: "1" };
+				},
+				(frame) => {
+					frames.push(decode(frame).data);
+				},
+			),
+		);
+		try {
+			await tick();
+			expect(calls).toBe(2);
+			expect(frames).toEqual(["first-principal", "second-principal"]);
+		} finally {
+			close();
+			next();
+		}
+	});
+	it("uses the shared ticker for maximum-age authority evaluation and removes its registration", async () => {
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source);
+		const size = sharedSseKeepAliveTicker.size;
+		let calls = 0;
+		let invalidations = 0;
+		const close = scheduler.subscribe({
+			...base(
+				async () => ({ data: ++calls, upToDate: String(calls) }),
+				() => {},
+			),
+			maxAgeMs: 10,
+			onInvalidate: () => {
+				invalidations++;
+			},
+		});
+		try {
+			await Bun.sleep(35);
+			expect(calls).toBeGreaterThan(1);
+			expect(invalidations).toBeGreaterThan(0);
+			expect(sharedSseKeepAliveTicker.size).toBe(size + 1);
+		} finally {
+			close();
+		}
+		expect(sharedSseKeepAliveTicker.size).toBe(size);
+	});
+});
+
+describe("protected route output cleanup", () => {
+	it("removes only the denied topic and fences its already queued callbacks", async () => {
+		let busy = true;
+		const delivered: string[] = [];
+		const sink: ClientSink = {
+			sessionId: "session",
+			write: async (frame) => {
+				if (busy) return { status: "busy", bufferedBytes: 0 };
+				delivered.push(new TextDecoder().decode(frame));
+				return { status: "accepted", bufferedBytes: 0 };
+			},
+			close: async () => {},
+		};
+		const writer = new SseLatestSnapshotWriter(sink);
+		const bytes = (text: string) => new TextEncoder().encode(text);
+		await writer.write("denied", bytes("protected pending"));
+		await writer.write("sibling", bytes("sibling pending"));
+		const queued = writer.write("denied", bytes("protected queued"));
+		const remove = writer.remove("denied");
+		busy = false;
+		await queued;
+		await remove;
+		await writer.flush();
+		expect(delivered).toEqual(["sibling pending"]);
+		expect(writer.bufferedBytes).toBe(0);
+		writer.clear();
+	});
+	it("discards staged and queued binding snapshots on authority invalidation and close", async () => {
+		const delivered: string[] = [];
+		const sink: ClientSink = {
+			sessionId: "session",
+			write: async (frame) => {
+				delivered.push(new TextDecoder().decode(frame));
+				return { status: "accepted", bufferedBytes: 0 };
+			},
+			close: async () => {},
+		};
+		const gate = new RealtimeBindingOutputGate(sink, {
+			maximumOrderedEvents: 5,
+			maximumBufferedBytes: 1024,
+			onError: (error) => {
+				throw error;
+			},
+		});
+		const bytes = (text: string) => new TextEncoder().encode(text);
+		await gate.write(bytes("staged protected"), "latest-snapshot");
+		gate.activate();
+		gate.discardSnapshots();
+		await tick();
+		expect(delivered).toEqual([]);
+		const write = gate.write(bytes("queued protected"), "latest-snapshot");
+		await gate.dispose();
+		await write;
+		expect(delivered).toEqual([]);
+	});
+});

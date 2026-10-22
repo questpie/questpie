@@ -1,0 +1,146 @@
+---
+title: Query routes and LIVE projections
+description: Share one authorized read across HTTP, MCP and an explicit LIVE subscription.
+kind: guide
+package: questpie
+---
+
+Declare a route as a query when it returns a read projection. HTTP, MCP and LIVE
+use its input schema, product access rule, handler and output schema. MCP
+exposure remains explicit route metadata; a query declaration does not expose a
+tool by itself.
+
+```ts
+import { route } from "questpie/services";
+import { z } from "zod";
+
+export default route()
+	.post()
+	.schema(z.object({ spaceId: z.string() }))
+	.outputSchema(
+		z.object({
+			docs: z.array(z.object({ id: z.string(), title: z.string() })),
+		}),
+	)
+	.access(({ session }) => !!session)
+	.query({
+		live: {
+			data: ({ spaceId }) => ({ posts: { spaceId } }),
+			authority: ({ spaceId }) => ({ memberships: { spaceId } }),
+			maxAgeMs: 60_000,
+		},
+	})
+	.handler(async ({ input, collections }) => {
+		const result = await collections.posts.find({
+			where: { spaceId: input.spaceId },
+			columns: { id: true, title: true },
+			limit: 40,
+			orderBy: { id: "asc" },
+		});
+		return { docs: result.docs };
+	});
+```
+
+The example assumes change capture is enabled for the registered `posts` and
+`memberships` collections and that their access rules enforce row visibility.
+Route access admits the operation; collection access still governs its reads.
+Use `.query()` without `live` for a one-shot snapshot read. Ordinary routes keep
+their existing transaction behavior and have no LIVE capability.
+
+## A coherent read
+
+A query runs in a read-only, repeatable-read transaction. Request-scoped services
+and request-derived application context facts are created on that transaction.
+Access, the handler and output validation run inside it. A LIVE evaluation also
+captures its visibility watermark in that snapshot before resolving facts.
+
+Use the handler's `db`, `collections` and request-scoped services. A singleton
+service or imported root `app.db` can read outside the snapshot. Explicit context
+facts supplied by a programmatic caller remain that caller's responsibility;
+the framework does not infer how to refresh them. Query execution requires an
+explicit user or system context and refuses an existing transaction.
+
+Do not write, enqueue effects or call external services from a query. PostgreSQL
+rejects database writes. Ordinary mutation routes retain ownership of their
+transactions, receipt recovery and post-commit dispatch.
+
+## Watching the same route
+
+```ts
+const abort = new AbortController();
+for await (const snapshot of client.routes.workingRuns.post.watch(
+	{ spaceId },
+	{ signal: abort.signal, locale: "sk" },
+)) {
+	// Replace the displayed projection with this complete snapshot.
+}
+```
+
+The client shares its SSE connection with collection realtime, channels and
+collaborative bindings. Abort on unmount. Parameterized routes accept
+`{ params: { entryId } }` in the second argument to both a one-shot call and
+`watch`; missing path parameters fail before opening a request.
+
+The TanStack query factory owns the LIVE arm:
+
+```ts
+useQuery(q.routes.workingRuns.post.query({ spaceId }, { realtime: true }));
+```
+
+One-shot and LIVE calls share a cache key for the same input, params and locale.
+The initial value comes from SSE rather than a duplicate HTTP fetch. Snapshots
+replace the value. Do not invalidate or incrementally patch a LIVE query with
+`setQueryData`. Terminal access denial clears that query's protected cached value;
+other queries continue. Route LIVE currently requires the native SSE transport.
+
+Wire input stays the schema's `z.input`; the handler, access rule and dependency
+callbacks receive parsed `z.output`. Date snapshots retain their typed-client
+representation. MCP needs a JSON-representable wire schema, such as an ISO string
+piped into date coercion.
+
+## Declare data and authority dependencies
+
+`data(input)` names every collection that can change the result, including
+inserts into an empty range and missing relations. Each value is `true` for all
+changes or a map of finite scalar equalities such as `{ spaceId }`. Narrow anchors
+avoid recomputing watches for unrelated tenants. Client-supplied dependencies and
+delta options are rejected.
+
+`authority(input)` names collections whose changes can invalidate access. Apps
+can also declare shared authority dependencies with `realtime.authority`, using
+stable verified identity fields rather than resolving database facts outside the
+query snapshot. Dependencies remain fixed for the binding; do not derive them
+from mutable facts that can change while it is open. Permission decisions are evaluated afresh for each computation.
+
+An authority event discards an in-flight result and removes queued snapshots
+before another authorized evaluation. Revocation follows drained change events
+or a maximum-age refresh, rather than a linearizable fence. Missed notifications
+recover through the existing outbox reconciliation. The refresh queue and running
+computation add time to this bound. Declare expiry-sensitive reads with an
+appropriate `maxAgeMs` (default 60 seconds).
+
+Once a transaction is acquired, its evaluation callback has a 30-second deadline
+and PostgreSQL statements have a 30-second timeout. Queueing, identity refresh,
+pool acquisition and cleanup can add time to a refresh. Application JavaScript must cooperate with `request.signal`; a deadline
+cannot stop arbitrary JavaScript. Raw SQL writes without change capture do not
+produce invalidations.
+
+## Keep query growth bounded
+
+- Filter authorized rows before pagination, totals and cursors. Filtering a page
+  afterward can hide readable rows and create misleading totals.
+- Load relations with `with` for a batch of roots. Avoid a `findOne` inside a loop,
+  a per-row `afterRead` hook or a per-row access callback.
+- Acquire permission facts for the whole read in one bounded batch, then make
+  decisions from those facts. Do not cache a verdict across different query
+  inputs or reuse it on the next LIVE evaluation.
+- Select only needed fields, bound root and child pages, and use a stable sort
+  with an id tie breaker. Child `limit` and `offset` apply per parent.
+- Index filter, join and ordering columns together where the PostgreSQL plan
+  benefits. A single window query can still scan many children; one SQL statement
+  alone does not establish efficient execution.
+- Test SQL growth at 10, 50 and 100 roots and inspect actual PostgreSQL plans for
+  large fan-out. Measure authorization work as well as row queries.
+
+A query route accepts ordinary handler code. It does not turn arbitrary loops,
+custom SQL or external I/O into an optimized relational plan.

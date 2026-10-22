@@ -107,7 +107,19 @@ export type RealtimeSubscriptionScopeResolver = (
 	context: RealtimeSubscriptionScopeContext,
 ) => string | null | undefined | Promise<string | null | undefined>;
 
+export type RealtimeAuthorityContext = Pick<
+	import("#questpie/server/config/context.js").RequestContext,
+	"session" | "principal" | "actor" | "locale" | "accessMode"
+> & { request?: Request };
+
 export interface RealtimeConfig {
+	/** Declare change-captured authority ranges from verified identity only.
+	 * Database-backed facts are resolved later, inside each query snapshot.
+	 */
+	authority?: (
+		context: RealtimeAuthorityContext,
+	) => import("#questpie/server/routes/types.js").RouteLiveDependencies;
+
 	/**
 	 * Enables native row-delta emission once every replica reads the outbox in
 	 * settled `(txid, seq)` order. Keep disabled during the first phase of a
