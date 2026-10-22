@@ -49,7 +49,7 @@ function toolBody(result: {
 	return JSON.parse(text!);
 }
 
-async function fixture() {
+async function fixture(workloadActorIsHuman = false) {
 	const toolName = "tasks.rename";
 	let transforms = 0;
 	let failure: unknown;
@@ -110,6 +110,7 @@ async function fixture() {
 		workload: { type: "agent-run", id: "run-1" },
 		requesterRunId: "run-1",
 	};
+	if (workloadActorIsHuman) agent.actor = human.actor;
 	const members = new Set([human.actor.subjectId, agent.actor.subjectId]);
 	let allowed = true;
 	let state = { taskId: "task-1", title: "Before", version: 1 };
@@ -227,13 +228,14 @@ async function fixture() {
 				locale: "sk",
 				db,
 				accessMode: "user" as const,
-				principal: options.actor
-					? undefined
-					: {
-							kind: "user",
-							user: { id: "human-1" },
-							session: { id: "fixture-session" },
-						},
+				principal:
+					options.actor && !workloadActorIsHuman
+						? undefined
+						: {
+								kind: "user",
+								user: { id: "human-1" },
+								session: { id: "fixture-session" },
+							},
 				verifiedSubjectId: authority.actor.subjectId,
 				"~contextExtensions": {
 					verifiedSubjectId: authority.actor.subjectId,
@@ -371,6 +373,47 @@ async function usingFixture(
 }
 
 describe("one product operation over HTTP, Human MCP and Agent MCP", () => {
+	it("uses the same operation and product policy for one actor through session and delegated credentials", async () => {
+		const f = await fixture(true);
+		try {
+			const descriptors = await Promise.all(
+				[f.humanMcp, f.agentMcp].map(async ({ client }) => {
+					const catalog = await client.listTools();
+					const tool = catalog.tools.find(
+						(item) => item.name === "tasks.rename",
+					)!;
+					return {
+						name: tool.name,
+						inputSchema: tool.inputSchema,
+						outputSchema: tool.outputSchema,
+					};
+				}),
+			);
+			expect(descriptors[1]).toEqual(descriptors[0]);
+			for (const [index, lane] of f.lanes.entries()) {
+				const result = await lane.call(f.input);
+				expect(result.body).toEqual({
+					taskId: "task-1",
+					title: "After",
+					version: 2,
+					replayed: index > 0,
+				});
+				expect(f.invocations.at(-1)!.actor).toEqual({
+					kind: "human",
+					subjectId: "human-1",
+				});
+			}
+			f.setAllowed(false);
+			for (const lane of f.lanes) {
+				const result = await lane.call(f.input);
+				expect(result.body.error.code).toBe("FORBIDDEN");
+			}
+			expect(f.invocations).toHaveLength(3);
+			expect(f.counts()).toEqual({ accessCalls: 6, transforms: 6 });
+		} finally {
+			await f.close();
+		}
+	});
 	it("returns the same result/replay and verified actor/workload provenance, with one transform and target policy per call", () =>
 		usingFixture(async (f) => {
 			for (const lane of f.lanes) {

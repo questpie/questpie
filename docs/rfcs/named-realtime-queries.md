@@ -12,6 +12,15 @@ Verified Human or Agent identity and credential restrictions arrive through
 context; neither selects another business handler. There is no new operation
 registry, codegen category or MCP-to-HTTP loopback.
 
+There is one logical operation catalog for every actor. Authentication adapters
+verify credentials and produce context; product policy decides what that actor
+may do. A delegated credential can further narrow that authority to a run,
+tenant or capability, for any actor type. Such grants never widen product
+access. The framework must not select business handlers, schemas or built-in
+product permissions through human/agent branches. Catalog filtering follows
+exposure, product-independent credential eligibility and declared policy.
+Different credential entry points do not require duplicate operation definitions.
+
 Add one semantic capability:
 
 ```ts
