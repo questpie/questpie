@@ -3,9 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { QueryCache, QueryClient, QueryObserver } from "@tanstack/react-query";
 import { ApiError, collection, route } from "questpie";
 import { createClient } from "questpie/client";
+import { createFetchHandler } from "questpie/http";
 import { z } from "zod";
 
-import { createFetchHandler } from "../../questpie/src/server/adapters/http.js";
 import { buildMockApp } from "../../questpie/test/utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../../questpie/test/utils/test-db.js";
 import { createQuestpieQueryOptions } from "../src/index.js";
