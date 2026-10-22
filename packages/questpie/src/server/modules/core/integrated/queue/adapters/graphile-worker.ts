@@ -87,6 +87,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	private fatalError?: Error;
 	private migrationRevision = 0;
 	private auditCursor = "";
+	private retiredCursor = "0";
 	private lastAuditAt = 0;
 	private readonly warnedPolicies = new Set<string>();
 	private runner?: WorkerPool;
@@ -775,7 +776,7 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 	}
 
 	private async tickSchedules(): Promise<void> {
-		await this.inTransaction(async (execute) => {
+		const retiredCursor = await this.inTransaction(async (execute) => {
 			const schedules =
 				await execute(sql`SELECT *, date_trunc('minute', now()) AS current_minute FROM ${this.table("questpie_schedules")}
 				WHERE last_run < date_trunc('minute', now()) FOR UPDATE SKIP LOCKED`);
@@ -821,22 +822,37 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				WHERE d.status IN ('completed', 'failed') AND d.created_at < now() - interval '7 days'
 				AND NOT EXISTS (SELECT FROM ${this.table("jobs")} j WHERE j.id = d.job_id)
 				LIMIT 500)`);
-			// Match Graphile 0.18's complete_jobs lock predicate before the batch
-			// limit. LATERAL keeps native lookups on the primary key, independent
-			// of the live queue size; locked retirees must not fill the batch.
-			await execute(sql`SELECT ${this.table("complete_jobs")}(ARRAY(
-				SELECT r.job_id FROM ${this.table("questpie_retired_jobs")} r
-				JOIN LATERAL (
-					SELECT j.id FROM ${this.table("_private_jobs")} j
-					WHERE j.id = r.job_id
-					AND (j.locked_at IS NULL OR j.locked_at < now() - interval '4 hours')
-					LIMIT 1
-				) j ON true
-				LIMIT 500))`);
-			await execute(
-				sql`DELETE FROM ${this.table("questpie_retired_jobs")} r WHERE NOT EXISTS (SELECT FROM ${this.table("jobs")} j WHERE j.id = r.job_id)`,
-			);
+			// Bound ledger reads before checking native locks, and advance even
+			// across fully locked pages. LATERAL bounds native PK probes as well.
+			const retired = await execute(sql`SELECT r.job_id, j.removable FROM (
+				SELECT job_id FROM ${this.table("questpie_retired_jobs")}
+				WHERE job_id > ${this.retiredCursor}::bigint ORDER BY job_id LIMIT 500
+			) r LEFT JOIN LATERAL (
+				SELECT (locked_at IS NULL OR locked_at < now() - interval '4 hours') AS removable
+				FROM ${this.table("_private_jobs")} WHERE id = r.job_id LIMIT 1
+			) j ON true ORDER BY r.job_id`);
+			if (retired.length > 0) {
+				const lastId = String(retired.at(-1)!.job_id);
+				const removable = retired
+					.filter((row) => row.removable)
+					.map((row) => String(row.job_id));
+				if (removable.length > 0)
+					await execute(
+						sql`SELECT ${this.table("complete_jobs")}(${sql.param(removable)}::bigint[])`,
+					);
+				// Resolve tuple locations inside this statement: Tid Scan avoids a
+				// second, unbounded ledger scan when deleting the bounded page.
+				await execute(sql`DELETE FROM ${this.table("questpie_retired_jobs")} r
+					WHERE r.ctid = ANY(ARRAY(
+						SELECT ctid FROM ${this.table("questpie_retired_jobs")}
+						WHERE job_id > ${this.retiredCursor}::bigint AND job_id <= ${lastId}::bigint
+						ORDER BY job_id LIMIT 500
+					)) AND (SELECT j.id FROM ${this.table("_private_jobs")} j WHERE j.id = r.job_id LIMIT 1) IS NULL`);
+				return retired.length === 500 ? lastId : "0";
+			}
+			return "0";
 		});
+		this.retiredCursor = retiredCursor;
 	}
 
 	private armSchedules(): void {

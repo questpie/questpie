@@ -1694,11 +1694,12 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		},
 	);
 
-	test("retired cleanup skips a full batch of locked jobs", async () => {
+	test("retired cleanup bounds ledger reads and revisits locked pages", async () => {
+		const lockedCount = 1501;
 		await pool.query(`WITH jobs AS (
 			SELECT * FROM "${schema}".add_jobs(ARRAY(SELECT
 				('retired', '{}'::json, NULL, now(), 25, NULL, 0, NULL)::"${schema}".job_spec
-				FROM generate_series(1,501)))
+				FROM generate_series(1,${lockedCount})))
 		) INSERT INTO "${schema}".questpie_retired_jobs (job_id) SELECT id FROM jobs`);
 		await pool.query(
 			`UPDATE "${schema}"._private_jobs SET locked_at=now(), locked_by='live-worker'`,
@@ -1711,11 +1712,15 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 			`UPDATE "${schema}"._private_jobs SET locked_at=now()-interval '4 hours 1 second', locked_by='dead-worker' WHERE id=$1`,
 			[removable[1]],
 		);
+		const orphan = "9223372036854775806";
 		await pool.query(
-			`INSERT INTO "${schema}".questpie_retired_jobs (job_id) VALUES ($1), ($2), (-1)`,
-			removable,
+			`INSERT INTO "${schema}".questpie_retired_jobs (job_id) VALUES ($1), ($2), ($3)`,
+			[...removable, orphan],
 		);
-		const cleanupQueries: string[] = [];
+		await pool.query(`ANALYZE "${schema}".questpie_retired_jobs`);
+		await pool.query(`ANALYZE "${schema}"._private_jobs`);
+		const cleanupQueries: { text: string; values: unknown[] }[] = [];
+		const pages: string[][] = [];
 		const wrapped = new WeakSet<pg.PoolClient>();
 		(adapter as unknown as { pool: pg.Pool }).pool.on(
 			"acquire",
@@ -1724,19 +1729,54 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 				wrapped.add(connection);
 				connection.query = new Proxy(connection.query, {
 					apply(target, receiver, args) {
+						const text = args[0];
+						const page =
+							typeof text === "string" && text.startsWith("SELECT r.job_id");
 						if (
-							typeof args[0] === "string" &&
-							args[0].includes('"complete_jobs"')
+							typeof text === "string" &&
+							(page ||
+								(text.startsWith("DELETE FROM") &&
+									text.includes('"questpie_retired_jobs"')))
 						)
-							cleanupQueries.push(args[0]);
-						return Reflect.apply(target, receiver, args);
+							cleanupQueries.push({ text, values: args[1] });
+						const result = Reflect.apply(target, receiver, args);
+						if (page)
+							return result.then((result: pg.QueryResult) => {
+								pages.push(result.rows.map((row) => String(row.job_id)));
+								return result;
+							});
+						return result;
 					},
 				});
 			},
 		);
-		await (
-			adapter as unknown as { tickSchedules(): Promise<void> }
-		).tickSchedules();
+		const internal = adapter as unknown as { tickSchedules(): Promise<void> };
+		const tickBound = Math.ceil((lockedCount + 3) / 500);
+		for (let tick = 0; tick < tickBound; tick++) {
+			await internal.tickSchedules();
+			if (tick === 0) {
+				expect(
+					(
+						await pool.query(
+							`SELECT FROM "${schema}".jobs WHERE id=ANY($1::bigint[])`,
+							[removable],
+						)
+					).rowCount,
+				).toBe(2);
+				expect(
+					(
+						await pool.query(
+							`SELECT FROM "${schema}".questpie_retired_jobs WHERE job_id=$1`,
+							[orphan],
+						)
+					).rowCount,
+				).toBe(1);
+			}
+		}
+		expect(pages.map((page) => page.length)).toEqual([500, 500, 500, 4]);
+		expect(new Set(pages.flat()).size).toBe(lockedCount + 3);
+		for (let index = 1; index < pages.length; index++)
+			expect(cleanupQueries[index * 2].values[0]).toBe(pages[index - 1].at(-1));
 		expect(
 			(
 				await pool.query(
@@ -1748,32 +1788,108 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		expect(
 			(await pool.query(`SELECT FROM "${schema}".questpie_retired_jobs`))
 				.rowCount,
-		).toBe(501);
+		).toBe(lockedCount);
 		expect(
 			(
 				await pool.query(
 					`SELECT FROM "${schema}".jobs WHERE locked_by='live-worker'`,
 				)
 			).rowCount,
-		).toBe(501);
+		).toBe(lockedCount);
 		expect(
 			(
 				await pool.query(
-					`SELECT FROM "${schema}".questpie_retired_jobs WHERE job_id=-1`,
+					`SELECT FROM "${schema}".questpie_retired_jobs WHERE job_id=$1`,
+					[orphan],
 				)
 			).rowCount,
 		).toBe(0);
-		expect(cleanupQueries).toHaveLength(1);
-		const plan = await pool.query(
-			"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + cleanupQueries[0],
+
+		interface PlanNode {
+			"Node Type": string;
+			"Relation Name"?: string;
+			"Index Name"?: string;
+			"Index Cond"?: string;
+			"Actual Rows": number;
+			"Actual Loops": number;
+			"Rows Removed by Filter"?: number;
+			Plans?: PlanNode[];
+		}
+		const flatten = (node: PlanNode): PlanNode[] => [
+			node,
+			...(node.Plans ?? []).flatMap(flatten),
+		];
+		// Replay the actual first page and orphan DELETE against an entirely
+		// locked ledger. EXPLAIN ANALYZE executes both; neither may remove a lock.
+		for (const query of cleanupQueries.slice(0, 2)) {
+			const plan = await pool.query(
+				"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + query.text,
+				query.values,
+			);
+			const root = plan.rows[0]["QUERY PLAN"][0];
+			console.info(
+				"Retired job cleanup EXPLAIN (ANALYZE, BUFFERS):\n" +
+					JSON.stringify(root, null, 2),
+			);
+			const nodes = flatten(root.Plan);
+			expect(nodes.some((node) => node["Node Type"] === "Seq Scan")).toBe(
+				false,
+			);
+			const ledger = nodes.filter(
+				(node) =>
+					node["Relation Name"] === "questpie_retired_jobs" &&
+					node["Node Type"] !== "ModifyTable",
+			);
+			expect(
+				ledger.some(
+					(node) =>
+						node["Index Name"] === "questpie_retired_jobs_pkey" &&
+						node["Index Cond"]?.includes("job_id >"),
+				),
+			).toBe(true);
+			for (const node of ledger) {
+				expect(["Index Scan", "Index Only Scan", "Tid Scan"]).toContain(
+					node["Node Type"],
+				);
+				expect(node["Actual Loops"]).toBe(1);
+				expect(
+					node["Actual Rows"] + (node["Rows Removed by Filter"] ?? 0),
+				).toBeLessThanOrEqual(500);
+			}
+			const native = nodes.filter(
+				(node) => node["Relation Name"] === "_private_jobs",
+			);
+			expect(native).toHaveLength(1);
+			expect(["Index Scan", "Index Only Scan"]).toContain(
+				native[0]["Node Type"],
+			);
+			expect(native[0]["Index Name"]).toMatch(/^jobs_pkey\d*$/);
+			expect(native[0]["Index Cond"]).toContain("id = r.job_id");
+			expect(native[0]["Actual Loops"]).toBeLessThanOrEqual(500);
+			expect(native[0]["Actual Rows"]).toBeLessThanOrEqual(1);
+		}
+		// A previously visited live lock becomes removable after the cursor has
+		// passed it. The short last page must wrap, so the next tick revisits it.
+		const firstId = pages[0][0];
+		await pool.query(
+			`UPDATE "${schema}"._private_jobs SET locked_at=NULL, locked_by=NULL WHERE id=$1`,
+			[firstId],
 		);
-		const planText = JSON.stringify(plan.rows[0]["QUERY PLAN"][0], null, 2);
-		// The native queue is probed by primary key, even when all retirees are locked.
-		expect(planText).toMatch(/"Index Name": "jobs_pkey\d*"/);
-		expect(planText).toContain('"Index Cond": "(id = r.job_id)"');
-		console.info(
-			"Retired job cleanup EXPLAIN (ANALYZE, BUFFERS):\n" + planText,
-		);
+		await internal.tickSchedules();
+		expect(cleanupQueries.at(-2)!.values[0]).toBe("0");
+		expect(pages.at(-1)).toHaveLength(500);
+		expect(
+			(await pool.query(`SELECT FROM "${schema}".jobs WHERE id=$1`, [firstId]))
+				.rowCount,
+		).toBe(0);
+		expect(
+			(
+				await pool.query(
+					`SELECT FROM "${schema}".questpie_retired_jobs WHERE job_id=$1`,
+					[firstId],
+				)
+			).rowCount,
+		).toBe(0);
 	});
 
 	test.each([false, true])(
