@@ -19,12 +19,23 @@ import { buildMockApp } from "../utils/mocks/mock-app-builder.js";
 import { runTestDbMigrations } from "../utils/test-db.js";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-async function until(check: () => boolean) {
-	for (let i = 0; i < 300; i++) {
+async function until(check: () => boolean, timeoutMs = 3000) {
+	for (let i = 0; i < timeoutMs / 10; i++) {
 		if (check()) return;
 		await wait(10);
 	}
 	throw new Error("Timed out waiting for SSE client");
+}
+
+class DisconnectableBroker extends InProcessEphemeralBroker {
+	disconnect?: (error: unknown) => void;
+	override async start(
+		onMessage: (message: string) => void,
+		onDisconnect?: (error: unknown) => void,
+	) {
+		this.disconnect = onDisconnect;
+		await super.start(onMessage);
+	}
 }
 
 test("HTTP + public client: shared SSE, dates, limits, no ledger/presence rows and idle access loss", async () => {
@@ -318,17 +329,7 @@ test("timer-driven ephemeral authorization owns a fresh disposable service scope
 }, 10000);
 
 test("a broker blip reconnects the shared SSE without removing logical subscriptions", async () => {
-	class Broker extends InProcessEphemeralBroker {
-		disconnect?: (error: unknown) => void;
-		override async start(
-			onMessage: (message: string) => void,
-			onDisconnect?: (error: unknown) => void,
-		) {
-			this.disconnect = onDisconnect;
-			await super.start(onMessage);
-		}
-	}
-	const broker = new Broker();
+	const broker = new DisconnectableBroker();
 	const setup = await buildMockApp(
 		{
 			channels: {
@@ -384,3 +385,100 @@ test("a broker blip reconnects the shared SSE without removing logical subscript
 		await setup.cleanup();
 	}
 }, 10000);
+
+for (const scenario of ["alone", "mixed", "incremental", "timeout"] as const) {
+	const withSibling = scenario === "mixed" || scenario === "incremental";
+	test(`ACL infrastructure recovery (${scenario})`, async () => {
+		const broker = new DisconnectableBroker();
+		let failing = false;
+		const setup = await buildMockApp(
+			{
+				channels: {
+					page: channel("recovering-acl-page")
+						.events({ cursor: z.number() })
+						.authorize({
+							subscribe: async () => {
+								if (failing && scenario === "timeout")
+									return new Promise<boolean>(() => {});
+								if (failing) throw new Error("database unavailable");
+								return true;
+							},
+							publish: true,
+						})
+						.ephemeral(),
+					activity: channel("recovering-acl-activity")
+						.events({ changed: z.number() })
+						.authorize({ subscribe: true }),
+				},
+			},
+			{
+				realtime: {
+					retentionDays: 0,
+					ephemeral: { broker },
+					channelSecurity: { authorizationTimeoutMs: 20 },
+				},
+			},
+		);
+		let client: ReturnType<typeof createClient<any>> | undefined;
+		try {
+			await runTestDbMigrations(setup.app);
+			const handler = createFetchHandler(setup.app, {
+				getSession: async () => ({
+					user: { id: "ada" },
+					session: { id: "ada-session" },
+				}),
+			});
+			const statuses: number[] = [];
+			client = createClient<any>({
+				baseURL: "http://localhost",
+				fetch: async (input, init) => {
+					const response = await handler(new Request(input as string, init));
+					if (response.status === 503) {
+						statuses.push(response.status);
+						failing = false;
+					}
+					return response;
+				},
+			});
+			let ready = 0;
+			const errors: Error[] = [];
+			const events: number[] = [];
+			if (scenario === "incremental") {
+				let siblingReady = false;
+				client.channels.activity.subscribe(() => {}, {
+					onReady: () => {
+						siblingReady = true;
+					},
+				});
+				await until(() => siblingReady);
+				failing = true;
+			}
+			client.channels.page.subscribe(
+				(event: { data: number }) => events.push(event.data),
+				{
+					onReady: () => {
+						ready++;
+					},
+					onError: (error: Error) => errors.push(error),
+				},
+			);
+			if (scenario === "mixed") client.channels.activity.subscribe(() => {});
+			if (scenario !== "incremental") {
+				await until(() => ready === 1);
+				failing = true;
+				broker.disconnect!(
+					new Error("LISTEN reconnect during database failover"),
+				);
+			}
+			await until(() => ready >= (scenario === "incremental" ? 1 : 2), 10000);
+			expect(statuses).toEqual([503]);
+			expect(errors).toEqual([]);
+			expect(client.channels.channelCount).toBe(withSibling ? 2 : 1);
+			await client.channels.page.publish("cursor", 7);
+			await until(() => events.includes(7));
+		} finally {
+			client?.channels.destroy();
+			await setup.cleanup();
+		}
+	}, 15000);
+}

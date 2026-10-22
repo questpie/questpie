@@ -327,7 +327,7 @@ and empty ledger/head/presence/authority tables.
 
 ## Autopilot S8 handoff
 
-Upgrade the framework/client together and run codegen. Register a new ephemeral
+Upgrade the framework/client together and run codegen. For S8 cursor/typing hints, set `maxPayloadBytes: 512` (the limit includes the typed payload envelope). Register a new ephemeral
 wire pattern for page awareness; preserve the page's existing read-access
 resolver for both admission and fresh live checks. Keep actor identity and
 server time in the application command, and pass `coalesceKey: actorId` when

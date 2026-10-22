@@ -17,6 +17,7 @@ import {
 	resolveChannelAuthoritySubject,
 } from "../../channels/authority.js";
 import { createChannelServiceContext } from "../../channels/context.js";
+import { EphemeralSubscriptionUnavailableError } from "../../channels/ephemeral.js";
 import {
 	ChannelsService,
 	ChannelRuntimeError,
@@ -378,6 +379,7 @@ async function resolveRealtimeTopologyCandidate(
 				),
 			});
 		} catch (error) {
+			if (error instanceof EphemeralSubscriptionUnavailableError) throw error;
 			errors.push({
 				id: desired.id,
 				kind: desired.kind,
@@ -411,7 +413,11 @@ function createFencedClientSink(
 function edgeStageRejection(
 	error: unknown,
 ): RealtimeTopologyApplyRejectedError | null {
-	if (!(error instanceof RealtimeEdgeBindingStageError)) return null;
+	if (
+		!(error instanceof RealtimeEdgeBindingStageError) ||
+		error.cause instanceof EphemeralSubscriptionUnavailableError
+	)
+		return null;
 	return new RealtimeTopologyApplyRejectedError([
 		{
 			id: error.subscription.id,
@@ -765,6 +771,18 @@ async function resolveIncrementalTopic(
 	throw new Error("Invalid resource type");
 }
 
+function ephemeralAuthorizationUnavailableResponse(): Response {
+	return Response.json(
+		{
+			error: {
+				code: "REALTIME_AUTHORIZATION_UNAVAILABLE",
+				message: "Realtime authorization is unavailable",
+			},
+		},
+		{ status: 503 },
+	);
+}
+
 async function resolveChannelSubscription(
 	app: Questpie<any>,
 	input: ChannelSubscriptionInput,
@@ -803,13 +821,29 @@ async function resolveChannelSubscription(
 	const resolvedName = channels.resolveName(input.channel, params);
 	const authoritySubject = resolveChannelAuthoritySubject(context);
 	let presence: Record<string, unknown> | undefined;
-	if (definition.visibility === "presence") {
-		const value = await channels.resolvePresence(input.channel, params);
-		if (value && typeof value === "object") {
-			presence = value as Record<string, unknown>;
+	try {
+		if (definition.visibility === "presence") {
+			const value = await channels.resolvePresence(input.channel, params);
+			if (value && typeof value === "object")
+				presence = value as Record<string, unknown>;
+		} else if (
+			!(await channels.authorize(input.channel, params, "subscribe"))
+		) {
+			throw new ChannelRuntimeError(
+				"channel_subscribe_denied",
+				"Channel subscription is denied",
+			);
 		}
-	} else if (!(await channels.authorize(input.channel, params, "subscribe"))) {
-		throw new Error("Channel subscription is denied");
+	} catch (error) {
+		if (
+			definition.ephemeralOptions &&
+			!(
+				error instanceof ChannelRuntimeError &&
+				error.code === "channel_subscribe_denied"
+			)
+		)
+			throw new EphemeralSubscriptionUnavailableError(error);
+		throw error;
 	}
 	return {
 		id: input.id,
@@ -1013,6 +1047,8 @@ export async function realtimeSubscribe(
 						crdtSubscriptions.push(desired);
 					}
 				} catch (error) {
+					if (error instanceof EphemeralSubscriptionUnavailableError)
+						return ephemeralAuthorizationUnavailableResponse();
 					entryErrors.push({
 						id: typeof desired.id === "string" ? desired.id : "unknown",
 						kind: typeof desired.kind === "string" ? desired.kind : "unknown",
@@ -1400,6 +1436,8 @@ export async function realtimeSubscribe(
 			}
 			validatedChannelsById.set(channel.id, channel);
 		} catch (error) {
+			if (error instanceof EphemeralSubscriptionUnavailableError)
+				return ephemeralAuthorizationUnavailableResponse();
 			channelErrors.push({
 				id,
 				message: error instanceof Error ? error.message : "Channel rejected",
@@ -2066,6 +2104,7 @@ export async function realtimeSubscribe(
 					try {
 						unsubscribeLedger = await app.realtime!.subscribeChannel({
 							subscriptionId: `${edgeSessionId}:${channel.id}:${bindingInstanceId}`,
+							channelSubscriptionId: channel.id,
 							channel: channel.resolvedName,
 							ephemeral: channel.ephemeral,
 							...(channel.subject || channel.ephemeral

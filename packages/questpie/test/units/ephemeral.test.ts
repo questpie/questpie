@@ -15,6 +15,7 @@ import {
 } from "../../src/server/channels/ephemeral-wire.js";
 import {
 	EphemeralChannels,
+	EphemeralSubscriptionUnavailableError,
 	EPHEMERAL_MAX_PACKET_BYTES,
 } from "../../src/server/channels/ephemeral.js";
 import { createChannels } from "../../src/server/channels/service.js";
@@ -259,7 +260,7 @@ describe("ephemeral channels", () => {
 					throw new Error("oops");
 				},
 			}),
-		).rejects.toThrow("denied");
+		).rejects.toBeInstanceOf(EphemeralSubscriptionUnavailableError);
 	});
 
 	test("rechecks access before delivery even when the idle timer is far away", async () => {
@@ -857,4 +858,38 @@ describe("ephemeral channels", () => {
 		).rejects.toMatchObject({ code: "channel_event_invalid" });
 		expect(appends).toBe(0);
 	});
+});
+
+test("a backpressured revocation closes the physical epoch and includes the logical ID", async () => {
+	const { value } = runtime();
+	const target = sink();
+	let allowed = true;
+	let bindingClosed = false;
+	let routedId: unknown;
+	await value.subscribe({
+		subscriptionId: "internal-binding-instance",
+		channelSubscriptionId: "logical-page",
+		channel: "busy-page",
+		reauthorize: async () => allowed,
+		sink: {
+			...target.output,
+			write: async (frame) => {
+				const encoded = new TextDecoder().decode(frame);
+				if (encoded.startsWith("event: error")) {
+					routedId = parseCompatibleTypedEventWire<Record<string, unknown>>(
+						encoded.split("data: ")[1]!.trim(),
+					).channelSubscriptionId;
+					return { status: "busy", bufferedBytes: 1024 };
+				}
+				return { status: "accepted", bufferedBytes: 0 };
+			},
+		},
+		close: async () => {
+			bindingClosed = true;
+		},
+	});
+	allowed = false;
+	await until(() => bindingClosed);
+	expect(routedId).toBe("logical-page");
+	expect(target.closed).toEqual(["transport_error"]);
 });

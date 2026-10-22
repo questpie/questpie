@@ -54,7 +54,15 @@ type Entry =
 	| { kind: "leave"; id: string }
 	| { kind: "sync" };
 type Packet = { channel: string; entries: Entry[] };
+export class EphemeralSubscriptionUnavailableError extends Error {
+	constructor(cause: unknown) {
+		super("Ephemeral subscription is unavailable", { cause });
+		this.name = "EphemeralSubscriptionUnavailableError";
+	}
+}
+
 type SubscriptionInput = Omit<LocalChannelSubscriptionInput, "stage"> & {
+	channelSubscriptionId?: string;
 	presence?: RegisterChannelPresenceInput;
 };
 type Subscription = {
@@ -305,7 +313,11 @@ export class EphemeralChannels {
 	async subscribe(input: SubscriptionInput): Promise<() => Promise<void>> {
 		if (input.presence && bytes(stringifyTypedWire(input.presence.data)) > 1024)
 			throw new Error("Ephemeral presence exceeds 1024 bytes");
-		await this.start();
+		try {
+			await this.start();
+		} catch (error) {
+			throw new EphemeralSubscriptionUnavailableError(error);
+		}
 		let topic = this.topics.get(input.channel);
 		if (!topic) {
 			if (this.topics.size >= this.maxTopics)
@@ -325,7 +337,7 @@ export class EphemeralChannels {
 		};
 		topic.subscriptions.add(subscription);
 		try {
-			if (!(await this.authorize(subscription).catch(() => false)))
+			if (!(await this.authorize(subscription)))
 				throw new Error("Channel subscription is denied");
 			await input.onReady?.();
 			if (subscription.closed)
@@ -375,6 +387,8 @@ export class EphemeralChannels {
 				subscription.input.presence.data = result.presence;
 			}
 			return true;
+		} catch (error) {
+			throw new EphemeralSubscriptionUnavailableError(error);
 		} finally {
 			if (timeout) clearTimeout(timeout);
 		}
@@ -548,13 +562,16 @@ export class EphemeralChannels {
 		if (sub.closed) return;
 		await this.release(sub);
 		try {
-			await sub.input.sink.write(
+			const result = await sub.input.sink.write(
 				encodeSseEvent("error", {
+					channelSubscriptionId: sub.input.channelSubscriptionId,
 					channel: sub.input.channel,
 					message: "Channel access ended",
 				}),
-				"latest-snapshot",
+				"ordered-channel-event",
 			);
+			if (result.status === "busy")
+				await sub.input.sink.close("transport_error");
 		} finally {
 			if (sub.input.close) await sub.input.close("access_revoked");
 			else await sub.input.sink.close("access_revoked");

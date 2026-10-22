@@ -863,6 +863,7 @@ export class RealtimeService {
 		input: Omit<LocalChannelSubscriptionInput, "stage"> & {
 			presence?: RegisterChannelPresenceInput;
 			ephemeral?: boolean;
+			channelSubscriptionId?: string;
 		},
 	): Promise<() => Promise<void>> {
 		if (input.ephemeral) return this.ephemeral.subscribe(input);

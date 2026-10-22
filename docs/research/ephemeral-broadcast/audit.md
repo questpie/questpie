@@ -28,3 +28,19 @@ re-readable domain state. Ephemeral topics own awareness and replaceable signals
 Removing durable Channels in a v3 minor would discard existing ordering, replay,
 transactional publishing and provider integrations; the optimization work preserves
 those contracts.
+
+A subsequent exact-head Claude review of `83a94a79` reproduced S1: a temporary
+ACL/database failure persisting into reconnect admission was converted to a
+terminal channel error (or HTTP 400 without siblings). Admission now preserves
+infrastructure failures as retryable HTTP 503 or a failed transport epoch,
+including topology changes and staged reauthorization; explicit denial stays
+terminal. Public-client regressions cover standalone/mixed streams, incremental
+admission and authorization timeout. A backpressured revocation now closes the
+physical epoch if its addressed terminal frame cannot be delivered, preventing
+stale client readiness. These corrections follow the archived performance runs;
+their steady-state fan-out/authorization contracts are unchanged.
+
+Standards review also moved the three new broker/config exports from the
+internal channel barrel to the public `src/exports/channels.ts` entrypoint.
+The optional suggestion to extract two identical client lookup expressions was
+left unchanged; it was a judgment call, not a documented-standard violation.
