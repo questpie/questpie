@@ -60,7 +60,7 @@ the channel whose rule failed; on the channel HTTP routes the status is `500`,
 not `403`, because the server never decided. Your rule's own message stays
 server-side. Do not use a throw to mean no: return `false`.
 
-Ephemeral subscriptions treat user-mode CRUD permission errors as denial. Other failed or timed-out checks fail closed and retry only the affected channel while healthy shared-stream bindings continue; after five consecutive failures its `onError` reports the channel. See [ephemeral delivery](/docs/client/channels/ephemeral#delivery-and-presence).
+Ephemeral subscribe and publish rules treat user-mode CRUD permission errors as denial (`403` for an HTTP publish). Other failed or timed-out checks fail closed and retry only the affected channel while healthy shared-stream bindings continue; after five consecutive failures its `onError` reports the channel. See [ephemeral delivery](/docs/client/channels/ephemeral#delivery-and-presence).
 
 ## Why your own handler gets denied
 

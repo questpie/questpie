@@ -284,7 +284,7 @@ export class SseConnectionManager {
 			return false;
 		const id = payload.channelSubscriptionId;
 		const resource = this.resources.get(id);
-		if (resource?.kind !== "channel") return false;
+		if (resource?.kind !== "channel") return !resource;
 		const previous = this.channelRetries.get(id);
 		if (previous?.retryAt) return true;
 		const failures = (previous?.failures ?? 0) + 1;
@@ -297,7 +297,7 @@ export class SseConnectionManager {
 		);
 		this.channelRetries.set(id, {
 			failures,
-			retryAt: Date.now() + Math.max(1, delay),
+			retryAt: Date.now() + Math.max(1, Math.ceil(delay)),
 		});
 		this.topologyGeneration += 1;
 		try {
