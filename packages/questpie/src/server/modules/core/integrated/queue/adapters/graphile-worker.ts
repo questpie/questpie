@@ -821,9 +821,18 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 				WHERE d.status IN ('completed', 'failed') AND d.created_at < now() - interval '7 days'
 				AND NOT EXISTS (SELECT FROM ${this.table("jobs")} j WHERE j.id = d.job_id)
 				LIMIT 500)`);
-			await execute(
-				sql`SELECT ${this.table("complete_jobs")}(ARRAY(SELECT job_id FROM ${this.table("questpie_retired_jobs")} LIMIT 500))`,
-			);
+			// Match Graphile 0.18's complete_jobs lock predicate before the batch
+			// limit. LATERAL keeps native lookups on the primary key, independent
+			// of the live queue size; locked retirees must not fill the batch.
+			await execute(sql`SELECT ${this.table("complete_jobs")}(ARRAY(
+				SELECT r.job_id FROM ${this.table("questpie_retired_jobs")} r
+				JOIN LATERAL (
+					SELECT j.id FROM ${this.table("_private_jobs")} j
+					WHERE j.id = r.job_id
+					AND (j.locked_at IS NULL OR j.locked_at < now() - interval '4 hours')
+					LIMIT 1
+				) j ON true
+				LIMIT 500))`);
 			await execute(
 				sql`DELETE FROM ${this.table("questpie_retired_jobs")} r WHERE NOT EXISTS (SELECT FROM ${this.table("jobs")} j WHERE j.id = r.job_id)`,
 			);

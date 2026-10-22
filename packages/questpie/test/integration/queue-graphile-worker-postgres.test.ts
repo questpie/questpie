@@ -1694,6 +1694,88 @@ describe.skipIf(!databaseUrl)("Graphile Worker PostgreSQL contract", () => {
 		},
 	);
 
+	test("retired cleanup skips a full batch of locked jobs", async () => {
+		await pool.query(`WITH jobs AS (
+			SELECT * FROM "${schema}".add_jobs(ARRAY(SELECT
+				('retired', '{}'::json, NULL, now(), 25, NULL, 0, NULL)::"${schema}".job_spec
+				FROM generate_series(1,501)))
+		) INSERT INTO "${schema}".questpie_retired_jobs (job_id) SELECT id FROM jobs`);
+		await pool.query(
+			`UPDATE "${schema}"._private_jobs SET locked_at=now(), locked_by='live-worker'`,
+		);
+		const removable = (
+			await pool.query(`SELECT id FROM "${schema}".add_job('unlocked-retired', '{}'::json)
+				UNION ALL SELECT id FROM "${schema}".add_job('stale-retired', '{}'::json)`)
+		).rows.map((row) => row.id);
+		await pool.query(
+			`UPDATE "${schema}"._private_jobs SET locked_at=now()-interval '4 hours 1 second', locked_by='dead-worker' WHERE id=$1`,
+			[removable[1]],
+		);
+		await pool.query(
+			`INSERT INTO "${schema}".questpie_retired_jobs (job_id) VALUES ($1), ($2), (-1)`,
+			removable,
+		);
+		const cleanupQueries: string[] = [];
+		const wrapped = new WeakSet<pg.PoolClient>();
+		(adapter as unknown as { pool: pg.Pool }).pool.on(
+			"acquire",
+			(connection) => {
+				if (wrapped.has(connection)) return;
+				wrapped.add(connection);
+				connection.query = new Proxy(connection.query, {
+					apply(target, receiver, args) {
+						if (
+							typeof args[0] === "string" &&
+							args[0].includes('"complete_jobs"')
+						)
+							cleanupQueries.push(args[0]);
+						return Reflect.apply(target, receiver, args);
+					},
+				});
+			},
+		);
+		await (
+			adapter as unknown as { tickSchedules(): Promise<void> }
+		).tickSchedules();
+		expect(
+			(
+				await pool.query(
+					`SELECT FROM "${schema}".jobs WHERE id=ANY($1::bigint[])`,
+					[removable],
+				)
+			).rowCount,
+		).toBe(0);
+		expect(
+			(await pool.query(`SELECT FROM "${schema}".questpie_retired_jobs`))
+				.rowCount,
+		).toBe(501);
+		expect(
+			(
+				await pool.query(
+					`SELECT FROM "${schema}".jobs WHERE locked_by='live-worker'`,
+				)
+			).rowCount,
+		).toBe(501);
+		expect(
+			(
+				await pool.query(
+					`SELECT FROM "${schema}".questpie_retired_jobs WHERE job_id=-1`,
+				)
+			).rowCount,
+		).toBe(0);
+		expect(cleanupQueries).toHaveLength(1);
+		const plan = await pool.query(
+			"EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + cleanupQueries[0],
+		);
+		const planText = JSON.stringify(plan.rows[0]["QUERY PLAN"][0], null, 2);
+		// The native queue is probed by primary key, even when all retirees are locked.
+		expect(planText).toMatch(/"Index Name": "jobs_pkey\d*"/);
+		expect(planText).toContain('"Index Cond": "(id = r.job_id)"');
+		console.info(
+			"Retired job cleanup EXPLAIN (ANALYZE, BUFFERS):\n" + planText,
+		);
+	});
+
 	test.each([false, true])(
 		"a key admits a new payload after framework retention before adapter cleanup, secret=%s",
 		async (secret) => {
