@@ -160,6 +160,15 @@ export interface McpExecutionDiagnosticEvent {
 
 export interface McpExecutionConfig extends McpExecutionLimits {
 	/**
+	 * Exclusive UTF-8 byte threshold for the complete advertised tools/list
+	 * result after schema diet and visibility projection, including tool and
+	 * wrapper metadata; excludes the transport's JSON-RPC envelope. Defaults to
+	 * 100000 and may only be tightened (e.g. 85000). Overflow rejects the whole
+	 * list; tools and required schemas are never removed to fit the budget.
+	 * Applies to Human and workload MCP servers.
+	 */
+	maxCatalogBytes?: number;
+	/**
 	 * Trusted server-side diagnostics sink. At most one unresolved callback is
 	 * retained; subsequent events are dropped until it settles.
 	 */

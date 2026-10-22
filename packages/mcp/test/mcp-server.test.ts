@@ -96,7 +96,7 @@ const deniedRoute = route()
 
 const dateRoute = route()
 	.post()
-	.schema(z.object({ at: z.coerce.date() }))
+	.schema(z.object({ at: z.iso.datetime().pipe(z.coerce.date()) }))
 	.outputSchema(z.object({ iso: z.string() }))
 	.meta({ mcp: { expose: true, name: "dates.parse" } })
 	.handler(async ({ input }) => ({ iso: input.at.toISOString() }));
@@ -1139,6 +1139,9 @@ describe("@questpie/mcp server", () => {
 			expect(toolNames).toContain("collections.posts.delete");
 			expect(toolNames).toContain("globals.siteSettings.update");
 			expect(toolNames).toContain("collections.privateNotes.list");
+			expect(
+				new TextEncoder().encode(JSON.stringify(tools)).byteLength,
+			).toBeLessThan(100_000);
 
 			const privateList = await client.callTool({
 				name: "collections.privateNotes.list",

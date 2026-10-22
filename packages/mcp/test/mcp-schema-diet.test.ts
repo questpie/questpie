@@ -538,11 +538,11 @@ describe("installSchemaDietListToolsHandler failure handling", () => {
 		expect(loggedErrors.length).toBeGreaterThan(0);
 	});
 
-	it("logs and degrades (does not throw) in production when the request-handler map is missing", () => {
+	it("fails closed in production when the request-handler map is missing", () => {
 		process.env.NODE_ENV = "production";
-		expect(() =>
-			installSchemaDietListToolsHandler(fakeServer({})),
-		).not.toThrow();
+		expect(() => installSchemaDietListToolsHandler(fakeServer({}))).toThrow(
+			/catalog byte budget/,
+		);
 		expect(loggedErrors.length).toBeGreaterThan(0);
 	});
 
@@ -556,13 +556,13 @@ describe("installSchemaDietListToolsHandler failure handling", () => {
 		expect(loggedErrors.length).toBeGreaterThan(0);
 	});
 
-	it("logs and degrades (does not throw) in production when no tools/list handler was registered", () => {
+	it("fails closed in production when no tools/list handler was registered", () => {
 		process.env.NODE_ENV = "production";
 		expect(() =>
 			installSchemaDietListToolsHandler(
 				fakeServer({ _requestHandlers: new Map() }),
 			),
-		).not.toThrow();
+		).toThrow(/catalog byte budget/);
 		expect(loggedErrors.length).toBeGreaterThan(0);
 	});
 });

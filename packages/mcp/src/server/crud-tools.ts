@@ -35,7 +35,7 @@ import {
 	executeWorkloadTool,
 	registerWorkloadDiscoveryTool,
 } from "./workload-boundary.js";
-import { toToolInputJsonSchema } from "./zod-json-schema.js";
+import { toToolInputJsonSchema, withMcpSchemaRefs } from "./zod-json-schema.js";
 
 const idSchema = z.union([z.string(), z.number()]);
 
@@ -536,7 +536,7 @@ export async function registerCrudTools(
 				toolName,
 				{
 					description: policy.description ?? operation.description(name),
-					inputSchema,
+					inputSchema: withMcpSchemaRefs(inputSchema, "input"),
 					annotations,
 				},
 				async (input: any, extra: any) => {
@@ -672,7 +672,7 @@ export async function registerCrudTools(
 				toolName,
 				{
 					description: policy.description ?? operation.description(name),
-					inputSchema,
+					inputSchema: withMcpSchemaRefs(inputSchema, "input"),
 					annotations,
 				},
 				async (input: any, extra: any) => {

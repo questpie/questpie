@@ -2,6 +2,14 @@
 import { ToolSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
+/** Preserve shared schema nodes when the SDK converts with its inline default. */
+export function withMcpSchemaRefs<T extends z.ZodType>(
+	schema: T,
+	io: "input" | "output",
+): T {
+	return schema.meta(z.toJSONSchema(schema, { io, reused: "ref" }));
+}
+
 export function jsonSchemaCompatibleSchema(
 	schema: z.ZodTypeAny | undefined,
 ): z.ZodTypeAny | undefined {

@@ -1,5 +1,6 @@
 import type { Questpie } from "questpie";
 
+import { resolveMcpCatalogByteLimit } from "./catalog-byte-budget.js";
 import { resolveMcpCatalog, type ResolvedMcpCatalog } from "./catalog.js";
 import {
 	McpExecutionBoundary,
@@ -12,6 +13,7 @@ import type { McpConfig } from "./types.js";
 export interface ResolvedMcpRelease {
 	readonly config: Readonly<McpConfig>;
 	readonly catalog: ResolvedMcpCatalog;
+	readonly maxCatalogBytes: number;
 	readonly execution: McpExecutionBoundary;
 }
 
@@ -55,6 +57,9 @@ function createRelease(
 				}
 			: config;
 	const frozenConfig = freezeConfig(releaseConfig);
+	const maxCatalogBytes = resolveMcpCatalogByteLimit(
+		frozenConfig.execution?.maxCatalogBytes,
+	);
 	const catalog = resolveMcpCatalog(app, frozenConfig);
 	const execution = new McpExecutionBoundary(
 		frozenConfig.execution,
@@ -81,7 +86,12 @@ function createRelease(
 	if (resourceCount > execution.limits.maxResources) {
 		throw new Error("MCP released resource count exceeds configured limit");
 	}
-	return Object.freeze({ config: frozenConfig, catalog, execution });
+	return Object.freeze({
+		config: frozenConfig,
+		catalog,
+		maxCatalogBytes,
+		execution,
+	});
 }
 
 /** App-owned release snapshot shared by OAuth advertisement and default servers. */

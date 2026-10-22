@@ -8,6 +8,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext, RequestContext } from "questpie";
 
+import { assertMcpCatalogByteBudget } from "./catalog-byte-budget.js";
 import {
 	assertBoundedMcpValue,
 	McpAccessDeniedError,
@@ -394,6 +395,7 @@ export async function listWorkloadTools(
 	boundary: WorkloadMcpBoundary,
 	execution: McpExecutionBoundary,
 	extra: McpHandlerExtra,
+	maxCatalogBytes?: number,
 ): Promise<ListToolsResult> {
 	const tools: Tool[] = [];
 	const controller = new AbortController();
@@ -446,6 +448,7 @@ export async function listWorkloadTools(
 				throw error;
 			}
 		}
+		assertMcpCatalogByteBudget({ tools }, maxCatalogBytes);
 		assertBoundedMcpValue(
 			{ tools },
 			{
