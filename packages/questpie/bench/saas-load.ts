@@ -2,6 +2,7 @@
  * Synthetic B2B workload, not an Autopilot end-to-end capacity claim.
  */
 import os from "node:os";
+import { setTimeout as retryDelay } from "node:timers/promises";
 
 import pg from "pg";
 
@@ -18,6 +19,40 @@ if (Number(process.env.BUN_CONFIG_MAX_HTTP_REQUESTS ?? 256) < 4096)
 	throw new Error(
 		"Run with BUN_CONFIG_MAX_HTTP_REQUESTS=4096: SSE must not exhaust the load generator fetch budget",
 	);
+const measuredSources = [
+	"./saas-app.ts",
+	"./saas-pod.ts",
+	"./saas-load.ts",
+	"../src/server/channels/ephemeral.ts",
+	"../src/server/channels/ephemeral-wire.ts",
+	"../src/server/channels/service.ts",
+	"../src/server/channels/authority.ts",
+	"../src/server/channels/channel-builder.ts",
+	"../src/server/config/request-scope.ts",
+	"../src/server/adapters/routes/realtime.ts",
+	"../src/server/modules/core/integrated/realtime/adapters/pg-notify.ts",
+	"../src/server/modules/core/integrated/realtime/channel-authority-fence.ts",
+	"../src/server/modules/core/integrated/realtime/channel-event-ledger.ts",
+	"../src/server/modules/core/integrated/realtime/service.ts",
+	"../src/server/modules/core/integrated/realtime/topology-coordinator.ts",
+];
+async function fingerprint() {
+	return Object.fromEntries(
+		await Promise.all(
+			measuredSources.map(async (path) => [
+				path,
+				new Bun.CryptoHasher("sha256")
+					.update(await Bun.file(new URL(path, import.meta.url)).arrayBuffer())
+					.digest("hex"),
+			]),
+		),
+	);
+}
+const sourceSha256 = await fingerprint();
+const runtimeCommit = Bun.spawnSync(["git", "rev-parse", "HEAD"])
+	.stdout.toString()
+	.trim();
+
 const pool = new pg.Pool({ connectionString: url, max: 4 });
 const mode = process.env.SAAS_ACCESS_SHARING ?? "default";
 const durationMs = Number(process.env.SAAS_DURATION_MS ?? 30000);
@@ -99,6 +134,7 @@ async function scenario(label: string) {
 	let pods = [pod(), pod()];
 	await Promise.all(pods.map((p) => p.start()));
 	const pending = new Set<Promise<unknown>>();
+	const stopRetries = new AbortController();
 	const timings: Record<string, number[]> = {
 		cursor: [],
 		save: [],
@@ -233,7 +269,8 @@ async function scenario(label: string) {
 		);
 	}
 	async function stream(client: Client) {
-		let attempt = 0;
+		let attempt = 0,
+			retryAttempt = 0;
 		while (isRunning()) {
 			const controller = new AbortController();
 			client.controller = controller;
@@ -312,6 +349,8 @@ async function scenario(label: string) {
 								data = lines
 									.find((line) => line.startsWith("data: "))
 									?.slice(6);
+							if (frame.startsWith(":")) retryAttempt = 0;
+							if (event === "ping") retryAttempt = 0;
 							if (!data) continue;
 							const payload = parseCompatibleTypedEventWire(data) as any;
 							if (event === "session") client.session = payload;
@@ -406,7 +445,13 @@ async function scenario(label: string) {
 				client.reconnectAt ??= Date.now();
 			}
 			attempt++;
-			await Bun.sleep(100);
+			// Match the public client's retry range, with repeatable per-client jitter.
+			const base = Math.min(1000 * 2 ** retryAttempt++, 30000);
+			await retryDelay(
+				Math.round(base * (0.5 + ((client.i * 17 + attempt * 31) % 101) / 100)),
+				undefined,
+				{ signal: stopRetries.signal },
+			).catch(() => {});
 		}
 	}
 	const readers: Promise<unknown>[] = [];
@@ -637,6 +682,8 @@ async function scenario(label: string) {
 				.sort((a, b) => b.executionMs - a.executionMs)
 				.slice(0, 12),
 			generator: {
+				reconnectPolicy:
+					"1s exponential to 30s, 0.5-1.5 deterministic jitter, heartbeat reset",
 				cpu: process.cpuUsage(),
 				rss: process.memoryUsage().rss,
 				loadAverage: os.loadavg(),
@@ -646,6 +693,7 @@ async function scenario(label: string) {
 		return result;
 	} finally {
 		running = false;
+		stopRetries.abort();
 		for (const client of clients) client.controller?.abort();
 		await Promise.allSettled(readers);
 		await Promise.allSettled(pending);
@@ -663,9 +711,21 @@ try {
 	await seedSaas();
 	const results = [];
 	for (const label of selected) results.push(await scenario(label));
+	if (JSON.stringify(sourceSha256) !== JSON.stringify(await fingerprint()))
+		throw new Error(
+			"Measured source changed during the run; results are not a frozen-candidate measurement",
+		);
+
 	console.log(
 		JSON.stringify(
 			{
+				implementation: {
+					runtimeCommit,
+					sourceSha256,
+					generatorHttpLimit: Number(process.env.BUN_CONFIG_MAX_HTTP_REQUESTS),
+					databaseLimits: process.env.SAAS_DATABASE_LIMITS ?? null,
+					storage: process.env.SAAS_STORAGE ?? null,
+				},
 				environment: {
 					bun: Bun.version,
 					postgres: (await pool.query("select version() as version")).rows[0]

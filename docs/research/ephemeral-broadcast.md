@@ -64,8 +64,9 @@ is executed by the unit tests, including independent server-resolved actors.
 
 The controlled measurements below predate the preliminary adversarial fixes and
 pin their own source variants. The [audit response](ephemeral-broadcast/audit.md)
-records those fixes; the realistic SaaS fixture adds real HTTP/TCP, session/RBAC
-queries, live projections, durable invalidations and failure injection. Read each
+records those fixes; the [realistic SaaS report](ephemeral-broadcast/saas-load.md)
+adds real HTTP/TCP, session/RBAC queries, live projections, durable invalidations
+and failure injection. Read each
 artifact's source metadata before comparing results.
 
 ## Method
@@ -104,6 +105,32 @@ after its batch completes. A failed batch rejects all its callers; shutdown
 finishes the active batch and cancels queued work. PostgreSQL can fold identical
 payloads within a transaction; these are lossy wake hints, not event receipts.
 Durable ledger/event persistence and replay semantics are unchanged.
+
+The audit follow-up also reduces work after a durable wake:
+
+| Contract probe                                                        | Before (`da944`) |      After |
+| --------------------------------------------------------------------- | ---------------: | ---------: |
+| Authority read SQL for seven bindings on two channels (one anonymous) |               12 |          2 |
+| Three viewers × 20 events: authority reads per delivered frame        |             2.00 |       0.33 |
+| Same probe: exact admission transactions per frame                    |             1.00 |       1.00 |
+| Same probe: frame encodes per delivery                                |             2.00 |       1.00 |
+| Ledger drains per wake, either initialization order                   |                2 |          1 |
+| Eight queued wake hints behind one in-flight notice                   |       8 payloads | 5 payloads |
+
+These are SQL/call-count contracts, not latency or throughput estimates.
+Reconciliation reads generations together per channel. Delivery first attempts
+admission at the generation already authorized for that binding; a mismatch
+re-reads and re-evaluates access. Every frame retains its exact database admission
+transaction. Neither a channel snapshot nor an authorization result is cached
+across an authority cut, and network I/O stays outside the fence lock.
+
+Queued outbox and channel-event wakes now share a matching queued hint. A wake
+already on the wire never absorbs a later committed change. Topology and CRDT
+notices stay distinct. The first high-water hint may survive a fold; consumers
+must drain committed state rather than treat that hint as a delivery boundary.
+Permanent regressions in `ordered-channel-ledger.test.ts`,
+`realtime-channel-reconciliation.test.ts` and `realtime-pg-change-broker.test.ts`
+cover both the count reductions and races with revocation/retry.
 
 This follows the same round-trip reduction principle described in
 [Graphile Worker's batching guidance](https://worker.graphile.org/docs/performance#batching).
@@ -169,6 +196,39 @@ Raw evidence and runnable benchmarks:
 - [Common PG before](ephemeral-broadcast/common-pg-before.json) / [after](ephemeral-broadcast/common-pg-after.json)
 - [Broker saturation](ephemeral-broadcast/pg-broker-throughput.json): `packages/questpie/bench/pg-notify-throughput.ts`
 - [Full shared SSE/control path](ephemeral-broadcast/shared-sse-topology.json): `packages/questpie/bench/ephemeral-sse-topology.ts`
+
+## Current controlled comparison on disk-backed PostgreSQL
+
+After the lifecycle, packet-packing, common wake/fence and topology fixes, the
+50-cursor/10-page/10 Hz benchmark was repeated on the SaaS experiment's
+2-CPU/1-GiB disk-backed PostgreSQL container. This keeps the original simple
+`SELECT true` authorization and modeled SSE sinks in two OS processes; use the
+SaaS report for actual TCP HTTP/SSE and representative ACLs. It is a new
+sequential pair, not a controlled speedup ratio against the earlier tmpfs runs.
+
+| Lane             | Measured NOTIFY payloads / SQL calls | Delivery p95 / p99 | Event rows | Result                                |
+| ---------------- | -----------------------------------: | -----------------: | ---------: | ------------------------------------- |
+| Ephemeral        |                             970 / 99 |       102 / 112 ms |          0 | 4800 retained IDs, no failures/closes |
+| Durable Channels |                          4991 / 2083 |       549 / 757 ms |       5000 | All 5000 IDs, no failures/closes      |
+
+The input was 5000 updates over ten seconds. Ephemeral supersession is intended;
+it delivered 24,000 frames to five local viewers per retained event. Its actual
+SQL window saw about 92 NOTIFY payloads/s, versus about 474/s for Channels.
+There were four concurrent 1-KiB writers: roughly 692 writes/s during ephemeral
+and 800/s during Channels. The writes-only phase reached 743/s; those sequential
+rates also show host/storage variation, not an ephemeral write-performance claim.
+[Raw current comparison](ephemeral-broadcast/controlled-final-disk.json) retains
+API observer counters separately: they include pre-window membership admission
+and, for durable wakes, calls folded before SQL. Use `notifySqlRows` for actual
+PostgreSQL notification counts in the measurement window.
+
+The larger TCP experiment found a cost hidden by the 50-stream control test:
+serial lease UPDATE round trips could expire healthy SSE ownership under load.
+Renewals are now bounded set-based UPDATEs, preserving owner/generation/client
+expiry predicates and row-level fencing. A matched 1000-stream run went from
+191 closes to zero; all final sequences arrived. Its multi-second latency and
+skipped POSTs still indicate overload. See the
+[SaaS investigation](ephemeral-broadcast/saas-load.md) before sizing a deployment.
 
 ## Initial lane comparison
 

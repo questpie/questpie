@@ -63,6 +63,10 @@ stopPresence();
 
 Both subscriptions share a logical channel and the client's physical SSE stream. Throttle the browser's POSTs to about one every 100 ms, retaining the newest pointer position between sends. Server coalescing reduces fan-out traffic; it does not reduce incoming HTTP requests.
 
+For next-turn typing updates, define a separate conversation or typing topic with `.ephemeral({ coalesceMs: 0 })`. Presence join/leave packets bypass a pending cursor window. Expire old typing/cursor hints in the UI and clear them on `onNotReady`; a final stop signal can be lost on a best-effort lane.
+
+Runs and other server processes use the same `publish` API with a server-resolved `actorId` and `coalesceKey: actorId`. They can emit agent typing without opening a browser subscription. Agent run state and its expiry remain application state; the automatic presence roster tracks subscribed connections.
+
 The executable framework example is `packages/questpie/examples/ephemeral-awareness.ts`; its actor partitioning is covered by the ephemeral unit tests.
 
 ## Delivery and presence

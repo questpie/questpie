@@ -240,6 +240,13 @@ export class RealtimeService {
 					(this.pgConnectionString
 						? new PgNotifyEphemeralBroker({
 								connectionString: this.pgConnectionString,
+								onError: this.logger
+									? (error) =>
+											this.logger?.error(
+												"[Realtime] Ephemeral broker failed",
+												error,
+											)
+									: undefined,
 							})
 						: undefined),
 			},
@@ -962,7 +969,10 @@ export class RealtimeService {
 
 	private async ensureLocalChannelReconciliation(): Promise<void> {
 		if (this.clientTransport) return;
-		if (this.unsubscribeChannelNotices) {
+		// The `initialize()` subscription already drains the ledger on every
+		// channel wake, reconnect and overflow. A second one repeated each drain:
+		// one more fence read per binding and one more log read per wake.
+		if (this.unsubscribeChannelNotices || this.unsubscribeNotices) {
 			this.startChannelPollTimer();
 			return;
 		}
@@ -970,10 +980,12 @@ export class RealtimeService {
 			this.channelNoticeStartPromise = (async () => {
 				this.unsubscribeChannelNotices = await this.noticeRouter.subscribe({
 					kind: "realtime",
+					// Each handler yields once a later `initialize()` owns these drains.
 					onNotice: ({ wake }) => {
 						if (
-							wake.kind !== "channel-events-maybe-advanced" &&
-							wake.kind !== "channel-authority-maybe-advanced"
+							this.unsubscribeNotices ||
+							(wake.kind !== "channel-events-maybe-advanced" &&
+								wake.kind !== "channel-authority-maybe-advanced")
 						) {
 							return;
 						}
@@ -992,7 +1004,7 @@ export class RealtimeService {
 							error,
 						),
 					onStateChange: (state) => {
-						if (state !== "connected") return;
+						if (state !== "connected" || this.unsubscribeNotices) return;
 						void this.channelEventLedger
 							.drain()
 							.catch((error) =>
@@ -1003,6 +1015,7 @@ export class RealtimeService {
 							);
 					},
 					onOverflow: () => {
+						if (this.unsubscribeNotices) return;
 						void this.channelEventLedger
 							.drain()
 							.catch((error) =>

@@ -1294,6 +1294,354 @@ describe("ordered channel event ledger", () => {
 		expect(sink.closeReasons).toEqual(["access_revoked"]);
 	});
 
+	function spyOnFences(events: ChannelEventLedger) {
+		const fences = (events as any).authorityFences;
+		const read = fences.read.bind(fences);
+		const readChannelGenerations = fences.readChannelGenerations.bind(fences);
+		const admitExpected = fences.admitExpected.bind(fences);
+		const calls = {
+			reads: 0,
+			admissions: 0,
+			beforeAdmission: undefined as (() => Promise<void>) | undefined,
+		};
+		fences.read = (...args: unknown[]) => {
+			calls.reads += 1;
+			return read(...args);
+		};
+		fences.readChannelGenerations = (...args: unknown[]) => {
+			calls.reads += 1;
+			return readChannelGenerations(...args);
+		};
+		fences.admitExpected = async (...args: unknown[]) => {
+			calls.admissions += 1;
+			const before = calls.beforeAdmission;
+			calls.beforeAdmission = undefined;
+			await before?.();
+			return admitExpected(...args);
+		};
+		return calls;
+	}
+
+	test("an unchanged authority generation admits each frame without a fence read or a second encode", async () => {
+		// Every frame used to read the fence before its admission transaction,
+		// and was encoded once to be counted and again on every write attempt.
+		const subscriber = ledger(undefined, { busyRetryMs: 60_000 });
+		const publisher = ledger();
+		const sink = createSink("cached-generation", true);
+		let reauthorizations = 0;
+		let encodes = 0;
+		await subscriber.subscribeLocal({
+			subscriptionId: "space-a:user-1:cached-generation",
+			channel: "private-space-a",
+			subject: "opaque-user-1",
+			reauthorize: async () => {
+				reauthorizations += 1;
+				return true;
+			},
+			sink,
+			encodeFrame: (frame) => {
+				encodes += 1;
+				return new TextEncoder().encode(JSON.stringify(frame));
+			},
+		});
+		for (const id of [1, 2, 3]) {
+			await publisher.append({
+				channel: "private-space-a",
+				event: "message",
+				schemaIdentity: "space:message",
+				data: { id },
+			});
+		}
+		const fences = spyOnFences(subscriber);
+		reauthorizations = 0;
+		encodes = 0;
+
+		await subscriber.drain();
+		expect(sink.frames).toEqual([]);
+		sink.busy = false;
+		await subscriber.drain();
+
+		expect(sink.frames.map((frame) => frame.data.id)).toEqual([1, 2, 3]);
+		// One reconciliation read per drain; the busy attempt and three writes
+		// are each one admission transaction at the cached generation.
+		expect(fences.reads).toBe(2);
+		expect(fences.admissions).toBe(4);
+		expect(encodes).toBe(3);
+		expect(reauthorizations).toBe(0);
+	});
+
+	test("a cut landing after reconciliation fails closed at the frame admission", async () => {
+		const subscriber = ledger();
+		const revoker = ledger();
+		const sink = createSink("cut-at-admission");
+		let authorized = true;
+		let reauthorizations = 0;
+		await subscriber.subscribeLocal({
+			subscriptionId: "space-a:user-1:cut-at-admission",
+			channel: "private-space-a",
+			subject: "opaque-user-1",
+			reauthorize: async () => {
+				reauthorizations += 1;
+				return authorized;
+			},
+			sink,
+		});
+		await revoker.append({
+			channel: "private-space-a",
+			event: "message",
+			schemaIdentity: "space:message",
+			data: { id: "after-cut" },
+		});
+		const fences = spyOnFences(subscriber);
+		reauthorizations = 0;
+		// Reconciliation already saw the old generation; the cut commits just
+		// before the frame's own admission transaction.
+		fences.beforeAdmission = async () => {
+			authorized = false;
+			await revoker.revokeAuthority({
+				channel: "private-space-a",
+				subject: "opaque-user-1",
+				idempotencyKey: "space-a:user-1:cut-at-admission",
+			});
+		};
+
+		await subscriber.drain();
+
+		expect(sink.frames).toEqual([]);
+		expect(sink.closeReasons).toEqual(["access_revoked"]);
+		expect(reauthorizations).toBe(1);
+		expect(
+			subscriber.hasLocalSubscription("space-a:user-1:cut-at-admission"),
+		).toBe(false);
+	});
+
+	test("a binding still authorized after a cut re-admits once at the new generation", async () => {
+		const subscriber = ledger();
+		const revoker = ledger();
+		const sink = createSink("readmit-after-cut");
+		let reauthorizations = 0;
+		await subscriber.subscribeLocal({
+			subscriptionId: "space-a:user-1:readmit-after-cut",
+			channel: "private-space-a",
+			subject: "opaque-user-1",
+			reauthorize: async () => {
+				reauthorizations += 1;
+				return true;
+			},
+			sink,
+		});
+		for (const id of [1, 2]) {
+			await revoker.append({
+				channel: "private-space-a",
+				event: "message",
+				schemaIdentity: "space:message",
+				data: { id },
+			});
+		}
+		const fences = spyOnFences(subscriber);
+		reauthorizations = 0;
+		fences.beforeAdmission = async () => {
+			await revoker.revokeAuthority({
+				channel: "private-space-a",
+				subject: "opaque-user-1",
+				idempotencyKey: "space-a:user-1:readmit-after-cut",
+			});
+		};
+
+		await subscriber.drain();
+
+		expect(sink.frames.map((frame) => frame.data.id)).toEqual([1, 2]);
+		expect(sink.closeReasons).toEqual([]);
+		// The refused admission costs one read and one fresh policy evaluation;
+		// the next frame is admitted directly at the new cached generation.
+		expect(reauthorizations).toBe(1);
+		expect(fences.admissions).toBe(3);
+	});
+
+	test("reconciliation reads each channel's authority fences in one statement", async () => {
+		// Every exact binding used to read its own fence row on every drain.
+		const subscriber = ledger();
+		const publisher = ledger();
+		const bindings = [
+			["private-space-a", "opaque-user-1"],
+			["private-space-a", "opaque-user-1"],
+			["private-space-a", "opaque-user-2"],
+			["private-space-a", "opaque-user-3"],
+			["private-space-a", undefined],
+			["private-space-b", "opaque-user-1"],
+			["private-space-b", "opaque-user-4"],
+		] as const;
+		const sinks = bindings.map((_, index) => createSink(`batched-${index}`));
+		for (const [index, [channelName, subject]] of bindings.entries()) {
+			await subscriber.subscribeLocal({
+				subscriptionId: `batched-${index}`,
+				channel: channelName,
+				...(subject ? { subject, reauthorize: async () => true } : {}),
+				sink: sinks[index]!,
+			});
+		}
+		for (const channelName of ["private-space-a", "private-space-b"]) {
+			await publisher.append({
+				channel: channelName,
+				event: "message",
+				schemaIdentity: "space:message",
+				data: { id: channelName },
+			});
+		}
+		const client = setup.app.db.$client as {
+			query: (...args: unknown[]) => unknown;
+		};
+		const query = client.query;
+		const fenceReads: string[] = [];
+		client.query = function (this: unknown, ...args: unknown[]) {
+			const statement = String(args[0]);
+			if (
+				statement.includes('from "questpie_channel_authority_fence"') &&
+				!/for share/i.test(statement)
+			) {
+				fenceReads.push(statement);
+			}
+			return Reflect.apply(query, this, args);
+		};
+		try {
+			await subscriber.drain();
+		} finally {
+			client.query = query;
+		}
+
+		expect(
+			sinks.map((sink) => sink.frames.map((frame) => frame.data.id)),
+		).toEqual(bindings.map(([channelName]) => [channelName]));
+		// One reconciliation read per channel; frames are still admitted one by
+		// one inside their own fence transactions.
+		expect(fenceReads).toHaveLength(2);
+	});
+
+	test("a cut during reconciliation's policy evaluation cannot publish the stale result", async () => {
+		const subscriber = ledger();
+		const revoker = ledger();
+		const sink = createSink("cut-during-reconciliation");
+		let authorized = true;
+		let evaluations = 0;
+		let block = false;
+		let entered!: () => void;
+		let release!: () => void;
+		const evaluationEntered = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const evaluationRelease = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await subscriber.subscribeLocal({
+			subscriptionId: "space-a:user-1:cut-during-reconciliation",
+			channel: "private-space-a",
+			subject: "opaque-user-1",
+			reauthorize: async () => {
+				evaluations += 1;
+				const result = authorized;
+				if (block) {
+					block = false;
+					entered();
+					await evaluationRelease;
+				}
+				return result;
+			},
+			sink,
+		});
+		// A first cut the subject survives makes the next drain re-evaluate.
+		await revoker.revokeAuthority({
+			channel: "private-space-a",
+			subject: "opaque-user-1",
+			idempotencyKey: "space-a:user-1:role-changed",
+		});
+		await revoker.append({
+			channel: "private-space-a",
+			event: "message",
+			schemaIdentity: "space:message",
+			data: { id: "after-removal" },
+		});
+		evaluations = 0;
+		block = true;
+
+		const draining = subscriber.drain();
+		await evaluationEntered;
+		authorized = false;
+		await revoker.revokeAuthority({
+			channel: "private-space-a",
+			subject: "opaque-user-1",
+			idempotencyKey: "space-a:user-1:removed",
+		});
+		release();
+		await draining;
+
+		expect(sink.frames).toEqual([]);
+		expect(sink.closeReasons).toEqual(["access_revoked"]);
+		// The stale "allowed" is refused at admission; a fresh read forces a
+		// fresh evaluation, which fails closed.
+		expect(evaluations).toBe(2);
+	});
+
+	test("a reconciliation retry re-reads the fence instead of reusing the channel snapshot", async () => {
+		const subscriber = ledger();
+		const revoker = ledger();
+		const sink = createSink("retry-after-snapshot");
+		let evaluations = 0;
+		let block = false;
+		let entered!: () => void;
+		let release!: () => void;
+		const evaluationEntered = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const evaluationRelease = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await subscriber.subscribeLocal({
+			subscriptionId: "space-a:user-1:retry-after-snapshot",
+			channel: "private-space-a",
+			subject: "opaque-user-1",
+			reauthorize: async () => {
+				evaluations += 1;
+				if (block) {
+					block = false;
+					entered();
+					await evaluationRelease;
+				}
+				// A stale snapshot would refuse every admission; stop instead of spinning.
+				return evaluations <= 5;
+			},
+			sink,
+		});
+		await revoker.revokeAuthority({
+			channel: "private-space-a",
+			subject: "opaque-user-1",
+			idempotencyKey: "space-a:user-1:first-cut",
+		});
+		await revoker.append({
+			channel: "private-space-a",
+			event: "message",
+			schemaIdentity: "space:message",
+			data: { id: "still-allowed" },
+		});
+		evaluations = 0;
+		block = true;
+
+		const draining = subscriber.drain();
+		await evaluationEntered;
+		await revoker.revokeAuthority({
+			channel: "private-space-a",
+			subject: "opaque-user-1",
+			idempotencyKey: "space-a:user-1:second-cut",
+		});
+		release();
+		await draining;
+
+		expect(sink.closeReasons).toEqual([]);
+		expect(sink.frames.map((frame) => frame.data.id)).toEqual([
+			"still-allowed",
+		]);
+		expect(evaluations).toBe(2);
+	});
+
 	test("an externally managed transaction commits before exact local reconciliation", async () => {
 		const events = ledger();
 		const sink = createSink("raw-transaction");

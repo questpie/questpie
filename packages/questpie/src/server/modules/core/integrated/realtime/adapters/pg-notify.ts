@@ -44,6 +44,19 @@ const PG_NOTIFY_KEEPALIVE_INITIAL_DELAY_MS = 10_000;
 
 const ignoreError = () => {};
 
+/**
+ * Re-read hints that may share one queued notice. Receivers drain the durable
+ * log and ignore the high-water hint; topology and CRDT wakes carry fields
+ * receivers act on and are never folded.
+ */
+function wakeFoldKey(wake: ChangeWake): string | undefined {
+	if (wake.kind === "outbox-maybe-advanced") return `outbox:${wake.reason}`;
+	if (wake.kind === "channel-events-maybe-advanced") {
+		return `channel-events:${wake.reason}:${wake.channelHash ?? "*"}`;
+	}
+	return undefined;
+}
+
 async function withTimeout<T>(
 	promise: Promise<T>,
 	timeoutMs: number,
@@ -110,6 +123,8 @@ class PgNotifyDriver {
 		resolve: () => void;
 		reject: (error: unknown) => void;
 	}> = [];
+	/** Queued, not yet sent, requests that an identical fold key may join. */
+	private readonly queuedFolds = new Map<string, Promise<void>>();
 
 	constructor(options: PgNotifyDriverOptions = {}) {
 		this.channel = options.channel ?? "questpie_realtime";
@@ -190,12 +205,8 @@ class PgNotifyDriver {
 		}
 		this.notificationHandler = (msg) => {
 			if (!msg.payload) return;
-			let notice: unknown;
-			try {
-				notice = JSON.parse(msg.payload);
-			} catch {
-				return;
-			}
+			const notice = this.decodePayload(msg.payload);
+			if (notice === undefined) return;
 			for (const listener of this.listeners) {
 				listener(notice);
 			}
@@ -294,15 +305,25 @@ class PgNotifyDriver {
 		return () => this.stateHandlers.delete(handler);
 	}
 
-	protected publishPayload(value: unknown): Promise<void> {
-		return this.publishSerializedPayloads([JSON.stringify(value)]);
+	/** One parse for JSON listeners; a payload that is not JSON is not a notice. */
+	protected decodePayload(payload: string): unknown {
+		try {
+			return JSON.parse(payload);
+		} catch {
+			return undefined;
+		}
+	}
+
+	protected publishPayload(value: unknown, foldKey?: string): Promise<void> {
+		return this.publishSerializedPayloads([JSON.stringify(value)], foldKey);
 	}
 
 	protected async publishSerializedPayloads(
 		payloads: readonly string[],
+		foldKey?: string,
 	): Promise<void> {
 		for (const payload of payloads) {
-			const payloadBytes = new TextEncoder().encode(payload).byteLength;
+			const payloadBytes = Buffer.byteLength(payload, "utf8");
 			if (payloadBytes >= PG_NOTIFY_MAX_PAYLOAD_BYTES) {
 				const error = new Error(
 					`${this.constructor.name} payload must be smaller than ${PG_NOTIFY_MAX_PAYLOAD_BYTES} bytes (received ${payloadBytes}).`,
@@ -313,6 +334,11 @@ class PgNotifyDriver {
 		}
 
 		if (this.stopping) throw new Error("pg-notify driver is stopping");
+		// A queued request is sent after this call, so it also carries this
+		// caller's wake: nothing committed before the call can miss it.
+		const folded =
+			foldKey === undefined ? undefined : this.queuedFolds.get(foldKey);
+		if (folded) return folded;
 		if (this.pendingPublishes >= PG_NOTIFY_MAX_PENDING_PUBLISHES) {
 			const error = new Error(
 				`pg-notify publish queue is full (${PG_NOTIFY_MAX_PENDING_PUBLISHES})`,
@@ -325,6 +351,7 @@ class PgNotifyDriver {
 		const settled = new Promise<void>((resolve, reject) => {
 			this.publishQueue.push({ payloads: [...payloads], resolve, reject });
 		});
+		if (foldKey !== undefined) this.queuedFolds.set(foldKey, settled);
 		if (!this.drainingPublishes) {
 			this.drainingPublishes = true;
 			// Collect this turn's requests, then drain whatever accumulated during
@@ -338,6 +365,7 @@ class PgNotifyDriver {
 		try {
 			while (this.publishQueue.length) {
 				const batch = this.publishQueue.splice(0);
+				this.queuedFolds.clear();
 				try {
 					if (this.stopping) throw new Error("pg-notify driver is stopping");
 					await this.sendPayloads(batch.flatMap((request) => request.payloads));
@@ -770,7 +798,7 @@ export class PgNotifyChangeBroker
 		}
 		const normalized = normalizeChangeWake(wake);
 		if (!normalized) throw new Error("Invalid ChangeWake payload");
-		await this.publishPayload(normalized);
+		await this.publishPayload(normalized, wakeFoldKey(normalized));
 	}
 
 	override async stop(): Promise<void> {
@@ -800,9 +828,16 @@ export type PgNotifyEphemeralBrokerOptions = {
 	connectionString: string;
 	/** Isolate applications sharing a database. Default questpie_ephemeral_v1. */
 	channel?: string;
+	/** Rate-limited LISTEN/NOTIFY failures. Defaults to console.error. */
+	onError?: (error: unknown) => void;
 };
 
 class EphemeralNotifyDriver extends PgNotifyDriver {
+	/** Packets stay the serialized strings the ephemeral runtime decodes once. */
+	protected override decodePayload(payload: string): unknown {
+		return payload;
+	}
+
 	send(messages: readonly string[]): Promise<void> {
 		return this.publishSerializedPayloads(messages);
 	}
@@ -820,6 +855,7 @@ export class PgNotifyEphemeralBroker implements EphemeralBroker {
 		this.driver = new EphemeralNotifyDriver({
 			connectionString: options.connectionString,
 			channel: options.channel ?? "questpie_ephemeral_v1",
+			onError: options.onError,
 		});
 	}
 
@@ -828,8 +864,8 @@ export class PgNotifyEphemeralBroker implements EphemeralBroker {
 		onDisconnect: (error: unknown) => void,
 	): Promise<void> {
 		if (this.unsubscribe) return;
-		this.unsubscribe = this.driver.subscribe((value) =>
-			onMessage(JSON.stringify(value)),
+		this.unsubscribe = this.driver.subscribe((message) =>
+			onMessage(message as string),
 		);
 		this.unsubscribeState = this.driver.onStateChange((state) => {
 			if (state === "disconnected")

@@ -29,6 +29,8 @@ export async function saasApp() {
 		max: 12,
 		application_name: "saas-auth",
 	});
+	const lifecycle: Record<string, number> = {};
+
 	const broker = pgNotifyEphemeralBroker({ connectionString: url });
 	const notifyLatency: number[] = [];
 	let notifyFailures = 0;
@@ -276,7 +278,28 @@ export async function saasApp() {
 		},
 		{
 			db: { url, pool: { max: 16 } },
-			realtime: { retentionDays: 0, ephemeral: { broker: observedBroker } },
+			realtime: {
+				retentionDays: 0,
+				ephemeral: { broker: observedBroker },
+				observer: {
+					record(event) {
+						if (
+							event.type === "session.closed" ||
+							event.type === "session.opened"
+						) {
+							const key =
+								event.type === "session.closed"
+									? `${event.type}:${event.reason}`
+									: event.type;
+							lifecycle[key] = (lifecycle[key] ?? 0) + 1;
+						}
+						if (event.type === "topology.lifecycle") {
+							const key = `${event.type}:${event.phase}:${event.outcome}`;
+							lifecycle[key] = (lifecycle[key] ?? 0) + 1;
+						}
+					},
+				},
+			},
 		},
 	);
 	systemChannels = createChannels(channels, setup.app.realtime, {
@@ -323,6 +346,7 @@ export async function saasApp() {
 					p99: notifySorted[Math.floor(notifySorted.length * 0.99)] ?? null,
 					max: notifySorted.at(-1) ?? null,
 				},
+				lifecycle: { ...lifecycle },
 				rss: process.memoryUsage().rss,
 				cpu: process.cpuUsage(),
 				authPoolWaitingMax: pendingMax,

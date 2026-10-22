@@ -3051,28 +3051,24 @@ test("SSE transport handles an ephemeral channel-name revocation without failing
 				type: "channel_ready",
 				data: JSON.stringify({ channelSubscriptionId: `channel:${name}` }),
 			});
-		resources
-			.get("page")!
-			.onEvent({
-				type: "error",
-				data: JSON.stringify({
-					channel: "page",
-					message: "Channel access ended",
-				}),
-			});
+		resources.get("page")!.onEvent({
+			type: "error",
+			data: JSON.stringify({
+				channel: "page",
+				message: "Channel access ended",
+			}),
+		});
 		expect(errors).toEqual(["Channel access ended"]);
 		expect(transport.channelCount).toBe(1);
-		resources
-			.get("activity")!
-			.onEvent({
-				type: "channel_ephemeral",
-				data: JSON.stringify({
-					channel: "activity",
-					event: "changed",
-					eventId: crypto.randomUUID(),
-					data: 42,
-				}),
-			});
+		resources.get("activity")!.onEvent({
+			type: "channel_ephemeral",
+			data: JSON.stringify({
+				channel: "activity",
+				event: "changed",
+				eventId: crypto.randomUUID(),
+				data: 42,
+			}),
+		});
 		await waitFor(() => messages.length === 1);
 		expect(messages).toEqual(["changed"]);
 	} finally {

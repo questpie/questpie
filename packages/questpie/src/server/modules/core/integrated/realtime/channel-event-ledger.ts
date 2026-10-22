@@ -158,7 +158,8 @@ type LocalSubscription = {
 	sink: ClientSink;
 	cursor: number;
 	readSeq: number;
-	pending: ChannelEventRow[];
+	/** Frames encoded once, with this binding's own encoder, at enqueue. */
+	pending: Array<{ seq: number; frame: Uint8Array }>;
 	pendingBytes: number;
 	drainPromise: Promise<void> | null;
 	drainPending: boolean;
@@ -847,14 +848,48 @@ export class ChannelEventLedger {
 		}
 	}
 
+	/**
+	 * Reconcile exact bindings from one fence read per channel.
+	 *
+	 * Every binding used to read its own fence row on every drain, so one wake
+	 * on a channel with 50 local viewers cost 50 reads. The shared read only
+	 * seeds each binding's first comparison: a moved generation still gets a
+	 * fresh policy evaluation and an exact admission, a refused admission
+	 * re-reads, and every frame is still admitted on its own.
+	 */
 	private async reconcileLocalAuthorities(channelHash?: string): Promise<void> {
 		const subscriptions = channelHash
 			? [...(this.subscriptionsByChannel.get(channelHash) ?? [])]
 			: [...this.localSubscriptions.values()];
+		const byChannel = new Map<string, LocalSubscription[]>();
+		for (const subscription of subscriptions) {
+			if (
+				subscription.closed ||
+				!subscription.subject ||
+				subscription.authorityGeneration === undefined ||
+				!subscription.reauthorize
+			) {
+				continue;
+			}
+			const group = byChannel.get(subscription.channelHash) ?? [];
+			group.push(subscription);
+			byChannel.set(subscription.channelHash, group);
+		}
 		await Promise.all(
-			subscriptions.map((subscription) =>
-				this.reconcileLocalAuthority(subscription),
-			),
+			[...byChannel].map(async ([hash, group]) => {
+				const generations = await this.authorityFences.readChannelGenerations(
+					hash,
+					[...new Set(group.map((subscription) => subscription.subject!))],
+				);
+				await Promise.all(
+					group.map((subscription) =>
+						this.reconcileLocalAuthority(
+							subscription,
+							generations.get(subscription.subject!),
+						),
+					),
+				);
+			}),
 		);
 	}
 
@@ -1196,19 +1231,20 @@ export class ChannelEventLedger {
 		subscription: LocalSubscription,
 		row: ChannelEventRow,
 	): boolean {
-		const frameBytes = this.encodeLocalFrame(
+		const frame = this.encodeLocalFrame(
 			this.toLocalFrame(row),
 			subscription.encodeFrame,
-		).byteLength;
+		);
 		if (
 			subscription.pending.length + 1 > this.config.maxBufferedEvents ||
-			subscription.pendingBytes + frameBytes > this.config.maxBufferedBytes
+			subscription.pendingBytes + frame.byteLength >
+				this.config.maxBufferedBytes
 		) {
 			void this.closeLocalSubscription(subscription, "slow_consumer");
 			return false;
 		}
-		subscription.pending.push(row);
-		subscription.pendingBytes += frameBytes;
+		subscription.pending.push({ seq: Number(row.seq), frame });
+		subscription.pendingBytes += frame.byteLength;
 		return true;
 	}
 
@@ -1216,15 +1252,8 @@ export class ChannelEventLedger {
 		subscription: LocalSubscription,
 	): Promise<boolean> {
 		while (!subscription.closed && subscription.pending.length > 0) {
-			const row = subscription.pending[0];
-			const encodedFrame = this.encodeLocalFrame(
-				this.toLocalFrame(row),
-				subscription.encodeFrame,
-			);
-			const result = await this.writeAuthorizedLocalFrame(
-				subscription,
-				encodedFrame,
-			);
+			const { seq, frame } = subscription.pending[0];
+			const result = await this.writeAuthorizedLocalFrame(subscription, frame);
 			if (!result) return false;
 			if (result.status === "busy") {
 				if (
@@ -1238,8 +1267,8 @@ export class ChannelEventLedger {
 				return false;
 			}
 			subscription.pending.shift();
-			subscription.pendingBytes -= encodedFrame.byteLength;
-			subscription.cursor = Number(row.seq);
+			subscription.pendingBytes -= frame.byteLength;
+			subscription.cursor = seq;
 		}
 		return true;
 	}
@@ -1338,11 +1367,12 @@ export class ChannelEventLedger {
 		) {
 			return subscription.sink.write(frame, "ordered-channel-event");
 		}
+		// Admission at the generation this binding was last authorized for needs
+		// no separate read: the fence transaction is the linearization point
+		// either way. Only a refused admission pays for a fresh read and, if the
+		// generation moved, a fresh policy evaluation before the next attempt.
+		let generation = subscription.authorityGeneration;
 		while (!subscription.closed && subscription.active) {
-			const generation = await this.authorityFences.read({
-				channelHash: subscription.channelHash,
-				subject: subscription.subject,
-			});
 			if (generation !== subscription.authorityGeneration) {
 				let authorization: LocalChannelAuthorization = false;
 				try {
@@ -1355,19 +1385,26 @@ export class ChannelEventLedger {
 					return null;
 				}
 			}
+			const expectedGeneration = generation;
 			const admission = await this.authorityFences.admitExpected(
 				{
 					channelHash: subscription.channelHash,
 					subject: subscription.subject,
-					expectedGeneration: generation,
+					expectedGeneration,
 				},
 				{
 					publish: () => {
-						subscription.authorityGeneration = generation;
+						subscription.authorityGeneration = expectedGeneration;
 					},
 				},
 			);
-			if (!admission.admitted) continue;
+			if (!admission.admitted) {
+				generation = await this.authorityFences.read({
+					channelHash: subscription.channelHash,
+					subject: subscription.subject,
+				});
+				continue;
+			}
 			if (subscription.closed || !subscription.active) return null;
 			// The frame was logically admitted at this generation. The sink is
 			// deliberately outside the fence so revocation never waits on I/O.
@@ -1376,8 +1413,10 @@ export class ChannelEventLedger {
 		return null;
 	}
 
+	/** `snapshot` replaces only the first read; an absent row reads (and fails) as before. */
 	private async reconcileLocalAuthority(
 		subscription: LocalSubscription,
+		snapshot?: number,
 	): Promise<void> {
 		if (
 			subscription.closed ||
@@ -1387,11 +1426,15 @@ export class ChannelEventLedger {
 		) {
 			return;
 		}
+		let observed = snapshot;
 		while (!subscription.closed) {
-			const generation = await this.authorityFences.read({
-				channelHash: subscription.channelHash,
-				subject: subscription.subject,
-			});
+			const generation =
+				observed ??
+				(await this.authorityFences.read({
+					channelHash: subscription.channelHash,
+					subject: subscription.subject,
+				}));
+			observed = undefined;
 			if (generation === subscription.authorityGeneration) return;
 			let authorization: LocalChannelAuthorization = false;
 			try {
