@@ -138,6 +138,90 @@ describe("pg-notify change broker", () => {
 		expect(states).toEqual(["connecting", "connected", "disconnected"]);
 	});
 
+	test("batches a concurrent burst in one autocommit without changing wake payloads", async () => {
+		const publisher = new FakePgClient();
+		const broker = new PgNotifyChangeBroker({
+			client: new FakePgClient() as any,
+			publisherClient: publisher as any,
+		});
+		await broker.start({ onWake: () => {}, onError: () => {} });
+		const wakes = Array.from({ length: 50 }, (_, desiredRevision) => ({
+			...topologyWake,
+			desiredRevision,
+		}));
+		await Promise.all(wakes.map((wake) => broker.publish(wake)));
+		expect(publisher.queries).toEqual([
+			{
+				text: "select pg_notify($1, message) from unnest($2::text[]) as message",
+				params: [
+					"questpie_realtime_v2",
+					wakes.map((wake) => JSON.stringify(wake)),
+				],
+			},
+		]);
+		await broker.stop();
+	});
+
+	test("rejects every caller of a failed batch and admits a later publish", async () => {
+		const publisher = new FakePgClient();
+		const query = spyOn(publisher, "query").mockRejectedValueOnce(
+			new Error("batch failed"),
+		);
+		const broker = new PgNotifyChangeBroker({
+			client: new FakePgClient() as any,
+			publisherClient: publisher as any,
+		});
+		await broker.start({
+			onWake: () => {},
+			onError: () => {
+				throw new Error("observer failed");
+			},
+		});
+		const outcomes = await Promise.allSettled(
+			Array.from({ length: 10 }, () => broker.publish(topologyWake)),
+		);
+		expect(outcomes.every((outcome) => outcome.status === "rejected")).toBe(
+			true,
+		);
+		expect(query).toHaveBeenCalledTimes(1);
+		await broker.publish(topologyWake);
+		expect(query).toHaveBeenCalledTimes(2);
+		await broker.stop();
+	});
+
+	test("bounds admission during a stalled batch and drains accumulated work in one query", async () => {
+		const publisher = new FakePgClient();
+		let release!: () => void;
+		let started!: () => void;
+		const queryStarted = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const query = spyOn(publisher, "query").mockImplementationOnce(async () => {
+			started();
+			await blocked;
+		});
+		const broker = new PgNotifyChangeBroker({
+			client: new FakePgClient() as any,
+			publisherClient: publisher as any,
+		});
+		await broker.start({ onWake: () => {}, onError: () => {} });
+		const active = broker.publish(topologyWake);
+		await queryStarted;
+		const queued = Array.from({ length: 255 }, () =>
+			broker.publish(topologyWake),
+		);
+		await expect(broker.publish(topologyWake)).rejects.toThrow("queue is full");
+		expect(query).toHaveBeenCalledTimes(1);
+		release();
+		await Promise.all([active, ...queued]);
+		expect(query).toHaveBeenCalledTimes(2);
+		expect(query.mock.calls[1]![1]![1]).toHaveLength(255);
+		await broker.stop();
+	});
+
 	test("reports unavailable and reconnects the LISTEN connection", async () => {
 		const listener = new FakePgClient();
 		const publisher = new FakePgClient();

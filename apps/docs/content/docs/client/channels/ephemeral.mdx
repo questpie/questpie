@@ -75,7 +75,7 @@ Subscribing to an ephemeral presence channel joins it. The server renews active 
 
 Access is checked at admission, before each delivery batch and every second while idle, using a fresh request context. A denied, failed or timed-out check ends that logical subscription, clears its pending events and removes its presence. Other subscriptions on the shared stream can continue. With the default authorization timeout, an idle revocation is detected within roughly one second plus up to five seconds for a slow check. Change the subscribe rule's underlying access state to revoke access; durable `invalidateAuthority()` fences are unavailable on this lane.
 
-The ephemeral lane issues no ledger, authority-fence or presence writes. The existing shared SSE transport still manages its connection topology and lease in the database. Application authorization rules may also read the database. Ephemeral publishing is independent of application write transactions: a later rollback does not undo a cursor or typing hint.
+The ephemeral lane issues no ledger, authority-fence or presence writes. The existing shared SSE transport still manages one connection-topology row per stream and renews its lease every 10 seconds. This supports cross-pod subscription changes and fences stale connection owners; it does not scale writes with cursor frequency. Application authorization rules may also read the database. Ephemeral publishing is independent of application write transactions: a later rollback does not undo a cursor or typing hint.
 
 ## Limits
 

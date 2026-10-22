@@ -104,6 +104,12 @@ class PgNotifyDriver {
 	private listenerConnectOperation: Promise<void> | null = null;
 	private publishChain: Promise<void> = Promise.resolve();
 	private pendingPublishes = 0;
+	private drainingPublishes = false;
+	private readonly publishQueue: Array<{
+		payloads: readonly string[];
+		resolve: () => void;
+		reject: (error: unknown) => void;
+	}> = [];
 
 	constructor(options: PgNotifyDriverOptions = {}) {
 		this.channel = options.channel ?? "questpie_realtime";
@@ -314,45 +320,70 @@ class PgNotifyDriver {
 			this.reportError("publish_queue", error);
 			throw error;
 		}
+		if (payloads.length === 0) return;
 		this.pendingPublishes += 1;
-		// Serialize NOTIFY queries on the dedicated publisher connection. The
-		// bounded queue protects memory during a burst; durable outbox polling
-		// remains the recovery path if admission rejects a notice.
-		const run = async () => {
-			if (this.stopping) throw new Error("pg-notify driver is stopping");
-			const client = await this.ensurePublisherClient();
-			try {
-				await this.ensurePublisherConnected(client);
-			} catch (error) {
-				// A failed client cannot connect again; the next publish creates one.
-				this.discardOwnedPublisherClient(client);
-				throw error;
-			}
-			if (this.stopping) throw new Error("pg-notify driver is stopping");
-			try {
-				await this.roundTrip(
-					client,
-					this.ownsPublisherClient,
-					payloads.length === 1
-						? "select pg_notify($1, $2)"
-						: "select pg_notify($1, message) from unnest($2::text[]) as message",
-					[this.channel, payloads.length === 1 ? payloads[0] : payloads],
-				);
-			} catch (error) {
-				// A failed or unanswered publish gets a fresh session next time.
-				this.discardOwnedPublisherClient(client);
-				throw error;
-			}
-		};
-		const settled = this.publishChain.then(run, run);
-		this.publishChain = settled.catch(() => {});
+		const settled = new Promise<void>((resolve, reject) => {
+			this.publishQueue.push({ payloads: [...payloads], resolve, reject });
+		});
+		if (!this.drainingPublishes) {
+			this.drainingPublishes = true;
+			// Collect this turn's requests, then drain whatever accumulated during
+			// the last round trip. No timer or extra latency window is needed.
+			this.publishChain = Promise.resolve().then(() => this.drainPublishes());
+		}
+		return settled;
+	}
+
+	private async drainPublishes(): Promise<void> {
 		try {
-			await settled;
-		} catch (error) {
-			this.reportError("notify", error);
-			throw error;
+			while (this.publishQueue.length) {
+				const batch = this.publishQueue.splice(0);
+				try {
+					if (this.stopping) throw new Error("pg-notify driver is stopping");
+					await this.sendPayloads(batch.flatMap((request) => request.payloads));
+					for (const request of batch) request.resolve();
+				} catch (error) {
+					try {
+						this.reportError("notify", error);
+					} catch {
+						// An error observer must not strand callers or the remaining queue.
+					}
+					for (const request of batch) request.reject(error);
+				} finally {
+					this.pendingPublishes -= batch.length;
+				}
+			}
 		} finally {
-			this.pendingPublishes -= 1;
+			this.drainingPublishes = false;
+		}
+	}
+
+	private async sendPayloads(payloads: readonly string[]): Promise<void> {
+		const client = await this.ensurePublisherClient();
+		try {
+			await this.ensurePublisherConnected(client);
+		} catch (error) {
+			// A failed client cannot connect again; the next publish creates one.
+			this.discardOwnedPublisherClient(client);
+			throw error;
+		}
+		if (this.stopping) throw new Error("pg-notify driver is stopping");
+		try {
+			// Every request keeps its payload and completion semantics. Sharing an
+			// autocommit amortizes round trips and the global NOTIFY commit lock for
+			// Channels, query invalidations, topology and CRDT as well as ephemeral.
+			await this.roundTrip(
+				client,
+				this.ownsPublisherClient,
+				payloads.length === 1
+					? "select pg_notify($1, $2)"
+					: "select pg_notify($1, message) from unnest($2::text[]) as message",
+				[this.channel, payloads.length === 1 ? payloads[0] : payloads],
+			);
+		} catch (error) {
+			// A failed or unanswered batch gets a fresh session next time.
+			this.discardOwnedPublisherClient(client);
+			throw error;
 		}
 	}
 

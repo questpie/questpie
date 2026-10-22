@@ -79,7 +79,86 @@ The controlled runs use a 512 MiB tmpfs data directory with `fsync=on` and
 while removing shared-host disk stalls. It is not a production-storage latency
 claim. CPU, Postgres and Bun versions are recorded in each JSON artifact.
 
-## Results
+## Shared PostgreSQL driver and SSE control decision
+
+The shared PG driver now drains concurrent/accumulated publish requests in one
+`unnest` SQL call, without adding a timer. This applies to durable Channels,
+query invalidations, topology and CRDT notices too. All distinct payloads remain
+in FIFO order. Admission stays bounded at 256 requests; each caller settles only
+after its batch completes. A failed batch rejects all its callers; shutdown
+finishes the active batch and cancels queued work. PostgreSQL can fold identical
+payloads within a transaction; these are lossy wake hints, not event receipts.
+Durable ledger/event persistence and replay semantics are unchanged.
+
+This follows the same round-trip reduction principle described in
+[Graphile Worker's batching guidance](https://worker.graphile.org/docs/performance#batching).
+Its local queue also separates retrieving work from distributing it locally.
+QUESTPIE already uses a durable ledger plus notice-only wakes for ordered data;
+ephemeral values instead travel in coalesced broker packets. Graphile's job
+throughput numbers are not a benchmark of QUESTPIE or ephemeral fan-out.
+[PostgreSQL's NOTIFY contract](https://www.postgresql.org/docs/17/sql-notify.html)
+explains commit-time delivery and duplicate folding. Notifications remain on
+separate autocommit connections, outside application writing transactions.
+
+A broker-only saturation check sends 10,000 distinct topology notices at fixed
+concurrency 128, with two independent PG broker instances in one Bun process.
+It waits for all notices to reach the listener and uses `pg_stat_statements`
+for actual SQL counts. The previous driver took 1505 ms (6,644 notices/s,
+10,000 SQL calls); the batched driver took 92 ms (108,183 notices/s, 79 SQL
+calls). Delivery p95/p99 fell from 23.6/26.9 to 2.1/3.8 ms. This local tmpfs
+microbenchmark verifies a concrete batching gain, not a production capacity or
+end-to-end application throughput claim.
+
+The 50-cursor/10-page/10 Hz workload was also repeated before and after the
+shared-driver change, under the same four concurrent writers:
+
+| Lane            | NOTIFY SQL calls | NOTIFY payloads | Delivery p95 / p99 | Outcome                                                                      |
+| --------------- | ---------------: | --------------: | -----------------: | ---------------------------------------------------------------------------- |
+| Channels before |            4,976 |           4,976 |   3,074 / 3,129 ms | 24 failed notices; all 50 sinks closed                                       |
+| Channels after  |            1,334 |           5,000 |   1,864 / 1,888 ms | No failed notices or closes; 4,616/5,000 event IDs observed by sample cutoff |
+| Ephemeral after |               97 |             970 |         46 / 56 ms | No failures or closes; zero ledger rows                                      |
+
+Channels still incurs ledger, fencing and ordered-delivery work; its measured
+latency/backlog is unsuitable for cursors even after the broker improvement.
+Ephemeral averaged 92 NOTIFY/s including presence and the drain tail. Raw JSON
+records broker API calls separately from server-side SQL calls: batching makes
+these different quantities. The before/after comparison is one sequential pair
+on a shared host, not a statistically controlled capacity study.
+
+**Keep the shared SSE topology row.** A separate measurement opens 50 real
+Fetch-handler SSE streams with memory presence, real authorization reads, 50
+cursors at 10 Hz on ten pages, and four concurrent SQL writers for 21 seconds.
+All 50 streams stayed open. It inserted 50 topology rows on admission and
+performed 100 lease UPDATEs (two default ten-second renewals per stream):
+6.18 ms total server SQL execution time, or about 0.062 ms per update. Opening
+all 50 streams took 177 ms; topology INSERT SQL accounted for 6.01 ms. The
+15-second reconciliation pass issued 50 SELECTs (1.75 ms SQL execution).
+It wrote zero event or presence rows. Delivery p95/p99 was 103/113 ms and
+concurrent writes averaged 829/s with p95 2.62 ms. SQL execution timings exclude
+network/commit round trips; the full stream measurement includes their effect.
+
+Thus 50 open streams pay roughly five lease writes/s, independent of cursor
+frequency, while the broker sends roughly ten autocommit batches/s. The row
+fences stale connection owners and lets topology POSTs arriving on another pod
+update the owner. Removing it would require another cross-pod control and
+fencing protocol, or sticky routing with weaker rollout/failover behavior. A
+pure in-memory owner map would not preserve those guarantees. The observed
+cost does not justify that tradeoff. This decision preserves the existing
+control plane and removes high-frequency event/presence DML from the data path.
+The Fetch benchmark executes the real handler and response readers in process;
+it excludes TCP/browser rendering and Autopilot's actual ACL query cost. The
+separate cross-process benchmark covers PG fan-out between OS processes.
+
+Raw evidence and runnable benchmarks:
+
+- [Common PG before](ephemeral-broadcast/common-pg-before.json) / [after](ephemeral-broadcast/common-pg-after.json)
+- [Broker saturation](ephemeral-broadcast/pg-broker-throughput.json): `packages/questpie/bench/pg-notify-throughput.ts`
+- [Full shared SSE/control path](ephemeral-broadcast/shared-sse-topology.json): `packages/questpie/bench/ephemeral-sse-topology.ts`
+
+## Initial lane comparison
+
+The following earlier runs predate common-driver batching. They remain as
+baseline evidence; the current Channels behavior is reported above.
 
 The matched 10 Hz workload corresponds to the recommended 100 ms browser POST
 throttle: 50 cursors offer about 500 updates/s.
@@ -130,8 +209,9 @@ Raw evidence:
 - [100 cursors, 20 Hz, tmpfs](ephemeral-broadcast/100-cursors-20hz-tmpfs.json)
 - [Disk-backed diagnostic](ephemeral-broadcast/50-cursors-20hz-disk.json)
 
-The headline artifact pins SHA-256 hashes of the runtime, broker interface and
-PG driver alongside the source base. No baseline files were raised.
+The initial headline artifact pins SHA-256 hashes of the runtime, broker
+interface and pre-batching PG driver alongside the source base. The newer
+artifacts identify the shared-driver variant separately. No baseline files were raised.
 
 ## Reproduce
 
@@ -144,6 +224,12 @@ QUESTPIE_MIGRATIONS_SILENT=1 \
 QUESTPIE_EPHEMERAL_DATABASE_URL="$EPHEMERAL_TEST_DATABASE_URL" \
 bun packages/questpie/bench/ephemeral-broadcast.ts
 ```
+
+For actual NOTIFY SQL counts and the two additional benchmarks, preload
+`pg_stat_statements` in the disposable server and run
+`CREATE EXTENSION pg_stat_statements` before benchmarking. Without it the main
+benchmark still runs, with SQL counters reported as null. Run the SSE and broker
+benchmarks separately from tests or other load generators.
 
 Optional benchmark inputs are `EPHEMERAL_BENCH_DURATION_MS`,
 `EPHEMERAL_BENCH_INPUT_HZ` (default 10), `EPHEMERAL_BENCH_CURSORS` (default 50),

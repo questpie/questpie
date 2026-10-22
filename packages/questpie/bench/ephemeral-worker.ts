@@ -159,7 +159,10 @@ process.on("message", async (message: any) => {
 			await Promise.all(pending);
 			await Bun.sleep(500);
 			const drainDeadline = Date.now() + 5000;
-			while (pendingFanout && Date.now() < drainDeadline) await Bun.sleep(20);
+			for (;;) {
+				if (!pendingFanout || Date.now() >= drainDeadline) break;
+				await Bun.sleep(20);
+			}
 			process.send?.({
 				request: message.request,
 				offered,

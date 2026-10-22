@@ -1,0 +1,31 @@
+{
+	"implementation": {
+		"date": "2026-10-22",
+		"baselineCommit": "0f04557367fc5a34099db87bc9fddb75343f104f",
+		"finalDriverSha256": "f0468894fac5be27ee9777067e17867493b975f0ffe8f921a8b6eaeeddd90c61",
+		"storage": "PostgreSQL 17, 512 MiB tmpfs, fsync=on, synchronous_commit=on; pg_stat_statements preloaded",
+		"sourceNote": "Normal publish path as measured. Final driver additionally isolates exceptions from error observers."
+	},
+	"before": {
+		"count": 10000,
+		"concurrency": 128,
+		"received": 10000,
+		"elapsedMs": 1505.0535570000002,
+		"notifiesPerSecond": 6644.281828703056,
+		"sqlCalls": 10000,
+		"sqlRows": 10000,
+		"latencyP95Ms": 23.589893999999987,
+		"latencyP99Ms": 26.888781999999992
+	},
+	"after": {
+		"count": 10000,
+		"concurrency": 128,
+		"received": 10000,
+		"elapsedMs": 92.43618,
+		"notifiesPerSecond": 108182.74835675815,
+		"sqlCalls": 79,
+		"sqlRows": 10000,
+		"latencyP95Ms": 2.1172380000000146,
+		"latencyP99Ms": 3.8420229999999975
+	}
+}

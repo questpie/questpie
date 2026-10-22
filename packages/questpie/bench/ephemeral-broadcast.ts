@@ -16,6 +16,21 @@ const cursors = Number(process.env.EPHEMERAL_BENCH_CURSORS ?? 50);
 const inputHz = Number(process.env.EPHEMERAL_BENCH_INPUT_HZ ?? 10);
 const pool = new pg.Pool({ connectionString: url, max: 8 });
 await pool.query("create extension if not exists pg_trgm");
+// Optional server-side evidence: preload pg_stat_statements in the disposable
+// benchmark server. Driver batching makes publish() calls differ from SQL calls.
+const hasStatementStats = (
+	await pool.query(
+		"select exists(select 1 from pg_extension where extname='pg_stat_statements') as enabled",
+	)
+).rows[0].enabled;
+async function notifySqlStats() {
+	if (!hasStatementStats) return null;
+	return (
+		await pool.query(
+			"select coalesce(sum(calls),0)::float8 as calls, coalesce(sum(rows),0)::float8 as notifications from pg_stat_statements where dbid=(select oid from pg_database where datname=current_database()) and query like 'select pg_notify(%'",
+		)
+	).rows[0] as { calls: number; notifications: number };
+}
 const setup = await buildMockApp({}, { db: { url } });
 await runTestDbMigrations(setup.app);
 await setup.cleanup();
@@ -119,6 +134,7 @@ try {
 				);
 				await subscriber.send({ operation: "subscribe", cursors });
 			}
+			const notifyBefore = await notifySqlStats();
 			const before = await pool.query(
 				"select count(*)::int as count from questpie_channel_event",
 			);
@@ -144,6 +160,7 @@ try {
 			const after = await pool.query(
 				"select count(*)::int as count from questpie_channel_event",
 			);
+			const notifyAfter = await notifySqlStats();
 			const errors = [
 				...(publisher?.messages ?? []),
 				...(subscriber?.messages ?? []),
@@ -159,9 +176,17 @@ try {
 				cursorNotifies: publication.notifies ?? 0,
 				presenceNotifies: delivery.notifies ?? 0,
 				notifies: (publication.notifies ?? 0) + (delivery.notifies ?? 0),
-				fanoutRoundTrips:
+				brokerPublishCalls:
 					(publication.fanoutRoundTrips ?? 0) +
 					(delivery.fanoutRoundTrips ?? 0),
+				notifySqlCalls:
+					notifyBefore && notifyAfter
+						? notifyAfter.calls - notifyBefore.calls
+						: null,
+				notifySqlRows:
+					notifyBefore && notifyAfter
+						? notifyAfter.notifications - notifyBefore.notifications
+						: null,
 				failedFanout:
 					(publication.failedFanout ?? 0) + (delivery.failedFanout ?? 0),
 				pendingFanout:
