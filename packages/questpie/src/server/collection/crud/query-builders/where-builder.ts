@@ -25,14 +25,20 @@ import { mapColumnsInSQLToAlias } from "drizzle-orm/alias";
 import { alias, type AnyPgColumn, type PgTable } from "drizzle-orm/pg-core";
 
 import type {
+	AccessWhere,
 	CollectionBuilderState,
 	RelationConfig,
 } from "#questpie/server/collection/builder/types.js";
-import { isAccessWhere } from "#questpie/server/collection/crud/shared/access-control.js";
+import {
+	isAccessWhere,
+	RELATION_READ_ACCESS,
+	type RelationReadAccess,
+} from "#questpie/server/collection/crud/shared/access-control.js";
 import {
 	getColumn,
 	getDb,
 } from "#questpie/server/collection/crud/shared/index.js";
+import { readAccessOf } from "#questpie/server/collection/crud/shared/relation-read.js";
 import type {
 	CRUDContext,
 	Where,
@@ -42,6 +48,7 @@ import { ApiError } from "#questpie/server/errors/base.js";
 import type { FieldState } from "#questpie/server/fields/field-class-types.js";
 import type { Field } from "#questpie/server/fields/field-class.js";
 import type { OperatorFn } from "#questpie/server/fields/types.js";
+import { DEFAULT_LOCALE } from "#questpie/shared/constants.js";
 import {
 	parseCalendarDate,
 	parseRfc3339Instant,
@@ -195,6 +202,46 @@ function normalizeTemporalWhereValue(
 	return normalizeOne(value);
 }
 
+// Keys that classify a filter value as field operators or relation
+// quantifiers. Shared by the compiler and `authorizeRelationPredicates`.
+const STANDARD_FIELD_OPERATORS = [
+	"eq",
+	"ne",
+	"not",
+	"gt",
+	"gte",
+	"lt",
+	"lte",
+	"in",
+	"notIn",
+	"like",
+	"ilike",
+	"notLike",
+	"notIlike",
+	"contains",
+	"startsWith",
+	"endsWith",
+	"isNull",
+	"isNotNull",
+	"arrayOverlaps",
+	"arrayContained",
+	"arrayContains",
+	// JSONB structural ops (select multi, object, array)
+	"containsAll",
+	"containsAny",
+	"containedBy",
+	"hasKey",
+	"hasKeys",
+	"hasAnyKeys",
+	"pathEquals",
+	"jsonPath",
+	"isEmpty",
+	"isNotEmpty",
+	"length",
+	"count",
+];
+const RELATION_QUANTIFIERS = ["some", "none", "every", "is", "isNot"];
+
 /**
  * Build WHERE clause from WHERE object
  *
@@ -308,43 +355,6 @@ export function buildWhereClause(
 			// Use the field's actual operator keys (if available) in addition to the
 			// standard hardcoded list, so custom operators (e.g., email.domain) are
 			// correctly recognized as field operators.
-			const standardFieldOperators = [
-				"eq",
-				"ne",
-				"not",
-				"gt",
-				"gte",
-				"lt",
-				"lte",
-				"in",
-				"notIn",
-				"like",
-				"ilike",
-				"notLike",
-				"notIlike",
-				"contains",
-				"startsWith",
-				"endsWith",
-				"isNull",
-				"isNotNull",
-				"arrayOverlaps",
-				"arrayContained",
-				"arrayContains",
-				// JSONB structural ops (select multi, object, array)
-				"containsAll",
-				"containsAny",
-				"containedBy",
-				"hasKey",
-				"hasKeys",
-				"hasAnyKeys",
-				"pathEquals",
-				"jsonPath",
-				"isEmpty",
-				"isNotEmpty",
-				"length",
-				"count",
-			];
-			const relationQuantifiers = ["some", "none", "every", "is", "isNot"];
 			const valueKeys = Object.keys(value as Record<string, any>);
 			if (
 				valueKeys.length === 0 &&
@@ -358,11 +368,11 @@ export function buildWhereClause(
 			// A key is a field operator if it's in the standard list OR in the field's operator map
 			const hasFieldOperators = valueKeys.some(
 				(k) =>
-					standardFieldOperators.includes(k) ||
+					STANDARD_FIELD_OPERATORS.includes(k) ||
 					(fieldColumnOps && k in fieldColumnOps),
 			);
 			const hasRelationQuantifiers = valueKeys.some((k) =>
-				relationQuantifiers.includes(k),
+				RELATION_QUANTIFIERS.includes(k),
 			);
 
 			// If value contains field operators, treat as field filter
@@ -620,6 +630,166 @@ export function buildOperatorCondition(
 }
 
 /**
+ * Whether `where[key]` filters through a relation, exactly as
+ * `buildWhereClause` classifies it.
+ */
+function isRelationFilter(
+	key: string,
+	value: unknown,
+	state: CollectionBuilderState,
+): value is Record<string, unknown> {
+	if (
+		!state.relations?.[key] ||
+		typeof value !== "object" ||
+		value === null ||
+		Array.isArray(value)
+	) {
+		return false;
+	}
+	const fieldColumnOps = (
+		state.fieldDefinitions?.[key] as Field<FieldState> | undefined
+	)?.getOperators?.()?.column;
+	const valueKeys = Object.keys(value);
+	const hasFieldOperators = valueKeys.some(
+		(k) =>
+			STANDARD_FIELD_OPERATORS.includes(k) ||
+			(fieldColumnOps && k in fieldColumnOps),
+	);
+	return (
+		!hasFieldOperators ||
+		valueKeys.some((k) => RELATION_QUANTIFIERS.includes(k))
+	);
+}
+
+type RelationSlot = "is" | "isNot" | "some" | "none" | "every";
+type RelationRead = { slot: RelationSlot; where: unknown; key?: string };
+type RelationReadDecisions = Partial<Record<RelationSlot, RelationReadAccess>>;
+
+/**
+ * The reads a relation filter compiles to: one EXISTS over the related rows
+ * per slot, negated for `isNot`, `none` and `every`. `key` is the filter key
+ * the slot's where came from; a plain nested filter has none.
+ */
+function relationReads(
+	relation: RelationConfig,
+	filter: Record<string, any>,
+): RelationRead[] {
+	const plain = !RELATION_QUANTIFIERS.some((key) => key in filter);
+	const first = (slot: RelationSlot, keys: string[]): RelationRead[] => {
+		const key = keys.find((candidate) => filter[candidate] != null);
+		if (key) return [{ slot, where: filter[key], key }];
+		return plain ? [{ slot, where: filter }] : [];
+	};
+	const direct = (slot: RelationSlot): RelationRead[] =>
+		filter[slot] === undefined
+			? []
+			: [{ slot, where: filter[slot], key: slot }];
+	if (relation.type === "one") {
+		return [...first("is", ["is", "some"]), ...direct("isNot")];
+	}
+	if (relation.type === "many" || relation.type === "manyToMany") {
+		return [...first("some", ["some"]), ...direct("none"), ...direct("every")];
+	}
+	return [];
+}
+
+/** The related rows a slot's EXISTS reads: `every` tests the rows failing it. */
+function slotWhere(slot: RelationSlot, where: unknown): Where {
+	return (slot === "every" ? { NOT: where } : where) as Where;
+}
+
+/**
+ * Resolve the caller's read access to the target (and junction) rows of every
+ * relation predicate in a CALLER-authored where, before it is compiled. The
+ * compiler restricts each relation set to that access before `some`, `none`,
+ * `every`, `is` or `isNot` quantify over it, so a target the caller may not
+ * read is an empty set rather than an oracle over its rows.
+ *
+ * Each read is decided by the target's own rule with that read's concrete
+ * options (`{ where }`), never shared across predicates: a rule may branch on
+ * `input.where`.
+ *
+ * Access predicates (`ACCESS_WHERE`) are server-authored and stay untouched:
+ * they may express cross-resource authority without consulting the targets'
+ * rules. System mode is not gated.
+ */
+export async function authorizeRelationPredicates(
+	where: Where | undefined,
+	options: {
+		state: CollectionBuilderState;
+		app?: Questpie<any>;
+		context: CRUDContext;
+	},
+): Promise<Where | undefined> {
+	const { app, context } = options;
+	if (!where || !app || context.accessMode === "system") return where;
+
+	const authorizeRelation = async (
+		relation: RelationConfig,
+		filter: Record<string, unknown>,
+	): Promise<Record<string, unknown>> => {
+		const targetCrud = app.collections[relation.collection];
+		const throughCrud =
+			relation.type === "manyToMany" && relation.through
+				? app.collections[relation.through]
+				: undefined;
+		const targetState = targetCrud["~internalState"];
+		let authorized: Record<string, unknown> = { ...filter };
+		const decisions: RelationReadDecisions = {};
+		for (const read of relationReads(relation, filter)) {
+			const access: RelationReadAccess = {
+				target: relation.inheritAccess
+					? true
+					: await readAccessOf(targetCrud)(context, {
+							where: slotWhere(read.slot, read.where),
+						}),
+			};
+			if (throughCrud) {
+				access.through = relation.inheritAccess
+					? true
+					: await readAccessOf(throughCrud)(context, { where: {} });
+			}
+			decisions[read.slot] = access;
+			if (access.target === false || access.through === false) continue;
+
+			const nested = await authorize(read.where as Where, targetState);
+			if (read.key) authorized[read.key] = nested;
+			else authorized = nested as Record<string, unknown>;
+		}
+		return Object.defineProperty(authorized, RELATION_READ_ACCESS, {
+			value: decisions,
+		});
+	};
+
+	const authorize = async (
+		node: Where,
+		state: CollectionBuilderState,
+	): Promise<Where> => {
+		if (!node || typeof node !== "object" || isAccessWhere(node)) return node;
+		const authorized: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(node)) {
+			if ((key === "AND" || key === "OR") && Array.isArray(value)) {
+				authorized[key] = await Promise.all(
+					value.map((entry) => authorize(entry, state)),
+				);
+			} else if (key === "NOT" && typeof value === "object") {
+				authorized[key] = await authorize(value as Where, state);
+			} else if (isRelationFilter(key, value, state)) {
+				authorized[key] = await authorizeRelation(
+					state.relations![key]!,
+					value,
+				);
+			} else {
+				authorized[key] = value;
+			}
+		}
+		return authorized as Where;
+	};
+
+	return authorize(where, options.state);
+}
+
+/**
  * Options for building relation WHERE clauses
  */
 interface BuildRelationWhereOptions {
@@ -639,6 +809,8 @@ interface BuildRelationWhereOptions {
 	parentRecord?: Readonly<Record<string, unknown>>;
 	/** Unique relation aliases for a single-record access evaluation. */
 	relationAliasDepth?: number;
+	/** The caller's read access to this relation's rows (caller predicates only). */
+	readAccess?: RelationReadAccess;
 }
 
 function relationQueryTarget(
@@ -716,7 +888,7 @@ export function buildRelationWhereClause(
 	relationValue: any,
 	options: BuildRelationWhereOptions,
 ): SQL | undefined {
-	const { app, context: _context } = options;
+	const { app } = options;
 
 	if (!app) return undefined;
 
@@ -730,68 +902,40 @@ export function buildRelationWhereClause(
 	}
 
 	const relationFilter = normalizedValue as Record<string, any>;
-	const hasQuantifiers = ["some", "none", "every", "is", "isNot"].some(
-		(key) => key in relationFilter,
-	);
+	const decisions = options.failClosedAccess
+		? undefined
+		: (relationFilter as { [RELATION_READ_ACCESS]?: RelationReadDecisions })[
+				RELATION_READ_ACCESS
+			];
+	const unauthorized = () =>
+		new Error(
+			`Relation predicate on '${options.parentState.name}' reached SQL without the caller's read access to '${relation.collection}'`,
+		);
+	if (
+		!options.failClosedAccess &&
+		!decisions &&
+		options.context?.accessMode === "user"
+	) {
+		throw unauthorized();
+	}
 
 	const clauses: SQL[] = [];
-
-	if (relation.type === "one") {
-		const isWhere =
-			relationFilter.is ??
-			relationFilter.some ??
-			(hasQuantifiers ? undefined : relationFilter);
-		const isNotWhere = relationFilter.isNot;
-
-		if (isWhere !== undefined) {
-			const existsClause = buildRelationExistsClause(
-				relation,
-				isWhere,
-				options,
-			);
-			if (existsClause) clauses.push(existsClause);
+	for (const { slot, where } of relationReads(relation, relationFilter)) {
+		let readOptions = options;
+		if (decisions) {
+			const readAccess = decisions[slot];
+			if (!readAccess) throw unauthorized();
+			readOptions = { ...options, readAccess };
 		}
-
-		if (isNotWhere !== undefined) {
-			const existsClause = buildRelationExistsClause(
-				relation,
-				isNotWhere,
-				options,
+		const existsClause = buildRelationExistsClause(
+			relation,
+			slotWhere(slot, where),
+			readOptions,
+		);
+		if (existsClause) {
+			clauses.push(
+				slot === "is" || slot === "some" ? existsClause : not(existsClause),
 			);
-			if (existsClause) clauses.push(not(existsClause));
-		}
-	} else if (relation.type === "many" || relation.type === "manyToMany") {
-		const someWhere =
-			relationFilter.some ?? (hasQuantifiers ? undefined : relationFilter);
-		const noneWhere = relationFilter.none;
-		const everyWhere = relationFilter.every;
-
-		if (someWhere !== undefined) {
-			const existsClause = buildRelationExistsClause(
-				relation,
-				someWhere,
-				options,
-			);
-			if (existsClause) clauses.push(existsClause);
-		}
-
-		if (noneWhere !== undefined) {
-			const existsClause = buildRelationExistsClause(
-				relation,
-				noneWhere,
-				options,
-			);
-			if (existsClause) clauses.push(not(existsClause));
-		}
-
-		if (everyWhere !== undefined) {
-			const negatedWhere = { NOT: everyWhere } as Where;
-			const existsClause = buildRelationExistsClause(
-				relation,
-				negatedWhere,
-				options,
-			);
-			if (existsClause) clauses.push(not(existsClause));
 		}
 	}
 
@@ -811,6 +955,13 @@ export function buildRelationExistsClause(
 	relationWhere: Where | undefined,
 	options: BuildRelationWhereOptions,
 ): SQL | undefined {
+	// A relation the caller may not read is empty: nothing exists in it.
+	if (
+		options.readAccess?.target === false ||
+		options.readAccess?.through === false
+	) {
+		return sql`false`;
+	}
 	switch (relation.type) {
 		case "one":
 			return buildBelongsToExistsClause(relation, relationWhere, options);
@@ -908,23 +1059,39 @@ export function buildBelongsToExistsClause(
 
 	const whereConditions: SQL[] = [...joinConditions];
 
+	const translations = relationTranslations(
+		relatedTable,
+		relatedState,
+		relatedCrud["~internalI18nTable"],
+		[relationWhere, options.readAccess?.target],
+		`qp_relation_${options.relationAliasDepth ?? 0}_i18n`,
+		context,
+	);
+
 	if (relationWhere) {
-		// Note: For relation subqueries, we don't use i18n fallback (useI18n: false)
-		// The related collection's i18n table is passed but not used for WHERE
 		const nestedClause = buildWhereClause(relationWhere, {
 			table: relatedTable,
 			state: relatedState,
-			i18nCurrentTable: relatedCrud["~internalI18nTable"],
-			i18nFallbackTable: null,
+			i18nCurrentTable: translations.current,
+			i18nFallbackTable: translations.fallback,
 			context,
 			app,
-			useI18n: false,
+			useI18n: translations.current !== null,
 			db: options.db,
 			failClosedAccess: options.failClosedAccess,
 			relationAliasDepth: (options.relationAliasDepth ?? 0) + 1,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
+
+	const accessClause = readAccessClause(
+		options.readAccess?.target,
+		relatedTable,
+		relatedState,
+		translations,
+		options,
+	);
+	if (accessClause) whereConditions.push(accessClause);
 
 	if (relatedState.options?.softDelete) {
 		const deletedAtCol = getColumn(relatedTable, "deletedAt");
@@ -934,12 +1101,12 @@ export function buildBelongsToExistsClause(
 	}
 
 	const db = getDb(options.db, context);
-	const subquery = db
-		.select({ one: sql`1` })
-		.from(relatedTable)
-		.where(and(...whereConditions));
+	let subquery = db.select({ one: sql`1` }).from(relatedTable);
+	for (const [table, on] of translations.joins) {
+		subquery = subquery.leftJoin(table, on);
+	}
 
-	return sql`exists (${subquery})`;
+	return sql`exists (${subquery.where(and(...whereConditions))})`;
 }
 
 /**
@@ -1002,22 +1169,39 @@ export function buildHasManyExistsClause(
 
 	const whereConditions: SQL[] = [...joinConditions];
 
+	const translations = relationTranslations(
+		relatedTable,
+		relatedState,
+		relatedCrud["~internalI18nTable"],
+		[relationWhere, options.readAccess?.target],
+		`qp_relation_${options.relationAliasDepth ?? 0}_i18n`,
+		context,
+	);
+
 	if (relationWhere) {
-		// Note: For relation subqueries, we don't use i18n fallback (useI18n: false)
 		const nestedClause = buildWhereClause(relationWhere, {
 			table: relatedTable,
 			state: relatedState,
-			i18nCurrentTable: relatedCrud["~internalI18nTable"],
-			i18nFallbackTable: null,
+			i18nCurrentTable: translations.current,
+			i18nFallbackTable: translations.fallback,
 			context,
 			app,
-			useI18n: false,
+			useI18n: translations.current !== null,
 			db: options.db,
 			failClosedAccess: options.failClosedAccess,
 			relationAliasDepth: (options.relationAliasDepth ?? 0) + 1,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
+
+	const accessClause = readAccessClause(
+		options.readAccess?.target,
+		relatedTable,
+		relatedState,
+		translations,
+		options,
+	);
+	if (accessClause) whereConditions.push(accessClause);
 
 	if (relatedState.options?.softDelete) {
 		const deletedAtCol = getColumn(relatedTable, "deletedAt");
@@ -1027,12 +1211,12 @@ export function buildHasManyExistsClause(
 	}
 
 	const db = getDb(options.db, context);
-	const subquery = db
-		.select({ one: sql`1` })
-		.from(relatedTable)
-		.where(and(...whereConditions));
+	let subquery = db.select({ one: sql`1` }).from(relatedTable);
+	for (const [table, on] of translations.joins) {
+		subquery = subquery.leftJoin(table, on);
+	}
 
-	return sql`exists (${subquery})`;
+	return sql`exists (${subquery.where(and(...whereConditions))})`;
 }
 
 /**
@@ -1091,21 +1275,57 @@ export function buildManyToManyExistsClause(
 		),
 	];
 
+	const depth = options.relationAliasDepth ?? 0;
+	const translations = relationTranslations(
+		relatedTable,
+		relatedState,
+		relatedCrud["~internalI18nTable"],
+		[relationWhere, options.readAccess?.target],
+		`qp_relation_${depth}_i18n`,
+		context,
+	);
+	const throughTranslations = relationTranslations(
+		junctionTable,
+		junctionState,
+		junctionCrud["~internalI18nTable"],
+		[options.readAccess?.through],
+		`qp_relation_${depth}_through_i18n`,
+		context,
+	);
+
 	if (relationWhere) {
-		// Note: For relation subqueries, we don't use i18n fallback (useI18n: false)
 		const nestedClause = buildWhereClause(relationWhere, {
 			table: relatedTable,
 			state: relatedState,
-			i18nCurrentTable: relatedCrud["~internalI18nTable"],
-			i18nFallbackTable: null,
+			i18nCurrentTable: translations.current,
+			i18nFallbackTable: translations.fallback,
 			context,
 			app,
-			useI18n: false,
+			useI18n: translations.current !== null,
 			db: options.db,
 			failClosedAccess: options.failClosedAccess,
-			relationAliasDepth: (options.relationAliasDepth ?? 0) + 1,
+			relationAliasDepth: depth + 1,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
+	}
+
+	for (const accessClause of [
+		readAccessClause(
+			options.readAccess?.target,
+			relatedTable,
+			relatedState,
+			translations,
+			options,
+		),
+		readAccessClause(
+			options.readAccess?.through,
+			junctionTable,
+			junctionState,
+			throughTranslations,
+			options,
+		),
+	]) {
+		if (accessClause) whereConditions.push(accessClause);
 	}
 
 	if (junctionState.options?.softDelete) {
@@ -1123,13 +1343,117 @@ export function buildManyToManyExistsClause(
 	}
 
 	const db = getDb(options.db, context);
-	const subquery = db
+	let subquery = db
 		.select({ one: sql`1` })
 		.from(junctionTable)
-		.innerJoin(relatedTable, eq(junctionTargetColumn, relatedColumn))
-		.where(and(...whereConditions));
+		.innerJoin(relatedTable, eq(junctionTargetColumn, relatedColumn));
+	for (const [table, on] of [
+		...translations.joins,
+		...throughTranslations.joins,
+	]) {
+		subquery = subquery.leftJoin(table, on);
+	}
 
-	return sql`exists (${subquery})`;
+	return sql`exists (${subquery.where(and(...whereConditions))})`;
+}
+
+/**
+ * The caller's read access to one table of a relation set, compiled over that
+ * table as the trusted access predicate it is.
+ */
+function readAccessClause(
+	access: boolean | AccessWhere | undefined,
+	table: PgTable,
+	state: CollectionBuilderState,
+	translations: RelationTranslations,
+	options: BuildRelationWhereOptions,
+): SQL | undefined {
+	if (access === undefined || typeof access === "boolean") return undefined;
+	return buildWhereClause(access, {
+		table,
+		state,
+		i18nCurrentTable: translations.current,
+		i18nFallbackTable: translations.fallback,
+		context: options.context,
+		app: options.app,
+		useI18n: translations.current !== null,
+		db: options.db,
+		failClosedAccess: true,
+		relationAliasDepth: (options.relationAliasDepth ?? 0) + 1,
+	});
+}
+
+type RelationTranslations = {
+	current: PgTable | null;
+	fallback: PgTable | null;
+	joins: Array<[PgTable, SQL | undefined]>;
+};
+
+/**
+ * Translation joins for one relation subquery, built like the main read's,
+ * when a predicate compiled over the subquery's table names one of its
+ * localized fields. Without them the field would compile to a bare column
+ * name, which SQL resolves against an OUTER table that has one.
+ */
+function relationTranslations(
+	table: PgTable,
+	state: CollectionBuilderState,
+	i18nTable: PgTable | null,
+	wheres: unknown[],
+	aliasName: string,
+	context: CRUDContext | undefined,
+): RelationTranslations {
+	if (!wheres.some((where) => namesLocalizedField(where, state))) {
+		return { current: null, fallback: null, joins: [] };
+	}
+	if (!i18nTable) {
+		throw new Error(
+			`Cannot compile localized relation predicate '${state.name}' without its translation table`,
+		);
+	}
+	const locale = context?.locale ?? context?.defaultLocale ?? DEFAULT_LOCALE;
+	const defaultLocale = context?.defaultLocale ?? DEFAULT_LOCALE;
+	const id = getColumn(table, "id")!;
+	const translation = (
+		name: string,
+		translationLocale: string,
+	): [PgTable, SQL | undefined] => {
+		const translated = alias(i18nTable, name);
+		return [
+			translated,
+			and(
+				eq(getColumn(translated, "parentId")!, id),
+				eq(getColumn(translated, "locale")!, translationLocale),
+			),
+		];
+	};
+	const current = translation(aliasName, locale);
+	const fallback =
+		context?.localeFallback !== false && locale !== defaultLocale
+			? translation(`${aliasName}_fallback`, defaultLocale)
+			: undefined;
+	return {
+		current: current[0],
+		fallback: fallback?.[0] ?? null,
+		joins: fallback ? [current, fallback] : [current],
+	};
+}
+
+/** Whether a where names a localized field of `state` outside its relations. */
+function namesLocalizedField(
+	where: unknown,
+	state: CollectionBuilderState,
+): boolean {
+	if (!where || typeof where !== "object") return false;
+	return Object.entries(where).some(([key, value]) => {
+		if ((key === "AND" || key === "OR") && Array.isArray(value)) {
+			return value.some((entry) => namesLocalizedField(entry, state));
+		}
+		if (key === "NOT") return namesLocalizedField(value, state);
+		// A raw predicate receives the translation tables and may use them.
+		if (key === "RAW") return state.localized.length > 0;
+		return (state.localized as readonly string[]).includes(key);
+	});
 }
 
 function accessCompilationError(

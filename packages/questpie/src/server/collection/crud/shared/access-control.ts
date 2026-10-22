@@ -32,6 +32,19 @@ export function isAccessWhere(value: unknown): boolean {
 	);
 }
 
+/**
+ * Internal, non-JSON marker on a caller relation predicate: for each of its
+ * quantifiers, the caller's read access to the target (and junction) rows that
+ * quantifier reads, resolved before SQL compilation so the relation set is
+ * restricted before it is quantified.
+ */
+export const RELATION_READ_ACCESS = Symbol("questpie.relationReadAccess");
+
+export type RelationReadAccess = {
+	target: boolean | AccessWhere;
+	through?: boolean | AccessWhere;
+};
+
 type FieldDefinitionLike = {
 	_state?: {
 		access?: FieldAccess;

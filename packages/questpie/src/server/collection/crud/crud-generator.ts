@@ -15,7 +15,7 @@ import {
 	is,
 	max,
 	min,
-	type SQL,
+	SQL,
 	sql,
 	sum,
 } from "drizzle-orm";
@@ -51,6 +51,7 @@ type UpdateExecutionParams =
 // Search/realtime integrations removed (Phase 3 — QUE-251).
 // Side effects now come from core module global hooks.
 import {
+	authorizeRelationPredicates,
 	buildLocalizedFieldRef,
 	buildOrderByClauses,
 	buildSelectObject,
@@ -128,6 +129,12 @@ import {
 	RELATION_AGGREGATE,
 	type RelationAggregate,
 } from "#questpie/server/collection/crud/shared/relation-aggregate.js";
+import {
+	READ_ACCESS,
+	RELATION_WINDOW,
+	RELATION_WINDOW_KEY,
+	type RelationWindow,
+} from "#questpie/server/collection/crud/shared/relation-read.js";
 import {
 	type RowLockStrength,
 	rowLockForUpdate,
@@ -509,6 +516,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				) => this._executeFind(options, context, "aggregate", { aggregate }),
 			),
 		});
+		Object.defineProperty(crud, RELATION_WINDOW, {
+			value: this.wrapWithAppContext(
+				"read",
+				(
+					options: FindManyOptions,
+					context: CRUDContext,
+					window: RelationWindow,
+				) => this._executeFind(options, context, "window", { window }),
+			),
+		});
+		Object.defineProperty(crud, READ_ACCESS, {
+			value: (context: CRUDContext, input: FindManyOptions) =>
+				this.enforceAccessControl("read", context, null, input),
+		});
 
 		// Fail loud on unknown method access (e.g. typos in untyped glue code)
 		return guardCrudMethods(crud, this.state.name);
@@ -770,16 +791,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 * @param context - CRUD context
 	 * @param mode - 'many' for paginated results, 'one' for single result,
 	 *   'rows' for a bounded row list without a total, 'aggregate' for a
-	 *   hasMany relation aggregate grouped by the foreign key
+	 *   hasMany relation aggregate grouped by the foreign key, 'window' for
+	 *   a to-many relation page per parent without a total
 	 */
 	private async _executeFind<T>(
 		options: FindManyOptions | FindOneOptionsBase,
 		context: CRUDContext,
-		mode: "many" | "one" | "rows" | "aggregate",
+		mode: "many" | "one" | "rows" | "aggregate" | "window",
 		findOptions?: {
 			rowsLimit?: number;
 			finiteIds?: readonly (string | number)[];
 			aggregate?: RelationAggregate;
+			window?: RelationWindow;
 			skipFieldFiltering?: boolean;
 			skipOutputHooks?: boolean;
 			skipReadLifecycle?: boolean;
@@ -874,7 +897,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					});
 				}
 
-				const mergedWhere = this.mergeWhere(options.where, accessWhere);
+				const mergedWhere = this.mergeWhere(
+					await authorizeRelationPredicates(options.where, {
+						state: this.state,
+						app: this.app,
+						context: normalized,
+					}),
+					accessWhere,
+				);
 				if (
 					mode === "rows" &&
 					((options as FindManyOptions).offset !== undefined ||
@@ -1053,6 +1083,50 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 									return [key, sql`${column}`.mapWith(column).as(key)];
 								}),
 							);
+				// A relation window ranks the target rows of every parent in one
+				// derived table, so each projected key needs its own column name.
+				const window = findOptions?.window;
+				let windowKey = "__questpie_window_key";
+				let windowRank = "__questpie_window_rank";
+				let windowSelect: Record<string, SQL.Aliased> | undefined;
+				if (window) {
+					while (Object.hasOwn(selectObj, windowKey)) windowKey += "_";
+					while (Object.hasOwn(selectObj, windowRank)) windowRank += "_";
+					const partition = window.through
+						? getColumn(window.through.table, window.through.sourceField)!
+						: getColumn(readTable, window.field)!;
+					const order = [
+						...(options.orderBy
+							? this.buildOrderByClauses(
+									options.orderBy,
+									useI18n,
+									i18nCurrentTable,
+									i18nFallbackTable,
+									readTable,
+								)
+							: []),
+						sql`${getColumn(readTable, "id")} ASC`,
+					];
+					windowSelect = Object.fromEntries(
+						Object.entries(selectObj).map(([key, value]) => {
+							if (is(value, Column)) {
+								return [key, sql`${value}`.mapWith(value).as(key)];
+							}
+							if (is(value, SQL)) return [key, value.as(key)];
+							if (is(value, SQL.Aliased)) return [key, value.sql.as(key)];
+							throw ApiError.badRequest(
+								"Relation limit/offset supports column and SQL projections only",
+							);
+						}),
+					);
+					windowSelect[windowKey] = sql`${partition}`
+						.mapWith(partition)
+						.as(windowKey);
+					windowSelect[windowRank] =
+						sql`row_number() over (partition by ${partition} order by ${sql.join(order, sql`, `)})`
+							.mapWith(Number)
+							.as(windowRank);
+				}
 				// Start building query
 				let query: any;
 				if (useStageVersions) {
@@ -1062,7 +1136,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						"latest_stage_versions",
 					);
 					query = db
-						.select(selectObj)
+						.select(windowSelect ?? selectObj)
 						.from(readTable)
 						.innerJoin(
 							latestStageSubquery,
@@ -1075,7 +1149,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							),
 						);
 				} else {
-					query = db.select(finiteSelect ?? selectObj).from(readTable);
+					query = db
+						.select(windowSelect ?? finiteSelect ?? selectObj)
+						.from(readTable);
 				}
 
 				// Add i18n joins if locale provided and localized fields exist
@@ -1184,7 +1260,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				// Search filter by _title (for relation pickers, etc.) - row lists only
 				if (
-					(mode === "many" || mode === "rows") &&
+					(mode === "many" || mode === "rows" || mode === "window") &&
 					(options as FindManyOptions).search
 				) {
 					const searchTerm = (options as FindManyOptions).search;
@@ -1240,6 +1316,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					return (await query
 						.where(and(...whereClauses))
 						.groupBy(column)) as T[];
+				}
+				// A manyToMany window reads its targets once per authorized link.
+				if (window?.through) {
+					const { table, ids, targetField } = window.through;
+					query = query.innerJoin(
+						table,
+						and(
+							eq(
+								getColumn(table, targetField)!,
+								getColumn(readTable, window.field)!,
+							),
+							inArray(getColumn(table, "id")!, ids),
+						),
+					);
 				}
 
 				if (groupByOptions) {
@@ -1364,6 +1454,27 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					query = query.where(and(...whereClauses));
 				}
 
+				// Access, soft delete and the caller's where all ran inside the
+				// ranking, so rows the caller cannot see never take a parent's slot.
+				if (window) {
+					let windowAlias = "__questpie_window";
+					while (windowAlias === getTableName(readTable)) windowAlias += "_";
+					const rank = sql`${sql.identifier(windowAlias)}.${sql.identifier(windowRank)}`;
+					const offset = window.offset ?? 0;
+					query = db
+						.select()
+						.from(query.as(windowAlias))
+						.where(
+							and(
+								sql`${rank} > ${offset}`,
+								window.limit === undefined
+									? undefined
+									: sql`${rank} <= ${offset + window.limit}`,
+							),
+						)
+						.orderBy(rank);
+				}
+
 				let orderTable = readTable;
 				if (finiteIds !== undefined) {
 					const idColumn = getColumn(readTable, "id")!;
@@ -1385,7 +1496,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				// ORDER BY
 				// Drizzle's .orderBy(...) REPLACES previous clauses (assignment, not
 				// append), so multi-field ordering must go through a single variadic call.
-				if (options.orderBy) {
+				if (options.orderBy && !window) {
 					const orderClauses = this.buildOrderByClauses(
 						options.orderBy,
 						useI18n,
@@ -1403,7 +1514,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					query = query.limit(1);
 				} else if (mode === "rows") {
 					query = query.limit(findOptions!.rowsLimit!);
-				} else {
+				} else if (mode === "many") {
 					const manyOptions = options as FindManyOptions;
 					if (!groupByOptions && manyOptions.limit !== undefined) {
 						query = query.limit(manyOptions.limit);
@@ -1431,6 +1542,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 				for (const row of rows) {
 					collapsePolymorphicRelationValues(row, this.state.relations ?? {});
+					if (window) {
+						Object.defineProperty(row, RELATION_WINDOW_KEY, {
+							value: row[windowKey],
+						});
+						delete row[windowKey];
+						delete row[windowRank];
+					}
 				}
 
 				// Handle relations
@@ -1474,7 +1592,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				if (mode === "one") {
 					return (rows[0] as T) || null;
 				}
-				if (mode === "rows") return rows as T[];
+				if (mode === "rows" || mode === "window") return rows as T[];
 
 				// Construct paginated result for 'many' mode
 				const manyOptions = options as FindManyOptions;
@@ -1751,7 +1869,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				});
 			}
 
-			const mergedWhere = this.mergeWhere(options.where, accessWhere);
+			const mergedWhere = this.mergeWhere(
+				await authorizeRelationPredicates(options.where, {
+					state: this.state,
+					app: this.app,
+					context: normalized,
+				}),
+				accessWhere,
+			);
 
 			// i18n joins mirror the find query so localized fields are usable in
 			// `where`. Joining on (parentId, locale) is unique per main row, so

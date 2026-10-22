@@ -102,6 +102,13 @@ where: { barber: { isActive: { eq: true } } }
 Forms 3 and 4 compile to an `EXISTS` subquery against the target table, and
 `isNot` negates it. To-many fields take `some`, `none` and `every` instead.
 
+In user-mode reads, these predicates see only rows allowed by the target
+collection's read rule; many-to-many predicates also honor junction access.
+A denied target behaves like an empty set: `some` and `is` do not match, while
+`none`, `every`, and `isNot` do. Parent counts use the same visibility. This also
+applies to relation filters added by `beforeRead` hooks. Server-authored access
+predicates remain trusted, and system-mode reads retain their bypass.
+
 ## Linking rows on write
 
 `create` and `update` take either the id or a nested mutation under the same

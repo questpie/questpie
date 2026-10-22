@@ -47,6 +47,11 @@ const parents = collection("rx_parents")
 		staged: many(f, "rx_staged"),
 		files: many(f, "rx_files"),
 		keyHidden: many(f, "rx_key_hidden"),
+		topics: f.relation("rx_topics").manyToMany({
+			through: "rx_parent_topics",
+			sourceField: "parent",
+			targetField: "topic",
+		}),
 	}))
 	.access({ read: true });
 
@@ -108,6 +113,17 @@ const files = collection("rx_files")
 const keyHidden = collection("rx_key_hidden")
 	.fields(({ f }: any) => ({ parent: childOf(f) }))
 	.access({ read: true, fields: { parent: { read: false } } } as any);
+
+const topics = collection("rx_topics")
+	.fields(({ f }: any) => ({ name: f.text(), visible: f.boolean() }))
+	.access({ read: () => ({ visible: true }) });
+
+const parentTopics = collection("rx_parent_topics")
+	.fields(({ f }: any) => ({
+		parent: f.relation("rx_parents"),
+		topic: f.relation("rx_topics"),
+	}))
+	.access({ read: true });
 
 const rows = collection("rx_rows")
 	.fields(({ f }: any) => ({
@@ -183,6 +199,8 @@ describe.skipIf(!runPostgresContract)("read execution on PostgreSQL", () => {
 			keyHidden,
 			rows,
 			lockedRows,
+			topics,
+			parentTopics,
 		];
 		for (const builder of builders) {
 			const built: any = builder.build();
@@ -248,6 +266,22 @@ describe.skipIf(!runPostgresContract)("read execution on PostgreSQL", () => {
 				child(parentIds[0], { size: 5 }),
 			]);
 		await db.insert(tables.rx_key_hidden.table).values([child(parentIds[0])]);
+		const topicIds = Object.fromEntries(
+			["x", "y", "z"].map((name) => [name, crypto.randomUUID()]),
+		);
+		await db.insert(tables.rx_topics.table).values([
+			{ id: topicIds.x, name: "x", visible: true },
+			{ id: topicIds.y, name: "y", visible: false },
+			{ id: topicIds.z, name: "z", visible: true },
+		]);
+		await db.insert(tables.rx_parent_topics.table).values(
+			[
+				[parentIds[0], topicIds.y],
+				[parentIds[0], topicIds.z],
+				[parentIds[0], topicIds.x],
+				[parentIds[1], topicIds.z],
+			].map(([parent, topic]) => ({ id: crypto.randomUUID(), parent, topic })),
+		);
 		await db.insert(tables.rx_rows.table).values([
 			...Array.from({ length: 5 }, (_, index) => ({
 				id: crypto.randomUUID(),
@@ -439,6 +473,116 @@ describe.skipIf(!runPostgresContract)("read execution on PostgreSQL", () => {
 				});
 			const after = await parentFind({ scoped: { _count: true } });
 			expect(after.docs[2].scoped).toEqual({ _count: 0 });
+		});
+	});
+
+	describe("hasMany relation windows", () => {
+		it("pages every parent in one ranked statement without a total", async () => {
+			const bounded = await parentFind({
+				scoped: { limit: 1, orderBy: { amount: "desc" } },
+			});
+			expect(
+				bounded.docs.map((parent: any) =>
+					parent.scoped.map((row: any) => row.amount),
+				),
+			).toEqual([[2], [], []]);
+			const targetStatements = statements.filter((sql) =>
+				sql.includes("rx_scoped"),
+			);
+			expect(targetStatements).toHaveLength(1);
+			expect(targetStatements[0]).toMatch(
+				/row_number\(\) over \(partition by (?:"rx_scoped"\.)?"parent"/i,
+			);
+			expect(targetStatements[0]).not.toMatch(/count\s*\(/i);
+			expect(scopedAccessCalls).toBe(1);
+
+			const unrestricted = await parentFind(
+				{ scoped: { limit: 1, offset: 1, orderBy: { amount: "desc" } } },
+				system,
+			);
+			expect(
+				unrestricted.docs.map((parent: any) =>
+					parent.scoped.map((row: any) => row.amount),
+				),
+			).toEqual([[2], [], []]);
+		});
+
+		it("pages many-to-many targets per parent through the junction", async () => {
+			const result = await parentFind({
+				topics: { limit: 1, orderBy: { name: "desc" } },
+			});
+			expect(
+				result.docs.map((parent: any) =>
+					parent.topics.map((topic: any) => topic.name),
+				),
+			).toEqual([["z"], ["z"], []]);
+			const windows = statements.filter((sql) => sql.includes('"rx_topics"'));
+			expect(windows).toHaveLength(1);
+			expect(windows[0]).toMatch(/partition by "rx_parent_topics"\."parent"/i);
+
+			const paged = await parentFind({
+				topics: { limit: 1, offset: 1, orderBy: { name: "desc" } },
+			});
+			expect(
+				paged.docs.map((parent: any) =>
+					parent.topics.map((topic: any) => topic.name),
+				),
+			).toEqual([["x"], [], []]);
+		});
+
+		it("keeps localized values inside the window", async () => {
+			const result = await parentFind(
+				{ localized: { limit: 1, orderBy: { label: "desc" } } },
+				{ ...user, locale: "sk" },
+			);
+			expect(
+				result.docs.map((parent: any) =>
+					parent.localized.map((row: any) => row.label),
+				),
+			).toEqual([["other"], [], []]);
+		});
+	});
+
+	describe("caller relation predicates", () => {
+		const parentNames = async (where: any, context = user) =>
+			(
+				await app.collections.rx_parents.find(
+					{ where, orderBy: { title: "asc" } },
+					context,
+				)
+			).docs.map((parent: any) => parent.title);
+
+		it("quantify over the rows the caller may read", async () => {
+			expect(await parentNames({ denied: { some: {} } })).toEqual([]);
+			expect(await parentNames({ denied: { none: {} } })).toEqual([
+				"a",
+				"b",
+				"c",
+			]);
+			expect(
+				await parentNames({ scoped: { some: { amount: { eq: 100 } } } }),
+			).toEqual([]);
+			expect(
+				await parentNames({ scoped: { every: { amount: { lt: 100 } } } }),
+			).toEqual(["a", "b", "c"]);
+			expect(
+				await parentNames(
+					{ scoped: { some: { amount: { eq: 100 } } } },
+					system,
+				),
+			).toEqual(["a", "b"]);
+		});
+
+		it("compare a localized target field through its translations", async () => {
+			expect(
+				await parentNames({ localized: { some: { label: { eq: "match" } } } }),
+			).toEqual(["a"]);
+			expect(
+				await parentNames(
+					{ localized: { some: { label: { eq: "match" } } } },
+					{ ...user, locale: "sk" },
+				),
+			).toEqual(["a"]);
 		});
 	});
 

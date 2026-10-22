@@ -9,6 +9,11 @@ import type { RelationConfig } from "#questpie/server/collection/builder/types.j
 import type { buildWhereClause as BuildWhereClauseFn } from "#questpie/server/collection/crud/query-builders/where-builder.js";
 import type { resolveFieldKey as ResolveFieldKeyFn } from "#questpie/server/collection/crud/shared/field-resolver.js";
 import { relationAggregateOf } from "#questpie/server/collection/crud/shared/relation-aggregate.js";
+import {
+	RELATION_WINDOW_KEY,
+	relationBound,
+	relationWindowOf,
+} from "#questpie/server/collection/crud/shared/relation-read.js";
 import type {
 	CRUD,
 	CRUDContext,
@@ -103,6 +108,36 @@ export async function resolveHasManyRelation(
 			...queryOptions.columns,
 			[foreignKeyField]: true,
 		};
+	}
+
+	// limit/offset page each parent's rows. The target ranks them per foreign
+	// key after its own access, where and soft delete, in one query.
+	if (nestedOptions.limit != null || nestedOptions.offset != null) {
+		const relatedRows = await relationWindowOf(relatedCrud)(
+			{ ...queryOptions, where: relatedWhere },
+			context,
+			{
+				field: foreignKeyField,
+				limit: relationBound(nestedOptions.limit),
+				offset: relationBound(nestedOptions.offset),
+			},
+		);
+		const relatedMap = new Map<unknown, Record<string, any>[]>();
+		for (const relatedRow of relatedRows) {
+			// A foreign key hidden by field access attaches the row to no parent,
+			// as in an unbounded read.
+			if (!Object.hasOwn(relatedRow, foreignKeyField)) continue;
+			const parentId = (relatedRow as Record<PropertyKey, unknown>)[
+				RELATION_WINDOW_KEY
+			];
+			const siblings = relatedMap.get(parentId);
+			if (siblings) siblings.push(relatedRow);
+			else relatedMap.set(parentId, [relatedRow]);
+		}
+		for (const row of rows) {
+			row[relationName] = relatedMap.get(row[primaryKeyField]) || [];
+		}
+		return;
 	}
 
 	// Fetch related records

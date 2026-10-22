@@ -18,6 +18,7 @@ export {
 	getIncludedFields,
 } from "./select-builder.js";
 export {
+	authorizeRelationPredicates,
 	type BuildWhereClauseOptions,
 	buildBelongsToExistsClause,
 	buildHasManyExistsClause,
