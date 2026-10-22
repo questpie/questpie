@@ -18,6 +18,7 @@ already on, and `execution` in `config/mcp.ts` only narrows them.
 | `timeoutMs`                  | 30 000  | 300 000 | Authorization plus execution, per call.   |
 | `maxConcurrency`             | 64      | 1 024   | In-flight calls for one app.              |
 | `maxConcurrencyPerPrincipal` | 8       | 1 024   | In-flight calls for one caller.           |
+| `maxCatalogBytes`            | 100 000 | 100 000 | Discovery result bytes (exclusive).       |
 | `maxTools`                   | 512     | 2 048   | Tools in the released catalog.            |
 | `maxResources`               | 512     | 2 048   | Resources in the released catalog.        |
 
@@ -38,6 +39,16 @@ export default mcpConfig({
 A value above its ceiling throws `Invalid MCP execution limit: <name>` rather
 than being clamped. So does a `maxConcurrencyPerPrincipal` above
 `maxConcurrency`, and a value that is not a positive safe integer.
+
+`maxCatalogBytes` counts the complete tool catalog after visibility filtering
+and schema projection, including schemas, metadata, and the result wrapper.
+HTTP, stdio, workload servers, and the in-process workload port’s
+`listCustomTools()` all enforce the same exclusive threshold: a result of
+exactly 100,000 bytes fails. Set `execution.maxCatalogBytes` to 85,000 to leave
+headroom. Oversized catalogs fail with their largest contributors; reduce
+verbose descriptions or explicitly narrow the configured tools. Tools and
+required schemas are never silently removed, and pagination cannot bypass the
+limit.
 
 <Callout type="info" title="One budget per app, not per request">
 	Every transport shares the same counters, including separate HTTP requests and

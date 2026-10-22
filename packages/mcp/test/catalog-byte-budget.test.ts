@@ -98,7 +98,7 @@ describe("MCP catalog UTF-8 byte budget", () => {
 				const list = result.tools.find(
 					({ name }) => name === "collections.posts.list",
 				);
-				expect(list?.inputSchema.$defs).toBeDefined();
+				expect(list?.inputSchema.definitions).toBeDefined();
 			} finally {
 				await close();
 			}

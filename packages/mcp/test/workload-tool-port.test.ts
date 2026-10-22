@@ -19,6 +19,95 @@ function errorCode(result: { _meta?: Record<string, unknown> }) {
 }
 
 describe("programmatic workload custom-tool port", () => {
+	it("bounds the complete authorized catalog at the hard ceiling and a stricter 85,000-byte boundary", async () => {
+		const bytes = (value: unknown) =>
+			new TextEncoder().encode(JSON.stringify(value)).byteLength;
+		const setup = await buildMockApp({
+			mcpTools: Object.fromEntries(
+				["first", "second", "third"].map((name) => [
+					name,
+					mcpTool(name, {
+						access: true,
+						scopes: false,
+						description: "x".repeat(40_000),
+						workload: { capabilities: ["read"] },
+					}).handler(async () => ({ content: [] })),
+				]),
+			),
+		});
+		let visible = 3;
+		const options = {
+			envelope: "opaque",
+			authorizer: {
+				authorize: async ({ tool }: { tool: { name: string } }) =>
+					["first", "second", "third"].indexOf(tool.name) < visible
+						? { context: "opaque" }
+						: null,
+			},
+			contextBinder: {
+				bind: async () => setup.app.createContext({ accessMode: "user" }),
+			},
+		};
+		try {
+			const port = createWorkloadMcpToolPort(setup.app, options);
+			await expect(port.listCustomTools()).rejects.toThrow(
+				/catalog byte budget exceeded.*100000/,
+			);
+			visible = 2;
+			const listed = await port.listCustomTools();
+			expect(listed.tools.map(({ name }) => name)).toEqual(["first", "second"]);
+			expect(bytes(listed)).toBeLessThan(85_000);
+			// Make the result exactly 85,000 bytes, including its wrapper.
+			const padding = 85_000 - bytes(listed);
+			const boundarySetup = await buildMockApp({
+				mcpTools: {
+					first: mcpTool("first", {
+						access: true,
+						scopes: false,
+						description: "x".repeat(40_000 + padding),
+						workload: { capabilities: ["read"] },
+					}).handler(async () => ({ content: [] })),
+					second: mcpTool("second", {
+						access: true,
+						scopes: false,
+						description: "x".repeat(40_000),
+						workload: { capabilities: ["read"] },
+					}).handler(async () => ({ content: [] })),
+				},
+			});
+			try {
+				const boundaryOptions = {
+					...options,
+					contextBinder: {
+						bind: async () =>
+							boundarySetup.app.createContext({ accessMode: "user" }),
+					},
+				};
+				const complete = await createWorkloadMcpToolPort(
+					boundarySetup.app,
+					boundaryOptions,
+				).listCustomTools();
+				expect(bytes(complete)).toBe(85_000);
+				await expect(
+					createWorkloadMcpToolPort(boundarySetup.app, {
+						...boundaryOptions,
+						config: { execution: { maxCatalogBytes: 85_000 } },
+					}).listCustomTools(),
+				).rejects.toThrow(/85000 UTF-8 bytes; must be < 85000/);
+				expect(
+					await createWorkloadMcpToolPort(boundarySetup.app, {
+						...boundaryOptions,
+						config: { execution: { maxCatalogBytes: 85_001 } },
+					}).listCustomTools(),
+				).toEqual(complete);
+			} finally {
+				await boundarySetup.cleanup();
+			}
+		} finally {
+			await setup.cleanup();
+		}
+	});
+
 	it("excludes generated surfaces and reauthorizes list and every call", async () => {
 		let allowed = true;
 		const phases: string[] = [];

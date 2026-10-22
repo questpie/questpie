@@ -76,15 +76,20 @@ export function jsonSchemaCompatibleSchema(
 	}
 }
 
-export function toJsonSchema(schema: z.ZodTypeAny | undefined) {
+export function toJsonSchema(
+	schema: z.ZodTypeAny | undefined,
+	options: { io?: "input" | "output"; target?: "draft-7" } = {},
+) {
 	const compatible = jsonSchemaCompatibleSchema(schema);
 	if (!compatible) return undefined;
 
 	try {
 		// CRUD query schemas intentionally reuse the same bounded condition
 		// schemas across fields and logical levels. Preserve that sharing as
-		// `$defs`/`$ref`; inlining turns a one-field list schema into megabytes.
-		return applyMcpSchemaDiet(z.toJSONSchema(compatible, { reused: "ref" }));
+		// definitions and `$ref`; inlining can expand a small list schema to megabytes.
+		return applyMcpSchemaDiet(
+			z.toJSONSchema(compatible, { ...options, reused: "ref" }),
+		);
 	} catch {
 		return undefined;
 	}
@@ -124,44 +129,13 @@ const NEUTRAL_MAYBE_BOOLEAN_SCHEMA_KEYS = [
 ] as const;
 
 /**
- * Rewrites a draft-07-style tuple (`items: [...]` + `additionalItems`) into
- * its 2020-12 equivalent (`prefixItems: [...]` + trailing `items`) in place.
- *
- * The MCP SDK's own `tools/list` projection (`zod-json-schema-compat.js`,
- * called with no `target`) emits JSON Schema **draft-07**, not 2020-12 — the
- * only place that difference is load-bearing for this codebase's schemas is
- * tuple typing, where draft-07's array-form `items` means something entirely
- * different in 2020-12 (a single "all items must match" schema). Our own
- * `toJsonSchema()` below (full zod's `z.toJSONSchema`) already emits native
- * 2020-12 `prefixItems`, so this is a no-op there. Converting first — for
- * every tuple anywhere in the tree, not just the root — makes the whole
- * document genuinely dialect-correct 2020-12 before `applyMcpSchemaDiet`
- * drops the top-level `$schema` pointer.
- */
-function normalizeTupleDialect(node: Record<string, unknown>): void {
-	if (!Array.isArray(node.items) || node.prefixItems !== undefined) return;
-	const tuple = node.items;
-	const additionalItems = node.additionalItems;
-	delete node.items;
-	delete node.additionalItems;
-	node.prefixItems = tuple;
-	if (additionalItems === false) {
-		node.items = false;
-	} else if (isPlainObject(additionalItems)) {
-		node.items = additionalItems;
-		// additionalItems === true (or absent): 2020-12 leaves `items` unset,
-		// which already means "no constraint on trailing items".
-	}
-}
-
-/**
  * Strips wire noise the zod v4 / MCP SDK JSON Schema codecs emit on every
  * tool schema, without touching example/default/const/enum payloads (those
  * carry caller data, not schema structure, and must never be walked).
  *
- * - Removes the document-level `$schema` dialect pointer (informational only;
- *   `normalizeTupleDialect` above makes the document genuinely 2020-12-shaped
- *   first, so an absent `$schema` is universally, correctly, read as 2020-12).
+ * - Removes the document-level `$schema` pointer without changing tuple
+ *   keywords. Tool projections use draft-07 to match the SDK's default AJV
+ *   validator; resource schemas retain their original dialect.
  * - Drops `additionalProperties: false`, *except inside a `oneOf`/`not`/`if`
  *   subtree*. Ordinarily this is safe to drop everywhere: the MCP SDK
  *   validates tool arguments against the *original* zod schema at call time
@@ -194,8 +168,6 @@ function walkSchemaNode(
 ): void {
 	if (!isPlainObject(node)) return;
 
-	normalizeTupleDialect(node);
-
 	if (node.format === "uuid" && typeof node.pattern === "string") {
 		delete node.pattern;
 	}
@@ -217,6 +189,10 @@ function walkSchemaNode(
 			for (const item of list)
 				walkSchemaNode(item, protectAdditionalProperties);
 		}
+	}
+	if (Array.isArray(node.items)) {
+		for (const item of node.items)
+			walkSchemaNode(item, protectAdditionalProperties);
 	}
 	for (const key of NEUTRAL_SCHEMA_KEYS) {
 		walkSchemaNode(node[key], protectAdditionalProperties);
@@ -244,7 +220,9 @@ export function toToolInputJsonSchema(
 ): Tool["inputSchema"] {
 	const cached = schema && inputProjections.get(schema);
 	if (cached) return cached;
-	const parsed = ToolSchema.shape.inputSchema.safeParse(toJsonSchema(schema));
+	const parsed = ToolSchema.shape.inputSchema.safeParse(
+		toJsonSchema(schema, { io: "input", target: "draft-7" }),
+	);
 	const projection = freezeProjection<Tool["inputSchema"]>(
 		parsed.success
 			? parsed.data
@@ -260,7 +238,9 @@ export function toToolInputJsonSchema(
 export function toToolOutputJsonSchema(
 	schema: z.ZodTypeAny | undefined,
 ): Tool["outputSchema"] {
-	const parsed = ToolSchema.shape.outputSchema.safeParse(toJsonSchema(schema));
+	const parsed = ToolSchema.shape.outputSchema.safeParse(
+		toJsonSchema(schema, { io: "output", target: "draft-7" }),
+	);
 	return parsed.success ? parsed.data : undefined;
 }
 

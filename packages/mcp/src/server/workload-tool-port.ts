@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+
+import { assertMcpCatalogByteBudget } from "./catalog-byte-budget.js";
 import {
 	customToolAllows,
 	customToolDescriptor,
@@ -16,7 +19,6 @@ import {
 import { createWorkloadMcpRelease } from "./release.js";
 import { createRuntimeScope, type QuestpieApp } from "./runtime.js";
 import type {
-	McpProgrammaticTool,
 	McpProgrammaticToolResult,
 	McpWorkloadToolPort,
 	WorkloadMcpServerOptions,
@@ -52,7 +54,7 @@ export function createWorkloadMcpToolPort(
 
 	const port: McpWorkloadToolPort = {
 		async listCustomTools(request = {}) {
-			const tools: McpProgrammaticTool[] = [];
+			const tools: Tool[] = [];
 			const controller = new AbortController();
 			let timedOut = false;
 			const cancel = () => controller.abort(request.signal?.reason);
@@ -106,7 +108,7 @@ export function createWorkloadMcpToolPort(
 							concurrencyKey: () => workloadAuthorization?.concurrencyKey,
 							invoke: async () => customToolDescriptor(toolName, tool),
 						});
-						tools.push(descriptor as McpProgrammaticTool);
+						tools.push(descriptor);
 					} catch (error) {
 						if (mcpPublicErrorCode(error) === "access_denied") {
 							continue;
@@ -126,6 +128,7 @@ export function createWorkloadMcpToolPort(
 					},
 					"output_too_large",
 				);
+				assertMcpCatalogByteBudget({ tools }, release.maxCatalogBytes);
 				return { tools };
 			} finally {
 				clearTimeout(timer);
