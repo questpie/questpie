@@ -1,15 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import {
-	evaluateRouteAccess,
 	executeJsonRoute,
-	extractAppServices,
 	isJsonRoute,
 	type IntrospectedRoute,
 } from "questpie";
+import { ApiError } from "questpie/errors";
 import { z } from "zod";
 
 import type { ResolvedMcpCatalog } from "./catalog.js";
-import { McpAccessDeniedError } from "./execution-boundary.js";
+import { McpAccessDeniedError, McpProductError } from "./execution-boundary.js";
 import {
 	evaluateMcpRule,
 	operationRule,
@@ -25,29 +25,128 @@ import {
 	executeWorkloadTool,
 	registerWorkloadDiscoveryTool,
 } from "./workload-boundary.js";
-import {
-	jsonSchemaCompatibleSchema,
-	toToolInputJsonSchema,
-	toToolOutputJsonSchema,
-} from "./zod-json-schema.js";
+import { applyMcpSchemaDiet } from "./zod-json-schema.js";
 
-function routeInputSchema(route: IntrospectedRoute): z.ZodTypeAny {
-	if (!isJsonRoute(route.definition)) return z.object({});
-	if (route.params.length === 0)
-		return jsonSchemaCompatibleSchema(route.definition.schema) ?? z.object({});
+/** The shared executor owns parsing. The SDK must preserve original wire values.
+ * SDK 1.32.1 normalizes object schemas before parsing and listing; keep an object
+ * facade with canonical JSON metadata and a passthrough Zod runner. In particular,
+ * don't let SDK object parsing strip unknown keys or execute input accessors.
+ */
+function advertisedSchema(json: Record<string, unknown>) {
+	const schema = z.object({}).meta(json);
+	// eslint-disable-next-line no-underscore-dangle -- SDK 1.32.1/Zod compatibility boundary, covered by wire tests.
+	schema._zod.run = (payload) => payload;
+	return schema;
+}
 
-	const paramsShape: Record<string, z.ZodString> = {};
-	for (const param of route.params) {
-		paramsShape[param] = z.string();
+function routeSchemas(route: IntrospectedRoute) {
+	if (!isJsonRoute(route.definition)) throw new Error("MCP route must be JSON");
+	const definition = route.definition;
+	let input: Record<string, unknown>;
+	let output: Record<string, unknown> | undefined;
+	let encodedDateOutput = false;
+	try {
+		input = definition.schema
+			? z.toJSONSchema(definition.schema, { io: "input", reused: "ref" })
+			: { type: "object", properties: {} };
+		output = definition.outputSchema
+			? z.toJSONSchema(definition.outputSchema, {
+					io: "output",
+					reused: "ref",
+					// Domain Date output has an ISO JSON wire encoding. Date input
+					// still needs an explicit ISO string schema piped into coercion.
+					unrepresentable: ({ zodSchema }) => {
+						// eslint-disable-next-line no-underscore-dangle -- inspect the Zod schema kind.
+						if (zodSchema._zod.def.type !== "date") return "throw";
+						encodedDateOutput = true;
+						return { type: "string", format: "date-time" };
+					},
+				})
+			: undefined;
+		// Older supported Zod versions do not invoke an unrepresentable handler.
+		// Requiring strict conversion in that case prevents their implicit {} fallback.
+		if (definition.outputSchema && !encodedDateOutput) {
+			z.toJSONSchema(definition.outputSchema, { io: "output" });
+		}
+	} catch {
+		throw new Error(
+			`MCP route ${route.path} has a schema that cannot be represented as JSON Schema`,
+		);
 	}
+	const wrapped = route.params.length > 0 || input.type !== "object";
+	if (wrapped) {
+		const { $defs, ...body } = input;
+		input = {
+			...($defs ? { $defs } : {}),
+			type: "object",
+			properties: {
+				...(route.params.length
+					? {
+							params: {
+								type: "object",
+								properties: Object.fromEntries(
+									route.params.map((param) => [param, { type: "string" }]),
+								),
+								required: route.params,
+								additionalProperties: false,
+							},
+						}
+					: {}),
+				input: body,
+			},
+			required: [...(route.params.length ? ["params"] : []), "input"],
+			additionalProperties: false,
+		};
+	}
+	const wrappedOutput = !!output && output.type !== "object";
+	if (output && wrappedOutput) {
+		const { $defs, ...body } = output;
+		output = {
+			...($defs ? { $defs } : {}),
+			type: "object",
+			properties: { value: body },
+			required: ["value"],
+			additionalProperties: false,
+		};
+	}
+	return {
+		inputSchema: advertisedSchema(input),
+		outputSchema: output ? advertisedSchema(output) : undefined,
+		input,
+		output,
+		wrapped,
+		wrappedOutput,
+	};
+}
 
-	return z
+function routeInvocation(
+	route: IntrospectedRoute,
+	input: unknown,
+	wrapped: boolean,
+): { input: unknown; params: Record<string, string> } {
+	if (!wrapped) return { input, params: {} };
+	const parsed = z
 		.object({
-			params: z.object(paramsShape).strict(),
-			input:
-				jsonSchemaCompatibleSchema(route.definition.schema) ?? z.object({}),
+			input: z.unknown(),
+			...(route.params.length
+				? {
+						params: z
+							.object(
+								Object.fromEntries(
+									route.params.map((param) => [param, z.string()]),
+								),
+							)
+							.strict(),
+					}
+				: {}),
 		})
-		.strict();
+		.strict()
+		.safeParse(input);
+	if (!parsed.success) throw ApiError.fromZodError(parsed.error);
+	return {
+		input: parsed.data.input,
+		params: (parsed.data.params ?? {}) as Record<string, string>,
+	};
 }
 
 export async function registerRouteTools(
@@ -71,8 +170,14 @@ export async function registerRouteTools(
 		if (scope.workload && !workloadRequirement) {
 			continue;
 		}
-		const inputSchema = routeInputSchema(route);
-		const outputSchema = jsonSchemaCompatibleSchema(definition.outputSchema);
+		const {
+			inputSchema,
+			outputSchema,
+			input: inputJson,
+			output: outputJson,
+			wrapped,
+			wrappedOutput,
+		} = routeSchemas(route);
 		const annotations = mcpMeta.annotations;
 		const workloadIdentity = {
 			kind: "route" as const,
@@ -102,24 +207,7 @@ export async function registerRouteTools(
 						"invoke",
 					),
 				);
-			if (!mcpAllowed) return false;
-			const services = extractAppServices(scope.app, {
-				db: ctx.db ?? scope.app.db,
-				session: ctx.session,
-				locale: ctx.locale,
-				accessMode: ctx.accessMode,
-				principal: ctx.principal,
-			});
-			const params = Object.fromEntries(
-				route.params.map((param) => [param, ""]),
-			);
-			return evaluateRouteAccess(definition.access, {
-				...services,
-				...(ctx["~contextExtensions"] ?? {}),
-				locale: ctx.locale,
-				request: scope.request,
-				params,
-			});
+			return mcpAllowed;
 		};
 		if (!scope.workload) {
 			const ctx = await scope.getContext();
@@ -168,15 +256,6 @@ export async function registerRouteTools(
 						},
 						concurrencyKey: () => workloadAuthorization?.concurrencyKey,
 						invoke: async ({ ctx, signal, requestId, correlationId }) => {
-							const invocation =
-								route.params.length > 0
-									? z
-											.object({
-												input: z.unknown(),
-												params: z.record(z.string(), z.string()),
-											})
-											.parse(input)
-									: { input, params: {} };
 							const requestContext = toRequestContext(ctx, scope.accessMode);
 							const executionRequest = new Request(
 								scope.request?.url ?? "http://questpie.local/mcp",
@@ -186,17 +265,27 @@ export async function registerRouteTools(
 									signal,
 								},
 							);
-							const invoke = async () =>
-								toToolResult(
-									await executeJsonRoute(
+							const invoke = async () => {
+								let result: unknown;
+								try {
+									const invocation = routeInvocation(route, input, wrapped);
+									result = await executeJsonRoute(
 										scope.app,
 										definition,
 										invocation.input,
 										requestContext,
 										executionRequest,
 										invocation.params,
-									),
-								);
+									);
+								} catch (error) {
+									throw new McpProductError(
+										error,
+										{ t: scope.app.t, locale: ctx.locale },
+										correlationId,
+									);
+								}
+								return toToolResult(wrappedOutput ? { value: result } : result);
+							};
 							if (
 								scope.workload &&
 								workloadAuthorization &&
@@ -219,16 +308,18 @@ export async function registerRouteTools(
 			},
 		);
 		if (scope.workload) {
-			const discoveryOutputSchema = toToolOutputJsonSchema(outputSchema);
+			const discoveryOutputSchema = outputJson
+				? applyMcpSchemaDiet(outputJson)
+				: undefined;
 			registerWorkloadDiscoveryTool(
 				scope.workload,
 				{
 					name,
 					title: mcpMeta.title ?? route.meta?.title,
 					description: mcpMeta.description ?? route.meta?.description,
-					inputSchema: toToolInputJsonSchema(inputSchema),
+					inputSchema: applyMcpSchemaDiet(inputJson) as Tool["inputSchema"],
 					...(discoveryOutputSchema
-						? { outputSchema: discoveryOutputSchema }
+						? { outputSchema: discoveryOutputSchema as Tool["outputSchema"] }
 						: {}),
 					annotations,
 				},

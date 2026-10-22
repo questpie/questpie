@@ -14,7 +14,7 @@ export type FieldError = {
 	messageParams?: Record<string, unknown>;
 	/** Original validation issue, kept server-side for localized serialization */
 	validationIssue?: unknown;
-	/** The invalid value (optional) */
+	/** Server-only invalid value; omitted by public serialization. */
 	value?: unknown;
 };
 
@@ -87,6 +87,6 @@ export type ApiErrorShape = {
 	context?: ApiErrorContext;
 	/** Only in dev mode */
 	stack?: string;
-	/** Original error message (if any) */
+	/** @deprecated Internal diagnostics are never included in public serialization. */
 	cause?: string;
 };

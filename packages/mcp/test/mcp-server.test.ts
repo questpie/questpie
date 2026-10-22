@@ -389,7 +389,7 @@ describe("@questpie/mcp server", () => {
 			expect(toolNames).not.toContain("collections.privateNotes.list");
 			expect(toolNames).not.toContain("routes.reports.unannotated");
 			expect(toolNames).not.toContain("raw.exposed");
-			expect(toolNames).not.toContain("routes.reports.denied");
+			expect(toolNames).toContain("routes.reports.denied");
 
 			const resources = await client.listResources();
 			const resourceUris = resources.resources.map((resource) => resource.uri);

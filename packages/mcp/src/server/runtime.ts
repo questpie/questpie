@@ -5,6 +5,7 @@ import {
 	type AppContext,
 	type RequestContext,
 } from "questpie";
+import type { PublicErrorOptions } from "questpie/errors";
 
 import type { McpExecutionBoundary } from "./execution-boundary.js";
 import {
@@ -135,8 +136,11 @@ export function toToolResult(value: unknown): CallToolResult {
 	};
 }
 
-export function toToolError(error: unknown): CallToolResult {
-	return toMcpToolError(error);
+export function toToolError(
+	error: unknown,
+	options: PublicErrorOptions = {},
+): CallToolResult {
+	return toMcpToolError(error, options);
 }
 
 export function jsonResource(uri: string, value: unknown) {

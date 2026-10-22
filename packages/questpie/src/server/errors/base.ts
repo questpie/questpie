@@ -2,13 +2,10 @@ import type {
 	BackendMessageKey,
 	BackendTranslateFn,
 } from "#questpie/server/i18n/types.js";
-import {
-	createZodErrorMap,
-	type ZodIssue,
-} from "#questpie/shared/i18n/zod-error-map.js";
 
 import type { ApiErrorCode } from "./codes.js";
 import { getHTTPStatusFromCode } from "./codes.js";
+import { formatPublicError } from "./public.js";
 import type {
 	AccessErrorContext,
 	ApiErrorContext,
@@ -29,45 +26,6 @@ export type ApiErrorOptions = {
 	/** Original error (preserves stack trace) */
 	cause?: unknown;
 };
-
-function translateFieldError(
-	fieldError: FieldError,
-	t?: BackendTranslateFn,
-	locale?: string,
-): FieldError {
-	let message = fieldError.message;
-
-	if (t && fieldError.validationIssue) {
-		const translate = (key: string, params?: Record<string, unknown>) =>
-			t(
-				key,
-				{
-					field: fieldError.path,
-					...fieldError.messageParams,
-					...params,
-				},
-				locale,
-			);
-		message = createZodErrorMap(translate)(
-			fieldError.validationIssue as ZodIssue,
-		).message;
-	} else if (t && fieldError.messageKey) {
-		message = t(
-			fieldError.messageKey,
-			{
-				field: fieldError.path,
-				...fieldError.messageParams,
-			},
-			locale,
-		);
-	}
-
-	return {
-		path: fieldError.path,
-		message,
-		value: fieldError.value,
-	};
-}
 
 /**
  * Base QUESTPIE Error class
@@ -120,7 +78,7 @@ export class ApiError extends Error {
 
 	/**
 	 * Convert to client-safe error shape
-	 * @param isDev - Include stack trace and detailed cause info
+	 * @param isDev - Include a local debug stack; HTTP/MCP use the safe public formatter
 	 * @param t - Optional backend translate function for i18n
 	 * @param locale - Optional locale for translation
 	 */
@@ -129,21 +87,8 @@ export class ApiError extends Error {
 		t?: BackendTranslateFn,
 		locale?: string,
 	): ApiErrorShape {
-		const message =
-			t && this.messageKey
-				? t(this.messageKey, this.messageParams, locale)
-				: this.message;
-
-		return {
-			code: this.code,
-			message,
-			fieldErrors: this.fieldErrors?.map((fieldError) =>
-				translateFieldError(fieldError, t, locale),
-			),
-			context: this.context,
-			stack: isDev ? this.stack : undefined,
-			cause: this.cause instanceof Error ? this.cause.message : undefined,
-		};
+		const result = formatPublicError(this, { t, locale });
+		return isDev ? { ...result, stack: this.stack } : result;
 	}
 
 	/**
@@ -154,14 +99,15 @@ export class ApiError extends Error {
 
 		// Zod v4 uses 'issues' property
 		if (zodError.issues && Array.isArray(zodError.issues)) {
-			for (const issue of zodError.issues) {
-				const path = Array.isArray(issue.path) ? issue.path.join(".") : "";
+			for (const issue of zodError.issues.slice(0, 8)) {
+				const path = Array.isArray(issue.path)
+					? issue.path.slice(0, 16).map(String).join(".").slice(0, 256)
+					: "";
 				fieldErrors.push({
 					path,
-					message: issue.message,
+					message: issue.message.slice(0, 200),
 					messageParams: { field: path },
 					validationIssue: issue,
-					value: issue.input,
 				});
 			}
 		}

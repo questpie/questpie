@@ -4,12 +4,12 @@
  * Utilities for creating HTTP responses with proper serialization.
  */
 
-import { ZodError } from "zod";
-
 import { stringifyTypedWire } from "#questpie/shared/typed-wire.js";
 
 import type { Questpie } from "../../config/questpie.js";
-import { ApiError, parseDatabaseError } from "../../errors/index.js";
+import { ApiError } from "../../errors/base.js";
+import { getHTTPStatusFromCode } from "../../errors/codes.js";
+import { formatPublicError } from "../../errors/public.js";
 
 export const jsonHeaders = {
 	"Content-Type": "application/json",
@@ -112,69 +112,12 @@ export const handleError = (
 	error: unknown,
 	options: HandleErrorOptions = {},
 ): Response => {
-	const { request, isDev = isDevelopment(), app, locale } = options;
-	const translator = app?.t;
-
-	// If it's our ApiError, use it directly
-	if (error instanceof ApiError) {
-		const errorData = { error: error.toJSON(isDev, translator, locale) };
-		if (request && supportsSuperJSON(request)) {
-			return new Response(stringifyTypedWire(errorData), {
-				status: error.getHTTPStatus(),
-				headers: superjsonHeaders,
-			});
-		}
-		return new Response(JSON.stringify(errorData), {
-			status: error.getHTTPStatus(),
-			headers: jsonHeaders,
-		});
-	}
-
-	// If it's ZodError, convert to ApiError
-	if (error instanceof ZodError) {
-		const cmsError = ApiError.fromZodError(error);
-		const errorData = { error: cmsError.toJSON(isDev, translator, locale) };
-		if (request && supportsSuperJSON(request)) {
-			return new Response(stringifyTypedWire(errorData), {
-				status: cmsError.getHTTPStatus(),
-				headers: superjsonHeaders,
-			});
-		}
-		return new Response(JSON.stringify(errorData), {
-			status: cmsError.getHTTPStatus(),
-			headers: jsonHeaders,
-		});
-	}
-
-	// Check if it's a database constraint violation
-	const dbError = parseDatabaseError(error);
-	if (dbError) {
-		const errorData = { error: dbError.toJSON(isDev, translator, locale) };
-		if (request && supportsSuperJSON(request)) {
-			return new Response(stringifyTypedWire(errorData), {
-				status: dbError.getHTTPStatus(),
-				headers: superjsonHeaders,
-			});
-		}
-		return new Response(JSON.stringify(errorData), {
-			status: dbError.getHTTPStatus(),
-			headers: jsonHeaders,
-		});
-	}
-
-	// Unknown error - wrap it as INTERNAL_SERVER_ERROR
-	const message = error instanceof Error ? error.message : "Unknown error";
-	const wrappedError = ApiError.internal(message, error);
-	const errorData = { error: wrappedError.toJSON(isDev, translator, locale) };
-
-	if (request && supportsSuperJSON(request)) {
-		return new Response(stringifyTypedWire(errorData), {
-			status: wrappedError.getHTTPStatus(),
-			headers: superjsonHeaders,
-		});
-	}
+	const { request, app, locale } = options;
+	const errorData = { error: formatPublicError(error, { t: app?.t, locale }) };
+	const status = getHTTPStatusFromCode(errorData.error.code);
+	if (request) return smartResponse(errorData, request, status);
 	return new Response(JSON.stringify(errorData), {
-		status: wrappedError.getHTTPStatus(),
+		status,
 		headers: jsonHeaders,
 	});
 };

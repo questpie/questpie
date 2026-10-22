@@ -167,7 +167,14 @@ export async function executeJsonRouteInternal<
 	// Output-only routes (`.outputSchema()` with no `.schema()`) are valid JSON
 	// routes with `unknown` input (route-builder.ts) — their `schema` is undefined,
 	// so pass the raw input through rather than crashing on `.parse`.
-	const parsed = definition.schema ? definition.schema.parse(input) : input;
+	// Only client input failures become VALIDATION_ERROR; a ZodError thrown by a
+	// handler or by output validation stays raw, so it is reported as a server error.
+	let parsed = input;
+	if (definition.schema) {
+		const result = definition.schema.safeParse(input);
+		if (!result.success) throw ApiError.fromZodError(result.error);
+		parsed = result.data;
+	}
 	const requestContext = unwrapRequestContext(context);
 	const resolvedContext =
 		requestContext ?? (await app.createContext({ accessMode: "system" }));

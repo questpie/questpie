@@ -4,6 +4,13 @@ import { types as nodeTypes } from "node:util";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext, RequestContext } from "questpie";
 import {
+	ApiError,
+	CMS_ERROR_CODES,
+	formatPublicError,
+	type ApiErrorShape,
+	type PublicErrorOptions,
+} from "questpie/errors";
+import {
 	type BrokerJsonValue,
 	snapshotBoundedBrokerValue,
 } from "questpie/executor";
@@ -46,6 +53,7 @@ const ABSOLUTE_MCP_EXECUTION_LIMITS = Object.freeze({
 
 const PUBLIC_ERROR_META_KEY = "questpie/error";
 const PUBLIC_ERROR_CODES = new Set<McpPublicErrorCode>([
+	...Object.values(CMS_ERROR_CODES),
 	"access_denied",
 	"invalid_input",
 	"input_too_large",
@@ -101,6 +109,19 @@ export class McpPublicError extends Error {
 		this.code = code;
 		this.correlationId = correlationId;
 		this.detail = detail;
+	}
+}
+
+export class McpProductError extends McpPublicError {
+	readonly productError: ApiErrorShape;
+	constructor(
+		error: unknown,
+		options: PublicErrorOptions = {},
+		correlationId?: string,
+	) {
+		const productError = formatPublicError(error, options);
+		super(productError.code, correlationId);
+		this.productError = productError;
 	}
 }
 
@@ -440,7 +461,11 @@ function publicMessage(code: McpPublicErrorCode, detail?: string): string {
 	return detail ? `MCP operation failed: ${detail}` : "MCP operation failed";
 }
 
-function classifyError(error: unknown, correlationId: string): McpPublicError {
+function classifyError(
+	error: unknown,
+	correlationId: string,
+	options: PublicErrorOptions = {},
+): McpPublicError {
 	if (
 		!!error &&
 		(typeof error === "object" || typeof error === "function") &&
@@ -449,6 +474,8 @@ function classifyError(error: unknown, correlationId: string): McpPublicError {
 		return new McpPublicError("internal", correlationId);
 	}
 	if (error instanceof McpPublicError) return error;
+	if (error instanceof ApiError)
+		return new McpProductError(error, options, correlationId);
 	if (error instanceof McpAccessDeniedError || isLegacyAccessDenied(error)) {
 		return new McpPublicError("access_denied", correlationId);
 	}
@@ -537,11 +564,28 @@ function safeRequestId(value: string | number): string | number | undefined {
 	return /^[\w.:-]{1,128}$/.test(value) ? value : undefined;
 }
 
-export function toMcpToolError(error: unknown): CallToolResult {
-	const resolved =
-		error instanceof McpPublicError
-			? error
-			: classifyError(error, randomUUID());
+export function toMcpToolError(
+	error: unknown,
+	options: PublicErrorOptions = {},
+): CallToolResult {
+	const resolved = classifyError(error, randomUUID(), options);
+	if (resolved instanceof McpProductError) {
+		return {
+			isError: true,
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify({ error: resolved.productError }),
+				},
+			],
+			_meta: {
+				[PUBLIC_ERROR_META_KEY]: {
+					code: resolved.productError.code,
+					correlationId: resolved.correlationId,
+				},
+			},
+		};
+	}
 	return {
 		isError: true,
 		content: [
