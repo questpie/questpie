@@ -1,0 +1,63 @@
+{
+	"environment": {
+		"bun": "1.4.2",
+		"postgres": "PostgreSQL 17.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+		"os": "linux",
+		"cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"cpus": 12
+	},
+	"durationMs": 15000,
+	"results": [
+		{
+			"mode": "writes-only",
+			"cursors": 50,
+			"pages": 10,
+			"inputHz": 20,
+			"elapsedMs": 15004,
+			"offered": 0,
+			"accepted": 0,
+			"notifies": 0,
+			"fanoutRoundTrips": 0,
+			"notifyPerSecond": 0,
+			"receivedUnique": 0,
+			"deliveredFrames": 0,
+			"latencyP50Ms": null,
+			"latencyP95Ms": null,
+			"latencyP99Ms": null,
+			"ledgerInserts": 0,
+			"writes": 5126,
+			"writesPerSecond": 341.6422287390029,
+			"writeP95Ms": 13.167750999999043,
+			"writeP99Ms": 180.94023300000117,
+			"maximumPending": 0,
+			"errors": []
+		},
+		{
+			"mode": "ephemeral",
+			"cursors": 50,
+			"pages": 10,
+			"inputHz": 20,
+			"elapsedMs": 15522,
+			"offered": 12700,
+			"accepted": 12700,
+			"notifies": 1300,
+			"fanoutRoundTrips": 130,
+			"notifyPerSecond": 86.66666666666667,
+			"receivedUnique": 6350,
+			"deliveredFrames": 31735,
+			"latencyP50Ms": 39,
+			"latencyP95Ms": 180,
+			"latencyP99Ms": 399,
+			"ledgerInserts": 0,
+			"writes": 4395,
+			"writesPerSecond": 283.14650173946654,
+			"writeP95Ms": 10.885865000000194,
+			"writeP99Ms": 361.3431610000007,
+			"maximumPending": 100,
+			"errors": []
+		}
+	],
+	"storage": "Docker writable layer on a contended host; fsync=on",
+	"sourceBase": "a65bdc4c2a39dd4c16c9d69bbe2811784fb6714b",
+	"capturedAtUtc": "2026-10-21T23:47:56.380951+00:00"
+}

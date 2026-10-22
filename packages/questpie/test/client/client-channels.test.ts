@@ -3009,3 +3009,69 @@ describe("channels client", () => {
 		client.channels.destroy();
 	});
 });
+
+test("SSE transport handles an ephemeral channel-name revocation without failing a sibling binding", async () => {
+	const resources = new Map<
+		string,
+		{ onEvent(event: { type: string; data: string }): void }
+	>();
+	const errors: string[] = [],
+		messages: string[] = [];
+	const connection = {
+		registerChannel(options: {
+			id: string;
+			onEvent(event: { type: string; data: string }): void;
+		}) {
+			const name = options.id.slice("channel:".length);
+			resources.set(name, options);
+			return () => resources.delete(name);
+		},
+	};
+	const transport = new SseChannelTransport({
+		baseUrl: "http://localhost",
+		withCredentials: false,
+		fetcher: fetch,
+		connection: connection as any,
+	});
+	const input = (name: string) => ({
+		registryKey: name,
+		params: {},
+		resolvedName: name,
+		visibility: "public" as const,
+	});
+	try {
+		transport.subscribe(input("page"), () => {}, {
+			onError: (error) => errors.push(error.message),
+		});
+		transport.subscribe(input("activity"), (message) =>
+			messages.push(message.event),
+		);
+		for (const [name, resource] of resources)
+			resource.onEvent({
+				type: "channel_ready",
+				data: JSON.stringify({ channelSubscriptionId: `channel:${name}` }),
+			});
+		resources.get("page")!.onEvent({
+			type: "error",
+			data: JSON.stringify({
+				channel: "page",
+				message: "Channel access ended",
+			}),
+		});
+		expect(errors).toEqual(["Channel access ended"]);
+		expect(transport.channelCount).toBe(1);
+		resources.get("activity")!.onEvent({
+			type: "channel_ephemeral",
+			data: JSON.stringify({
+				channel: "activity",
+				event: "changed",
+				eventId: crypto.randomUUID(),
+				data: 42,
+			}),
+		});
+		await waitFor(() => messages.length === 1);
+		expect(messages).toEqual(["changed"]);
+	} finally {
+		transport.destroy();
+	}
+});

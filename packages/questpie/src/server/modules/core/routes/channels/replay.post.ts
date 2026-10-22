@@ -46,6 +46,12 @@ export default route()
 					origin,
 				);
 			}
+			if (definition.ephemeralOptions)
+				return channelRouteResponse(
+					{ error: "channel_ephemeral_no_replay" },
+					409,
+					origin,
+				);
 			const realtime = routeApp(ctx).realtime;
 			if (!realtime) {
 				return channelRouteResponse(

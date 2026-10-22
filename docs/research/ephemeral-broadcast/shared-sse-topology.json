@@ -1,0 +1,70 @@
+{
+	"streams": 50,
+	"pages": 10,
+	"inputHz": 10,
+	"offered": 10500,
+	"openMs": 176.96012700000006,
+	"elapsedMs": 21343,
+	"ready": 50,
+	"closedDuringRun": 0,
+	"frames": 49000,
+	"retained": 9800,
+	"latencyP95Ms": 103,
+	"latencyP99Ms": 113,
+	"writesPerSecond": 829.1243030501804,
+	"writeP95Ms": 2.6160610000006272,
+	"tableCounts": {
+		"topology": 50,
+		"events": 10000,
+		"presence": 0
+	},
+	"ledgerInserts": 0,
+	"presenceInserts": 0,
+	"openSql": [
+		{
+			"query": "insert into \"questpie_realtime_topology\" (\"session_key\", \"owner_id\", \"owner_generation\", \"protocol_version\", \"token_hash\", \"identity_hash\", \"lease_expires_at\", \"desired_revision\", \"applied_revision\", \"desired_topology\", \"created_at\", \"updated_at\") values ($1, $2, default, $3, $4, $5, now() + ($6 * interval $10), $7, $8, $9, default, default) returning \"session_key\", \"owner_id\", \"owner_generation\", \"protocol_version\", \"token_hash\", \"identity_hash\", \"lease_expires_at\", \"desired_revision\", \"applied_revision\", \"desired_topology\", \"created_at\", \"updated_at\"",
+			"calls": 50,
+			"rows": 50,
+			"executionMs": 6.005454999999998
+		},
+		{
+			"query": "select pg_notify($1, message) from unnest($2::text[]) as message",
+			"calls": 1,
+			"rows": 10,
+			"executionMs": 0.04259000000000057
+		}
+	],
+	"steadySql": [
+		{
+			"query": "delete from \"questpie_realtime_topology\" where \"questpie_realtime_topology\".\"lease_expires_at\" < now()",
+			"calls": 1,
+			"rows": 0,
+			"executionMs": 0.03587699999999999
+		},
+		{
+			"query": "select \"session_key\", \"owner_id\", \"owner_generation\", \"protocol_version\", \"token_hash\", \"identity_hash\", \"lease_expires_at\", \"desired_revision\", \"applied_revision\", \"desired_topology\", \"created_at\", \"updated_at\" from \"questpie_realtime_topology\" where (\"questpie_realtime_topology\".\"session_key\" = $1 and \"questpie_realtime_topology\".\"owner_id\" = $2 and \"questpie_realtime_topology\".\"owner_generation\" = $3 and \"questpie_realtime_topology\".\"lease_expires_at\" > now())",
+			"calls": 50,
+			"rows": 50,
+			"executionMs": 1.7482670000000016
+		},
+		{
+			"query": "select pg_notify($1, message) from unnest($2::text[]) as message",
+			"calls": 196,
+			"rows": 1960,
+			"executionMs": 5.434816000000001
+		},
+		{
+			"query": "update \"questpie_realtime_topology\" set \"lease_expires_at\" = now() + ($1 * interval $5) where (\"questpie_realtime_topology\".\"session_key\" = $2 and \"questpie_realtime_topology\".\"owner_id\" = $3 and \"questpie_realtime_topology\".\"owner_generation\" = $4 and \"questpie_realtime_topology\".\"lease_expires_at\" > now()) returning \"session_key\"",
+			"calls": 100,
+			"rows": 100,
+			"executionMs": 6.179034999999997
+		}
+	],
+	"implementation": {
+		"date": "2026-10-22",
+		"baselineCommit": "0f04557367fc5a34099db87bc9fddb75343f104f",
+		"finalDriverSha256": "f0468894fac5be27ee9777067e17867493b975f0ffe8f921a8b6eaeeddd90c61",
+		"storage": "PostgreSQL 17, 512 MiB tmpfs, fsync=on, synchronous_commit=on; pg_stat_statements preloaded",
+		"sourceNote": "Normal publish path as measured. Final driver additionally isolates exceptions from error observers."
+	}
+}

@@ -81,6 +81,8 @@ Leaving is not symmetric:
 - **Ungraceful.** A killed tab or dropped network waits for the lease to lapse,
   30 seconds by default.
 
+For a memory-only roster with broker heartbeats, add [`.ephemeral()`](/docs/client/channels/ephemeral). Its presence does not use the lease table or the settings below.
+
 ## SSE presence settings
 
 These live under `realtime.channelPresence` and apply only to the SSE transport.

@@ -17,10 +17,19 @@ import {
 	resolveChannelAuthoritySubject,
 } from "../../channels/authority.js";
 import { createChannelServiceContext } from "../../channels/context.js";
-import { ChannelsService } from "../../channels/service.js";
+import {
+	EphemeralSubscriptionUnavailableError,
+	isEphemeralAccessDenied,
+	validateEphemeralPresence,
+} from "../../channels/ephemeral.js";
+import {
+	ChannelsService,
+	ChannelRuntimeError,
+} from "../../channels/service.js";
 import { executeAccessRule } from "../../collection/crud/shared/access-control.js";
 import type { RequestContext } from "../../config/context.js";
 import type { Questpie } from "../../config/questpie.js";
+import { runInFreshRequestScope } from "../../config/request-scope.js";
 import { ApiError } from "../../errors/index.js";
 import { CrdtRealtimeBindingRejectedError } from "../../modules/core/integrated/crdt/realtime-binding.js";
 import {
@@ -202,6 +211,7 @@ type ValidatedChannelSubscription = {
 	params: Record<string, string>;
 	resolvedName: string;
 	presenceChannel: boolean;
+	ephemeral: boolean;
 	subject?: string;
 	lastEventId?: string;
 	presence?: Record<string, unknown>;
@@ -373,6 +383,7 @@ async function resolveRealtimeTopologyCandidate(
 				),
 			});
 		} catch (error) {
+			if (error instanceof EphemeralSubscriptionUnavailableError) throw error;
 			errors.push({
 				id: desired.id,
 				kind: desired.kind,
@@ -406,7 +417,11 @@ function createFencedClientSink(
 function edgeStageRejection(
 	error: unknown,
 ): RealtimeTopologyApplyRejectedError | null {
-	if (!(error instanceof RealtimeEdgeBindingStageError)) return null;
+	if (
+		!(error instanceof RealtimeEdgeBindingStageError) ||
+		error.cause instanceof EphemeralSubscriptionUnavailableError
+	)
+		return null;
 	return new RealtimeTopologyApplyRejectedError([
 		{
 			id: error.subscription.id,
@@ -760,6 +775,21 @@ async function resolveIncrementalTopic(
 	throw new Error("Invalid resource type");
 }
 
+function ephemeralUnavailablePayload(id: string) {
+	return {
+		code: "REALTIME_AUTHORIZATION_UNAVAILABLE",
+		channelSubscriptionId: id,
+		message: `Channel "${id}" authorization is unavailable`,
+	};
+}
+
+function ephemeralAuthorizationUnavailableResponse(id: string): Response {
+	return Response.json(
+		{ error: ephemeralUnavailablePayload(id) },
+		{ status: 503 },
+	);
+}
+
 async function resolveChannelSubscription(
 	app: Questpie<any>,
 	input: ChannelSubscriptionInput,
@@ -793,23 +823,49 @@ async function resolveChannelSubscription(
 		app.config.realtime?.channelSecurity,
 	);
 	const definition = channels.getDefinition(input.channel);
+	if (definition.ephemeralOptions && input.lastEventId)
+		throw new Error("Ephemeral channels cannot resume");
 	const resolvedName = channels.resolveName(input.channel, params);
 	const authoritySubject = resolveChannelAuthoritySubject(context);
 	let presence: Record<string, unknown> | undefined;
-	if (definition.visibility === "presence") {
-		const value = await channels.resolvePresence(input.channel, params);
-		if (value && typeof value === "object") {
-			presence = value as Record<string, unknown>;
+	try {
+		if (definition.visibility === "presence") {
+			const value = await channels.resolvePresence(input.channel, params);
+			if (value && typeof value === "object")
+				presence = value as Record<string, unknown>;
+		} else if (
+			!(await channels.authorize(input.channel, params, "subscribe"))
+		) {
+			throw new ChannelRuntimeError(
+				"channel_subscribe_denied",
+				"Channel subscription is denied",
+			);
 		}
-	} else if (!(await channels.authorize(input.channel, params, "subscribe"))) {
-		throw new Error("Channel subscription is denied");
+	} catch (error) {
+		if (definition.ephemeralOptions && isEphemeralAccessDenied(error))
+			throw new ChannelRuntimeError(
+				"channel_subscribe_denied",
+				"Channel subscription is denied",
+			);
+		if (
+			definition.ephemeralOptions &&
+			!(
+				error instanceof ChannelRuntimeError &&
+				error.code === "channel_subscribe_denied"
+			)
+		)
+			throw new EphemeralSubscriptionUnavailableError(error, input.id);
+		throw error;
 	}
+	if (definition.ephemeralOptions && presence)
+		validateEphemeralPresence(presence);
 	return {
 		id: input.id,
 		channel: input.channel,
 		params,
 		resolvedName,
 		presenceChannel: definition.visibility === "presence",
+		ephemeral: Boolean(definition.ephemeralOptions),
 		...(authoritySubject
 			? { subject: opaqueChannelAuthoritySubject(authoritySubject) }
 			: {}),
@@ -1005,6 +1061,8 @@ export async function realtimeSubscribe(
 						crdtSubscriptions.push(desired);
 					}
 				} catch (error) {
+					if (error instanceof EphemeralSubscriptionUnavailableError)
+						return ephemeralAuthorizationUnavailableResponse(desired.id);
 					entryErrors.push({
 						id: typeof desired.id === "string" ? desired.id : "unknown",
 						kind: typeof desired.kind === "string" ? desired.kind : "unknown",
@@ -1392,6 +1450,8 @@ export async function realtimeSubscribe(
 			}
 			validatedChannelsById.set(channel.id, channel);
 		} catch (error) {
+			if (error instanceof EphemeralSubscriptionUnavailableError)
+				return ephemeralAuthorizationUnavailableResponse(id);
 			channelErrors.push({
 				id,
 				message: error instanceof Error ? error.message : "Channel rejected",
@@ -2017,6 +2077,21 @@ export async function realtimeSubscribe(
 					);
 				};
 
+				const sendEphemeralUnavailable = (id: string) =>
+					sessionSink.write(
+						encodeSseEvent("error", ephemeralUnavailablePayload(id)),
+						"ordered-channel-event",
+					);
+				const sendEphemeralStageError = async (error: unknown) => {
+					if (
+						!(error instanceof RealtimeEdgeBindingStageError) ||
+						!(error.cause instanceof EphemeralSubscriptionUnavailableError)
+					)
+						return false;
+					await sendEphemeralUnavailable(error.subscription.id);
+					return true;
+				};
+
 				// Send per-topic error
 				const sendTopicError = (
 					topicId: string,
@@ -2026,7 +2101,13 @@ export async function realtimeSubscribe(
 					return send("error", rejection ?? { topicId, message });
 				};
 				const sendChannelError = (subscriptionId: string, message: string) =>
-					send("error", { channelSubscriptionId: subscriptionId, message });
+					sessionSink.write(
+						encodeSseEvent("error", {
+							channelSubscriptionId: subscriptionId,
+							message,
+						}),
+						"ordered-channel-event",
+					);
 
 				const closeIfEmpty = () => {
 					if (edge?.size && provisionalCrdtHold) provisionalCrdtHold = false;
@@ -2058,38 +2139,53 @@ export async function realtimeSubscribe(
 					try {
 						unsubscribeLedger = await app.realtime!.subscribeChannel({
 							subscriptionId: `${edgeSessionId}:${channel.id}:${bindingInstanceId}`,
+							channelSubscriptionId: channel.id,
 							channel: channel.resolvedName,
-							...(channel.subject
+							ephemeral: channel.ephemeral,
+							...(channel.subject || channel.ephemeral
 								? {
 										subject: channel.subject,
-										reauthorize: async () => {
-											const fresh = await resolveFreshRouteContext();
-											const channels = new ChannelsService(
-												app.config.channels ?? {},
-												app.realtime!,
-												createChannelServiceContext(app, fresh.appContext),
-												app.config.realtime?.channelSecurity,
-											);
-											if (channel.presenceChannel) {
-												const presence = await channels.resolvePresence(
+										reauthorize: () =>
+											runInFreshRequestScope(app, async () => {
+												const fresh = await resolveFreshRouteContext();
+												const channels = new ChannelsService(
+													app.config.channels ?? {},
+													app.realtime!,
+													createChannelServiceContext(app, fresh.appContext),
+													app.config.realtime?.channelSecurity,
+												);
+												if (channel.presenceChannel) {
+													try {
+														const presence = await channels.resolvePresence(
+															channel.channel,
+															channel.params,
+														);
+														return {
+															authorized: true,
+															...(presence && typeof presence === "object"
+																? {
+																		presence: presence as Record<
+																			string,
+																			unknown
+																		>,
+																	}
+																: {}),
+														};
+													} catch (error) {
+														if (
+															error instanceof ChannelRuntimeError &&
+															error.code === "channel_subscribe_denied"
+														)
+															return false;
+														throw error;
+													}
+												}
+												return channels.authorize(
 													channel.channel,
 													channel.params,
+													"subscribe",
 												);
-												return {
-													authorized: true,
-													...(presence && typeof presence === "object"
-														? {
-																presence: presence as Record<string, unknown>,
-															}
-														: {}),
-												};
-											}
-											return channels.authorize(
-												channel.channel,
-												channel.params,
-												"subscribe",
-											);
-										},
+											}),
 										close: async () => {
 											if (edge?.has(channel.id)) {
 												await edge.drop(channel.id);
@@ -2492,6 +2588,11 @@ export async function realtimeSubscribe(
 								admission,
 							);
 						} catch (error) {
+							if (
+								error instanceof EphemeralSubscriptionUnavailableError &&
+								error.channelSubscriptionId
+							)
+								await sendEphemeralUnavailable(error.channelSubscriptionId);
 							if (error instanceof RealtimeTopologyApplyRejectedError) {
 								for (const entry of error.entries) {
 									await send("error", {
@@ -2530,6 +2631,7 @@ export async function realtimeSubscribe(
 								},
 							);
 						} catch (error) {
+							await sendEphemeralStageError(error);
 							const rejection = edgeStageRejection(error);
 							if (rejection) {
 								for (const entry of rejection.entries) {
@@ -2563,30 +2665,59 @@ export async function realtimeSubscribe(
 						versions: [2],
 					},
 				});
-				await edge.apply(
-					{
-						topology: initialTopology,
-						ownerGeneration: topologySession.generation,
-						signal: topologySession.signal,
-					},
-					async (subscription) => {
-						if (subscription.kind === "query") {
-							return subscribeTopic(
-								validatedTopicsById.get(subscription.id)!,
-								resolved.appContext,
-							);
+				await edge
+					.apply(
+						{
+							topology: initialTopology,
+							ownerGeneration: topologySession.generation,
+							signal: topologySession.signal,
+						},
+						async (subscription) => {
+							if (subscription.kind === "query") {
+								return subscribeTopic(
+									validatedTopicsById.get(subscription.id)!,
+									resolved.appContext,
+								);
+							}
+							if (subscription.kind === "channel") {
+								return subscribeChannel(
+									validatedChannelsById.get(subscription.id)!,
+								);
+							}
+							if (subscription.kind === "crdt") {
+								return subscribeCrdt(subscription);
+							}
+							return { activate: () => {}, close: () => {} };
+						},
+					)
+					.catch(async (error) => {
+						if (!(await sendEphemeralStageError(error))) {
+							const rejection = edgeStageRejection(error);
+							if (
+								!rejection ||
+								!rejection.entries.every(
+									(entry) =>
+										entry.kind === "channel" &&
+										validatedChannelsById.get(entry.id)?.ephemeral,
+								)
+							)
+								throw error;
+							for (const entry of rejection.entries) {
+								await sessionSink.write(
+									encodeSseEvent("error", {
+										topologyEntryId: entry.id,
+										kind: entry.kind,
+										code: entry.code,
+										message: entry.message,
+									}),
+									"ordered-channel-event",
+								);
+							}
 						}
-						if (subscription.kind === "channel") {
-							return subscribeChannel(
-								validatedChannelsById.get(subscription.id)!,
-							);
-						}
-						if (subscription.kind === "crdt") {
-							return subscribeCrdt(subscription);
-						}
-						return { activate: () => {}, close: () => {} };
-					},
-				);
+						// A stream error would discard the addressed error frame.
+						requestClose();
+					});
+				if (closed) return;
 
 				// Send initial errors for invalid topics
 				for (const error of topicErrors) {

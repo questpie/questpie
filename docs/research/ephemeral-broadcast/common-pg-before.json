@@ -1,0 +1,279 @@
+{
+	"environment": {
+		"bun": "1.4.2",
+		"postgres": "PostgreSQL 17.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+		"os": "linux",
+		"cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"cpus": 12,
+		"loadAverage": [7.27, 6.11, 7.5],
+		"freeMemoryBytes": 6898950144
+	},
+	"durationMs": 10000,
+	"results": [
+		{
+			"mode": "writes-only",
+			"cursors": 50,
+			"pages": 10,
+			"inputHz": 10,
+			"elapsedMs": 10000,
+			"offered": 0,
+			"accepted": 0,
+			"cursorNotifies": 0,
+			"presenceNotifies": 0,
+			"notifies": 0,
+			"brokerPublishCalls": 0,
+			"notifySqlCalls": 0,
+			"notifySqlRows": 0,
+			"failedFanout": 0,
+			"pendingFanout": 0,
+			"notifyPerSecond": 0,
+			"receivedUnique": 0,
+			"deliveredFrames": 0,
+			"latencyP50Ms": null,
+			"latencyP95Ms": null,
+			"latencyP99Ms": null,
+			"ledgerInserts": 0,
+			"writes": 8878,
+			"writesPerSecond": 887.8,
+			"writeP95Ms": 0.8940909999992073,
+			"writeP99Ms": 1.9537020000007033,
+			"maximumPending": 0,
+			"errors": [],
+			"postgresWaitSamples": {
+				"CPU/running": 5,
+				"IO/WalWrite": 1
+			}
+		},
+		{
+			"mode": "ephemeral",
+			"cursors": 50,
+			"pages": 10,
+			"inputHz": 10,
+			"elapsedMs": 10528,
+			"offered": 5000,
+			"accepted": 5000,
+			"cursorNotifies": 1000,
+			"presenceNotifies": 20,
+			"notifies": 1020,
+			"brokerPublishCalls": 102,
+			"notifySqlCalls": 102,
+			"notifySqlRows": 1020,
+			"failedFanout": 0,
+			"pendingFanout": 0,
+			"notifyPerSecond": 96.88449848024315,
+			"receivedUnique": 5000,
+			"deliveredFrames": 25000,
+			"latencyP50Ms": 37,
+			"latencyP95Ms": 46,
+			"latencyP99Ms": 54,
+			"ledgerInserts": 0,
+			"writes": 9635,
+			"writesPerSecond": 915.1785714285713,
+			"writeP95Ms": 0.409947000000102,
+			"writeP99Ms": 0.6338150000010501,
+			"maximumPending": 50,
+			"errors": [],
+			"postgresWaitSamples": {
+				"CPU/running": 2,
+				"Client/ClientRead": 1
+			}
+		},
+		{
+			"mode": "channels",
+			"cursors": 50,
+			"pages": 10,
+			"inputHz": 10,
+			"elapsedMs": 10561,
+			"offered": 5000,
+			"accepted": 5000,
+			"cursorNotifies": 4976,
+			"presenceNotifies": 0,
+			"notifies": 4976,
+			"brokerPublishCalls": 4976,
+			"notifySqlCalls": 4976,
+			"notifySqlRows": 4976,
+			"failedFanout": 24,
+			"pendingFanout": 0,
+			"notifyPerSecond": 471.1675030773601,
+			"receivedUnique": 1085,
+			"deliveredFrames": 4806,
+			"latencyP50Ms": 1209,
+			"latencyP95Ms": 3074,
+			"latencyP99Ms": 3129,
+			"ledgerInserts": 5000,
+			"writes": 8677,
+			"writesPerSecond": 821.6078022914497,
+			"writeP95Ms": 2.5655170000027283,
+			"writeP99Ms": 5.826873999998497,
+			"maximumPending": 82,
+			"errors": [
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				},
+				{
+					"error": "Subscriber closed: slow_consumer"
+				}
+			],
+			"postgresWaitSamples": {
+				"CPU/running": 16,
+				"Client/ClientRead": 13,
+				"Lock/transactionid": 9,
+				"LWLock/WALInsert": 4,
+				"Timeout/VacuumTruncate": 1,
+				"Timeout/VacuumDelay": 1
+			}
+		}
+	],
+	"implementation": {
+		"date": "2026-10-22",
+		"baselineCommit": "0f04557367fc5a34099db87bc9fddb75343f104f",
+		"finalDriverSha256": "f0468894fac5be27ee9777067e17867493b975f0ffe8f921a8b6eaeeddd90c61",
+		"storage": "PostgreSQL 17, 512 MiB tmpfs, fsync=on, synchronous_commit=on; pg_stat_statements preloaded",
+		"sourceNote": "Normal publish path as measured. Final driver additionally isolates exceptions from error observers.",
+		"variant": "before"
+	}
+}

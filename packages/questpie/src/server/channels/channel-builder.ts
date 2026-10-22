@@ -19,6 +19,13 @@ export type ExtractChannelParams<TPattern extends string> = Simplify<
 >;
 
 export type ChannelEventSchemas = Record<string, z.ZodType>;
+export type EphemeralChannelOptions = Readonly<{
+	/** Latest value per publisher and event, batched per resolved channel. Default 100 ms; 0 flushes next turn. */
+	coalesceMs?: number;
+	/** Serialized event payload limit, default 1024 bytes, maximum 4096. */
+	maxPayloadBytes?: number;
+}>;
+
 export type ChannelVisibility = "public" | "private" | "presence";
 
 export type ChannelOperationContext<TPattern extends string> = AppContext & {
@@ -66,6 +73,7 @@ export interface ChannelDefinition<
 	readonly authorization: TAuthorization;
 	readonly presenceResolver: TPresence;
 	readonly visibility: TVisibility;
+	readonly ephemeralOptions?: EphemeralChannelOptions;
 }
 
 export type AnyChannelDefinition = ChannelDefinition<any, any, any, any, any>;
@@ -208,6 +216,7 @@ export class ChannelBuilder<
 	readonly authorization: TAuthorization;
 	readonly presenceResolver: TPresence;
 	readonly visibility: TVisibility;
+	readonly ephemeralOptions?: EphemeralChannelOptions;
 
 	constructor(state: {
 		pattern: TPattern;
@@ -215,6 +224,7 @@ export class ChannelBuilder<
 		authorization?: TAuthorization;
 		presenceResolver?: TPresence;
 		visibility?: TVisibility;
+		ephemeralOptions?: EphemeralChannelOptions;
 	}) {
 		validateChannelWirePattern(state.pattern);
 		this.pattern = state.pattern;
@@ -224,6 +234,7 @@ export class ChannelBuilder<
 		this.authorization = state.authorization as TAuthorization;
 		this.presenceResolver = state.presenceResolver as TPresence;
 		this.visibility = (state.visibility ?? "public") as TVisibility;
+		this.ephemeralOptions = state.ephemeralOptions;
 		const shortest = resolveChannelName(
 			this as AnyChannelDefinition,
 			Object.fromEntries(
@@ -235,6 +246,36 @@ export class ChannelBuilder<
 		);
 		void shortest;
 		Object.freeze(this);
+	}
+
+	/** Lossy, memory-only events and presence over the shared SSE connection. */
+	ephemeral(
+		options: EphemeralChannelOptions = {},
+	): ChannelBuilder<TPattern, TEvents, TAuthorization, TPresence, TVisibility> {
+		const coalesceMs = options.coalesceMs ?? 100;
+		const maxPayloadBytes = options.maxPayloadBytes ?? 1024;
+		if (!Number.isInteger(coalesceMs) || coalesceMs < 0 || coalesceMs > 1000) {
+			throw new Error(
+				"Ephemeral coalesceMs must be an integer between 0 and 1000",
+			);
+		}
+		if (
+			!Number.isInteger(maxPayloadBytes) ||
+			maxPayloadBytes < 1 ||
+			maxPayloadBytes > 4096
+		) {
+			throw new Error(
+				"Ephemeral maxPayloadBytes must be an integer between 1 and 4096",
+			);
+		}
+		return new ChannelBuilder({
+			pattern: this.pattern,
+			eventSchemas: this.eventSchemas as TEvents,
+			authorization: this.authorization,
+			presenceResolver: this.presenceResolver,
+			visibility: this.visibility,
+			ephemeralOptions: Object.freeze({ coalesceMs, maxPayloadBytes }),
+		});
 	}
 
 	events<const TNextEvents extends ChannelEventSchemas>(
@@ -252,6 +293,7 @@ export class ChannelBuilder<
 			authorization: this.authorization,
 			presenceResolver: this.presenceResolver,
 			visibility: this.visibility,
+			ephemeralOptions: this.ephemeralOptions,
 		});
 	}
 
@@ -274,6 +316,7 @@ export class ChannelBuilder<
 			eventSchemas: this.eventSchemas as TEvents,
 			authorization: normalized,
 			presenceResolver: this.presenceResolver,
+			ephemeralOptions: this.ephemeralOptions,
 			visibility: (this.visibility === "presence"
 				? "presence"
 				: "private") as TVisibility extends "presence" ? "presence" : "private",
@@ -302,6 +345,7 @@ export class ChannelBuilder<
 			authorization: this.authorization,
 			presenceResolver: resolver,
 			visibility: "presence",
+			ephemeralOptions: this.ephemeralOptions,
 		});
 	}
 }

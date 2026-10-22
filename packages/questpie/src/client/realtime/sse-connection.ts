@@ -11,6 +11,7 @@ export type RealtimeSseEvent = {
 };
 
 type TopologyResource = {
+	id: string;
 	kind: "topic" | "channel" | "crdt";
 	openPayload(): Record<string, unknown>;
 	desiredPayload(): Record<string, unknown>;
@@ -48,6 +49,11 @@ function normalizedError(error: unknown): Error {
  */
 export class SseConnectionManager {
 	private readonly resources = new Map<string, TopologyResource>();
+	private readonly channelRetries = new Map<
+		string,
+		{ failures: number; retryAt: number }
+	>();
+	private channelRetryTimer: ReturnType<typeof setTimeout> | null = null;
 	private abortController: AbortController | null = null;
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private watchdogTimer: ReturnType<typeof setTimeout> | null = null;
@@ -194,6 +200,7 @@ export class SseConnectionManager {
 		const pendingDirtyLanes = new Set<"visible" | "awareness" | undefined>();
 		let dirtyScheduled = false;
 		const release = this.register(input.id, {
+			id: input.id,
 			kind: "crdt",
 			openPayload: () => ({}),
 			desiredPayload: () => ({
@@ -260,9 +267,84 @@ export class SseConnectionManager {
 			if (released || this.resources.get(id) !== resource) return;
 			released = true;
 			this.resources.delete(id);
+			this.channelRetries.delete(id);
+			this.scheduleChannelRetry();
 			this.topologyGeneration += 1;
 			this.applyTopologyChange();
 		};
+	}
+
+	private retryChannel(value: unknown): boolean {
+		if (!value || typeof value !== "object") return false;
+		const payload = value as Record<string, unknown>;
+		if (
+			payload.code !== "REALTIME_AUTHORIZATION_UNAVAILABLE" ||
+			typeof payload.channelSubscriptionId !== "string"
+		)
+			return false;
+		const id = payload.channelSubscriptionId;
+		const resource = this.resources.get(id);
+		if (resource?.kind !== "channel") return !resource;
+		const previous = this.channelRetries.get(id);
+		if (previous?.retryAt) return true;
+		const failures = (previous?.failures ?? 0) + 1;
+		const error = new Error(payload.message as string);
+		const delay = Math.min(
+			this.options.maxRetryMs ?? 30_000,
+			(this.options.retryBaseMs ?? 1000) *
+				2 ** (failures - 1) *
+				(0.5 + (this.options.random ?? Math.random)()),
+		);
+		this.channelRetries.set(id, {
+			failures,
+			retryAt: Date.now() + Math.max(1, Math.ceil(delay)),
+		});
+		this.topologyGeneration += 1;
+		try {
+			resource.onEpochEnd?.(error);
+		} catch {
+			// Consumer callbacks cannot interrupt retry isolation.
+		}
+		if (failures >= 5 && this.resources.get(id) === resource) {
+			this.resources.delete(id);
+			this.channelRetries.delete(id);
+			try {
+				resource.onError(error);
+			} catch {
+				// Terminal delivery remains isolated to this channel.
+			}
+		}
+		this.scheduleChannelRetry();
+		queueMicrotask(() => this.applyTopologyChange());
+		return true;
+	}
+
+	private scheduleChannelRetry(): void {
+		if (this.channelRetryTimer) clearTimeout(this.channelRetryTimer);
+		this.channelRetryTimer = null;
+		let next = Infinity;
+		for (const { retryAt } of this.channelRetries.values()) {
+			if (retryAt > 0) next = Math.min(next, retryAt);
+		}
+		if (next === Infinity) return;
+		this.channelRetryTimer = setTimeout(
+			() => {
+				this.channelRetryTimer = null;
+				for (const retry of this.channelRetries.values()) {
+					if (retry.retryAt <= Date.now()) retry.retryAt = 0;
+				}
+				this.topologyGeneration += 1;
+				this.applyTopologyChange();
+				this.scheduleChannelRetry();
+			},
+			Math.max(1, next - Date.now()),
+		);
+	}
+
+	private activeResources(): TopologyResource[] {
+		return [...this.resources.values()].filter(
+			(resource) => !this.channelRetries.get(resource.id)?.retryAt,
+		);
 	}
 
 	private applyTopologyChange(): void {
@@ -325,8 +407,14 @@ export class SseConnectionManager {
 			);
 			if (!response.ok) {
 				const payload = (await response.json().catch(() => null)) as {
+					error?: unknown;
 					errors?: unknown[];
 				} | null;
+				if (abort.signal.aborted) return;
+				if (response.status === 503 && this.retryChannel(payload?.error)) {
+					this.reconnectPending = true;
+					return;
+				}
 				for (const error of payload?.errors ?? []) {
 					this.dispatch({
 						type: "error",
@@ -359,13 +447,13 @@ export class SseConnectionManager {
 			}
 			if (normalized.name === "AbortError" && !this.watchdogTriggered) {
 				if (this.reconnectPending) {
-					for (const resource of this.resources.values()) {
+					for (const resource of this.activeResources()) {
 						resource.onEpochEnd?.(normalized);
 					}
 				}
 				return;
 			}
-			for (const resource of this.resources.values()) {
+			for (const resource of this.activeResources()) {
 				resource.onEpochEnd?.(normalized);
 			}
 			const retryBaseMs = this.options.retryBaseMs ?? 1000;
@@ -392,7 +480,7 @@ export class SseConnectionManager {
 		channels: Record<string, unknown>[];
 		crdtHold?: true;
 	} {
-		const resources = [...this.resources.values()];
+		const resources = this.activeResources();
 		return {
 			topics: resources
 				.filter((resource) => resource.kind === "topic")
@@ -408,7 +496,7 @@ export class SseConnectionManager {
 	}
 
 	private desiredTopology() {
-		const resources = [...this.resources.values()];
+		const resources = this.activeResources();
 		return {
 			protocol: "questpie-realtime-topology",
 			version: 2,
@@ -459,6 +547,8 @@ export class SseConnectionManager {
 								error?: unknown;
 							} | null;
 							if (!isCurrent()) return;
+							if (response.status === 503 && this.retryChannel(payload?.error))
+								return;
 							if (isExpiredControlSession(response.status, payload?.error)) {
 								throw new Error(`Realtime control failed: ${response.status}`);
 							}
@@ -498,7 +588,11 @@ export class SseConnectionManager {
 				session.abort.abort();
 			})
 			.finally(() => {
-				if (this.flushPromise === flush) this.flushPromise = null;
+				if (this.flushPromise !== flush) return;
+				this.flushPromise = null;
+				if (isCurrent() && this.flushedGeneration < this.topologyGeneration) {
+					queueMicrotask(() => this.applyTopologyChange());
+				}
 			});
 		this.flushPromise = flush;
 		return flush;
@@ -584,8 +678,10 @@ export class SseConnectionManager {
 			}
 			return;
 		}
-		if (event.type === "ping") this.retryAttempt = 0;
-		if (event.type === "ping") return;
+		if (event.type === "ping") {
+			this.retryAttempt = 0;
+			return;
+		}
 		this.dispatch(event);
 	}
 
@@ -599,6 +695,10 @@ export class SseConnectionManager {
 				kind?: unknown;
 				message?: unknown;
 			};
+			if (event.type === "error" && this.retryChannel(payload)) {
+				this.reconnectPending = true;
+				return true;
+			}
 			const id =
 				typeof payload.topologyEntryId === "string"
 					? payload.topologyEntryId
@@ -628,6 +728,12 @@ export class SseConnectionManager {
 			if (!id) return false;
 			const resource = this.resources.get(id);
 			if (!resource) return false;
+			if (event.type !== "error" && this.channelRetries.get(id)?.retryAt)
+				return true;
+			if (event.type === "channel_ready") {
+				this.channelRetries.delete(id);
+				this.scheduleChannelRetry();
+			}
 			if (event.type === "error") {
 				const message =
 					typeof payload.message === "string"
@@ -693,6 +799,8 @@ export class SseConnectionManager {
 	}
 
 	private notifyAll(error: Error): void {
+		this.channelRetries.clear();
+		this.scheduleChannelRetry();
 		for (const resource of this.resources.values()) {
 			try {
 				resource.onError(error);
@@ -720,7 +828,7 @@ export class SseConnectionManager {
 	}
 
 	private hasDemand(): boolean {
-		return this.resources.size > 0 || this.holdCount > 0;
+		return this.activeResources().length > 0 || this.holdCount > 0;
 	}
 }
 

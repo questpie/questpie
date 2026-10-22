@@ -1,0 +1,81 @@
+{
+	"environment": {
+		"bun": "1.4.2",
+		"postgres": "PostgreSQL 17.11 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+		"os": "linux",
+		"cpu": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"cpus": 12,
+		"loadAverage": [8.13, 10.13, 11.25],
+		"freeMemoryBytes": 2972983296
+	},
+	"durationMs": 10000,
+	"results": [
+		{
+			"mode": "writes-only",
+			"cursors": 100,
+			"pages": 10,
+			"inputHz": 20,
+			"elapsedMs": 10001,
+			"offered": 0,
+			"accepted": 0,
+			"cursorNotifies": 0,
+			"presenceNotifies": 0,
+			"notifies": 0,
+			"fanoutRoundTrips": 0,
+			"failedFanout": 0,
+			"pendingFanout": 0,
+			"notifyPerSecond": 0,
+			"receivedUnique": 0,
+			"deliveredFrames": 0,
+			"latencyP50Ms": null,
+			"latencyP95Ms": null,
+			"latencyP99Ms": null,
+			"ledgerInserts": 0,
+			"writes": 8684,
+			"writesPerSecond": 868.3131686831317,
+			"writeP95Ms": 0.7903800000003685,
+			"writeP99Ms": 1.5624950000001263,
+			"maximumPending": 0,
+			"errors": [],
+			"postgresWaitSamples": {
+				"CPU/running": 4
+			}
+		},
+		{
+			"mode": "ephemeral",
+			"cursors": 100,
+			"pages": 10,
+			"inputHz": 20,
+			"elapsedMs": 10542,
+			"offered": 19600,
+			"accepted": 19600,
+			"cursorNotifies": 990,
+			"presenceNotifies": 34,
+			"notifies": 1024,
+			"fanoutRoundTrips": 104,
+			"failedFanout": 0,
+			"pendingFanout": 0,
+			"notifyPerSecond": 97.13526845000949,
+			"receivedUnique": 9850,
+			"deliveredFrames": 98460,
+			"latencyP50Ms": 35,
+			"latencyP95Ms": 63,
+			"latencyP99Ms": 93,
+			"ledgerInserts": 0,
+			"writes": 8909,
+			"writesPerSecond": 845.0958072472017,
+			"writeP95Ms": 1.4669360000007146,
+			"writeP99Ms": 3.2914010000022245,
+			"maximumPending": 200,
+			"errors": [],
+			"postgresWaitSamples": {
+				"Client/ClientRead": 2,
+				"CPU/running": 13,
+				"LWLock/BufferContent": 1
+			}
+		}
+	],
+	"storage": "tmpfs, 512 MiB; fsync=on; synchronous_commit=on",
+	"sourceBase": "a65bdc4c2a39dd4c16c9d69bbe2811784fb6714b",
+	"capturedAtUtc": "2026-10-21T23:47:56.378395+00:00"
+}

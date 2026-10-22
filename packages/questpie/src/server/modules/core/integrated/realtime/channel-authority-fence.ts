@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { and, eq, gt, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 
 import {
 	withTransaction,
@@ -339,6 +339,30 @@ export class ChannelAuthorityFenceStore {
 			.limit(1);
 		if (!row) throw new Error("Channel authority fence is unavailable");
 		return Number(row.generation);
+	}
+
+	/** One read for many subjects on a channel; absent rows are omitted. */
+	async readChannelGenerations(
+		channelHash: string,
+		subjects: readonly string[],
+	): Promise<Map<string, number>> {
+		const rows = await this.db
+			.select({
+				subject: questpieChannelAuthorityFenceTable.subject,
+				generation: questpieChannelAuthorityFenceTable.generation,
+			})
+			.from(questpieChannelAuthorityFenceTable)
+			.where(
+				and(
+					eq(questpieChannelAuthorityFenceTable.channelHash, channelHash),
+					inArray(questpieChannelAuthorityFenceTable.subject, [...subjects]),
+				),
+			);
+		const generations = new Map<string, number>();
+		for (const row of rows) {
+			generations.set(row.subject, Number(row.generation));
+		}
+		return generations;
 	}
 
 	private async ensureRow(

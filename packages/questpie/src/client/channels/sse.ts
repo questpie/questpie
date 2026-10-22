@@ -494,7 +494,10 @@ export class SseChannelTransport implements ChannelClientTransport {
 			const frame = parseCompatibleTypedEventWire<Record<string, unknown>>(
 				event.data,
 			);
-			if (event.type === "channel_event") {
+			if (
+				event.type === "channel_event" ||
+				event.type === "channel_ephemeral"
+			) {
 				const entry = this.entryForFrame(frame);
 				if (
 					!entry ||
@@ -507,7 +510,10 @@ export class SseChannelTransport implements ChannelClientTransport {
 					eventId: frame.eventId,
 					data: frame.data,
 				};
-				const decision = entry.cursor.accept(message);
+				const decision =
+					event.type === "channel_ephemeral"
+						? { status: "accepted" }
+						: entry.cursor.accept(message);
 				if (decision.status === "duplicate") return;
 				if (decision.status === "gap") {
 					this.failEntry(entry, channelGapError());
@@ -519,7 +525,9 @@ export class SseChannelTransport implements ChannelClientTransport {
 				}
 			} else if (event.type === "channel_ready") {
 				const id = frame.channelSubscriptionId;
-				const entry = [...this.entries.values()].find((item) => item.id === id);
+				const entry =
+					[...this.entries.values()].find((item) => item.id === id) ??
+					this.entryForFrame(frame);
 				if (entry) {
 					this.retryAttempt = 0;
 					entry.readiness.admit();
@@ -535,7 +543,9 @@ export class SseChannelTransport implements ChannelClientTransport {
 				}
 			} else if (event.type === "error") {
 				const id = frame.channelSubscriptionId;
-				const entry = [...this.entries.values()].find((item) => item.id === id);
+				const entry =
+					[...this.entries.values()].find((item) => item.id === id) ??
+					this.entryForFrame(frame);
 				if (entry) {
 					this.failEntry(
 						entry,

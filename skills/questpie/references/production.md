@@ -144,6 +144,7 @@ Bun SQL (`new SQL({ url })`) already pools connections internally. In single-ins
 | Adapter                               | Direct PG | PgBouncer (transaction)          | PgBouncer (session)         |
 | ------------------------------------- | --------- | -------------------------------- | --------------------------- |
 | `PgNotifyChangeBroker` (realtime)     | works     | broken, listens silently dropped | works (pooling neutralized) |
+| `PgNotifyEphemeralBroker` (awareness) | works     | broken, listens silently dropped | works (pooling neutralized) |
 | `pgBossAdapter` (queue)               | works     | broken, LISTEN/NOTIFY required   | works (pooling neutralized) |
 | Drizzle queries via Bun SQL           | works     | works                            | works                       |
 | `redisStreamsChangeBroker` (realtime) | n/a       | n/a                              | n/a                         |

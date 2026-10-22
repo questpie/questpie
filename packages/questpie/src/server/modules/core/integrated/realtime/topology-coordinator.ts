@@ -103,6 +103,12 @@ type TopologyMutationResult =
 			row: TopologyRow;
 	  };
 
+type TopologyLease = {
+	sessionKey: string;
+	ownerGeneration: number;
+	clientLeaseMs?: number;
+};
+
 interface RealtimeTopologyStore {
 	open(input: {
 		sessionKey: string;
@@ -149,6 +155,11 @@ interface RealtimeTopologyStore {
 		leaseMs: number;
 		clientLeaseMs?: number;
 	}): Promise<boolean>;
+	renewMany?(input: {
+		ownerId: string;
+		leaseMs: number;
+		sessions: readonly TopologyLease[];
+	}): Promise<TopologyLease[]>;
 	removeOwned(input: {
 		sessionKey: string;
 		ownerId: string;
@@ -701,6 +712,47 @@ export class PostgresRealtimeTopologyStore implements RealtimeTopologyStore {
 		return rows.length === 1;
 	}
 
+	async renewMany(input: {
+		ownerId: string;
+		leaseMs: number;
+		sessions: readonly TopologyLease[];
+	}): Promise<TopologyLease[]> {
+		const renewed: TopologyLease[] = [];
+		const table = questpieRealtimeTopologyTable;
+		// Bound parameter count and lock duration even on large pods.
+		for (let offset = 0; offset < input.sessions.length; offset += 1000) {
+			const values = input.sessions
+				.slice(offset, offset + 1000)
+				.map(
+					(entry) =>
+						sql`(${entry.sessionKey}::text, ${entry.ownerGeneration}::bigint, ${entry.clientLeaseMs ?? null}::integer)`,
+				);
+			const rows = await this.db
+				.update(table)
+				.set({ leaseExpiresAt: this.leaseDeadline(input.leaseMs) })
+				.where(
+					and(
+						eq(table.ownerId, input.ownerId),
+						gt(table.leaseExpiresAt, sql`now()`),
+						sql`exists (
+						select 1 from (values ${sql.join(values, sql`, `)})
+						as leases(session_key, generation, client_lease_ms)
+						where leases.session_key = ${table.sessionKey}
+						and leases.generation = ${table.ownerGeneration}
+						and (leases.client_lease_ms is null or ${table.updatedAt} >
+							now() - (leases.client_lease_ms * interval '1 millisecond'))
+					)`,
+					),
+				)
+				.returning({
+					sessionKey: table.sessionKey,
+					ownerGeneration: table.ownerGeneration,
+				});
+			renewed.push(...rows);
+		}
+		return renewed;
+	}
+
 	async removeOwned(input: {
 		sessionKey: string;
 		ownerId: string;
@@ -765,6 +817,7 @@ export class RealtimeTopologyCoordinator {
 	private readonly observer?: RealtimeObserver;
 	private readonly handlers = new Map<string, LocalHandler>();
 	private heartbeatTimer?: ReturnType<typeof setInterval>;
+	private heartbeatOperation: Promise<void> | null = null;
 	private reconcileTimer?: ReturnType<typeof setInterval>;
 	private reconcileOperation: Promise<void> | null = null;
 	private started = false;
@@ -1200,16 +1253,43 @@ export class RealtimeTopologyCoordinator {
 		});
 	}
 
-	private async heartbeat(): Promise<void> {
-		for (const [sessionKey, handler] of this.handlers) {
-			const renewed = await this.store.renew({
-				sessionKey,
-				ownerId: this.ownerId,
-				ownerGeneration: handler.generation,
-				leaseMs: this.leaseMs,
-				clientLeaseMs: handler.clientLeaseMs,
-			});
-			if (!renewed) {
+	private heartbeat(): Promise<void> {
+		if (this.heartbeatOperation) return this.heartbeatOperation;
+		const operation = this.runHeartbeat().finally(() => {
+			if (this.heartbeatOperation === operation) this.heartbeatOperation = null;
+		});
+		this.heartbeatOperation = operation;
+		return operation;
+	}
+
+	private async runHeartbeat(): Promise<void> {
+		const handlers = [...this.handlers];
+		const renewed = this.store.renewMany
+			? new Map(
+					(
+						await this.store.renewMany({
+							ownerId: this.ownerId,
+							leaseMs: this.leaseMs,
+							sessions: handlers.map(([sessionKey, handler]) => ({
+								sessionKey,
+								ownerGeneration: handler.generation,
+								clientLeaseMs: handler.clientLeaseMs,
+							})),
+						})
+					).map((row) => [row.sessionKey, row.ownerGeneration]),
+				)
+			: undefined;
+		for (const [sessionKey, handler] of handlers) {
+			const alive = renewed
+				? renewed.get(sessionKey) === handler.generation
+				: await this.store.renew({
+						sessionKey,
+						ownerId: this.ownerId,
+						ownerGeneration: handler.generation,
+						leaseMs: this.leaseMs,
+						clientLeaseMs: handler.clientLeaseMs,
+					});
+			if (!alive && this.handlers.get(sessionKey) === handler) {
 				this.observe({
 					type: "topology.lifecycle",
 					phase: "lease",
@@ -1249,6 +1329,8 @@ export class RealtimeTopologyCoordinator {
 		if (this.reconcileTimer) clearInterval(this.reconcileTimer);
 		this.heartbeatTimer = undefined;
 		this.reconcileTimer = undefined;
+		// A failed renewal must not prevent releasing sessions during shutdown.
+		await this.heartbeatOperation?.catch(() => {});
 		for (const key of this.handlers.keys()) {
 			await this.closeLocal(key, true, true);
 		}

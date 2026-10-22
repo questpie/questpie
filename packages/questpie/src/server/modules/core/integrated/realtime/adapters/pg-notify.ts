@@ -1,5 +1,7 @@
 import type { Client, ClientConfig, Notification } from "pg";
 
+import type { EphemeralBroker } from "#questpie/server/channels/ephemeral-broker.js";
+
 import type {
 	ChangeBroker,
 	ChangeBrokerState,
@@ -41,6 +43,19 @@ const PG_NOTIFY_MAX_PENDING_PUBLISHES = 256;
 const PG_NOTIFY_KEEPALIVE_INITIAL_DELAY_MS = 10_000;
 
 const ignoreError = () => {};
+
+/**
+ * Re-read hints that may share one queued notice. Receivers drain the durable
+ * log and ignore the high-water hint; topology and CRDT wakes carry fields
+ * receivers act on and are never folded.
+ */
+function wakeFoldKey(wake: ChangeWake): string | undefined {
+	if (wake.kind === "outbox-maybe-advanced") return `outbox:${wake.reason}`;
+	if (wake.kind === "channel-events-maybe-advanced") {
+		return `channel-events:${wake.reason}:${wake.channelHash ?? "*"}`;
+	}
+	return undefined;
+}
 
 async function withTimeout<T>(
 	promise: Promise<T>,
@@ -102,6 +117,14 @@ class PgNotifyDriver {
 	private listenerConnectOperation: Promise<void> | null = null;
 	private publishChain: Promise<void> = Promise.resolve();
 	private pendingPublishes = 0;
+	private drainingPublishes = false;
+	private readonly publishQueue: Array<{
+		payloads: readonly string[];
+		resolve: () => void;
+		reject: (error: unknown) => void;
+	}> = [];
+	/** Queued, not yet sent, requests that an identical fold key may join. */
+	private readonly queuedFolds = new Map<string, Promise<void>>();
 
 	constructor(options: PgNotifyDriverOptions = {}) {
 		this.channel = options.channel ?? "questpie_realtime";
@@ -182,12 +205,8 @@ class PgNotifyDriver {
 		}
 		this.notificationHandler = (msg) => {
 			if (!msg.payload) return;
-			let notice: unknown;
-			try {
-				notice = JSON.parse(msg.payload);
-			} catch {
-				return;
-			}
+			const notice = this.decodePayload(msg.payload);
+			if (notice === undefined) return;
 			for (const listener of this.listeners) {
 				listener(notice);
 			}
@@ -286,17 +305,40 @@ class PgNotifyDriver {
 		return () => this.stateHandlers.delete(handler);
 	}
 
-	protected async publishPayload(value: unknown): Promise<void> {
-		const payload = JSON.stringify(value);
-		const payloadBytes = new TextEncoder().encode(payload).byteLength;
-		if (payloadBytes >= PG_NOTIFY_MAX_PAYLOAD_BYTES) {
-			const error = new Error(
-				`${this.constructor.name} payload must be smaller than ${PG_NOTIFY_MAX_PAYLOAD_BYTES} bytes (received ${payloadBytes}).`,
-			);
-			this.reportError("payload", error);
-			throw error;
+	/** One parse for JSON listeners; a payload that is not JSON is not a notice. */
+	protected decodePayload(payload: string): unknown {
+		try {
+			return JSON.parse(payload);
+		} catch {
+			return undefined;
 		}
+	}
+
+	protected publishPayload(value: unknown, foldKey?: string): Promise<void> {
+		return this.publishSerializedPayloads([JSON.stringify(value)], foldKey);
+	}
+
+	protected async publishSerializedPayloads(
+		payloads: readonly string[],
+		foldKey?: string,
+	): Promise<void> {
+		for (const payload of payloads) {
+			const payloadBytes = Buffer.byteLength(payload, "utf8");
+			if (payloadBytes >= PG_NOTIFY_MAX_PAYLOAD_BYTES) {
+				const error = new Error(
+					`${this.constructor.name} payload must be smaller than ${PG_NOTIFY_MAX_PAYLOAD_BYTES} bytes (received ${payloadBytes}).`,
+				);
+				this.reportError("payload", error);
+				throw error;
+			}
+		}
+
 		if (this.stopping) throw new Error("pg-notify driver is stopping");
+		// A queued request is sent after this call, so it also carries this
+		// caller's wake: nothing committed before the call can miss it.
+		const folded =
+			foldKey === undefined ? undefined : this.queuedFolds.get(foldKey);
+		if (folded) return folded;
 		if (this.pendingPublishes >= PG_NOTIFY_MAX_PENDING_PUBLISHES) {
 			const error = new Error(
 				`pg-notify publish queue is full (${PG_NOTIFY_MAX_PENDING_PUBLISHES})`,
@@ -304,43 +346,72 @@ class PgNotifyDriver {
 			this.reportError("publish_queue", error);
 			throw error;
 		}
+		if (payloads.length === 0) return;
 		this.pendingPublishes += 1;
-		// Serialize NOTIFY queries on the dedicated publisher connection. The
-		// bounded queue protects memory during a burst; durable outbox polling
-		// remains the recovery path if admission rejects a notice.
-		const run = async () => {
-			if (this.stopping) throw new Error("pg-notify driver is stopping");
-			const client = await this.ensurePublisherClient();
-			try {
-				await this.ensurePublisherConnected(client);
-			} catch (error) {
-				// A failed client cannot connect again; the next publish creates one.
-				this.discardOwnedPublisherClient(client);
-				throw error;
-			}
-			if (this.stopping) throw new Error("pg-notify driver is stopping");
-			try {
-				await this.roundTrip(
-					client,
-					this.ownsPublisherClient,
-					"select pg_notify($1, $2)",
-					[this.channel, payload],
-				);
-			} catch (error) {
-				// A failed or unanswered publish gets a fresh session next time.
-				this.discardOwnedPublisherClient(client);
-				throw error;
-			}
-		};
-		const settled = this.publishChain.then(run, run);
-		this.publishChain = settled.catch(() => {});
+		const settled = new Promise<void>((resolve, reject) => {
+			this.publishQueue.push({ payloads: [...payloads], resolve, reject });
+		});
+		if (foldKey !== undefined) this.queuedFolds.set(foldKey, settled);
+		if (!this.drainingPublishes) {
+			this.drainingPublishes = true;
+			// Collect this turn's requests, then drain whatever accumulated during
+			// the last round trip. No timer or extra latency window is needed.
+			this.publishChain = Promise.resolve().then(() => this.drainPublishes());
+		}
+		return settled;
+	}
+
+	private async drainPublishes(): Promise<void> {
 		try {
-			await settled;
-		} catch (error) {
-			this.reportError("notify", error);
-			throw error;
+			while (this.publishQueue.length) {
+				const batch = this.publishQueue.splice(0);
+				this.queuedFolds.clear();
+				try {
+					if (this.stopping) throw new Error("pg-notify driver is stopping");
+					await this.sendPayloads(batch.flatMap((request) => request.payloads));
+					for (const request of batch) request.resolve();
+				} catch (error) {
+					try {
+						this.reportError("notify", error);
+					} catch {
+						// An error observer must not strand callers or the remaining queue.
+					}
+					for (const request of batch) request.reject(error);
+				} finally {
+					this.pendingPublishes -= batch.length;
+				}
+			}
 		} finally {
-			this.pendingPublishes -= 1;
+			this.drainingPublishes = false;
+		}
+	}
+
+	private async sendPayloads(payloads: readonly string[]): Promise<void> {
+		const client = await this.ensurePublisherClient();
+		try {
+			await this.ensurePublisherConnected(client);
+		} catch (error) {
+			// A failed client cannot connect again; the next publish creates one.
+			this.discardOwnedPublisherClient(client);
+			throw error;
+		}
+		if (this.stopping) throw new Error("pg-notify driver is stopping");
+		try {
+			// Every request keeps its payload and completion semantics. Sharing an
+			// autocommit amortizes round trips and the global NOTIFY commit lock for
+			// Channels, query invalidations, topology and CRDT as well as ephemeral.
+			await this.roundTrip(
+				client,
+				this.ownsPublisherClient,
+				payloads.length === 1
+					? "select pg_notify($1, $2)"
+					: "select pg_notify($1, message) from unnest($2::text[]) as message",
+				[this.channel, payloads.length === 1 ? payloads[0] : payloads],
+			);
+		} catch (error) {
+			// A failed or unanswered batch gets a fresh session next time.
+			this.discardOwnedPublisherClient(client);
+			throw error;
 		}
 	}
 
@@ -727,7 +798,7 @@ export class PgNotifyChangeBroker
 		}
 		const normalized = normalizeChangeWake(wake);
 		if (!normalized) throw new Error("Invalid ChangeWake payload");
-		await this.publishPayload(normalized);
+		await this.publishPayload(normalized, wakeFoldKey(normalized));
 	}
 
 	override async stop(): Promise<void> {
@@ -751,3 +822,76 @@ export class PgNotifyChangeBroker
 export const pgNotifyChangeBroker = (
 	options: PgNotifyChangeBrokerOptions = {},
 ) => new PgNotifyChangeBroker(options);
+
+export type PgNotifyEphemeralBrokerOptions = {
+	/** Direct/session-pooled URL. Never pass an application transaction client. */
+	connectionString: string;
+	/** Isolate applications sharing a database. Default questpie_ephemeral_v1. */
+	channel?: string;
+	/** Rate-limited LISTEN/NOTIFY failures. Defaults to console.error. */
+	onError?: (error: unknown) => void;
+};
+
+class EphemeralNotifyDriver extends PgNotifyDriver {
+	/** Packets stay the serialized strings the ephemeral runtime decodes once. */
+	protected override decodePayload(payload: string): unknown {
+		return payload;
+	}
+
+	send(messages: readonly string[]): Promise<void> {
+		return this.publishSerializedPayloads(messages);
+	}
+}
+
+/** One LISTEN connection per app process, plus one autocommit publisher.
+ * Reuses the existing driver's bounded queue, timeouts and reconnect handling.
+ */
+export class PgNotifyEphemeralBroker implements EphemeralBroker {
+	private readonly driver: EphemeralNotifyDriver;
+	private unsubscribe?: () => void;
+	private unsubscribeState?: () => void;
+
+	constructor(options: PgNotifyEphemeralBrokerOptions) {
+		this.driver = new EphemeralNotifyDriver({
+			connectionString: options.connectionString,
+			channel: options.channel ?? "questpie_ephemeral_v1",
+			onError: options.onError,
+		});
+	}
+
+	async start(
+		onMessage: (message: string) => void,
+		onDisconnect: (error: unknown) => void,
+	): Promise<void> {
+		if (this.unsubscribe) return;
+		this.unsubscribe = this.driver.subscribe((message) =>
+			onMessage(message as string),
+		);
+		this.unsubscribeState = this.driver.onStateChange((state) => {
+			if (state === "disconnected")
+				onDisconnect(new Error("Ephemeral LISTEN connection lost"));
+		});
+		try {
+			await this.driver.start();
+		} catch (error) {
+			await this.stop();
+			throw error;
+		}
+	}
+
+	publish(messages: readonly string[]): Promise<void> {
+		return this.driver.send(messages);
+	}
+
+	async stop(): Promise<void> {
+		this.unsubscribe?.();
+		this.unsubscribeState?.();
+		this.unsubscribe = undefined;
+		this.unsubscribeState = undefined;
+		await this.driver.stop();
+	}
+}
+
+export const pgNotifyEphemeralBroker = (
+	options: PgNotifyEphemeralBrokerOptions,
+) => new PgNotifyEphemeralBroker(options);

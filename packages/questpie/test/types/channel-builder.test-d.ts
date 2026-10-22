@@ -123,3 +123,17 @@ channels.publish("room", {
 	event: "typing",
 	data: { text: "hello" },
 });
+
+const ephemeral = channel("awareness-[pageId]")
+	.ephemeral()
+	.events({ cursor: z.object({ x: z.number() }) })
+	.authorize({ subscribe: true })
+	.presence(() => ({ id: "a" }));
+declare const awareness: Channels<{ awareness: typeof ephemeral }>;
+awareness
+	.awareness({ pageId: "one" })
+	.publish("cursor", { x: 1 }, { coalesceKey: "actor-a" });
+// @ts-expect-error ephemeral mode preserves schema input validation
+awareness.awareness({ pageId: "one" }).publish("cursor", { x: "bad" });
+// @ts-expect-error ephemeral mode preserves channel params
+awareness.awareness({ roomId: "one" });

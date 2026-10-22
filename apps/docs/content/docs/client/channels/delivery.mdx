@@ -9,6 +9,8 @@ Can you trust the order? Yes, per resolved channel, and the same on both
 transports. You cannot trust that every event survives an outage. The runtime
 says so out loud rather than guessing.
 
+These ordered-delivery guarantees apply to ordinary Channels. [Ephemeral channels](/docs/client/channels/ephemeral) use replaceable updates and rebuild presence after reconnecting.
+
 ## Event ids
 
 Every appended event gets an id built from the resolved channel name and a

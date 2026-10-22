@@ -60,6 +60,8 @@ the channel whose rule failed; on the channel HTTP routes the status is `500`,
 not `403`, because the server never decided. Your rule's own message stays
 server-side. Do not use a throw to mean no: return `false`.
 
+Ephemeral subscribe and publish rules treat user-mode CRUD permission errors as denial (`403` for an HTTP publish). Other failed or timed-out checks fail closed and retry only the affected channel while healthy shared-stream bindings continue; after five consecutive failures its `onError` reports the channel. See [ephemeral delivery](/docs/client/channels/ephemeral#delivery-and-presence).
+
 ## Why your own handler gets denied
 
 Publish has one bypass. A system context skips the publish rule entirely.
@@ -136,12 +138,12 @@ that key for another target or subject is a conflict.
 
 These live under `realtime.channelSecurity` in your runtime config.
 
-| Option                   | Default | What it does                         |
-| ------------------------ | ------- | ------------------------------------ |
-| `trustedOrigins`         | none    | Extra exact browser origins          |
-| `authorizationTimeoutMs` | `5000`  | Rule deadline. A timeout denies      |
-| `publishRatePerSecond`   | `10`    | Token refill for each publish bucket |
-| `publishBurst`           | `20`    | Tokens each bucket holds             |
+| Option                   | Default | What it does                                             |
+| ------------------------ | ------- | -------------------------------------------------------- |
+| `trustedOrigins`         | none    | Extra exact browser origins                              |
+| `authorizationTimeoutMs` | `5000`  | Rule deadline. Durable timeout denies; ephemeral retries |
+| `publishRatePerSecond`   | `10`    | Token refill for each publish bucket                     |
+| `publishBurst`           | `20`    | Tokens each bucket holds                                 |
 
 ### Origins
 

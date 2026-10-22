@@ -1,0 +1,99 @@
+# Preliminary adversarial audit and fixes
+
+Claude Opus 5.5 independently audited `da944cdf678fc7bf0113599164afba13004fcfaf`
+against `a65bdc4c2a39dd4c16c9d69bbe2811784fb6714b` on 2026-10-22. It exported
+that committed tree before reproducing findings because implementation work was
+continuing in the shared worktree. This preliminary audit is not merge clearance.
+
+| Finding                                                                    | Change and regression evidence                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1: delayed reauthorization inherited a disposed request scope             | The complete fresh-context/rule/presence callback owns a fresh disposable scope. Broker startup, flush timers and idle timers run outside the initiating request scope. HTTP tests exercise scoped policy disposal and post-response publishing; the infrastructure unit test checks absent ambient request state.                                                                                      |
+| F2: broker failures looked like permanent access denial                    | Listener loss closes the physical SSE epoch; the public client reconnects and re-admits bindings. Failed best-effort publish batches are dropped without disconnecting healthy subscribers. Failed or timed-out live checks deliver no unchecked data and close the transport; explicit policy denial remains terminal for that binding. Tests distinguish all three outcomes.                          |
+| F3: staging a cursor could overwrite the only presence snapshot            | Already-coalesced application frames use the existing bounded FIFO SSE queue. A staging regression holds activation until both presence and cursor have arrived and verifies `channel_ready` precedes both.                                                                                                                                                                                             |
+| F4: a fixed ceiling of 100 topics/subscribers was unsuitable for SaaS pods | Admission is configurable through `maxTopics` (4096 by default) and `maxSubscriptionsPerTopic` (1000). Existing per-principal SSE admission remains in force. Pending-topic overflow rejects a publish instead of returning a misleading receipt. A regression admits 101 distinct pages and checks explicit configured overflow. These remain bounded resources, not a distributed fairness guarantee. |
+| F5: anonymous publishers overwrote the system partition                    | Anonymous browser calls get independent receipt partitions. Trusted server code can supply a stable coalescing key. Tests publish system and independent anonymous events into one window.                                                                                                                                                                                                              |
+| F6: packing repeatedly serialized growing arrays                           | Each immutable entry is encoded once and cached weakly; packet packing counts UTF-8 bytes linearly. The wire carries independent typed envelopes without escaping them into strings. The large-batch test round-trips 10,000 entries including Dates and multibyte strings. `packing.json` records the CPU/wire-size tradeoff.                                                                          |
+| F7: `presence()` could resolve an empty or partial roster                  | Own membership is installed locally before the first roster. Remote rosters still converge asynchronously through peer sync; a pub/sub exchange cannot promise an atomic complete global snapshot. Documentation explicitly calls the one-shot result provisional and uses ongoing presence subscriptions for UI state.                                                                                 |
+| F8: shutdown stopped ingress before broadcasting leaves                    | Graceful shutdown releases subscriptions and flushes urgent leave packets before stopping the broker. A two-runtime regression verifies the other roster removes the member without waiting for TTL. A crash still expires through the lease.                                                                                                                                                           |
+| F9: many distinct wake notices could overflow a subscriber queue           | Queued outbox/channel-event wakes fold by kind, reason and channel. In-flight requests never absorb later commits; topology and CRDT notices retain distinct order. Driver tests cover a trailing wake during an active send. Durable state remains the recovery source.                                                                                                                                |
+| F10: minor configuration ambiguities                                       | Coalescing keys on durable publishes are rejected. The default broker uses the app logger and custom adapters accept `onError`. Ephemeral packets reach the runtime without the driver parse/stringify/parse bounce. Documentation requires a direct/session-pooled URL for the explicit broker; configuring a separate durable change broker does not implicitly reconfigure it.                       |
+
+The broker has three operations and no storage abstraction. No Redis implementation,
+authorization cache, weaker authority fence or new persistent presence table was
+introduced in response to the audit.
+
+The durable Channels contract remains useful for ordered, replayable transient
+streams and transactional semantic events. Collections plus live queries own
+re-readable domain state. Ephemeral topics own awareness and replaceable signals.
+Removing durable Channels in a v3 minor would discard existing ordering, replay,
+transactional publishing and provider integrations; the optimization work preserves
+those contracts.
+
+A subsequent exact-head Claude review of `83a94a79` reproduced S1: a temporary
+ACL/database failure persisting into reconnect admission was converted to a
+terminal channel error (or HTTP 400 without siblings). Admission now preserves
+infrastructure failures as retryable HTTP 503 or a failed transport epoch,
+including topology changes and staged reauthorization; explicit denial stays
+terminal. Public-client regressions cover standalone/mixed streams, incremental
+admission and authorization timeout. A backpressured revocation now closes the
+physical epoch if its addressed terminal frame cannot be delivered, preventing
+stale client readiness. These corrections follow the archived performance runs;
+their steady-state fan-out/authorization contracts are unchanged.
+
+Standards review also moved the three new broker/config exports from the
+internal channel barrel to the public `src/exports/channels.ts` entrypoint.
+The optional suggestion to extract two identical client lookup expressions was
+left unchanged; it was a judgment call, not a documented-standard violation.
+
+The `82fca046` adversarial round confirmed S1, then found S2: a permanently
+throwing ephemeral rule could keep healthy siblings in the same retry loop.
+User-mode CRUD 401/403/404 errors are now recognized as denial through wrapped
+causes. Retryable admission responses and asynchronous failure frames identify
+the logical channel. The shared client temporarily omits only that entry,
+retries it independently and reports a terminal per-channel error after five
+consecutive failures. Successful admission resets the count. The regression
+checks that a durable sibling delivers during a persistent generic rule failure,
+then that the ephemeral entry recovers; another uses the documented user-mode
+`findOne` rule and revokes collection read access. Both were red on `82fca046`.
+
+Targeted S2 proof: the HTTP/manager run passed 25 tests; the client/manager/runtime
+run passed 81 tests (the manager suite overlaps). The separate two-process
+PostgreSQL read-only regression passed. Both core TypeScript configurations, the
+core package build, formatter, targeted lint, skill freshness, any census and
+clone census passed. These checks do not replace CI or the next independent
+exact-head review.
+
+Claude exact-head review of `a40b44a6` cleared merge and confirmed S2 recovery,
+including persistent exceptions, initial mixed admission, live failure and
+user-mode CRUD denial. It also identified non-blocking N1 (failed broker startup
+during initial edge staging lacks the addressed retry frame), N2 (a released
+binding's in-flight 503 can abort a healthy epoch once), and N3 (publish denial
+and prolonged-outage retry exhaustion need clearer documentation). We chose to
+fix N1/N2 before release, with regressions, and clarify N3. These follow-ups
+require a new exact-head review; the earlier clearance is not transferred.
+
+N1/N2 targeted red-to-green proof passed: child HTTP/manager/runtime suites
+54/54, final parent HTTP/manager verification 30/30, both core TypeScript
+contracts, package build, formatting/lint and unchanged browser bundle budget.
+The final client guard preserves resource-kind isolation while treating a
+released channel's addressed retry response as handled.
+
+The `ab3aee1b` Claude round cleared the code and confirmed N1/N2/N3, while CI
+exposed an assertion that assumed retry timers never wake before their deadline.
+The test now checks topology transitions and all five admission attempts, allowing
+an unchanged cooldown snapshot. The reviewer also found non-blocking N4: oversized
+presence or a full per-process topic/subscription limit during opening staging
+could prevent healthy siblings from becoming ready. Presence size is now checked
+in preflight using the runtime's validator. Other ephemeral staging rejections
+send the existing addressed rejection in the ordered class and close normally;
+query, durable and CRDT staging failures retain their existing handling. Three
+public-client regressions were red before this fix and green afterwards.
+
+Retry deadlines are rounded up to whole milliseconds, avoiding redundant topology
+POSTs and fresh rule checks when fractional jitter would wake the timer early.
+The reviewer's six-run fixture on Bun 1.3.13 measured 3 redundant healthy-only
+POSTs over 24 retries before the change, and 0 over 24 afterwards. This is a
+small timing experiment, not a throughput capacity claim. The final targeted
+HTTP/manager/runtime runs passed 57 tests, both core TypeScript configurations
+and the package build passed, and the browser bundle remains within its unchanged
+122.7 KB limit. A new exact-head review and CI are still required.

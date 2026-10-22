@@ -5,7 +5,15 @@ description: Define schema-validated application events with channel(), authoriz
 
 Channels are typed application event streams built on the same realtime runtime as live queries. Define each channel once in `channels/`; codegen adds it to request contexts as `channels`, to the generated `AppConfig`, and to `client.channels`. The application API stays the same whether delivery uses the zero-infrastructure SSE path or the managed Pusher/Soketi path.
 
-Use channels for transient events such as chat notifications, progress, typing, or presence. The bounded replay ledger is delivery infrastructure, **not** queryable application history. Persist messages that users must retrieve later in a collection.
+Choose the delivery contract from what consumers need:
+
+| Need                                                           | Use                                                    | Example                                          |
+| -------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------ |
+| Re-readable domain data and the latest authorized query result | Collections plus [live queries](/docs/client/realtime) | Messages, notifications, task lists              |
+| Replaceable awareness without event/presence rows              | [Ephemeral channels](/docs/client/channels/ephemeral)  | Cursors, typing, online members                  |
+| Ordered events, bounded replay and transactional publication   | Ordinary Channels                                      | Command acknowledgments, ordered job transitions |
+
+The bounded channel ledger is delivery infrastructure, **not** queryable application history. A live query can collapse intermediate states; an ordinary channel retains each event for replay. Keep messages that users must retrieve later in a collection.
 
 ## Define a channel
 
@@ -16,7 +24,7 @@ import { z } from "zod";
 export default channel("chat-room-[roomId]")
 	.events({
 		message: z.object({ id: z.string(), text: z.string() }),
-		typing: z.object({ active: z.boolean() }),
+		receipt: z.object({ accepted: z.boolean() }),
 	})
 	.authorize({
 		subscribe: async ({ params, session, collections }) => {
@@ -168,7 +176,7 @@ const stop = chatRoom.subscribe(
 		if (message.event === "message") {
 			console.log(message.eventId, message.data.text);
 		} else {
-			console.log(message.data.active);
+			console.log(message.data.accepted);
 		}
 	},
 	{
@@ -178,7 +186,7 @@ const stop = chatRoom.subscribe(
 	},
 );
 
-const receipt = await chatRoom.publish("typing", { active: true });
+const receipt = await chatRoom.publish("receipt", { accepted: true });
 
 stop();
 ```
