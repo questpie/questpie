@@ -184,11 +184,12 @@ export type JsonRouteDefinition<
 	TInput = unknown,
 	TOutput = unknown,
 	TParams extends JsonRouteParams = JsonRouteParams,
+	TWireInput = unknown,
 > = {
 	readonly __brand: "route";
 	readonly mode: "json";
 	readonly method: HttpMethod;
-	readonly schema: z.ZodSchema<TInput>;
+	readonly schema: z.ZodType<TInput, TWireInput>;
 	readonly outputSchema?: z.ZodSchema<TOutput>;
 	readonly access?: RouteAccess;
 	readonly meta?: RouteMeta;
@@ -211,7 +212,8 @@ export type QueryRouteDefinition<
 	TOutput = unknown,
 	TParams extends JsonRouteParams = JsonRouteParams,
 	TLive extends boolean = boolean,
-> = JsonRouteDefinition<TInput, TOutput, TParams> & {
+	TWireInput = unknown,
+> = JsonRouteDefinition<TInput, TOutput, TParams, TWireInput> & {
 	readonly query: TLive extends true
 		? RouteQueryOptions<TInput> & { readonly live: RouteLiveOptions<TInput> }
 		: RouteQueryOptions<TInput>;
@@ -241,7 +243,10 @@ export type RouteDefinition<
 	TInput = unknown,
 	TOutput = unknown,
 	TParams extends JsonRouteParams = JsonRouteParams,
-> = JsonRouteDefinition<TInput, TOutput, TParams> | RawRouteDefinition<TParams>;
+	TWireInput = unknown,
+> =
+	| JsonRouteDefinition<TInput, TOutput, TParams, TWireInput>
+	| RawRouteDefinition<TParams>;
 
 /**
  * Route definition for heterogeneous route maps (app state, modules).
@@ -253,10 +258,18 @@ export type StoredRouteDefinition = RouteDefinition<any, any, any>;
 // Type Helpers
 // ============================================================================
 
+/** Parsed input passed to server handlers, access rules and LIVE dependencies. */
 export type InferRouteInput<T> = T extends {
 	schema: z.ZodSchema<infer Input>;
 }
 	? Input
+	: never;
+
+/** Input accepted by the schema before defaults and transforms, sent by clients. */
+export type InferRouteWireInput<T> = T extends {
+	schema: infer TSchema extends z.ZodType;
+}
+	? z.input<TSchema>
 	: never;
 
 export type InferRouteOutput<T> = T extends {
@@ -298,7 +311,8 @@ export type RouteWithParams<
 		JsonRouteDefinition<
 			InferRouteInput<TDef>,
 			InferRouteOutput<TDef>,
-			TParams
+			TParams,
+			InferRouteWireInput<TDef>
 		> &
 			// The rebuild must keep a query route's marker, including `live`.
 			(TDef extends { query: infer TQuery } ? { readonly query: TQuery } : {})

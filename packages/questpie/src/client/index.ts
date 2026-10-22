@@ -1,8 +1,8 @@
 import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
 	HttpMethod,
-	InferRouteInput,
 	InferRouteOutput,
+	InferRouteWireInput,
 	JsonRouteDefinition,
 	RawRouteDefinition,
 } from "#questpie/server/routes/types.js";
@@ -337,8 +337,8 @@ export type QuestpieClientConfig<TApp extends QuestpieApp = QuestpieApp> = {
 /**
  * Caller for a JSON route — sends input, returns typed output.
  */
-type JsonRouteCaller<TDef extends JsonRouteDefinition<any, any>> = (
-	input: InferRouteInput<TDef>,
+type JsonRouteCaller<TDef extends JsonRouteDefinition<any, any, any>> = (
+	input: InferRouteWireInput<TDef>,
 ) => Promise<InferRouteOutput<TDef>>;
 
 /**
@@ -406,7 +406,7 @@ type RouteMethodCallers<TDef> = TDef extends { method: infer TMethod }
 	: { post: RouteCallerFromDef<TDef> };
 
 type RouteCallerFromDef<TDef> =
-	TDef extends JsonRouteDefinition<any, any>
+	TDef extends JsonRouteDefinition<any, any, any>
 		? JsonRouteCaller<TDef>
 		: TDef extends RawRouteDefinition<any, infer TMethod>
 			? HttpMethod extends TMethod

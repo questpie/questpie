@@ -57,7 +57,11 @@ type JsonModeOf<TMode> = TMode extends QueryMode ? TMode : JsonMode;
 // would make `NoSchema = { __schema: false }` match `HasSchema<infer T>` as
 // T=false, mis-classifying a schemaless `route().handler()` chain as a JSON route.
 type NoSchema = { __schema: false };
-type HasSchema<T = unknown> = { __schema: true; __schemaType: T };
+type HasSchema<T = unknown, TWireInput = unknown> = {
+	__schema: true;
+	__schemaType: T;
+	__wireInputType: TWireInput;
+};
 
 // Explicit discriminant (`__output: true/false`) — a structural
 // `{ __output: T }` would make NoOutput match `HasOutput<infer O>` as O=false.
@@ -66,6 +70,8 @@ type HasOutput<T = unknown> = { __output: true; __outputType: T };
 
 type InputOf<TSchema> =
 	TSchema extends HasSchema<infer TInput> ? TInput : unknown;
+type WireInputOf<TSchema> =
+	TSchema extends HasSchema<unknown, infer TWireInput> ? TWireInput : unknown;
 
 // ============================================================================
 // Internal config shape
@@ -230,7 +236,7 @@ export class RouteBuilder<
 	 * Set input validation schema. Implies JSON mode.
 	 * Cannot be combined with `.raw()`.
 	 *
-	 * Generic over the schema itself and read through `z.output`, as Zod
+	 * Generic over the schema itself and read through `z.input` / `z.output`, as Zod
 	 * advises library authors. Inferring `T` from `z.ZodSchema<T>` instead
 	 * compares the concrete schema with `ZodType<T>` member by member, which
 	 * cost tens of thousands of instantiations per route.
@@ -241,7 +247,7 @@ export class RouteBuilder<
 		TParams,
 		_TMethod,
 		JsonModeOf<TMode>,
-		HasSchema<z.output<TZod>>,
+		HasSchema<z.output<TZod>, z.input<TZod>>,
 		TOutput
 	> {
 		return new RouteBuilder({ ...this._config, mode: "json", schema }) as any;
@@ -409,14 +415,21 @@ export class RouteBuilder<
 		: TMode extends QueryMode<infer TLive>
 			? TSchema extends HasSchema<infer TInput>
 				? TOutput extends HasOutput<infer O>
-					? QueryRouteDefinition<TInput, O, TParams, TLive>
+					? QueryRouteDefinition<
+							TInput,
+							O,
+							TParams,
+							TLive,
+							WireInputOf<TSchema>
+						>
 					: never
 				: never
 			: TSchema extends HasSchema<infer TInput>
 				? JsonRouteDefinition<
 						TInput,
 						TOutput extends HasOutput<infer O> ? O : Awaited<TReturn>,
-						TParams
+						TParams,
+						WireInputOf<TSchema>
 					>
 				: // Output-only chain → JSON route, `unknown` input, output from schema.
 					TMode extends JsonMode

@@ -322,6 +322,7 @@ export type {
 export type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
 
 export type {
+	InferRouteWireInput,
 	QueryRouteDefinition,
 	RouteLiveDependencies,
 	RouteLiveOptions,

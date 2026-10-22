@@ -10,6 +10,7 @@ export { email } from "#questpie/server/modules/core/integrated/mailer/template.
 export { migration } from "#questpie/server/migration/define-migration.js";
 
 export type {
+	InferRouteWireInput,
 	QueryRouteDefinition,
 	RouteLiveDependencies,
 	RouteLiveOptions,
