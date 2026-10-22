@@ -216,6 +216,7 @@ export default mcpConfig({
 		timeoutMs: 30_000,
 		maxConcurrency: 64,
 		maxConcurrencyPerPrincipal: 8,
+		maxCatalogBytes: 85_000,
 		maxTools: 512,
 		maxResources: 512,
 		onDiagnostic(event) {
@@ -224,6 +225,15 @@ export default mcpConfig({
 	},
 });
 ```
+
+The complete advertised tool catalog must be strictly less than 100,000 UTF-8
+bytes, including its wrapper, schemas, and metadata. This applies to HTTP,
+stdio, workload servers, and the workload port’s `listCustomTools()` result.
+Set `execution.maxCatalogBytes` to 85,000, as above, to reserve headroom. The
+ceiling cannot be raised. Oversized discovery fails with its largest
+contributors; reduce descriptions or explicitly narrow the configured tool
+catalog. Tools and required schemas are never silently dropped, and pagination
+cannot bypass the limit.
 
 Saturation rejects immediately; it does not create an unbounded queue. Timed
 out or cancelled work keeps its concurrency permit until the underlying

@@ -173,7 +173,7 @@ describe("applyMcpSchemaDiet (unit)", () => {
 		expect(JSON.stringify(schema)).toContain('"format":"uuid"');
 	});
 
-	it("normalizes a draft-07 tuple (array items + additionalItems) into 2020-12 prefixItems + items", () => {
+	it("preserves draft-07 tuple semantics for the SDK default validator", () => {
 		const closed = applyMcpSchemaDiet({
 			type: "array",
 			items: [{ type: "string" }, { type: "number" }],
@@ -181,29 +181,26 @@ describe("applyMcpSchemaDiet (unit)", () => {
 			minItems: 2,
 			maxItems: 2,
 		}) as Record<string, unknown>;
-		expect(closed.prefixItems).toEqual([
-			{ type: "string" },
-			{ type: "number" },
-		]);
-		expect(closed.items).toBe(false);
-		expect(closed).not.toHaveProperty("additionalItems");
+		expect(closed.items).toEqual([{ type: "string" }, { type: "number" }]);
+		expect(closed.additionalItems).toBe(false);
+		expect(closed).not.toHaveProperty("prefixItems");
 
 		const open = applyMcpSchemaDiet({
 			type: "array",
 			items: [{ type: "string" }],
 			additionalItems: true,
 		}) as Record<string, unknown>;
-		expect(open.prefixItems).toEqual([{ type: "string" }]);
-		expect(open).not.toHaveProperty("items");
-		expect(open).not.toHaveProperty("additionalItems");
+		expect(open.items).toEqual([{ type: "string" }]);
+		expect(open.additionalItems).toBe(true);
+		expect(open).not.toHaveProperty("prefixItems");
 
 		const trailingSchema = applyMcpSchemaDiet({
 			type: "array",
 			items: [{ type: "string" }],
 			additionalItems: { type: "number" },
 		}) as Record<string, unknown>;
-		expect(trailingSchema.prefixItems).toEqual([{ type: "string" }]);
-		expect(trailingSchema.items).toEqual({ type: "number" });
+		expect(trailingSchema.items).toEqual([{ type: "string" }]);
+		expect(trailingSchema.additionalItems).toEqual({ type: "number" });
 	});
 
 	it("leaves a schema that already uses 2020-12 prefixItems alone", () => {
@@ -515,7 +512,10 @@ describe("installSchemaDietListToolsHandler failure handling", () => {
 	let loggedErrors: unknown[][];
 
 	function fakeServer(overrides: Record<string, unknown>): McpServer {
-		return { server: { ...overrides } } as unknown as McpServer;
+		return {
+			_registeredTools: { tool: {} },
+			server: { ...overrides },
+		} as unknown as McpServer;
 	}
 
 	beforeEach(() => {
@@ -531,6 +531,18 @@ describe("installSchemaDietListToolsHandler failure handling", () => {
 		process.env.NODE_ENV = originalNodeEnv;
 		console.error = originalConsoleError;
 	});
+
+	it.each(["test", "production"])(
+		"fails closed in %s when the SDK registered-tool map is unavailable",
+		(env) => {
+			process.env.NODE_ENV = env;
+			const server = fakeServer({ _requestHandlers: new Map() });
+			Reflect.deleteProperty(server, "_registeredTools");
+			expect(() => installSchemaDietListToolsHandler(server)).toThrow(
+				/registered-tool map/,
+			);
+		},
+	);
 
 	it("throws outside production when the SDK's request-handler map is missing", () => {
 		process.env.NODE_ENV = "test";

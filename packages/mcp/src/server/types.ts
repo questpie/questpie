@@ -167,7 +167,7 @@ export interface McpExecutionConfig extends McpExecutionLimits {
 	 * wrapper metadata; excludes the transport's JSON-RPC envelope. Defaults to
 	 * 100000 and may only be tightened (e.g. 85000). Overflow rejects the whole
 	 * list; tools and required schemas are never removed to fit the budget.
-	 * Applies to Human and workload MCP servers.
+	 * Applies to human and workload MCP servers and workload port discovery.
 	 */
 	maxCatalogBytes?: number;
 	/**
