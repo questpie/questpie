@@ -121,3 +121,15 @@ call the shared executor in-process. Credentials are verified by their transport
 actor normalization, domain access and business behavior are shared. The larger
 planned-query and LIVE work can follow independently of this application
 refactor once the compatibility gate passes.
+
+## Adapter experiment follow-up
+
+The [actual HTTP/Human MCP/Agent workload MCP experiment](./operation-parity-experiment.md)
+now establishes shared success/replay schemas and results, policy blocking,
+input-injection rejection and standard actor/workload provenance. It also
+reproduces two framework gaps: native `ApiError.conflict` is translated to MCP
+`internal`, and a flat custom requester-run field survives only inside the
+context-extension bundle. These are concrete reasons to fix the common error
+projection and context propagation before migrating Autopilot commands. They do
+not require LIVE queries, a new naming system or a second business-operation
+catalog. The fixture does not establish actual Autopilot-domain parity.

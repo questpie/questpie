@@ -173,6 +173,19 @@ and SQL-growth assertions. This is one belongs-to edge, not nested-plan or
 production latency proof. It also exposes two implicit count queries in the
 current relation path; data-only reads are a further separate optimization.
 
+A third [HTTP/MCP adapter experiment](./operation-parity-experiment.md) ran one
+JSON route through actual HTTP, Human MCP and Agent workload MCP. All 14 assertion
+groups passed: the shared schemas, successful/replayed results, product policy,
+input injection rejection and standard actor/workload context behave consistently.
+Two known-gap assertions also passed: a thrown conflict is HTTP `409/CONFLICT`
+but MCP `internal`, and a custom requester-run extension survives in its extension
+bundle but is absent from flat handler arguments. These must be fixed once in the
+framework projection/context path before claiming the owner's complete parity
+contract. Do not replace duplicated handlers with duplicated error wrappers.
+This fixture has an in-memory domain and controlled identity; it does not prove
+Autopilot's database receipts, OAuth verification or a production migration.
+Its imported-source type check remains incomplete.
+
 This establishes that existing execution machinery can host these semantics;
 it does not establish live invalidation, revocation fencing or throughput.
 The fixture and [raw result](./prototype-results.json) are research artifacts,
@@ -183,7 +196,9 @@ not framework implementation or a production migration.
 1. **One contract, several projections.** Migrate one read and one domain command
    to a canonical schema/result/error definition using current route adapters.
    Compare HTTP, typed client and MCP structured results, refusals and actor
-   provenance; snapshot OpenAPI from the same output schema. Choose one canonical
+   provenance; snapshot OpenAPI from the same output schema. First close the
+   reproduced native-error and flat-extension gaps in the shared framework path.
+   Choose one canonical
    cancellation acknowledgement for all callers and preserve authenticated run
    provenance in context. Legacy envelopes are temporary migration shims with
    retirement gates, not the target architecture. Prefer deleting custom MCP
