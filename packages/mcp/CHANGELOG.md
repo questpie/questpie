@@ -1,5 +1,50 @@
 # @questpie/mcp
 
+## 3.40.0
+
+### Minor Changes
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Breaking behavior change: the previously unbounded MCP tools catalog must now be strictly less than 100,000 UTF-8 bytes, including the complete result wrapper, schemas, and metadata after visibility and schema projection. Oversized catalogs fail explicitly with their largest contributors. No tools or required input/output schemas are silently removed, and pagination cannot bypass the limit. This applies to HTTP, workload, trusted-maintenance stdio discovery, and the in-process workload port’s listCustomTools result.
+
+  Migration: measure your complete tools/list response and target less than 85,000 UTF-8 bytes to leave headroom. Reduce verbose descriptions or explicitly configure which tools your release exposes if it exceeds the limit. Set execution.maxCatalogBytes to 85,000 (or a stricter threshold) to enforce that margin; the 100,000-byte ceiling cannot be raised.
+
+  Generated CRUD discovery uses cached schema projections with shared references to reduce catalog size. Input schemas preserve optional defaults, including recursive block children. Workload server and in-process port discovery now advertise custom-tool defaults as optional, matching human discovery. Tool schemas explicitly declare their non-default draft-07 dialect, as required when differing from MCP’s 2020-12 default. Tool tuple schemas remain compatible with the MCP SDK’s default draft-07 validator, including output validation after a client lists tools. Server-side Zod validation, the complete visible tool set, and output schemas remain intact. Principals with zero visible tools receive an empty list and can still use authorized resources and prompts. Schema-diet installation fails closed in every environment if SDK internals prevent budget enforcement, and unsupported tools/list cursors return InvalidParams (-32602).
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Explicit query({ live }) routes can stream complete authorized projections over the existing shared SSE connection. Declare data and authority dependencies on captured collections with optional scalar equality anchors. Evaluations refresh identity and request-derived context facts, run access and data in one read-only repeatable-read snapshot, and capture the visibility watermark inside it. Authority events discard in-flight and queued results; maximum-age refresh and existing outbox reconciliation cover expiry and missed notifications. This is bounded reauthorization, not a linearizable revocation fence.
+
+  Typed route method callers gain watch(input, { signal, params, locale }) only for explicitly LIVE definitions. HTTP calls accept the same path params and locale options. Wire input types remain distinct from parsed handler input, and Date snapshots retain their typed encoding. The TanStack factory adds query(input, { realtime: true }) on these routes; the initial value comes from SSE, snapshots replace data, and access denial clears only that watch's cached data. Ordinary routes remain non-realtime. Route LIVE requires native SSE; collection delta delivery remains unchanged.
+
+  Once a transaction is acquired, its LIVE evaluation callback has a 30-second deadline and PostgreSQL statements have a 30-second timeout. Queueing, identity refresh, pool acquisition and cleanup can add time; application JavaScript must honor request.signal. Read query guidance for dependency coverage, context/transaction ownership, bounded relation loading, authorization batching, indexing and SQL-growth tests before adopting LIVE projections. No database migration is required.
+
+  MCP derives readOnlyHint from a declared query route while preserving explicit delegation/handoff requirements. Recursive route schemas are converted with their protocol envelope so root references retain their meaning beneath input or value.
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - This minor changes existing HTTP and MCP error contracts and MCP route schemas.
+  Apply the upgrade notes below before switching existing clients to the release;
+  the new query APIs do not make these changes opt-in.
+
+  Use one safe public error shape for HTTP and MCP product operations. MCP product failures now return canonical `{ error }` JSON in a text content block, with the same uppercase product code in `questpie/error` metadata; protocol refusals retain their existing carrier codes. Error responses omit `structuredContent` so SDK clients do not validate them against the success output schema after tool discovery. Responses in every environment omit causes, stack traces, database/hook internals, and invalid field values. Unknown exceptions remain opaque. Internal and hook diagnostic messages, including custom internal translation keys, serialize as generic public errors; the original error retains its diagnostic data server-side.
+
+  Route tools preserve original wire input for one shared validation/execution pass and advertise input schemas without applying transforms twice. Product access runs once at invocation with real route parameters. Exposed schemas that cannot describe JSON wire input now fail explicitly; use a representable input schema such as an ISO string piped into date coercion.
+
+  The MCP package now requires Zod 4.6.2 or newer for strict JSON Schema conversion with the explicit ISO encoding of Date outputs. Older unsupported schema conversions continue to fail closed.
+
+  Upgrade notes: MCP route discovery no longer evaluates functional route access rules with placeholder input or parameters. Statically denied routes remain hidden; credential scopes and delegation policy still filter discovery. Functional product access runs once on the actual invocation, so an advertised tool can still reject a particular input. Keep product policy in the route instead of copying it into transport policy.
+
+  Non-object route inputs (including root unions) use the advertised `{ input: ... }` MCP wrapper; non-object outputs use `{ value: ... }`. Update callers to the advertised schema. Unrepresentable input or output schemas now fail registration explicitly instead of advertising an empty schema. Date inputs need an explicit JSON wire schema, such as ISO text piped into date coercion; Date outputs advertise ISO text. Arbitrary output transforms require a representable output contract.
+
+  Public HTTP handleError now treats an unwrapped ZodError as an internal 500. Convert errors from application-owned input parsing with ApiError.fromZodError; do not convert handler or output errors. HOOK_ERROR is exposed as INTERNAL_SERVER_ERROR, and validation details are limited to eight entries. The compatibility isDev option no longer enables public diagnostic disclosure. Use server-side logs for full diagnostics. Custom and CRUD MCP tools retain their existing error classification; canonical route product errors are normalized by the shared route executor.
+
+  The MCP SDK is pinned to 1.32.1 because route schema adaptation depends on its validation and registration contract. Upgrade it only with discovery-before-invocation parity and schema-reference tests.
+
+  Preparation also classifies a ZodError thrown by a nested parse inside the input schema as VALIDATION_ERROR; unknown transform exceptions and handler/output Zod errors remain internal. Field-error bounds now preserve safe path/message feedback when localization issue data is too large. executeJsonRoute input failures now throw ApiError rather than raw ZodError; fromZodError retains at most eight fields without invalid values. Unique-constraint product messages omit the conflicting value.
+
+  Delegated handoffs validate credentials and input before invoking execution; product access remains at execution, so an approval may still be followed by a product denial. Approval is not a cached authorization verdict.
+
+### Patch Changes
+
+- Updated dependencies [[`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`1ed72ab`](https://github.com/questpie/questpie/commit/1ed72abbdf993235953f81836b1c91758bb3f092), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010)]:
+  - questpie@3.40.0
+
 ## 3.39.0
 
 ### Patch Changes

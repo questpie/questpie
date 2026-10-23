@@ -1,5 +1,15 @@
 # @questpie/admin
 
+## 3.40.0
+
+### Patch Changes
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Encode literal record IDs in admin workflow transitions, audit-history reads and form action endpoints. IDs containing percent signs, spaces or slashes now reach the same record after HTTP parameter decoding. Continue passing literal IDs rather than pre-encoding them.
+
+- Updated dependencies [[`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`1ed72ab`](https://github.com/questpie/questpie/commit/1ed72abbdf993235953f81836b1c91758bb3f092), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010)]:
+  - questpie@3.40.0
+  - @questpie/tanstack-query@3.40.0
+
 ## 3.39.0
 
 ### Patch Changes

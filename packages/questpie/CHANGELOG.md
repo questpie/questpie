@@ -1,5 +1,71 @@
 # questpie
 
+## 3.40.0
+
+### Minor Changes
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Caller-authored relation predicates now apply the target collection's read access before testing `some`, `none`, `every`, `is`, or `isNot`; many-to-many predicates also apply junction access. An unreadable target behaves as an empty set, including in parent counts. Trusted server-authored access predicates and system-mode reads retain their existing behavior. Policies receive the concrete target predicate for each read; decisions are not cached across predicates.
+
+  Upgrade note: parent reads that previously inferred hidden related rows can now return different results and totals. Review relation filters in user-facing reads. Filters added by beforeRead hooks receive the same treatment; put trusted authorization predicates in the collection's read rule. Localized relation predicates now resolve against the target's translations with locale fallback rather than an outer table's column.
+
+  For hasMany and manyToMany hydration, limit and offset now apply per parent after target authorization and filtering, rather than once across the entire parent batch. For example, two parents with limit: 1 can each receive one readable child. Bounded many-to-many results honor orderBy with a target-id tie breaker; unbounded junction ordering is unchanged. Non-negative integer bounds, including digit strings from query parameters, are accepted; malformed bounds return BAD_REQUEST. No schema migration is required.
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add batchRead for field read policies that acquire permission facts once per authorized page. It returns one boolean per selected document and preserves existing per-row rules, system bypass, nested field filtering, and hook ordering. The additive batch context includes the effective database handle, so permission facts inside a query route use its read-only snapshot; use this handle instead of a captured root app.db.
+
+  The callback is evaluated afresh per field path and read, without a permission cache. Globals and write responses use a singleton batch; row-dependent aggregates remain unsupported. In the PGlite growth fixture, 10/50/100 roots each use five statements: page plus count, then one fact lookup for each of three protected field paths. This does not optimize I/O loops inside callbacks or establish PostgreSQL plan/throughput performance.
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Explicit query({ live }) routes can stream complete authorized projections over the existing shared SSE connection. Declare data and authority dependencies on captured collections with optional scalar equality anchors. Evaluations refresh identity and request-derived context facts, run access and data in one read-only repeatable-read snapshot, and capture the visibility watermark inside it. Authority events discard in-flight and queued results; maximum-age refresh and existing outbox reconciliation cover expiry and missed notifications. This is bounded reauthorization, not a linearizable revocation fence.
+
+  Typed route method callers gain watch(input, { signal, params, locale }) only for explicitly LIVE definitions. HTTP calls accept the same path params and locale options. Wire input types remain distinct from parsed handler input, and Date snapshots retain their typed encoding. The TanStack factory adds query(input, { realtime: true }) on these routes; the initial value comes from SSE, snapshots replace data, and access denial clears only that watch's cached data. Ordinary routes remain non-realtime. Route LIVE requires native SSE; collection delta delivery remains unchanged.
+
+  Once a transaction is acquired, its LIVE evaluation callback has a 30-second deadline and PostgreSQL statements have a 30-second timeout. Queueing, identity refresh, pool acquisition and cleanup can add time; application JavaScript must honor request.signal. Read query guidance for dependency coverage, context/transaction ownership, bounded relation loading, authorization batching, indexing and SQL-growth tests before adopting LIVE projections. No database migration is required.
+
+  MCP derives readOnlyHint from a declared query route while preserving explicit delegation/handoff requirements. Recursive route schemas are converted with their protocol envelope so root references retain their meaning beneath input or value.
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Preserve Zod wire input types separately from parsed route input. Typed clients now accept the original schema input, including ISO strings piped into Date coercion, transforms, defaults and optional values. Handlers, access rules and LIVE dependency callbacks keep the parsed output type. The distinction survives route parameters and generated definitions; `InferRouteWireInput` is available from the server, services and client entrypoints.
+
+  HTTP route parameters are percent-decoded exactly once before route access and execution, matching the literal values supplied through MCP and LIVE. Catch-all parameters retain slashes, and literal percent escapes are not decoded twice. Malformed encoded parameters return BAD_REQUEST (400). Applications that manually decoded HTTP route parameters should remove that extra decoding.
+
+  The collection client encodes literal IDs on every by-ID endpoint, preserving IDs such as `50%off` and `a%20b` through reads, mutations, versions and workflow transitions. Pass literal IDs instead of pre-encoding them. Standalone `.` and `..` parameter values are rejected before opening client requests and during LIVE admission because URL normalization cannot preserve them as path segments.
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - This minor changes existing HTTP and MCP error contracts and MCP route schemas.
+  Apply the upgrade notes below before switching existing clients to the release;
+  the new query APIs do not make these changes opt-in.
+
+  Use one safe public error shape for HTTP and MCP product operations. MCP product failures now return canonical `{ error }` JSON in a text content block, with the same uppercase product code in `questpie/error` metadata; protocol refusals retain their existing carrier codes. Error responses omit `structuredContent` so SDK clients do not validate them against the success output schema after tool discovery. Responses in every environment omit causes, stack traces, database/hook internals, and invalid field values. Unknown exceptions remain opaque. Internal and hook diagnostic messages, including custom internal translation keys, serialize as generic public errors; the original error retains its diagnostic data server-side.
+
+  Route tools preserve original wire input for one shared validation/execution pass and advertise input schemas without applying transforms twice. Product access runs once at invocation with real route parameters. Exposed schemas that cannot describe JSON wire input now fail explicitly; use a representable input schema such as an ISO string piped into date coercion.
+
+  The MCP package now requires Zod 4.6.2 or newer for strict JSON Schema conversion with the explicit ISO encoding of Date outputs. Older unsupported schema conversions continue to fail closed.
+
+  Upgrade notes: MCP route discovery no longer evaluates functional route access rules with placeholder input or parameters. Statically denied routes remain hidden; credential scopes and delegation policy still filter discovery. Functional product access runs once on the actual invocation, so an advertised tool can still reject a particular input. Keep product policy in the route instead of copying it into transport policy.
+
+  Non-object route inputs (including root unions) use the advertised `{ input: ... }` MCP wrapper; non-object outputs use `{ value: ... }`. Update callers to the advertised schema. Unrepresentable input or output schemas now fail registration explicitly instead of advertising an empty schema. Date inputs need an explicit JSON wire schema, such as ISO text piped into date coercion; Date outputs advertise ISO text. Arbitrary output transforms require a representable output contract.
+
+  Public HTTP handleError now treats an unwrapped ZodError as an internal 500. Convert errors from application-owned input parsing with ApiError.fromZodError; do not convert handler or output errors. HOOK_ERROR is exposed as INTERNAL_SERVER_ERROR, and validation details are limited to eight entries. The compatibility isDev option no longer enables public diagnostic disclosure. Use server-side logs for full diagnostics. Custom and CRUD MCP tools retain their existing error classification; canonical route product errors are normalized by the shared route executor.
+
+  The MCP SDK is pinned to 1.32.1 because route schema adaptation depends on its validation and registration contract. Upgrade it only with discovery-before-invocation parity and schema-reference tests.
+
+  Preparation also classifies a ZodError thrown by a nested parse inside the input schema as VALIDATION_ERROR; unknown transform exceptions and handler/output Zod errors remain internal. Field-error bounds now preserve safe path/message feedback when localization issue data is too large. executeJsonRoute input failures now throw ApiError rather than raw ZodError; fromZodError retains at most eight fields without invalid values. Unique-constraint product messages omit the conflicting value.
+
+  Delegated handoffs validate credentials and input before invoking execution; product access remains at execution, so an approval may still be followed by a product denial. Approval is not a cached authorization verdict.
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Declare read-only routes with `.query()`. Each evaluation uses a repeatable-read transaction for access, handler execution, output validation and request-derived context facts, with a fresh request-service scope. Queries require input/output schemas, an explicit access rule and an explicit request context; they never inherit standalone system access or join an ambient transaction. Ordinary routes retain their transaction ownership.
+
+  JSON route access rules receive parsed input. Framework services take precedence over context-extension collisions in JSON/raw route access and handlers. LIVE dependency metadata can be declared on query routes; watch transport support follows separately.
+
+### Patch Changes
+
+- [#423](https://github.com/questpie/questpie/pull/423) [`1ed72ab`](https://github.com/questpie/questpie/commit/1ed72abbdf993235953f81836b1c91758bb3f092) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Pass verified app context extensions directly to JSON and raw route handlers, matching access rules and other framework handlers. Reserved framework arguments take precedence over extension fields. This preserves server-resolved provenance such as requester run IDs when the same route executes over HTTP or MCP.
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Keep LIVE route queries subscribed after temporary compute failures so the next dependency change or maximum-age refresh can recover. Treat hidden-resource NOT_FOUND failures like other access denials. Clear only the affected TanStack query's protected snapshot while fresh authority is unavailable, including its cancellation fallback, without interrupting sibling subscriptions.
+
+  The TanStack LIVE arm reports pending with no data while recovering, rather than success with undefined data. Cancellation leaves an empty pending cache, including after a healthy snapshot, so remounting starts a fresh watch without restoring an old protected value. Opening a watch over previously cached one-shot data can briefly report pending.
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Reject SQL issued through a query evaluation's database handle after cancellation or completion, including prepared statements created before cancellation. This prevents a late handler from using a connection returned to another request. Query routes refuse nested transactions and preserve database statement timeouts stricter than their 30-second limit. LIVE locale resolution now uses the same Accept-Language path as a one-shot route call.
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Prevent maximum-age LIVE refreshes from repeatedly discarding authorized evaluations under load. Age deadlines remove pending old snapshots and request a fresh check; actual authority events still fence in-flight work. Coherent evaluations also absorb dependency wakes received before their compute slot starts, rather than running a redundant snapshot afterward. This preserves fresh authorization and the documented queue/evaluation component of the revocation bound, without caching permission results.
+
 ## 3.39.0
 
 ### Minor Changes
