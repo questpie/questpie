@@ -106,102 +106,132 @@ describe("Pusher realtime client transport", () => {
 		mock.restore();
 	});
 
-	test("keeps collections.live transport-agnostic and refetches on private invalidation", async () => {
-		const fetcher: typeof fetch = async (input, init) => {
-			const url = String(input);
-			requests.push({ url, init });
-			expect(new Headers(init?.headers).get("Authorization")).toMatch(
-				/^Bearer token-/,
-			);
-			if (url.endsWith("/realtime/config")) {
-				return Response.json({
-					transport: "shared-provider",
-					config: {
-						provider: "pusher",
-						key: "public-key",
-						cluster: "eu",
-						authEndpoint: "realtime/auth",
-					},
-				});
-			}
-			if (url.endsWith("/realtime/auth")) {
-				expect(init?.headers).toMatchObject({
-					Authorization: expect.stringMatching(/^Bearer token-/),
-					"Content-Type": "application/x-www-form-urlencoded",
-				});
-				return Response.json({ auth: "signed" });
-			}
-			if (url.endsWith("/realtime") && init?.method === "POST") {
-				const body = JSON.parse(String(init.body));
-				if (body.transport === "shared-provider") {
+	test.each(["find", "get"] as const)(
+		"refetches a %s topic on private invalidation",
+		async (operation) => {
+			const fetcher: typeof fetch = async (input, init) => {
+				const url = String(input);
+				requests.push({ url, init });
+				expect(new Headers(init?.headers).get("Authorization")).toMatch(
+					/^Bearer token-/,
+				);
+				if (url.endsWith("/realtime/config")) {
 					return Response.json({
 						transport: "shared-provider",
-						sessionId: "session-1",
-						token: "control-1",
-						channel: "private-questpie-rt-session-1",
-						control: {
-							protocol: "questpie-realtime-topology",
-							versions: [2],
+						config: {
+							provider: "pusher",
+							key: "public-key",
+							cluster: "eu",
+							authEndpoint: "realtime/auth",
 						},
 					});
 				}
-				return Response.json({ status: "accepted" }, { status: 202 });
-			}
-			if (url.startsWith("http://localhost:3000/posts")) {
-				snapshotVersion += 1;
-				return Response.json({
-					docs: [{ id: String(snapshotVersion) }],
-					totalDocs: 1,
-				});
-			}
-			throw new Error(`Unexpected request: ${url}`);
-		};
-		const client = createClient<any>({
-			baseURL: "http://localhost:3000",
-			fetch: fetcher,
-			getAuthHeaders: () => ({
-				Authorization: `Bearer token-${++authVersion}`,
-			}),
-		});
-		const snapshots: unknown[] = [];
-		const errors: Error[] = [];
-		const stop = client.collections.posts.live(
-			{ where: { published: true } },
-			(snapshot) => snapshots.push(snapshot),
-			{ onError: (error) => errors.push(error) },
-		);
+				if (url.endsWith("/realtime/auth")) {
+					expect(init?.headers).toMatchObject({
+						Authorization: expect.stringMatching(/^Bearer token-/),
+						"Content-Type": "application/x-www-form-urlencoded",
+					});
+					return Response.json({ auth: "signed" });
+				}
+				if (url.endsWith("/realtime") && init?.method === "POST") {
+					const body = JSON.parse(String(init.body));
+					if (body.transport === "shared-provider") {
+						return Response.json({
+							transport: "shared-provider",
+							sessionId: "session-1",
+							token: "control-1",
+							channel: "private-questpie-rt-session-1",
+							control: {
+								protocol: "questpie-realtime-topology",
+								versions: [2],
+							},
+						});
+					}
+					return Response.json({ status: "accepted" }, { status: 202 });
+				}
+				if (url.startsWith("http://localhost:3000/posts")) {
+					snapshotVersion += 1;
+					if (operation === "get") {
+						expect(new URL(url).pathname).toBe("/posts/a%2520b");
+						return Response.json({ id: "a%20b", revision: snapshotVersion });
+					}
+					return Response.json({
+						docs: [{ id: String(snapshotVersion) }],
+						totalDocs: 1,
+					});
+				}
+				throw new Error(`Unexpected request: ${url}`);
+			};
+			const client = createClient<any>({
+				baseURL: "http://localhost:3000",
+				fetch: fetcher,
+				getAuthHeaders: () => ({
+					Authorization: `Bearer token-${++authVersion}`,
+				}),
+			});
+			const snapshots: unknown[] = [];
+			const errors: Error[] = [];
+			const stop =
+				operation === "get"
+					? client.realtime.subscribe(
+							{
+								resourceType: "collection",
+								resource: "posts",
+								operation: "get",
+								id: "a%20b",
+							},
+							(snapshot) => snapshots.push(snapshot),
+							undefined,
+							undefined,
+							(error) => errors.push(error),
+						)
+					: client.collections.posts.live(
+							{ where: { published: true } },
+							(snapshot) => snapshots.push(snapshot),
+							{ onError: (error) => errors.push(error) },
+						);
 
-		await waitFor(
-			() => snapshots.length === 1 && FakePusher.instances.length === 1,
-		);
-		expect(FakePusher.instances[0].key).toBe("public-key");
-		expect(snapshots[0]).toEqual({
-			docs: [{ id: "1" }],
-			totalDocs: 1,
-		});
-		expect(errors).toHaveLength(0);
+			await waitFor(
+				() => snapshots.length === 1 && FakePusher.instances.length === 1,
+			);
+			expect(FakePusher.instances[0].key).toBe("public-key");
+			expect(snapshots[0]).toEqual(
+				operation === "get"
+					? { id: "a%20b", revision: 1 }
+					: {
+							docs: [{ id: "1" }],
+							totalDocs: 1,
+						},
+			);
+			expect(errors).toHaveLength(0);
 
-		FakePusher.instances[0].channel.emit("questpie:invalidate", {
-			sessionId: "session-1",
-		});
-		await waitFor(() => snapshots.length === 2);
-		expect(snapshots[1]).toEqual({
-			docs: [{ id: "2" }],
-			totalDocs: 1,
-		});
+			FakePusher.instances[0].channel.emit("questpie:invalidate", {
+				sessionId: "session-1",
+			});
+			await waitFor(() => snapshots.length === 2);
+			expect(snapshots[1]).toEqual(
+				operation === "get"
+					? { id: "a%20b", revision: 2 }
+					: {
+							docs: [{ id: "2" }],
+							totalDocs: 1,
+						},
+			);
 
-		stop();
-		await waitFor(() =>
-			requests.some(({ url, init }) => {
-				if (!url.endsWith("/realtime") || init?.method !== "POST") return false;
-				const body = JSON.parse(String(init.body));
-				return body.topology?.subscriptions?.length === 0;
-			}),
-		);
-		client.realtime.destroy();
-		expect(FakePusher.instances[0].disconnected).toBe(true);
-		expect(authVersion).toBeGreaterThanOrEqual(4);
-	});
+			stop();
+			await waitFor(() =>
+				requests.some(({ url, init }) => {
+					if (!url.endsWith("/realtime") || init?.method !== "POST")
+						return false;
+					const body = JSON.parse(String(init.body));
+					return body.topology?.subscriptions?.length === 0;
+				}),
+			);
+			client.realtime.destroy();
+			expect(FakePusher.instances[0].disconnected).toBe(true);
+			expect(authVersion).toBeGreaterThanOrEqual(4);
+		},
+	);
 
 	test("flushes the newest desired topology and closes the final server session", async () => {
 		const controls: Array<{

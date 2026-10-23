@@ -1,4 +1,5 @@
 import { runInFreshRequestScope } from "#questpie/server/config/request-scope.js";
+import { stringifyCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
 
 import { deriveDeltaOp, type RealtimeDeliveryMode } from "./delta.js";
 import {
@@ -7,6 +8,7 @@ import {
 	type RealtimeObserver,
 } from "./observer.js";
 import { encodeSseEvent } from "./sse-client-transport.js";
+import { sharedSseKeepAliveTicker } from "./sse-keep-alive.js";
 import type {
 	RealtimeChangeEvent,
 	RealtimeErrorListener,
@@ -294,6 +296,10 @@ function rebindGroupProvider(group: GroupProvider): void {
 }
 
 type SchedulerGroup = {
+	coherent: boolean;
+	authorityEpoch: number;
+	onInvalidate?: () => void;
+	unregisterMaxAge?: () => void;
 	key: string;
 	topicId: string;
 	topics: RealtimeTopics;
@@ -315,7 +321,7 @@ type SchedulerGroup = {
 	disposed: boolean;
 };
 
-export type RefreshSubscriptionInput = {
+export type LegacyRefreshSubscriptionInput = {
 	key: string;
 	topicId: string;
 	topics: RealtimeTopics;
@@ -336,6 +342,22 @@ export type RefreshSubscriptionInput = {
 	deltaRebootstrapIntervalMs?: number;
 	heartbeatIntervalMs?: number;
 };
+
+/** A snapshot and watermark produced together by the query executor. */
+export type CoherentRefreshSubscriptionInput = Pick<
+	LegacyRefreshSubscriptionInput,
+	"key" | "topicId" | "onFrame" | "onError" | "onTransportError"
+> & {
+	kind: "coherent";
+	dependencies: readonly { topic: RealtimeTopics; authority: boolean }[];
+	compute: () => Promise<{ data: unknown; upToDate: string }>;
+	maxAgeMs?: number;
+	/** Synchronously discard protected output buffered by the edge. */
+	onInvalidate: () => void;
+};
+export type RefreshSubscriptionInput =
+	| LegacyRefreshSubscriptionInput
+	| CoherentRefreshSubscriptionInput;
 
 const sha256 = async (value: string): Promise<string> => {
 	const digest = await globalThis.crypto.subtle.digest(
@@ -445,6 +467,28 @@ export class RealtimeRefreshScheduler {
 	}
 
 	subscribe(input: RefreshSubscriptionInput): () => void {
+		if ("kind" in input)
+			return this.subscribeSnapshot({
+				...input,
+				// A route binding never adopts another binding's cached authority or output.
+				key: `${input.key}:${globalThis.crypto.randomUUID()}`,
+				topics: input.dependencies[0]?.topic ?? {
+					resourceType: "collection",
+					resource: "",
+				},
+			});
+		return this.subscribeSnapshot(input);
+	}
+
+	private subscribeSnapshot(
+		input: LegacyRefreshSubscriptionInput &
+			Partial<
+				Pick<
+					CoherentRefreshSubscriptionInput,
+					"kind" | "dependencies" | "maxAgeMs" | "onInvalidate"
+				>
+			>,
+	): () => void {
 		if (input.mode === "delta") return this.subscribeDelta(input);
 
 		let group = this.groups.get(input.key);
@@ -453,6 +497,9 @@ export class RealtimeRefreshScheduler {
 			created = true;
 			group = {
 				key: input.key,
+				coherent: input.kind === "coherent",
+				authorityEpoch: 0,
+				onInvalidate: input.onInvalidate,
 				topicId: input.topicId,
 				topics: input.topics,
 				sinceSeq: input.sinceSeq,
@@ -468,11 +515,48 @@ export class RealtimeRefreshScheduler {
 				disposed: false,
 			};
 			this.groups.set(input.key, group);
-			group.unsubscribe = this.realtime.subscribe(
-				(event) => this.requestRefresh(group!, event.seq),
-				input.topics,
-				(error) => this.reportTransportError(group!, error),
+			const dependencies = input.dependencies ?? [
+				{ topic: input.topics, authority: false },
+			];
+			let subscribing = true;
+			const unsubscribes = dependencies.map(({ topic, authority }) =>
+				this.realtime.subscribe(
+					(event) => {
+						if (group!.disposed) return;
+						if (authority) {
+							group!.authorityEpoch++;
+							group!.lastFrame = undefined;
+							group!.lastHash = undefined;
+							group!.onInvalidate?.();
+						}
+						if (subscribing) {
+							group!.lastSeq = Math.max(group!.lastSeq, event.seq);
+							return;
+						}
+						this.requestRefresh(group!, event.seq);
+					},
+					topic,
+					(error) => this.reportTransportError(group!, error),
+				),
 			);
+			subscribing = false;
+			group.unsubscribe = () => {
+				for (const unsubscribe of unsubscribes) unsubscribe();
+			};
+			if (group.coherent)
+				group.unregisterMaxAge = sharedSseKeepAliveTicker.register(
+					input.maxAgeMs ?? 60_000,
+					() => {
+						if (group!.disposed) return;
+						// A deadline requests fresh authorization, but is not evidence
+						// of an authority change. Invalidating active evaluations on
+						// every tick can starve work that takes longer than maxAge.
+						group!.lastFrame = undefined;
+						group!.lastHash = undefined;
+						group!.onInvalidate?.();
+						this.requestRefresh(group!, group!.lastSeq);
+					},
+				);
 			if (input.captureWatermark && input.heartbeatIntervalMs !== undefined) {
 				group.heartbeatTimer = setInterval(() => {
 					this.startTask(
@@ -514,11 +598,12 @@ export class RealtimeRefreshScheduler {
 			group!.disposed = true;
 			if (group!.heartbeatTimer) clearInterval(group!.heartbeatTimer);
 			group!.unsubscribe();
+			group!.unregisterMaxAge?.();
 			this.groups.delete(group!.key);
 		};
 	}
 
-	private subscribeDelta(input: RefreshSubscriptionInput): () => void {
+	private subscribeDelta(input: LegacyRefreshSubscriptionInput): () => void {
 		if (!input.hydrateRows) {
 			throw new Error("Delta subscriptions require hydrateRows");
 		}
@@ -1057,7 +1142,11 @@ export class RealtimeRefreshScheduler {
 	private async initialize(group: SchedulerGroup): Promise<void> {
 		try {
 			let resume: { latestSeq: number; reset: boolean; current: boolean };
-			if (group.sinceSeq !== undefined && this.realtime.getResumeState) {
+			if (
+				!group.coherent &&
+				group.sinceSeq !== undefined &&
+				this.realtime.getResumeState
+			) {
 				resume = await this.realtime.getResumeState(group.sinceSeq);
 			} else {
 				resume = {
@@ -1132,7 +1221,9 @@ export class RealtimeRefreshScheduler {
 	}
 
 	private async refresh(group: SchedulerGroup): Promise<void> {
-		const operation = realtimeOperation(group.topics.operation);
+		const operation = group.coherent
+			? "query"
+			: realtimeOperation(group.topics.operation);
 		try {
 			do {
 				group.refreshQueued = false;
@@ -1142,15 +1233,41 @@ export class RealtimeRefreshScheduler {
 					operation,
 					subscribers: group.subscribers.size,
 				});
-				const upToDate = await group.captureWatermark?.();
-				this.observe({
-					type: "routing.authoritative_db",
-					operation,
-				});
-				const data = await this.runBounded(group.compute);
+				let epoch = group.authorityEpoch;
+				let seq = group.lastSeq;
+				let upToDate = await group.captureWatermark?.();
+				this.observe({ type: "routing.authoritative_db", operation });
+				let computed: unknown;
+				try {
+					computed = await this.runBounded(() => {
+						if (group.coherent) {
+							// The owned snapshot begins after this queue wait. It
+							// includes earlier commits; only later wakes need a rerun.
+							epoch = group.authorityEpoch;
+							seq = group.lastSeq;
+							group.refreshQueued = false;
+						}
+						return group.compute();
+					});
+				} catch (error) {
+					if (group.disposed) return;
+					if (epoch !== group.authorityEpoch) continue;
+					throw error;
+				}
 				if (group.disposed) return;
-				const serialized = JSON.stringify(data);
+				if (epoch !== group.authorityEpoch) continue;
+				const data = group.coherent
+					? (computed as { data: unknown }).data
+					: computed;
+				if (group.coherent)
+					upToDate = (computed as { upToDate: string }).upToDate;
+				const serialized = group.coherent
+					? stringifyCompatibleTypedEventWire({ data })
+					: JSON.stringify(data);
 				const hash = await sha256(serialized);
+				// Hashing yields too: an authority wake can invalidate the result here.
+				if (group.disposed) return;
+				if (epoch !== group.authorityEpoch) continue;
 				if (hash === group.lastHash) {
 					this.observe({
 						type: "refresh.suppressed",
@@ -1161,7 +1278,7 @@ export class RealtimeRefreshScheduler {
 						const frame = encodeSseEvent("up-to-date", {
 							type: "up-to-date",
 							topicId: group.topicId,
-							seq: group.lastSeq,
+							seq,
 							upToDate,
 						});
 						for (const subscriber of group.subscribers) {
@@ -1176,7 +1293,7 @@ export class RealtimeRefreshScheduler {
 				group.lastHash = hash;
 				group.lastFrame = encodeSseEvent("snapshot", {
 					topicId: group.topicId,
-					seq: group.lastSeq,
+					seq,
 					data,
 					reset: group.nextReset,
 					...(upToDate === undefined ? {} : { upToDate }),
@@ -1209,6 +1326,13 @@ export class RealtimeRefreshScheduler {
 	}
 
 	private reportError(group: SchedulerGroup, error: unknown): void {
+		if (group.disposed) return;
+		if (group.coherent) {
+			group.authorityEpoch++;
+			group.lastFrame = undefined;
+			group.lastHash = undefined;
+			group.onInvalidate?.();
+		}
 		for (const subscriber of group.subscribers) subscriber.onError(error);
 	}
 
@@ -1220,6 +1344,8 @@ export class RealtimeRefreshScheduler {
 
 	private async runBounded<T>(compute: () => Promise<T>): Promise<T> {
 		if (this.activeComputations >= this.maxConcurrency) {
+			if (this.pendingComputations.length >= 1024)
+				throw new Error("Realtime compute queue is full");
 			await new Promise<void>((resolve) =>
 				this.pendingComputations.push(resolve),
 			);

@@ -113,6 +113,34 @@ describe("client by-id aliases (canonical CRUD vocabulary)", () => {
 		expect(calls[1]?.method).toBe("POST");
 	});
 
+	it.each(["50%off", "a%20b", "a/b ?#", "café"])(
+		"encodes the literal id %s on every by-id endpoint",
+		async (id) => {
+			await client.collections.posts.findOne({ where: { id } });
+			await client.collections.posts.update({ id, data: {} });
+			await client.collections.posts.delete({ id });
+			await client.collections.posts.restore({ id });
+			await client.collections.posts.purgeById({ id });
+			await client.collections.posts.findVersions({ id });
+			await client.collections.posts.revertToVersion({ id, version: 1 });
+			await client.collections.posts.transitionStage({ id, stage: "draft" });
+			const base = `/posts/${encodeURIComponent(id)}`;
+			expect(calls.map(({ url }) => url.pathname)).toEqual([
+				base,
+				base,
+				base,
+				`${base}/restore`,
+				`${base}/purge`,
+				`${base}/versions`,
+				`${base}/revert`,
+				`${base}/transition`,
+			]);
+			expect(
+				calls.every(({ url }) => url.hash === "" && url.search === ""),
+			).toBe(true);
+		},
+	);
+
 	it("serializes optimistic-concurrency inputs on every mutation surface", async () => {
 		await client.collections.posts.updateById({
 			id: "post-1",

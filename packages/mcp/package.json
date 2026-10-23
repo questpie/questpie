@@ -69,12 +69,13 @@
 		"test": "bun test ./test"
 	},
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.32.1",
+		"@modelcontextprotocol/sdk": "1.32.1",
 		"questpie": "workspace:*",
-		"zod": "^4.2.1"
+		"zod": "^4.6.2"
 	},
 	"devDependencies": {
 		"@better-auth/oauth-provider": "^1.7.4",
+		"@questpie/admin": "workspace:*",
 		"better-auth": "^1.7.4",
 		"bun-types": "latest",
 		"tsdown": "^0.18.3"

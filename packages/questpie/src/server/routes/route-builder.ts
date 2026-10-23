@@ -24,10 +24,13 @@ import type {
 	JsonRouteParams,
 	JsonRouteDefinition,
 	JsonRouteHandlerArgs,
+	QueryRouteDefinition,
 	RawRouteDefinition,
 	RawRouteHandlerArgs,
 	RouteAccess,
+	RouteLiveOptions,
 	RouteMeta,
+	RouteQueryOptions,
 } from "./types.js";
 
 // ============================================================================
@@ -42,17 +45,33 @@ type MethodOf<TMethod> =
 type NoMode = { __mode: false };
 type JsonMode = { __mode: "json" };
 type RawMode = { __mode: "raw" };
+// `.query()` is a JSON route with snapshot semantics; `TLive` records `live`.
+type QueryMode<TLive extends boolean = boolean> = {
+	__mode: "query";
+	__live: TLive;
+};
+// `.schema()` / `.outputSchema()` imply JSON mode without dropping `.query()`.
+type JsonModeOf<TMode> = TMode extends QueryMode ? TMode : JsonMode;
 
 // Explicit discriminant (`__schema: true/false`) — a structural `{ __schema: T }`
 // would make `NoSchema = { __schema: false }` match `HasSchema<infer T>` as
 // T=false, mis-classifying a schemaless `route().handler()` chain as a JSON route.
 type NoSchema = { __schema: false };
-type HasSchema<T = unknown> = { __schema: true; __schemaType: T };
+type HasSchema<T = unknown, TWireInput = unknown> = {
+	__schema: true;
+	__schemaType: T;
+	__wireInputType: TWireInput;
+};
 
 // Explicit discriminant (`__output: true/false`) — a structural
 // `{ __output: T }` would make NoOutput match `HasOutput<infer O>` as O=false.
 type NoOutput = { __output: false };
 type HasOutput<T = unknown> = { __output: true; __outputType: T };
+
+type InputOf<TSchema> =
+	TSchema extends HasSchema<infer TInput> ? TInput : unknown;
+type WireInputOf<TSchema> =
+	TSchema extends HasSchema<unknown, infer TWireInput> ? TWireInput : unknown;
 
 // ============================================================================
 // Internal config shape
@@ -65,7 +84,33 @@ interface BuilderConfig {
 	outputSchema?: z.ZodSchema<any>;
 	access?: RouteAccess;
 	meta?: RouteMeta;
+	query?: RouteQueryOptions<any>;
 	handler?: (...args: any[]) => any;
+}
+
+/** Bounds of `live.maxAgeMs`: frequent enough to expire stale authority, rare enough to stay cheap. */
+const LIVE_MAX_AGE_MS = { min: 1_000, max: 3_600_000 } as const;
+
+function assertLiveOptions(live: RouteLiveOptions<any>): void {
+	if (typeof live?.data !== "function") {
+		throw new Error("route().query({ live }) requires a data(input) function");
+	}
+	if (live.authority !== undefined && typeof live.authority !== "function") {
+		throw new Error("route().query({ live }) authority must be a function");
+	}
+	const { maxAgeMs } = live;
+	if (
+		maxAgeMs !== undefined &&
+		!(
+			Number.isSafeInteger(maxAgeMs) &&
+			maxAgeMs >= LIVE_MAX_AGE_MS.min &&
+			maxAgeMs <= LIVE_MAX_AGE_MS.max
+		)
+	) {
+		throw new Error(
+			`route().query({ live }) maxAgeMs must be an integer from ${LIVE_MAX_AGE_MS.min} to ${LIVE_MAX_AGE_MS.max}`,
+		);
+	}
 }
 
 // ============================================================================
@@ -81,7 +126,7 @@ interface BuilderConfig {
 export class RouteBuilder<
 	TParams extends JsonRouteParams = JsonRouteParams,
 	_TMethod extends NoMethod | HasMethod = NoMethod,
-	TMode extends NoMode | JsonMode | RawMode = NoMode,
+	TMode extends NoMode | JsonMode | RawMode | QueryMode = NoMode,
 	TSchema extends NoSchema | HasSchema = NoSchema,
 	TOutput extends NoOutput | HasOutput = NoOutput,
 > {
@@ -169,15 +214,20 @@ export class RouteBuilder<
 
 	/**
 	 * Mark this route as raw — handler receives `(request, ctx)` and returns `Response`.
-	 * Cannot be combined with `.schema()`.
+	 * Cannot be combined with `.schema()` or `.query()`.
 	 */
-	raw(): RouteBuilder<TParams, _TMethod, RawMode, NoSchema, NoOutput> {
+	raw(): TMode extends QueryMode
+		? never
+		: RouteBuilder<TParams, _TMethod, RawMode, NoSchema, NoOutput> {
+		if (this._config.query) {
+			throw new Error("route().query() routes cannot be raw");
+		}
 		return new RouteBuilder({
 			...this._config,
 			mode: "raw",
 			schema: undefined,
 			outputSchema: undefined,
-		});
+		}) as any;
 	}
 
 	// ── Schema ──────────────────────────────────────────────────
@@ -186,7 +236,7 @@ export class RouteBuilder<
 	 * Set input validation schema. Implies JSON mode.
 	 * Cannot be combined with `.raw()`.
 	 *
-	 * Generic over the schema itself and read through `z.output`, as Zod
+	 * Generic over the schema itself and read through `z.input` / `z.output`, as Zod
 	 * advises library authors. Inferring `T` from `z.ZodSchema<T>` instead
 	 * compares the concrete schema with `ZodType<T>` member by member, which
 	 * cost tens of thousands of instantiations per route.
@@ -196,11 +246,11 @@ export class RouteBuilder<
 	): RouteBuilder<
 		TParams,
 		_TMethod,
-		JsonMode,
-		HasSchema<z.output<TZod>>,
+		JsonModeOf<TMode>,
+		HasSchema<z.output<TZod>, z.input<TZod>>,
 		TOutput
 	> {
-		return new RouteBuilder({ ...this._config, mode: "json", schema });
+		return new RouteBuilder({ ...this._config, mode: "json", schema }) as any;
 	}
 
 	/**
@@ -217,7 +267,7 @@ export class RouteBuilder<
 	): RouteBuilder<
 		TParams,
 		_TMethod,
-		JsonMode,
+		JsonModeOf<TMode>,
 		TSchema,
 		HasOutput<z.output<TZod>>
 	> {
@@ -248,12 +298,59 @@ export class RouteBuilder<
 	// ── Access ──────────────────────────────────────────────────
 
 	/**
-	 * Set access control for this route.
+	 * Set access control for this route. JSON routes evaluate it after input
+	 * validation, so a rule declared after `.schema()` receives the parsed
+	 * `input` as typed by that schema.
 	 */
 	access(
-		access: RouteAccess,
+		access: RouteAccess<InputOf<TSchema>>,
 	): RouteBuilder<TParams, _TMethod, TMode, TSchema, TOutput> {
-		return new RouteBuilder({ ...this._config, access }) as any;
+		return new RouteBuilder({
+			...this._config,
+			access: access as RouteAccess,
+		}) as any;
+	}
+
+	// ── Query semantics ─────────────────────────────────────────
+
+	/**
+	 * Mark this JSON route as a read-only query. Each call runs in one read-only
+	 * repeatable-read transaction: request-derived context facts, the access
+	 * rule, the handler and output validation all read the same snapshot, and a
+	 * database write fails. Requires `.schema()`, `.outputSchema()` and
+	 * `.access()`; cannot be combined with `.raw()`.
+	 *
+	 * `live` declares dependencies for an explicit watch over the shared SSE
+	 * transport. Without it the query supports one-shot execution only.
+	 */
+	query(options: {
+		live: RouteLiveOptions<InputOf<TSchema>>;
+	}): TMode extends RawMode
+		? never
+		: RouteBuilder<TParams, _TMethod, QueryMode<true>, TSchema, TOutput>;
+	query(options?: {
+		live?: undefined;
+	}): TMode extends RawMode
+		? never
+		: RouteBuilder<TParams, _TMethod, QueryMode<false>, TSchema, TOutput>;
+	query(
+		options?: RouteQueryOptions<InputOf<TSchema>>,
+	): TMode extends RawMode
+		? never
+		: RouteBuilder<TParams, _TMethod, QueryMode, TSchema, TOutput>;
+	query(options?: RouteQueryOptions<any>): unknown {
+		if (this._config.mode === "raw") {
+			throw new Error("route().query() routes cannot be raw");
+		}
+		const live = options?.live;
+		if (live !== undefined) assertLiveOptions(live);
+		return new RouteBuilder({
+			...this._config,
+			mode: "json",
+			query: Object.freeze(
+				live === undefined ? {} : { live: Object.freeze({ ...live }) },
+			),
+		}) as any;
 	}
 
 	// ── Metadata ────────────────────────────────────────────────
@@ -273,6 +370,8 @@ export class RouteBuilder<
 	 * Terminal method — defines the handler and returns a frozen `RouteDefinition`.
 	 *
 	 * The return type depends on the builder state:
+	 * - If `.query()` was called → `QueryRouteDefinition` (throws unless
+	 *   `.schema()`, `.outputSchema()` and `.access()` were set)
 	 * - If `.schema()` was called → `JsonRouteDefinition`
 	 * - If `.raw()` was called → `RawRouteDefinition`
 	 * - Otherwise → defaults to `RawRouteDefinition` with POST method
@@ -291,37 +390,68 @@ export class RouteBuilder<
 	handler<TReturn>(
 		handler: TMode extends RawMode
 			? (args: RawRouteHandlerArgs<TParams>) => Response | Promise<Response>
-			: TSchema extends HasSchema<infer TInput>
-				? TOutput extends HasOutput<infer O>
-					? (args: JsonRouteHandlerArgs<TInput, TParams>) => O | Promise<O>
-					: (
-							args: JsonRouteHandlerArgs<TInput, TParams>,
-						) => TReturn | Promise<TReturn>
-				: // Output-only chain (`.outputSchema()` with no `.schema()`): JSON
-					// route with `unknown` input. Output comes from the schema, so the
-					// handler return is unconstrained here.
-					TMode extends JsonMode
-					? (args: JsonRouteHandlerArgs<unknown, TParams>) => any
-					: (
-							args: RawRouteHandlerArgs<TParams>,
-						) => Response | Promise<Response>,
+			: TMode extends QueryMode
+				? TSchema extends HasSchema<infer TInput>
+					? TOutput extends HasOutput<infer O>
+						? (args: JsonRouteHandlerArgs<TInput, TParams>) => O | Promise<O>
+						: "route().query() requires .outputSchema()"
+					: "route().query() requires .schema()"
+				: TSchema extends HasSchema<infer TInput>
+					? TOutput extends HasOutput<infer O>
+						? (args: JsonRouteHandlerArgs<TInput, TParams>) => O | Promise<O>
+						: (
+								args: JsonRouteHandlerArgs<TInput, TParams>,
+							) => TReturn | Promise<TReturn>
+					: // Output-only chain (`.outputSchema()` with no `.schema()`): JSON
+						// route with `unknown` input. Output comes from the schema, so the
+						// handler return is unconstrained here.
+						TMode extends JsonMode
+						? (args: JsonRouteHandlerArgs<unknown, TParams>) => any
+						: (
+								args: RawRouteHandlerArgs<TParams>,
+							) => Response | Promise<Response>,
 	): TMode extends RawMode
 		? RawRouteDefinition<TParams, MethodOf<_TMethod>>
-		: TSchema extends HasSchema<infer TInput>
-			? JsonRouteDefinition<
-					TInput,
-					TOutput extends HasOutput<infer O> ? O : Awaited<TReturn>,
-					TParams
-				>
-			: // Output-only chain → JSON route, `unknown` input, output from schema.
-				TMode extends JsonMode
+		: TMode extends QueryMode<infer TLive>
+			? TSchema extends HasSchema<infer TInput>
+				? TOutput extends HasOutput<infer O>
+					? QueryRouteDefinition<
+							TInput,
+							O,
+							TParams,
+							TLive,
+							WireInputOf<TSchema>
+						>
+					: never
+				: never
+			: TSchema extends HasSchema<infer TInput>
 				? JsonRouteDefinition<
-						unknown,
-						TOutput extends HasOutput<infer O> ? O : unknown,
-						TParams
+						TInput,
+						TOutput extends HasOutput<infer O> ? O : Awaited<TReturn>,
+						TParams,
+						WireInputOf<TSchema>
 					>
-				: RawRouteDefinition<TParams, MethodOf<_TMethod>> {
+				: // Output-only chain → JSON route, `unknown` input, output from schema.
+					TMode extends JsonMode
+					? JsonRouteDefinition<
+							unknown,
+							TOutput extends HasOutput<infer O> ? O : unknown,
+							TParams
+						>
+					: RawRouteDefinition<TParams, MethodOf<_TMethod>> {
 		const method = (this._config.method ?? "POST") as MethodOf<_TMethod>;
+		const { query } = this._config;
+
+		if (query) {
+			const missing = [
+				this._config.schema ? undefined : ".schema()",
+				this._config.outputSchema ? undefined : ".outputSchema()",
+				this._config.access === undefined ? ".access()" : undefined,
+			].filter(Boolean);
+			if (missing.length > 0) {
+				throw new Error(`route().query() requires ${missing.join(", ")}`);
+			}
+		}
 
 		if (this._config.mode === "json" || this._config.schema) {
 			// JSON route
@@ -333,6 +463,7 @@ export class RouteBuilder<
 				outputSchema: this._config.outputSchema,
 				access: this._config.access,
 				meta: this._config.meta,
+				...(query ? { query } : {}),
 				handler: handler as any,
 			};
 			return Object.freeze(def) as any;

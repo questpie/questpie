@@ -6,6 +6,7 @@
  */
 
 import { ApiError } from "./base.js";
+import { errorDataProperty } from "./public.js";
 import type { DBErrorContext, FieldError } from "./types.js";
 
 /**
@@ -26,14 +27,19 @@ const PG_ERROR_CODES = {
 const unwrapError = (error: unknown): unknown => {
 	if (!error || typeof error !== "object") return error;
 
-	const err = error as any;
-
-	// Try to find nested error in common properties
-	if (err.cause) return unwrapError(err.cause);
-	if (err.original) return unwrapError(err.original);
-	if (err.originalError) return unwrapError(err.originalError);
-
-	return error;
+	const seen = new Set<unknown>();
+	let current = error;
+	for (let depth = 0; depth < 16; depth++) {
+		if (seen.has(current)) return current;
+		seen.add(current);
+		const nested =
+			errorDataProperty(current, "cause") ??
+			errorDataProperty(current, "original") ??
+			errorDataProperty(current, "originalError");
+		if (!nested) return current;
+		current = nested;
+	}
+	return current;
 };
 
 /**
@@ -42,15 +48,8 @@ const unwrapError = (error: unknown): unknown => {
 const isDatabaseError = (error: unknown): error is any => {
 	if (!error || typeof error !== "object") return false;
 
-	const err = error as any;
-
-	// Check if error has PostgreSQL error code
-	// Different drivers use different property names:
-	// - Bun's postgres: errno (preferred - contains actual PG code like "23505")
-	// - node-postgres: code (contains actual PG code)
-	// Try errno first because some drivers have both errno and a wrapper code
-	const pgCode = err.errno || err.code;
-	// PostgreSQL error codes are exactly 5 characters (e.g., "23505")
+	const pgCode =
+		errorDataProperty(error, "errno") ?? errorDataProperty(error, "code");
 	return typeof pgCode === "string" && /^\d{5}$/.test(pgCode);
 };
 
@@ -61,7 +60,8 @@ const isDatabaseError = (error: unknown): error is any => {
  * - "users_email_key" -> "email"
  * - "posts_author_id_fkey" -> "authorId"
  */
-const extractFieldFromConstraint = (constraint: string): string | null => {
+const extractFieldFromConstraint = (constraint: unknown): string | null => {
+	if (typeof constraint !== "string") return null;
 	// Remove table prefix (everything before first underscore + underscore)
 	const parts = constraint.split("_");
 	if (parts.length < 2) return null;
@@ -106,15 +106,6 @@ const extractFieldFromDetail = (detail: string): string | null => {
 };
 
 /**
- * Extract value from error detail message
- * Example: "Key (email)=(test@example.com) already exists."
- */
-const extractValueFromDetail = (detail: string): string | null => {
-	const match = detail.match(/Key \([^)]+\)=\(([^)]+)\)/);
-	return match ? match[1] : null;
-};
-
-/**
  * Detect and transform database constraint violations into ApiError
  * Returns null if the error is not a known database constraint violation
  */
@@ -124,14 +115,17 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 
 	if (!isDatabaseError(unwrapped)) return null;
 
-	const dbError = unwrapped as any;
-	// Different drivers use different property names for error code
-	// Try errno first (Bun), then code (node-postgres)
-	const code = dbError.errno || dbError.code;
-	const constraint = dbError.constraint_name || dbError.constraint;
-	const detail = dbError.detail || "";
-	const table = dbError.table || dbError.table_name;
-
+	const code =
+		errorDataProperty(unwrapped, "errno") ??
+		errorDataProperty(unwrapped, "code");
+	const constraint =
+		errorDataProperty(unwrapped, "constraint_name") ??
+		errorDataProperty(unwrapped, "constraint");
+	const rawDetail = errorDataProperty(unwrapped, "detail");
+	const detail = typeof rawDetail === "string" ? rawDetail : "";
+	const table =
+		errorDataProperty(unwrapped, "table") ??
+		errorDataProperty(unwrapped, "table_name");
 	// Unique constraint violation
 	if (code === PG_ERROR_CODES.UNIQUE_VIOLATION) {
 		const field =
@@ -139,29 +133,26 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 			extractFieldFromDetail(detail) ||
 			"value";
 
-		const value = extractValueFromDetail(detail);
-
 		const fieldErrors: FieldError[] = [
 			{
 				path: field,
 				message: `A record with this ${field} already exists`,
 				messageKey: "error.database.uniqueViolation.field",
 				messageParams: { field },
-				value: value,
 			},
 		];
 
 		const context: DBErrorContext = {
 			operation: "insert",
-			table: table || "unknown",
-			constraint: constraint || "unique",
+			table: typeof table === "string" ? table : "unknown",
+			constraint: typeof constraint === "string" ? constraint : "unique",
 		};
 
 		return new ApiError({
 			code: "CONFLICT",
-			message: `Duplicate ${field}: ${value || "value already exists"}`,
-			messageKey: "error.database.uniqueViolation",
-			messageParams: { field, value },
+			message: `A record with this ${field} already exists`,
+			messageKey: "error.database.uniqueViolation.field",
+			messageParams: { field },
 			fieldErrors,
 			context: { db: context },
 			cause: error,
@@ -185,8 +176,8 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 
 		const context: DBErrorContext = {
 			operation: "insert",
-			table: table || "unknown",
-			constraint: constraint || "foreign_key",
+			table: typeof table === "string" ? table : "unknown",
+			constraint: typeof constraint === "string" ? constraint : "foreign_key",
 		};
 
 		return new ApiError({
@@ -202,8 +193,8 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 
 	// Not null violation
 	if (code === PG_ERROR_CODES.NOT_NULL_VIOLATION) {
-		const column = (error as any).column;
-		const field = column || "field";
+		const column = errorDataProperty(unwrapped, "column");
+		const field = typeof column === "string" ? column : "field";
 
 		const fieldErrors: FieldError[] = [
 			{
@@ -216,7 +207,7 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 
 		const context: DBErrorContext = {
 			operation: "insert",
-			table: table || "unknown",
+			table: typeof table === "string" ? table : "unknown",
 		};
 
 		return new ApiError({
@@ -245,8 +236,8 @@ export const parseDatabaseError = (error: unknown): ApiError | null => {
 
 		const context: DBErrorContext = {
 			operation: "insert",
-			table: table || "unknown",
-			constraint: constraint || "check",
+			table: typeof table === "string" ? table : "unknown",
+			constraint: typeof constraint === "string" ? constraint : "check",
 		};
 
 		return new ApiError({

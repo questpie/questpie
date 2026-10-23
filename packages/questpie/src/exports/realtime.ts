@@ -12,3 +12,5 @@ export * from "#questpie/server/modules/core/integrated/realtime/sse-client-tran
 export type { ChannelPresenceConfig } from "#questpie/server/modules/core/integrated/realtime/sse-channel-presence.js";
 export * from "#questpie/server/modules/core/integrated/realtime/transport.js";
 export * from "#questpie/server/modules/core/integrated/realtime/types.js";
+
+export type { RouteQueryTopic } from "#questpie/server/routes/live.js";

@@ -31,21 +31,55 @@ export type HttpMethod =
 // Access Control
 // ============================================================================
 
-export type RouteAccessContext = AppContext & {
+/**
+ * Context passed to route access rules. Rules declared through the builder
+ * also receive `input`: the parsed `.schema()` input of a JSON route.
+ */
+export type RouteAccessContext<TInput = never> = AppContext & {
 	locale?: string;
 	request?: Request;
 	params?: Record<string, string>;
-};
+} & ([TInput] extends [never] ? {} : { input: TInput });
 
-export type RouteAccessRule =
+export type RouteAccessRule<TInput = never> =
 	| boolean
-	| ((ctx: RouteAccessContext) => boolean | Promise<boolean>);
+	| ((ctx: RouteAccessContext<TInput>) => boolean | Promise<boolean>);
 
-export type RouteAccess =
-	| RouteAccessRule
+export type RouteAccess<TInput = never> =
+	| RouteAccessRule<TInput>
 	| {
-			execute?: RouteAccessRule;
+			execute?: RouteAccessRule<TInput>;
 	  };
+
+// ============================================================================
+// Query Semantics
+// ============================================================================
+
+/**
+ * Collections a LIVE query depends on: `true` for any row, or an equality
+ * anchor on scalar fields. Anchors only narrow which writes wake the query;
+ * they never grant access.
+ */
+export type RouteLiveDependencies = Readonly<
+	Record<string, true | Readonly<Record<string, string | number | boolean>>>
+>;
+
+/**
+ * Server-owned data and authority dependencies for watching a query route.
+ */
+export interface RouteLiveOptions<TInput = unknown> {
+	/** Data the result reads, derived from the parsed input. */
+	readonly data: (input: TInput) => RouteLiveDependencies;
+	/** Authority the access decision reads, derived from the parsed input. */
+	readonly authority?: (input: TInput) => RouteLiveDependencies;
+	/** Maximum age of a watched result before it is recomputed with fresh context. */
+	readonly maxAgeMs?: number;
+}
+
+/** Options of `route().query()`. */
+export interface RouteQueryOptions<TInput = unknown> {
+	readonly live?: RouteLiveOptions<TInput>;
+}
 
 // ============================================================================
 // Route Metadata
@@ -149,17 +183,39 @@ export type JsonRouteDefinition<
 	TInput = unknown,
 	TOutput = unknown,
 	TParams extends JsonRouteParams = JsonRouteParams,
+	TWireInput = unknown,
 > = {
 	readonly __brand: "route";
 	readonly mode: "json";
 	readonly method: HttpMethod;
-	readonly schema: z.ZodSchema<TInput>;
+	readonly schema: z.ZodType<TInput, TWireInput>;
 	readonly outputSchema?: z.ZodSchema<TOutput>;
 	readonly access?: RouteAccess;
 	readonly meta?: RouteMeta;
+	/**
+	 * Present on `route().query()` routes. Their context facts, access rule,
+	 * handler and output validation read one read-only repeatable-read snapshot.
+	 */
+	readonly query?: RouteQueryOptions<TInput>;
 	readonly handler: (
 		args: JsonRouteHandlerArgs<TInput, TParams>,
 	) => TOutput | Promise<TOutput>;
+};
+
+/**
+ * Definition returned by `route().query().handler()`. `TLive` records whether
+ * the route declared `live`.
+ */
+export type QueryRouteDefinition<
+	TInput = unknown,
+	TOutput = unknown,
+	TParams extends JsonRouteParams = JsonRouteParams,
+	TLive extends boolean = boolean,
+	TWireInput = unknown,
+> = JsonRouteDefinition<TInput, TOutput, TParams, TWireInput> & {
+	readonly query: TLive extends true
+		? RouteQueryOptions<TInput> & { readonly live: RouteLiveOptions<TInput> }
+		: RouteQueryOptions<TInput>;
 };
 
 /**
@@ -186,7 +242,10 @@ export type RouteDefinition<
 	TInput = unknown,
 	TOutput = unknown,
 	TParams extends JsonRouteParams = JsonRouteParams,
-> = JsonRouteDefinition<TInput, TOutput, TParams> | RawRouteDefinition<TParams>;
+	TWireInput = unknown,
+> =
+	| JsonRouteDefinition<TInput, TOutput, TParams, TWireInput>
+	| RawRouteDefinition<TParams>;
 
 /**
  * Route definition for heterogeneous route maps (app state, modules).
@@ -198,10 +257,18 @@ export type StoredRouteDefinition = RouteDefinition<any, any, any>;
 // Type Helpers
 // ============================================================================
 
+/** Parsed input passed to server handlers, access rules and LIVE dependencies. */
 export type InferRouteInput<T> = T extends {
 	schema: z.ZodSchema<infer Input>;
 }
 	? Input
+	: never;
+
+/** Input accepted by the schema before defaults and transforms, sent by clients. */
+export type InferRouteWireInput<T> = T extends {
+	schema: infer TSchema extends z.ZodType;
+}
+	? z.input<TSchema>
 	: never;
 
 export type InferRouteOutput<T> = T extends {
@@ -240,7 +307,14 @@ export type RouteWithParams<
 	? // Rebuild from the schema members instead of inferring the generics
 		// wholesale: codegen-erased handlers (`(args: unknown) => unknown`)
 		// would otherwise poison the inferred `TOutput` with `unknown`.
-		JsonRouteDefinition<InferRouteInput<TDef>, InferRouteOutput<TDef>, TParams>
+		JsonRouteDefinition<
+			InferRouteInput<TDef>,
+			InferRouteOutput<TDef>,
+			TParams,
+			InferRouteWireInput<TDef>
+		> &
+			// The rebuild must keep a query route's marker, including `live`.
+			(TDef extends { query: infer TQuery } ? { readonly query: TQuery } : {})
 	: TDef extends { mode: "raw"; method: infer TMethod }
 		? RawRouteDefinition<TParams, Extract<TMethod, HttpMethod>>
 		: TDef;

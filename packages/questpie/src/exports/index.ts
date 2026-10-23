@@ -119,6 +119,12 @@ export * from "#questpie/server/config/types.js";
 export * from "#questpie/server/errors/index.js";
 // Field builder system (expanded from fields/index.ts barrel)
 export {
+	batchRead,
+	type BatchReadCallback,
+	type BatchReadContext,
+	type BatchReadRule,
+} from "#questpie/server/fields/batch-read.js";
+export {
 	type BuiltinFields,
 	createFieldBuilder,
 	createFieldsCallbackContext,
@@ -288,6 +294,7 @@ export {
 	type CoreMessageKey,
 	coreBackendMessages,
 } from "#questpie/server/modules/starter/_messages.js";
+export { prepareJsonRoute } from "#questpie/server/routes/execute.js";
 export { route } from "#questpie/server/routes/define-route.js";
 export { routeApp } from "#questpie/server/routes/route-app.js";
 export * from "#questpie/server/routes/index.js";
@@ -320,3 +327,11 @@ export type {
 	ResolveRelationsDeep,
 } from "#questpie/shared/type-utils.js";
 export type { CollectionAPI } from "#questpie/server/config/integrated/questpie-api.js";
+
+export type {
+	InferRouteWireInput,
+	QueryRouteDefinition,
+	RouteLiveDependencies,
+	RouteLiveOptions,
+	RouteQueryOptions,
+} from "#questpie/server/routes/types.js";

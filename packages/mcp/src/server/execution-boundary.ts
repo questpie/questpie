@@ -4,6 +4,12 @@ import { types as nodeTypes } from "node:util";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext, RequestContext } from "questpie";
 import {
+	CMS_ERROR_CODES,
+	formatPublicError,
+	type ApiErrorShape,
+	type PublicErrorOptions,
+} from "questpie/errors";
+import {
 	type BrokerJsonValue,
 	snapshotBoundedBrokerValue,
 } from "questpie/executor";
@@ -46,6 +52,7 @@ const ABSOLUTE_MCP_EXECUTION_LIMITS = Object.freeze({
 
 const PUBLIC_ERROR_META_KEY = "questpie/error";
 const PUBLIC_ERROR_CODES = new Set<McpPublicErrorCode>([
+	...Object.values(CMS_ERROR_CODES),
 	"access_denied",
 	"invalid_input",
 	"input_too_large",
@@ -101,6 +108,19 @@ export class McpPublicError extends Error {
 		this.code = code;
 		this.correlationId = correlationId;
 		this.detail = detail;
+	}
+}
+
+export class McpProductError extends McpPublicError {
+	readonly productError: ApiErrorShape;
+	constructor(
+		error: unknown,
+		options: PublicErrorOptions = {},
+		correlationId?: string,
+	) {
+		const productError = formatPublicError(error, options);
+		super(productError.code, correlationId);
+		this.productError = productError;
 	}
 }
 
@@ -538,10 +558,24 @@ function safeRequestId(value: string | number): string | number | undefined {
 }
 
 export function toMcpToolError(error: unknown): CallToolResult {
-	const resolved =
-		error instanceof McpPublicError
-			? error
-			: classifyError(error, randomUUID());
+	const resolved = classifyError(error, randomUUID());
+	if (resolved instanceof McpProductError) {
+		return {
+			isError: true,
+			content: [
+				{
+					type: "text",
+					text: JSON.stringify({ error: resolved.productError }),
+				},
+			],
+			_meta: {
+				[PUBLIC_ERROR_META_KEY]: {
+					code: resolved.productError.code,
+					correlationId: resolved.correlationId,
+				},
+			},
+		};
+	}
 	return {
 		isError: true,
 		content: [
@@ -722,7 +756,8 @@ export class McpExecutionBoundary {
 				durationMs: Date.now() - startedAt,
 				outcome: "rejected",
 				code: publicError.code,
-				...(publicError.code === "internal"
+				...(publicError.code === "internal" ||
+				publicError.code === "INTERNAL_SERVER_ERROR"
 					? { internalError: diagnosticError(rawError) }
 					: {}),
 			});

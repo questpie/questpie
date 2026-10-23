@@ -5,11 +5,17 @@
  * Solves the HTTP/1.1 connection limit problem (6 connections per domain).
  */
 
+import type { HttpMethod } from "../../server/routes/types.js";
 import {
+	isRealtimeQueryUnavailablePayload,
 	isRealtimeTopicRejectedPayload,
+	type RealtimeQueryUnavailablePayload,
 	type RealtimeTopicRejectedPayload,
 } from "../../shared/realtime-error.js";
-import { parseCompatibleTypedEventWire } from "../../shared/typed-wire.js";
+import {
+	parseCompatibleTypedEventWire,
+	serializeCompatibleTypedEventWire,
+} from "../../shared/typed-wire.js";
 import type { GetAuthHeaders } from "../auth.js";
 import type { CrdtRealtimeEdgeCapability } from "./session.js";
 import type { SseConnectionManager } from "./sse-connection.js";
@@ -28,6 +34,13 @@ type TopicCommon = {
 };
 
 export type TopicConfig =
+	| (TopicCommon & {
+			resourceType: "route";
+			method: HttpMethod;
+			operation: "query";
+			input: unknown;
+			params?: Record<string, string>;
+	  })
 	| (TopicCommon & {
 			resourceType: "collection";
 			/** Omitted values default to `find` on the server. */
@@ -91,10 +104,22 @@ export class RealtimeTopicRejectedError extends Error {
 	}
 }
 
+export class RealtimeQueryUnavailableError extends Error {
+	readonly code = "REALTIME_QUERY_UNAVAILABLE";
+	readonly retryable = true;
+
+	constructor(readonly payload: RealtimeQueryUnavailablePayload) {
+		super(payload.message);
+		this.name = "RealtimeQueryUnavailableError";
+	}
+}
+
 function toRealtimeError(payload: unknown): Error | null {
-	return isRealtimeTopicRejectedPayload(payload)
-		? new RealtimeTopicRejectedError(payload)
-		: null;
+	if (isRealtimeTopicRejectedPayload(payload))
+		return new RealtimeTopicRejectedError(payload);
+	if (isRealtimeQueryUnavailablePayload(payload))
+		return new RealtimeQueryUnavailableError(payload);
+	return null;
 }
 
 type ControlSession = {
@@ -138,8 +163,14 @@ export function stableStringify(x: unknown): string {
 	return `{${keys.map((k) => JSON.stringify(k) + ":" + stableStringify((x as Record<string, unknown>)[k])).join(",")}}`;
 }
 
+function topicWire(topic: TopicConfig): TopicConfig {
+	return topic.resourceType === "route"
+		? (serializeCompatibleTypedEventWire({ ...topic }) as TopicConfig)
+		: topic;
+}
+
 export function realtimeTopicId(topic: TopicConfig): string {
-	const normalized = stableStringify(topic);
+	const normalized = stableStringify(topicWire(topic));
 	if (typeof Buffer !== "undefined") {
 		return Buffer.from(normalized, "utf8").toString("base64url");
 	}
@@ -298,7 +329,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				const release = this.sharedConnection.registerTopic({
 					id: topicId,
 					openPayload: () => ({
-						...topic,
+						...topicWire(topic),
 						...(topic.resourceType === "collection" && topic.operation === "get"
 							? { recordId: topic.id }
 							: {}),
@@ -310,7 +341,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 					desiredPayload: () => ({
 						kind: "query",
 						id: topicId,
-						topic,
+						topic: topicWire(topic),
 						...(this.lastSeq.has(topicId)
 							? { sinceSeq: this.lastSeq.get(topicId) }
 							: {}),
@@ -366,7 +397,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			subscriptions: [...this.topics.entries()].map(([id, topic]) => ({
 				kind: "query" as const,
 				id,
-				topic,
+				topic: topicWire(topic),
 				...(this.lastSeq.has(id) ? { sinceSeq: this.lastSeq.get(id) } : {}),
 			})),
 		};
@@ -558,7 +589,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		 */
 		const topicsPayload = Array.from(this.topics.entries()).map(
 			([topicId, config]) => ({
-				...config,
+				...topicWire(config),
 				...(config.resourceType === "collection" && config.operation === "get"
 					? { recordId: config.id }
 					: {}),
@@ -596,10 +627,11 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				const admissionErrors =
 					payload?.errors
 						?.map(toRealtimeError)
-						.filter((error) => error !== null) ?? [];
+						.filter((error) => error instanceof RealtimeTopicRejectedError) ??
+					[];
 				if (admissionErrors.length > 0) {
 					for (const error of admissionErrors) {
-						this.rejectTopic(error as RealtimeTopicRejectedError);
+						this.rejectTopic(error);
 					}
 					return;
 				}
@@ -753,7 +785,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 				} else if (topicId) {
 					this.notifyTopicError(
 						topicId,
-						new Error(raw.message ?? "Realtime topic failed"),
+						error ?? new Error(raw.message ?? "Realtime topic failed"),
 					);
 				}
 				// An error with no routable id is a connection/protocol fault, not a

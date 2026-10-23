@@ -1,8 +1,9 @@
 import type { GlobalSchema } from "#questpie/server/global/introspection.js";
 import type {
 	HttpMethod,
-	InferRouteInput,
 	InferRouteOutput,
+	InferRouteParams,
+	InferRouteWireInput,
 	JsonRouteDefinition,
 	RawRouteDefinition,
 } from "#questpie/server/routes/types.js";
@@ -337,9 +338,27 @@ export type QuestpieClientConfig<TApp extends QuestpieApp = QuestpieApp> = {
 /**
  * Caller for a JSON route — sends input, returns typed output.
  */
-type JsonRouteCaller<TDef extends JsonRouteDefinition<any, any>> = (
-	input: InferRouteInput<TDef>,
-) => Promise<InferRouteOutput<TDef>>;
+type JsonRouteCallOptions<TParams = Record<string, string>> = {
+	params?: TParams;
+	locale?: string;
+	signal?: AbortSignal;
+};
+
+type JsonRouteCaller<TDef extends JsonRouteDefinition<any, any, any>> = ((
+	input: InferRouteWireInput<TDef>,
+	options?: JsonRouteCallOptions<InferRouteParams<TDef>>,
+) => Promise<InferRouteOutput<TDef>>) &
+	(TDef extends { readonly query: { readonly live: object } }
+		? {
+				watch: (
+					input: InferRouteWireInput<TDef>,
+					options?: JsonRouteCallOptions<InferRouteParams<TDef>> & {
+						/** Discard cached data while the watch waits for recovery. */
+						onInvalidate?: () => void;
+					},
+				) => AsyncIterable<InferRouteOutput<TDef>>;
+			}
+		: {});
 
 /**
  * Caller for a raw route — returns raw Response.
@@ -406,7 +425,7 @@ type RouteMethodCallers<TDef> = TDef extends { method: infer TMethod }
 	: { post: RouteCallerFromDef<TDef> };
 
 type RouteCallerFromDef<TDef> =
-	TDef extends JsonRouteDefinition<any, any>
+	TDef extends JsonRouteDefinition<any, any, any>
 		? JsonRouteCaller<TDef>
 		: TDef extends RawRouteDefinition<any, infer TMethod>
 			? HttpMethod extends TMethod
@@ -1305,6 +1324,11 @@ export function createClient<TApp extends QuestpieApp>(
 		: `/${basePath}`;
 	const trimmedBasePath = normalizedBasePath.replace(/\/$/, "");
 	const apiBasePath = trimmedBasePath || "";
+	const encodePathParameter = (value: string) => {
+		if (value === "." || value === "..")
+			throw new Error("Route parameters cannot be dot segments");
+		return encodeURIComponent(value);
+	};
 	const defaultHeaders = config.headers || {};
 	let currentLocale: string | undefined =
 		defaultHeaders["accept-language"] ?? defaultHeaders["Accept-Language"];
@@ -1427,6 +1451,9 @@ export function createClient<TApp extends QuestpieApp>(
 	const refetchRealtimeTopic = async (
 		topic: Parameters<RealtimeAPI["subscribe"]>[0],
 	): Promise<unknown> => {
+		if (topic.resourceType === "route") {
+			throw new Error("Route LIVE queries require server SSE snapshots");
+		}
 		if (topic.resourceType === "collection") {
 			if (topic.operation === "count") {
 				const queryString = stringifyQuery({
@@ -1444,7 +1471,7 @@ export function createClient<TApp extends QuestpieApp>(
 					locale: topic.locale,
 				});
 				return request(
-					`${apiBasePath}/${topic.resource}/${topic.id}${queryString ? `?${queryString}` : ""}`,
+					`${apiBasePath}/${topic.resource}/${encodePathParameter(topic.id)}${queryString ? `?${queryString}` : ""}`,
 				);
 			}
 			const queryString = stringifyQuery({
@@ -1576,7 +1603,7 @@ export function createClient<TApp extends QuestpieApp>(
 							stage: options.stage,
 						});
 
-						const path = `${apiBasePath}/${collectionName}/${where.id}${queryString ? `?${queryString}` : ""}`;
+						const path = `${apiBasePath}/${collectionName}/${encodePathParameter(where.id)}${queryString ? `?${queryString}` : ""}`;
 						return request(path);
 					}
 
@@ -1606,7 +1633,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "PATCH",
 						json:
@@ -1621,7 +1648,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "DELETE",
 						...(expectedRevision === undefined
@@ -1635,7 +1662,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}/restore${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/restore${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
 						...(expectedRevision === undefined
@@ -1649,7 +1676,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}/purge${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/purge${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
 						...(expectedRevision === undefined
@@ -1671,7 +1698,7 @@ export function createClient<TApp extends QuestpieApp>(
 						offset,
 						...options,
 					});
-					const path = `${apiBasePath}/${collectionName}/${id}/versions${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/versions${queryString ? `?${queryString}` : ""}`;
 					return request(path);
 				},
 
@@ -1690,7 +1717,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}/revert${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/revert${queryString ? `?${queryString}` : ""}`;
 					return mutationRequest(path, {
 						method: "POST",
 						json: { version, versionId, expectedRevision },
@@ -1707,7 +1734,7 @@ export function createClient<TApp extends QuestpieApp>(
 					options: LocaleOptions = {},
 				) => {
 					const queryString = stringifyQuery(options);
-					const path = `${apiBasePath}/${collectionName}/${id}/transition${queryString ? `?${queryString}` : ""}`;
+					const path = `${apiBasePath}/${collectionName}/${encodePathParameter(id)}/transition${queryString ? `?${queryString}` : ""}`;
 					const body = {
 						stage,
 						...(expectedRevision === undefined ? {} : { expectedRevision }),
@@ -2146,69 +2173,94 @@ export function createClient<TApp extends QuestpieApp>(
 		},
 	};
 
-	/** Convert camelCase to kebab-case for URL paths */
-	const camelToKebab = (s: string) =>
-		s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+	/** Convert registry keys to URL paths, substituting literal path parameters. */
+	const routePath = (segments: string[], params?: Record<string, string>) =>
+		segments
+			.map((segment) => {
+				const parameter = /^\[(?:\.\.\.)?([^\]]+)\]$/.exec(segment)?.[1];
+				if (!parameter)
+					return segment.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+				const value = params?.[parameter];
+				if (typeof value !== "string" || value.length === 0) {
+					throw new Error(`Missing route parameter: ${parameter}`);
+				}
+				return encodePathParameter(value);
+			})
+			.join("/");
 
-	/**
-	 * Routes API — nested proxy that maps route keys to callable endpoints.
-	 *
-	 * Route paths use slash-separated segments accessed via dot notation:
-	 *   `routes/admin/stats.post.ts` → `client.routes.admin.stats.post(input)`
-	 *
-	 * For routes with method suffix:
-	 *   `admin/stats:GET` → `client.routes.admin.stats.get(input)`
-	 * Traversing deeper builds the URL path.
-	 * Segment names are converted from camelCase to kebab-case for URLs.
-	 */
-	const createRouteProxy = (segments: string[]): any => {
-		const path = segments.map(camelToKebab).join("/");
-		const callable = async (input?: any) => {
-			return request(`${apiBasePath}/${path}`, {
-				method: "POST",
-				json: input,
-			});
+	const routeCaller = (segments: string[], method: string) => {
+		const call = async (
+			input?: unknown,
+			options: JsonRouteCallOptions = {},
+		) => {
+			const path = routePath(segments, options.params);
+			if (
+				(config.rawRoutes as Readonly<Record<string, true>> | undefined)?.[
+					`${segments.join("/")}:${method}`
+				]
+			) {
+				return (await import("./raw-route.js")).callRawRoute(
+					fetcher,
+					`${config.baseURL}${apiBasePath}/${path}`,
+					method,
+					(input ?? {}) as RouteCallOptions,
+					defaultHeaders,
+					config.getAuthHeaders,
+				);
+			}
+			const queryString =
+				method === "GET" && input
+					? stringifyQuery(input as Record<string, unknown>)
+					: "";
+			return request(
+				`${apiBasePath}/${path}${queryString ? `?${queryString}` : ""}`,
+				{
+					method,
+					...(method === "GET" ? {} : { json: input }),
+					...(options.locale
+						? { headers: { "accept-language": options.locale } }
+						: {}),
+					...(options.signal ? { signal: options.signal } : {}),
+				},
+			);
 		};
+		call.watch = (
+			input: unknown,
+			options: JsonRouteCallOptions & { onInvalidate?: () => void } = {},
+		) => {
+			// Validate the same required path parameters before opening a watch.
+			routePath(segments, options.params);
+			return realtimeApi.stream(
+				{
+					resourceType: "route",
+					resource: segments.join("/"),
+					method: method as HttpMethod,
+					operation: "query",
+					input,
+					...(options.params ? { params: options.params } : {}),
+					...((options.locale ?? currentLocale)
+						? { locale: options.locale ?? currentLocale }
+						: {}),
+				},
+				options.signal,
+				undefined,
+				options.onInvalidate,
+			);
+		};
+		return call;
+	};
 
-		return new Proxy(callable, {
+	const createRouteProxy = (segments: string[]): any => {
+		return new Proxy(routeCaller(segments, "POST"), {
 			get(_, prop) {
 				if (prop === "then") return undefined;
-				if (prop === "url") return `${config.baseURL}${apiBasePath}/${path}`;
+				if (prop === "url")
+					return `${config.baseURL}${apiBasePath}/${routePath(segments)}`;
 				if (typeof prop !== "string") return undefined;
-
-				// HTTP method names at leaf → method-specific caller
 				const method = prop.toUpperCase();
 				if (/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)$/.test(method)) {
-					return async (input?: any) => {
-						if (
-							(
-								config.rawRoutes as Readonly<Record<string, true>> | undefined
-							)?.[`${segments.join("/")}:${method}`]
-						) {
-							return (await import("./raw-route.js")).callRawRoute(
-								fetcher,
-								`${config.baseURL}${apiBasePath}/${path}`,
-								method,
-								input ?? {},
-								defaultHeaders,
-								config.getAuthHeaders,
-							);
-						}
-						if (method === "GET" && input) {
-							const queryString = stringifyQuery(input);
-							return request(
-								`${apiBasePath}/${path}${queryString ? `?${queryString}` : ""}`,
-								{ method: "GET" },
-							);
-						}
-						return request(`${apiBasePath}/${path}`, {
-							method,
-							json: input,
-						});
-					};
+					return routeCaller(segments, method);
 				}
-
-				// Otherwise, deeper nesting
 				return createRouteProxy([...segments, prop]);
 			},
 		});

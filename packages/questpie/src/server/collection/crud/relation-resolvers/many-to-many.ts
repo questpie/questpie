@@ -6,6 +6,11 @@
 
 import type { RelationConfig } from "#questpie/server/collection/builder/types.js";
 import { INHERIT_ACCESS } from "#questpie/server/collection/crud/shared/context.js";
+import {
+	RELATION_WINDOW_KEY,
+	relationBound,
+	relationWindowOf,
+} from "#questpie/server/collection/crud/shared/relation-read.js";
 import type {
 	CRUD,
 	CRUDContext,
@@ -71,6 +76,10 @@ export async function resolveManyToManyRelation(
 
 	if (sourceIds.size === 0) return;
 
+	const bounded = nestedOptions.limit != null || nestedOptions.offset != null;
+	const limit = relationBound(nestedOptions.limit);
+	const offset = relationBound(nestedOptions.offset);
+
 	// Fetch junction records. Inherit-access relations (f.upload through a
 	// junction) read the join rows through the parent's read decision too —
 	// the junction rows are pure composition, not user-facing data.
@@ -119,6 +128,46 @@ export async function resolveManyToManyRelation(
 
 	if (nestedOptions.where) {
 		relatedWhere.AND = [nestedOptions.where];
+	}
+
+	// limit/offset page each source's targets. The target ranks the rows the
+	// authorized junction rows link, after its own access, where and soft
+	// delete, in one query.
+	if (bounded) {
+		const links = junctionRows.filter(
+			(link) => link[sourceField] != null && link[targetField] != null,
+		);
+		const relatedRows =
+			links.length === 0
+				? []
+				: await relationWindowOf(relatedCrud)(
+						{ ...nestedOptions, where: relatedWhere },
+						context,
+						{
+							field: targetKey,
+							limit,
+							offset,
+							through: {
+								table: junctionCrud["~internalRelatedTable"],
+								ids: links.map((link) => link.id),
+								sourceField,
+								targetField,
+							},
+						},
+					);
+		const relatedMap = new Map<unknown, Record<string, any>[]>();
+		for (const relatedRow of relatedRows) {
+			const sourceId = (relatedRow as Record<PropertyKey, unknown>)[
+				RELATION_WINDOW_KEY
+			];
+			const linked = relatedMap.get(sourceId);
+			if (linked) linked.push(relatedRow);
+			else relatedMap.set(sourceId, [relatedRow]);
+		}
+		for (const row of rows) {
+			row[relationName] = relatedMap.get(row[sourceKey]) || [];
+		}
+		return;
 	}
 
 	// Fetch related records

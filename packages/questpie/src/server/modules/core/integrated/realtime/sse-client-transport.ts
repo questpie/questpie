@@ -230,6 +230,7 @@ export class SseOrderedDeltaWriter {
 /** Per-session latest-wins queue used when an SSE stream applies backpressure. */
 export class SseLatestSnapshotWriter {
 	private readonly pending = new Map<string, Uint8Array>();
+	private readonly generations = new Map<string, { writes: number }>();
 	private operation: Promise<void> = Promise.resolve();
 	private closed = false;
 	private pendingBytes = 0;
@@ -247,17 +248,29 @@ export class SseLatestSnapshotWriter {
 	}
 
 	write(topicId: string, frame: Uint8Array): Promise<SinkWriteResult> {
-		return this.run(async () => {
+		const generation = this.generations.get(topicId) ?? { writes: 0 };
+		this.generations.set(topicId, generation);
+		generation.writes++;
+		return this.run<SinkWriteResult>(async () => {
+			if (generation !== this.generations.get(topicId))
+				return { status: "accepted", bufferedBytes: this.pendingBytes };
 			if (this.closed)
 				throw new Error("Realtime SSE snapshot writer is closed");
 			this.removePending(topicId);
 			const result = await this.sink.write(frame, "latest-snapshot");
-			if (!this.closed && result.status === "busy") {
+			if (
+				!this.closed &&
+				generation === this.generations.get(topicId) &&
+				result.status === "busy"
+			) {
 				this.setPending(topicId, frame, result.bufferedBytes);
 			}
 			return result.status === "busy"
 				? { ...result, bufferedBytes: result.bufferedBytes + this.pendingBytes }
 				: result;
+		}).finally(() => {
+			generation.writes--;
+			this.releaseGeneration(topicId, generation);
 		});
 	}
 
@@ -265,18 +278,43 @@ export class SseLatestSnapshotWriter {
 		return this.run(async () => {
 			if (this.closed) return;
 			for (const [topicId, frame] of this.pending) {
+				const generation = this.generations.get(topicId);
 				this.removePending(topicId);
 				const result = await this.sink.write(frame, "latest-snapshot");
 				if (result.status === "busy") {
+					if (generation !== this.generations.get(topicId)) continue;
 					this.setPending(topicId, frame, result.bufferedBytes);
 					break;
 				}
+				if (generation) this.releaseGeneration(topicId, generation);
 			}
+		});
+	}
+
+	private releaseGeneration(
+		topicId: string,
+		generation: { writes: number },
+	): void {
+		if (
+			generation.writes === 0 &&
+			!this.pending.has(topicId) &&
+			this.generations.get(topicId) === generation
+		)
+			this.generations.delete(topicId);
+	}
+
+	/** Fence queued writes synchronously, then serialize removal with sink writes. */
+	remove(topicId: string): Promise<void> {
+		this.generations.delete(topicId);
+		this.removePending(topicId);
+		return this.run(async () => {
+			this.removePending(topicId);
 		});
 	}
 
 	clear(): void {
 		this.closed = true;
+		this.generations.clear();
 		this.pending.clear();
 		this.pendingBytes = 0;
 	}

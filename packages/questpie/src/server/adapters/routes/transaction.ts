@@ -223,9 +223,9 @@ function parseOperations(
 /**
  * Resolve a thrown value to an `ApiError` so decorating a failure never
  * changes the status the caller would otherwise have received for that
- * operation. Mirrors `handleError`'s ladder minus its `ZodError` rung: CRUD
- * converts validation issues with `ApiError.fromZodError` before they leave
- * the verb (`crud-generator.ts:1782`, `:2409`).
+ * operation. CRUD converts input validation issues with `ApiError.fromZodError`
+ * before they leave the verb. Other thrown values remain internal failures;
+ * public diagnostic redaction happens when the response is formatted.
  */
 function toApiError(error: unknown): ApiError {
 	if (error instanceof ApiError) return error;

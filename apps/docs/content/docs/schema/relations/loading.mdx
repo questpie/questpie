@@ -39,13 +39,13 @@ for. List options on a single row are not offered at all.
 | `where`           | yes    | yes     | Filter, typed against the target.                   |
 | `with`            | yes    | yes     | Go one relation deeper.                             |
 | `limit`, `offset` | no     | yes     | Cap and page them.                                  |
-| `orderBy`         | no     | yes     | Sort the related rows. `hasMany` only.              |
+| `orderBy`         | no     | yes     | Sort the related rows; see below.                   |
 | `_count`          | no     | yes     | A count in place of the rows. `hasMany` only.       |
 | `_aggregate`      | no     | yes     | `_sum`, `_avg`, `_min`, `_max` too. `hasMany` only. |
 
-The last three are offered on a `manyToMany` and ignored there. It rebuilds each
-parent's array from the junction rows after the fact, so what comes back is the
-rows themselves, in junction order.
+On a `manyToMany`, `_count` and `_aggregate` still return rows rather than
+aggregates. A bounded read (`limit` or `offset`) honors `orderBy`, with the
+target id breaking ties. An unbounded read retains junction order.
 
 The types follow a nested `with` three levels deep, which is the cap that keeps
 inference finite. The client and the server use the same number.
@@ -74,11 +74,16 @@ costs one extra read for the whole page of results rather than one per row, and
 a `manyToMany` costs two, one for the junction and one for the rows. Nesting
 adds a read per level, still not per row.
 
-<Callout type="warn" title="`limit` inside `with` caps the batch">
-	The related rows for every parent on the page are fetched together, so a
-	`limit` applies to that whole set rather than to each parent. On `findOne`
-	there is only one parent and the two are the same.
-</Callout>
+`limit` and `offset` apply separately to each parent for `hasMany` and
+`manyToMany`. With `limit: 3`, each parent can receive up to three readable
+children. Target access, `where`, and soft deletion apply before the per-parent
+page. Bounds must be non-negative integers.
+
+Bounded hydration ranks the matching rows in one target query for the parent
+batch; it does not issue one query per parent. It can still scan many candidates
+when a parent has a large relation. Index the foreign key and the requested sort
+columns, and inspect the PostgreSQL plan for high-fan-out reads. A many-to-many
+read also loads authorized junction rows.
 
 ## Access rules still apply
 

@@ -4,7 +4,7 @@
  * Utilities for resolving session, locale, and creating adapter context.
  */
 
-import { tryGetContext } from "../../config/context.js";
+import { type RequestContext, tryGetContext } from "../../config/context.js";
 import { getInternalAdapterContext } from "../../config/internal-context.js";
 import type { Questpie } from "../../config/questpie.js";
 import type { QuestpieConfig } from "../../config/types.js";
@@ -26,13 +26,77 @@ const FRESH_ADAPTER_CONTEXT = Symbol.for(
 	"questpie.internal.freshAdapterContext",
 );
 
-type RefreshableAdapterContext = AdapterContext & {
-	[FRESH_ADAPTER_CONTEXT]?: () => Promise<AdapterContext>;
+type RefreshContextOptions = {
+	request?: Request;
+	deferContextExtensions?: boolean;
 };
+type RefreshableAdapterContext = AdapterContext & {
+	[FRESH_ADAPTER_CONTEXT]?: (
+		options?: RefreshContextOptions,
+	) => Promise<AdapterContext>;
+};
+
+/**
+ * `appConfig({ context })` bundles that adapter context creation resolved from
+ * a request. Only these are re-derived when a query reads its own snapshot; a
+ * bundle the caller supplied is trusted as given.
+ */
+const requestDerivedExtensions = new WeakSet<object>();
+
+function markRequestDerived(appContext: RequestContext): RequestContext {
+	const extensions = appContext["~contextExtensions"];
+	if (extensions) {
+		// A resolver may return a shared object, so each request gets its own key.
+		const bundle = { ...extensions };
+		appContext["~contextExtensions"] = bundle;
+		requestDerivedExtensions.add(bundle);
+	}
+	return appContext;
+}
+
+/**
+ * @internal Resolve a request-derived context's `appConfig({ context })` facts
+ * again on another database handle, keeping the context's identity. Returns
+ * `undefined` when the extensions were not derived from the context's request.
+ */
+export async function deriveRequestContextOnDb(
+	app: Questpie<any>,
+	context: RequestContext,
+	db: unknown,
+): Promise<RequestContext | undefined> {
+	const stale = context["~contextExtensions"];
+	if (
+		!stale ||
+		!requestDerivedExtensions.has(stale) ||
+		!(context.request instanceof Request)
+	) {
+		return undefined;
+	}
+	// Drop the stale facts merged flat into the context; keep everything else.
+	const base = Object.fromEntries(
+		Object.entries(context).filter(([key]) => !Object.hasOwn(stale, key)),
+	);
+	return markRequestDerived(
+		await app.createContext({
+			...base,
+			session: context.session,
+			principal: context.principal,
+			actor: context.actor,
+			locale: context.locale,
+			accessMode: context.accessMode,
+			stage: context.stage,
+			requestId: context.requestId,
+			traceId: context.traceId,
+			request: context.request,
+			db,
+			"~contextExtensions": undefined,
+		}),
+	);
+}
 
 function attachFreshAdapterContext(
 	context: AdapterContext,
-	resolveFresh: () => Promise<AdapterContext>,
+	resolveFresh: (options?: RefreshContextOptions) => Promise<AdapterContext>,
 ): AdapterContext {
 	Object.defineProperty(context, FRESH_ADAPTER_CONTEXT, {
 		value: resolveFresh,
@@ -82,18 +146,21 @@ export function createIsolatedAdapterContextResolver<
 			})
 			.then((appContext) => {
 				appContext.localeFallback = nativeContext.localeFallback;
+				markRequestDerived(appContext);
 				return attachFreshAdapterContext(
 					{
 						...nativeContext,
 						session,
 						appContext,
 					},
-					() =>
+					(options) =>
 						createAdapterContextInternal(
 							app,
-							authorityRequest,
-							{ accessMode },
+							options?.request ?? authorityRequest,
+							{ accessMode, extendContext: () => ({ actor }) },
 							observability,
+							undefined,
+							options?.deferContextExtensions,
 						),
 				);
 			}));
@@ -102,6 +169,7 @@ export function createIsolatedAdapterContextResolver<
 /** @internal Re-run session resolution and app context derivation for a route. */
 export function refreshAdapterContext(
 	context: AdapterContext,
+	options?: RefreshContextOptions,
 ): Promise<AdapterContext> {
 	const resolveFresh = (context as RefreshableAdapterContext)[
 		FRESH_ADAPTER_CONTEXT
@@ -109,7 +177,7 @@ export function refreshAdapterContext(
 	if (!resolveFresh) {
 		throw new Error("Fresh adapter context is unavailable");
 	}
-	return resolveFresh();
+	return resolveFresh(options);
 }
 
 export const resolveSession = async <
@@ -167,6 +235,7 @@ const createAdapterContextInternal = async <
 	config: AdapterConfig<TConfig> = {},
 	observability?: { requestId?: string; traceId?: string },
 	oauthAudience?: string,
+	deferContextExtensions = false,
 ): Promise<AdapterContext> => {
 	const parsedQuery = getQueryParams(new URL(request.url));
 	const queryLocale =
@@ -224,12 +293,16 @@ const createAdapterContextInternal = async <
 	// `createContext` as the authoritative identity: `accessMode` then derives to
 	// `"user"` (RBAC applies as that user — never `"system"`), and the scopes ride
 	// along on `ctx.principal` for the MCP scope gate (MO8).
-	const appContext = await app.createContext({
-		...baseContext,
-		...(adapterExtension ?? {}),
-		...(oauthPrincipal ? { principal: oauthPrincipal.principal } : {}),
-		request,
-	});
+	const appContext = markRequestDerived(
+		await app.createContext({
+			...baseContext,
+			...(adapterExtension ?? {}),
+			...(oauthPrincipal ? { principal: oauthPrincipal.principal } : {}),
+			// Query routes derive database-backed facts inside their snapshot.
+			...(deferContextExtensions ? { "~contextExtensions": {} } : {}),
+			request,
+		}),
+	);
 
 	return attachFreshAdapterContext(
 		{
@@ -245,13 +318,14 @@ const createAdapterContextInternal = async <
 				? { traceId: appContext.traceId }
 				: {}),
 		},
-		() =>
+		(options) =>
 			createAdapterContextInternal(
 				app,
-				request,
+				options?.request ?? request,
 				config,
 				observability,
 				oauthAudience,
+				options?.deferContextExtensions ?? deferContextExtensions,
 			),
 	);
 };
@@ -295,6 +369,7 @@ export const resolveContext = async <
 	config: AdapterConfig<TConfig>,
 	context?: AdapterContext,
 	observability?: { requestId?: string; traceId?: string },
+	deferContextExtensions = false,
 ) => {
 	if (context?.appContext) {
 		return withObservability(context, observability);
@@ -308,7 +383,14 @@ export const resolveContext = async <
 		return withObservability(storedAdapterContext, observability);
 	}
 
-	return createAdapterContext(app, request, config, observability);
+	return createAdapterContextInternal(
+		app,
+		request,
+		config,
+		observability,
+		undefined,
+		deferContextExtensions,
+	);
 };
 
 function withObservability(

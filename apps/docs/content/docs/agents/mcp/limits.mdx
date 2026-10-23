@@ -1,6 +1,6 @@
 ---
 title: Limits and errors
-description: Every tool call and resource read runs inside a budget for size, depth, time and concurrency. Every failure comes back as one of eight codes with a correlation id.
+description: Every tool call and resource read runs inside a budget for size, depth, time and concurrency. Protocol failures have bounded codes; route product failures share the HTTP error contract.
 kind: reference
 package: "@questpie/mcp"
 ---
@@ -18,6 +18,7 @@ already on, and `execution` in `config/mcp.ts` only narrows them.
 | `timeoutMs`                  | 30 000  | 300 000 | Authorization plus execution, per call.   |
 | `maxConcurrency`             | 64      | 1 024   | In-flight calls for one app.              |
 | `maxConcurrencyPerPrincipal` | 8       | 1 024   | In-flight calls for one caller.           |
+| `maxCatalogBytes`            | 100 000 | 100 000 | Discovery result bytes (exclusive).       |
 | `maxTools`                   | 512     | 2 048   | Tools in the released catalog.            |
 | `maxResources`               | 512     | 2 048   | Resources in the released catalog.        |
 
@@ -38,6 +39,16 @@ export default mcpConfig({
 A value above its ceiling throws `Invalid MCP execution limit: <name>` rather
 than being clamped. So does a `maxConcurrencyPerPrincipal` above
 `maxConcurrency`, and a value that is not a positive safe integer.
+
+`maxCatalogBytes` counts the complete tool catalog after visibility filtering
+and schema projection, including schemas, metadata, and the result wrapper.
+HTTP, stdio, workload servers, and the in-process workload port’s
+`listCustomTools()` all enforce the same exclusive threshold: a result of
+exactly 100,000 bytes fails. Set `execution.maxCatalogBytes` to 85,000 to leave
+headroom. Oversized catalogs fail with their largest contributors; reduce
+verbose descriptions or explicitly narrow the configured tools. Tools and
+required schemas are never silently removed, and pagination cannot bypass the
+limit.
 
 <Callout type="info" title="One budget per app, not per request">
 	Every transport shares the same counters, including separate HTTP requests and
@@ -60,9 +71,14 @@ never served at all.
 
 ## Error codes
 
-A failed call returns `isError: true`. The text says only `MCP access denied`
-or `MCP operation failed`. The real code sits in the result's `_meta`, under
-the key `questpie/error`, next to a correlation id.
+A failed call returns `isError: true`. Route product failures carry canonical
+`{ error }` JSON in a text block and an uppercase product code such as
+`FORBIDDEN`, `CONFLICT` or `VALIDATION_ERROR` in `_meta["questpie/error"]`, next
+to a correlation id. They omit `structuredContent`, so SDK clients do not try
+to validate an error against the success output schema.
+
+Protocol refusals and legacy custom/CRUD tool failures retain the lower-case
+codes below and generic text (`MCP access denied` or `MCP operation failed`).
 
 | Code               | When                                             |
 | ------------------ | ------------------------------------------------ |
@@ -85,10 +101,13 @@ the key `questpie/error`, next to a correlation id.
 }
 ```
 
-<Callout type="warn" title="The caller never sees why">
-	No database message, no stack, no input, no output, no credential and no
-	authorization envelope crosses the boundary. Give the user the correlation id
-	and match it in your own logs.
+<Callout type="warn" title="Public errors exclude diagnostics">
+	Product errors can include safe app-authored messages and bounded field
+	feedback. Causes, stacks, invalid values, database/hook diagnostics and
+	credential envelopes are omitted in every environment. Internal route errors
+	use the generic `INTERNAL_SERVER_ERROR` product error. Keep full diagnostics
+	in application-owned server logging; the diagnostic event below records only
+	the error kind and correlation metadata.
 </Callout>
 
 `mcpPublicErrorCode(error)` reads the code off an error thrown by the list and
@@ -109,17 +128,28 @@ try {
 `execution.onDiagnostic` is a server-side sink. It fires once per call, on both
 outcomes.
 
-| Field           | Notes                                                         |
-| --------------- | ------------------------------------------------------------- |
-| `correlationId` | The same id the caller received.                              |
-| `requestId`     | The MCP request id, when there is one.                        |
-| `transport`     | `"http"`, `"stdio"` or `"workload"`.                          |
-| `operation`     | The tool or resource name, truncated to 256 characters.       |
-| `durationMs`    | Wall clock for the whole call.                                |
-| `outcome`       | `"completed"` or `"rejected"`.                                |
-| `code`          | The public error code, on a rejection.                        |
-| `internalError` | `{ kind: "Error" \| "Unknown" }`, on an `internal` code only. |
+| Field           | Notes                                                                       |
+| --------------- | --------------------------------------------------------------------------- |
+| `correlationId` | The same id the caller received.                                            |
+| `requestId`     | The MCP request id, when there is one.                                      |
+| `transport`     | `"http"`, `"stdio"` or `"workload"`.                                        |
+| `operation`     | The tool or resource name, truncated to 256 characters.                     |
+| `durationMs`    | Wall clock for the whole call.                                              |
+| `outcome`       | `"completed"` or `"rejected"`.                                              |
+| `code`          | The public error code, on a rejection.                                      |
+| `internalError` | `{ kind: "Error" \| "Unknown" }`, on `internal` or `INTERNAL_SERVER_ERROR`. |
 
 The sink is deliberately narrow. Only one unresolved callback is kept at a
 time, and events that arrive while it is still pending are dropped rather than
 buffered. Do slow work elsewhere.
+
+Tool schemas declare draft-07 explicitly for compatibility with the current SDK's
+validator, including ordered tuples. MCP defaults to 2020-12 when the dialect is
+omitted, so removing this declaration would change schema semantics. Clients must
+support the declared dialect or report it as unsupported. See the
+[MCP schema dialect rules](https://modelcontextprotocol.io/specification/2025-11-25/basic#schema-dialect).
+
+For delegated route calls, credential eligibility and input validation happen
+before handoff. Product access runs when the handoff invokes execution. A handoff
+that collects approval may therefore ask about a call that is later denied;
+approval does not substitute for product authorization at execution.

@@ -12,6 +12,7 @@ import type {
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import { extractAppServices } from "#questpie/server/config/app-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { getBatchReadCallback } from "#questpie/server/fields/batch-read.js";
 import type {
 	FieldAccess,
 	FieldAccessContext,
@@ -31,6 +32,19 @@ export function isAccessWhere(value: unknown): boolean {
 		(value as { [ACCESS_WHERE]?: unknown })[ACCESS_WHERE] === true
 	);
 }
+
+/**
+ * Internal, non-JSON marker on a caller relation predicate: for each of its
+ * quantifiers, the caller's read access to the target (and junction) rows that
+ * quantifier reads, resolved before SQL compilation so the relation set is
+ * restricted before it is quantified.
+ */
+export const RELATION_READ_ACCESS = Symbol("questpie.relationReadAccess");
+
+export type RelationReadAccess = {
+	target: boolean | AccessWhere;
+	through?: boolean | AccessWhere;
+};
 
 type FieldDefinitionLike = {
 	_state?: {
@@ -391,6 +405,7 @@ export async function getRestrictedReadFields(
 	result: Record<string, any>,
 	context: CRUDContext,
 	options: FilterFieldsForReadOptions,
+	batchRestrictedFields?: string[],
 ): Promise<string[]> {
 	if (!result) return [];
 
@@ -402,7 +417,9 @@ export async function getRestrictedReadFields(
 	const fieldAccess = options.fieldAccess;
 	if (!fieldAccess) return [];
 
-	const fieldsToRemove: string[] = [];
+	const fieldsToRemove =
+		batchRestrictedFields ??
+		(await getBatchRestrictedReadFields([result], normalized, options))[0];
 
 	for (const [fieldName, access] of Object.entries(fieldAccess)) {
 		// Skip meta fields
@@ -420,6 +437,7 @@ export async function getRestrictedReadFields(
 			// No access rule for this field - allow read
 			continue;
 		}
+		if (getBatchReadCallback(access.read)) continue;
 
 		const canRead = await evaluateFieldAccess(
 			access.read,
@@ -439,6 +457,56 @@ export async function getRestrictedReadFields(
 	}
 
 	return fieldsToRemove;
+}
+
+/** Batch policies see only the page already admitted by SQL row access. */
+export async function getBatchRestrictedReadFields(
+	results: Record<string, unknown>[],
+	context: CRUDContext,
+	options: FilterFieldsForReadOptions,
+): Promise<string[][]> {
+	const restricted = results.map(() => [] as string[]);
+	const normalized = normalizeContext(context);
+	if (normalized.accessMode === "system" || results.length === 0) {
+		return restricted;
+	}
+
+	for (const [fieldName, access] of Object.entries(options.fieldAccess ?? {})) {
+		if (
+			fieldName === "id" ||
+			fieldName === "_title" ||
+			fieldName === "createdAt" ||
+			fieldName === "updatedAt" ||
+			fieldName === "deletedAt"
+		) {
+			continue;
+		}
+		const callback = getBatchReadCallback(access?.read);
+		if (!callback) continue;
+		const { doc: _doc, ...fieldContext } = createFieldAccessContext({
+			context: normalized,
+			operation: "read",
+		});
+		const decisions = await callback({
+			...fieldContext,
+			db: normalized.db ?? options.db,
+			operation: "read",
+			docs: results,
+		});
+		if (
+			!Array.isArray(decisions) ||
+			decisions.length !== results.length ||
+			!decisions.every((decision) => typeof decision === "boolean")
+		) {
+			throw new Error("batchRead must return one boolean per document");
+		}
+		for (const [index, decision] of decisions.entries()) {
+			if (!decision && hasPathValue(results[index], fieldName.split("."))) {
+				restricted[index].push(fieldName);
+			}
+		}
+	}
+	return restricted;
 }
 
 /**

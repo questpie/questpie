@@ -173,7 +173,18 @@ describe("applyMcpSchemaDiet (unit)", () => {
 		expect(JSON.stringify(schema)).toContain('"format":"uuid"');
 	});
 
-	it("normalizes a draft-07 tuple (array items + additionalItems) into 2020-12 prefixItems + items", () => {
+	it("preserves an explicitly declared non-default dialect", () => {
+		const schema = applyMcpSchemaDiet({
+			$schema: "http://json-schema.org/draft-07/schema#",
+			type: "array",
+			items: [{ type: "string" }],
+			additionalItems: false,
+		});
+		expect(schema.$schema).toBe("http://json-schema.org/draft-07/schema#");
+		expect(schema.items).toEqual([{ type: "string" }]);
+	});
+
+	it("preserves draft-07 tuple semantics for the SDK default validator", () => {
 		const closed = applyMcpSchemaDiet({
 			type: "array",
 			items: [{ type: "string" }, { type: "number" }],
@@ -181,29 +192,26 @@ describe("applyMcpSchemaDiet (unit)", () => {
 			minItems: 2,
 			maxItems: 2,
 		}) as Record<string, unknown>;
-		expect(closed.prefixItems).toEqual([
-			{ type: "string" },
-			{ type: "number" },
-		]);
-		expect(closed.items).toBe(false);
-		expect(closed).not.toHaveProperty("additionalItems");
+		expect(closed.items).toEqual([{ type: "string" }, { type: "number" }]);
+		expect(closed.additionalItems).toBe(false);
+		expect(closed).not.toHaveProperty("prefixItems");
 
 		const open = applyMcpSchemaDiet({
 			type: "array",
 			items: [{ type: "string" }],
 			additionalItems: true,
 		}) as Record<string, unknown>;
-		expect(open.prefixItems).toEqual([{ type: "string" }]);
-		expect(open).not.toHaveProperty("items");
-		expect(open).not.toHaveProperty("additionalItems");
+		expect(open.items).toEqual([{ type: "string" }]);
+		expect(open.additionalItems).toBe(true);
+		expect(open).not.toHaveProperty("prefixItems");
 
 		const trailingSchema = applyMcpSchemaDiet({
 			type: "array",
 			items: [{ type: "string" }],
 			additionalItems: { type: "number" },
 		}) as Record<string, unknown>;
-		expect(trailingSchema.prefixItems).toEqual([{ type: "string" }]);
-		expect(trailingSchema.items).toEqual({ type: "number" });
+		expect(trailingSchema.items).toEqual([{ type: "string" }]);
+		expect(trailingSchema.additionalItems).toEqual({ type: "number" });
 	});
 
 	it("leaves a schema that already uses 2020-12 prefixItems alone", () => {
@@ -380,16 +388,20 @@ describe("MCP tools/list schema diet (integration)", () => {
 		return { setup, server };
 	}
 
-	it("removes $schema from every emitted tool schema", async () => {
+	it("declares the non-default draft-07 dialect on emitted tool schemas", async () => {
 		const { setup, server } = await buildFixtureServer();
 		const { client, close } = await connect(server);
 		try {
 			const tools = await client.listTools();
 			expect(tools.tools.length).toBeGreaterThan(0);
 			for (const tool of tools.tools) {
-				expect(JSON.stringify(tool.inputSchema)).not.toContain('"$schema"');
+				expect(tool.inputSchema.$schema).toBe(
+					"http://json-schema.org/draft-07/schema#",
+				);
 				if (tool.outputSchema) {
-					expect(JSON.stringify(tool.outputSchema)).not.toContain('"$schema"');
+					expect(tool.outputSchema.$schema).toBe(
+						"http://json-schema.org/draft-07/schema#",
+					);
 				}
 			}
 		} finally {
@@ -515,7 +527,10 @@ describe("installSchemaDietListToolsHandler failure handling", () => {
 	let loggedErrors: unknown[][];
 
 	function fakeServer(overrides: Record<string, unknown>): McpServer {
-		return { server: { ...overrides } } as unknown as McpServer;
+		return {
+			_registeredTools: { tool: {} },
+			server: { ...overrides },
+		} as unknown as McpServer;
 	}
 
 	beforeEach(() => {
@@ -532,17 +547,29 @@ describe("installSchemaDietListToolsHandler failure handling", () => {
 		console.error = originalConsoleError;
 	});
 
+	it.each(["test", "production"])(
+		"fails closed in %s when the SDK registered-tool map is unavailable",
+		(env) => {
+			process.env.NODE_ENV = env;
+			const server = fakeServer({ _requestHandlers: new Map() });
+			Reflect.deleteProperty(server, "_registeredTools");
+			expect(() => installSchemaDietListToolsHandler(server)).toThrow(
+				/registered-tool map/,
+			);
+		},
+	);
+
 	it("throws outside production when the SDK's request-handler map is missing", () => {
 		process.env.NODE_ENV = "test";
 		expect(() => installSchemaDietListToolsHandler(fakeServer({}))).toThrow();
 		expect(loggedErrors.length).toBeGreaterThan(0);
 	});
 
-	it("logs and degrades (does not throw) in production when the request-handler map is missing", () => {
+	it("fails closed in production when the request-handler map is missing", () => {
 		process.env.NODE_ENV = "production";
-		expect(() =>
-			installSchemaDietListToolsHandler(fakeServer({})),
-		).not.toThrow();
+		expect(() => installSchemaDietListToolsHandler(fakeServer({}))).toThrow(
+			/catalog byte budget/,
+		);
 		expect(loggedErrors.length).toBeGreaterThan(0);
 	});
 
@@ -556,13 +583,13 @@ describe("installSchemaDietListToolsHandler failure handling", () => {
 		expect(loggedErrors.length).toBeGreaterThan(0);
 	});
 
-	it("logs and degrades (does not throw) in production when no tools/list handler was registered", () => {
+	it("fails closed in production when no tools/list handler was registered", () => {
 		process.env.NODE_ENV = "production";
 		expect(() =>
 			installSchemaDietListToolsHandler(
 				fakeServer({ _requestHandlers: new Map() }),
 			),
-		).not.toThrow();
+		).toThrow(/catalog byte budget/);
 		expect(loggedErrors.length).toBeGreaterThan(0);
 	});
 });

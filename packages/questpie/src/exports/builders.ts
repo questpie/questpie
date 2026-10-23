@@ -40,6 +40,12 @@ export {
 	type FieldValues,
 	type InferFieldsFromFactory,
 } from "#questpie/server/fields/builder.js";
+export {
+	batchRead,
+	type BatchReadCallback,
+	type BatchReadContext,
+	type BatchReadRule,
+} from "#questpie/server/fields/batch-read.js";
 export * from "#questpie/server/modules/core/fields/index.js";
 // Operator sets + combinators: required by app-land `fieldType()` definitions
 // (every FieldRuntimeState carries an operatorSet — without these exports a

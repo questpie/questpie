@@ -471,7 +471,7 @@ Inside `packages/questpie`:
 
 - **Check `package.json`** before adding deps — critical packages have pinned versions (zod v4, drizzle-orm beta, better-auth, etc.).
 - Internal deps **must** use `workspace:*`.
-- Key pinned versions: `zod ^4.2.1`, `drizzle-orm 1.0.0-beta.*`, `react ^19.2.0`, `tailwindcss ^4.0.6`.
+- Key pinned versions: core `zod ^4.2.1` (MCP requires `^4.6.2` for strict schema conversion), `drizzle-orm 1.0.0-beta.*`, `react ^19.2.0`, `tailwindcss ^4.0.6`.
 
 ### Git Workflow
 

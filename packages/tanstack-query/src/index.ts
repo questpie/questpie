@@ -3,6 +3,7 @@ import {
 	mutationOptions,
 	type QueryKey,
 	queryOptions,
+	replaceEqualDeep,
 	experimental_streamedQuery as streamedQuery,
 	type UseMutationOptions,
 	type UseQueryOptions,
@@ -58,6 +59,7 @@ import {
 	applyRealtimeSingleEvent,
 	buildCollectionTopic,
 	buildGlobalTopic,
+	RealtimeTopicRejectedError,
 } from "questpie/client";
 
 // ============================================================================
@@ -126,13 +128,6 @@ type LiveQueryBuilder<TFn extends AnyAsyncFn> =
 				options: FirstArg<TFn>,
 				queryConfig?: RealtimeQueryConfig<QueryData<TFn>>,
 			) => UseQueryOptions<QueryData<TFn>>;
-
-type KeyBuilder<TFn extends AnyAsyncFn> =
-	HasArgs<TFn> extends false
-		? () => QueryKey
-		: undefined extends FirstArg<TFn>
-			? (options?: FirstArg<TFn>) => QueryKey
-			: (options: FirstArg<TFn>) => QueryKey;
 
 type MutationVariables<TFn extends AnyAsyncFn> =
 	HasArgs<TFn> extends false
@@ -344,10 +339,36 @@ type GlobalTransitionStage<
 		: never
 	: never;
 
+type RouteCallConfig<TFn extends AnyAsyncFn> = Pick<
+	NonNullable<Parameters<TFn>[1]>,
+	Extract<keyof NonNullable<Parameters<TFn>[1]>, "params" | "locale" | "signal">
+>;
+
+type RouteQueryConfig<TFn extends AnyAsyncFn> = RouteCallConfig<TFn> &
+	Omit<UseQueryOptions<QueryData<TFn>>, "queryFn" | "queryKey"> &
+	(TFn extends { watch: (...args: any[]) => AsyncIterable<unknown> }
+		? { realtime?: boolean }
+		: { realtime?: never });
+
+type RouteQueryBuilder<TFn extends AnyAsyncFn> =
+	undefined extends FirstArg<TFn>
+		? (
+				input?: FirstArg<TFn>,
+				config?: RouteQueryConfig<TFn>,
+			) => UseQueryOptions<QueryData<TFn>>
+		: (
+				input: FirstArg<TFn>,
+				config?: RouteQueryConfig<TFn>,
+			) => UseQueryOptions<QueryData<TFn>>;
+
 type RouteLeafQueryOptionsAPI<TFn extends AnyAsyncFn> = {
-	query: QueryBuilder<TFn>;
+	query: RouteQueryBuilder<TFn>;
 	mutation: MutationBuilder<MutationVariables<TFn>, QueryData<TFn>>;
-	key: KeyBuilder<TFn>;
+	key: (
+		...args: undefined extends FirstArg<TFn>
+			? [input?: FirstArg<TFn>, config?: RouteCallConfig<TFn>]
+			: [input: FirstArg<TFn>, config?: RouteCallConfig<TFn>]
+	) => QueryKey;
 };
 
 type RoutesQueryOptionsAPI<TNode> = TNode extends AnyAsyncFn
@@ -1221,11 +1242,29 @@ export function createQuestpieQueryOptions<
 	/**
 	 * Resolve a nested route caller from the client by traversing dot segments.
 	 */
-	const callRoute = async (segments: string[], input: unknown) => {
-		let current: any = client.routes as any;
+	type RouteCallOptions = {
+		params?: Record<string, string>;
+		locale?: string;
+		signal?: AbortSignal;
+	};
+	type RouteCaller = ((
+		input: unknown,
+		options?: RouteCallOptions,
+	) => Promise<unknown>) & {
+		watch?: (
+			input: unknown,
+			options?: RouteCallOptions & { onInvalidate?: () => void },
+		) => AsyncIterable<unknown>;
+	};
+	const resolveRoute = (segments: string[]): RouteCaller => {
+		let current: unknown = client.routes;
 
 		for (const segment of segments) {
-			current = current?.[segment];
+			current =
+				current &&
+				(typeof current === "object" || typeof current === "function")
+					? Reflect.get(current, segment)
+					: undefined;
 		}
 
 		if (typeof current !== "function") {
@@ -1234,12 +1273,23 @@ export function createQuestpieQueryOptions<
 			);
 		}
 
-		if (input === undefined) {
-			return current();
-		}
-
-		return current(input);
+		return current as RouteCaller;
 	};
+	const routeKey = (
+		segments: string[],
+		input: unknown,
+		options: RouteCallOptions,
+	) =>
+		buildKey(keyPrefix, [
+			"routes",
+			...segments,
+			"query",
+			options.locale,
+			normalizeQueryKeyOptions(input),
+			...(options.params === undefined
+				? []
+				: [normalizeQueryKeyOptions(options.params)]),
+		]);
 
 	const createRouteNodeProxy = (segments: string[]): any => {
 		return new Proxy(
@@ -1247,20 +1297,135 @@ export function createQuestpieQueryOptions<
 			{
 				get: (_target, prop) => {
 					if (prop === "query") {
-						return (input?: any) =>
-							queryOptions({
-								queryKey: buildKey(keyPrefix, [
-									"routes",
-									...segments,
-									"query",
-									locale,
-									normalizeQueryKeyOptions(input),
-								]),
-								queryFn: wrapQueryFn(
-									() => callRoute(segments, input),
-									errorMap,
-								),
+						return (
+							input?: unknown,
+							queryConfig: RealtimeQueryConfig & RouteCallOptions = {},
+						) => {
+							const {
+								realtime,
+								params,
+								locale: queryLocale,
+								signal,
+								...overrides
+							} = queryConfig;
+							const options = {
+								params,
+								locale: queryLocale ?? locale ?? client.getLocale?.(),
+							};
+							const queryKey = routeKey(segments, input, options);
+							if (realtime) {
+								return queryOptions({
+									staleTime: 0,
+									refetchOnMount: "always",
+									...overrides,
+									queryKey,
+									retry: (count, error) => {
+										if (isNonRetryableError(error)) return false;
+										const retry = overrides.retry ?? realtimeRetry;
+										return typeof retry === "function"
+											? retry(count, error)
+											: retry === true ||
+													(typeof retry === "number" && count < retry);
+									},
+									behavior: {
+										onFetch: (context, query) => {
+											const state = query.state;
+											// Capture an empty cancellation fallback before fetching.
+											// Snapshot writes below must not replace it with protected data.
+											query.setState({
+												data: undefined,
+												dataUpdatedAt: 0,
+												error: null,
+												status: "pending",
+											});
+											const fetchFn = context.fetchFn;
+											let firstAttempt = true;
+											context.fetchFn = () => {
+												// Retries must not restore data cleared by an invalidation.
+												if (firstAttempt) {
+													firstAttempt = false;
+													if (state.data !== undefined)
+														query.setState({
+															...state,
+															fetchStatus: "fetching",
+														});
+												}
+												return fetchFn();
+											};
+										},
+									},
+									queryFn: async (context) => {
+										const querySignal = context.signal;
+										const watchSignal = signal
+											? AbortSignal.any([querySignal, signal])
+											: querySignal;
+										const query = context.client
+											.getQueryCache()
+											.find({ queryKey, exact: true })!;
+										const clear = () =>
+											query.setState({
+												data: undefined,
+												dataUpdatedAt: 0,
+												error: null,
+												status: "pending",
+											});
+										try {
+											const caller = resolveRoute(segments);
+											if (!caller.watch)
+												throw new Error("Route does not support LIVE queries");
+											for await (const snapshot of caller.watch(input, {
+												...options,
+												signal: watchSignal,
+												onInvalidate: () => {
+													if (!watchSignal.aborted) clear();
+												},
+											})) {
+												if (watchSignal.aborted) break;
+												const sharing = query.options.structuralSharing;
+												query.setState({
+													data:
+														typeof sharing === "function"
+															? sharing(query.state.data, snapshot)
+															: sharing === false
+																? snapshot
+																: replaceEqualDeep(query.state.data, snapshot),
+													dataUpdatedAt: Date.now(),
+													dataUpdateCount: query.state.dataUpdateCount + 1,
+													error: null,
+													isInvalidated: false,
+													status: "success",
+												});
+											}
+											return query.state.data;
+										} catch (error) {
+											if (
+												!watchSignal.aborted &&
+												error instanceof RealtimeTopicRejectedError &&
+												error.details.reason === "access"
+											)
+												clear();
+											throw mapRealtimeError(error, errorMap);
+										}
+									},
+								});
+							}
+							return queryOptions({
+								...overrides,
+								queryKey,
+								queryFn: async ({ signal: querySignal }) => {
+									try {
+										return await resolveRoute(segments)(input, {
+											...options,
+											signal: signal
+												? AbortSignal.any([querySignal, signal])
+												: querySignal,
+										});
+									} catch (error) {
+										throw errorMap(error);
+									}
+								},
 							});
+						};
 					}
 
 					if (prop === "mutation") {
@@ -1273,21 +1438,19 @@ export function createQuestpieQueryOptions<
 									locale,
 								]),
 								mutationFn: wrapMutationFn(
-									(variables: any) => callRoute(segments, variables),
+									(variables: unknown) =>
+										resolveRoute(segments)(variables, { locale }),
 									errorMap,
 								),
 							});
 					}
 
 					if (prop === "key") {
-						return (input?: any) =>
-							buildKey(keyPrefix, [
-								"routes",
-								...segments,
-								"query",
-								locale,
-								normalizeQueryKeyOptions(input),
-							]);
+						return (input?: unknown, options?: RouteCallOptions) =>
+							routeKey(segments, input, {
+								...options,
+								locale: options?.locale ?? locale ?? client.getLocale?.(),
+							});
 					}
 
 					if (typeof prop !== "string") return undefined;

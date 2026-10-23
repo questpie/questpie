@@ -8,12 +8,14 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext, RequestContext } from "questpie";
 
+import { assertMcpCatalogByteBudget } from "./catalog-byte-budget.js";
 import {
 	assertBoundedMcpValue,
 	McpAccessDeniedError,
 	type McpExecutionBoundary,
 	type McpHandlerExtra,
 	McpPublicError,
+	McpProductError,
 	mcpPublicErrorCode,
 } from "./execution-boundary.js";
 import type {
@@ -394,6 +396,7 @@ export async function listWorkloadTools(
 	boundary: WorkloadMcpBoundary,
 	execution: McpExecutionBoundary,
 	extra: McpHandlerExtra,
+	maxCatalogBytes?: number,
 ): Promise<ListToolsResult> {
 	const tools: Tool[] = [];
 	const controller = new AbortController();
@@ -439,13 +442,19 @@ export async function listWorkloadTools(
 				tools.push(tool);
 			} catch (error) {
 				const code = mcpPublicErrorCode(error);
-				if (code === "access_denied" || code === "internal") continue;
+				if (
+					error instanceof McpProductError ||
+					code === "access_denied" ||
+					code === "internal"
+				)
+					continue;
 				if (timedOut && code === "cancelled") {
 					throw new McpPublicError("timeout");
 				}
 				throw error;
 			}
 		}
+		assertMcpCatalogByteBudget({ tools }, maxCatalogBytes);
 		assertBoundedMcpValue(
 			{ tools },
 			{
@@ -488,7 +497,8 @@ export async function executeWorkloadTool(
 			correlationId: execution.correlationId,
 			invoke,
 		});
-	} catch {
-		throw new Error(PUBLIC_ACCESS_DENIED);
+	} catch (error) {
+		if (error instanceof McpPublicError) throw error;
+		throw new Error(PUBLIC_ACCESS_DENIED, { cause: error });
 	}
 }

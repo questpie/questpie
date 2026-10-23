@@ -87,6 +87,12 @@ import {
 	type RealtimeTopologyQuery,
 } from "../../modules/core/integrated/realtime/topology-coordinator.js";
 import type { ClientSink } from "../../modules/core/integrated/realtime/transport.js";
+import {
+	prepareRouteQueryTopic,
+	resolveRouteQueryTopic,
+	routeTopicRejection,
+	type RouteQueryTopic,
+} from "../../routes/live.js";
 import type { AdapterConfig, AdapterContext } from "../types.js";
 import { refreshAdapterContext, resolveContext } from "../utils/context.js";
 import { handleError, sseHeaders } from "../utils/response.js";
@@ -99,11 +105,14 @@ type TopicInput = {
 	/** Unique topic ID */
 	id: string;
 	/** Resource type */
-	resourceType: "collection" | "global";
+	resourceType: "collection" | "global" | "route";
 	/** Resource name */
 	resource: string;
 	/** Query operation; omitted values are normalized by resource type. */
-	operation?: "find" | "count" | "get";
+	operation?: "find" | "count" | "get" | "query";
+	method?: import("../../routes/types.js").HttpMethod;
+	input?: unknown;
+	params?: Record<string, string>;
 	/** Record id for a collection `get` topic. */
 	recordId?: string;
 	/** WHERE filters */
@@ -134,7 +143,8 @@ type NormalizedTopicInput =
 			operation: "get";
 			recordId: string;
 	  })
-	| (TopicInput & { resourceType: "global"; operation: "get" });
+	| (TopicInput & { resourceType: "global"; operation: "get" })
+	| (TopicInput & RouteQueryTopic);
 
 type ValidatedTopicMetadata = {
 	crud: any;
@@ -163,7 +173,19 @@ type RealtimeDefinition = {
 	};
 };
 
+type ValidatedRouteTopic = TopicInput &
+	RouteQueryTopic & {
+		type: "route";
+		live: ReturnType<typeof prepareRouteQueryTopic>;
+		definition: ReturnType<typeof prepareRouteQueryTopic>["prepared"];
+		crud?: never;
+		accessCacheKey?: never;
+		requestedWhere?: never;
+		accessWhere?: never;
+	};
+
 type ValidatedTopic =
+	| ValidatedRouteTopic
 	| (Extract<NormalizedTopicInput, { resourceType: "collection" }> &
 			ValidatedTopicMetadata & { type: "collection" })
 	| (Extract<NormalizedTopicInput, { resourceType: "global" }> &
@@ -179,6 +201,7 @@ function enforceRealtimeTopicPolicy(
 	topic: NormalizedTopicInput,
 	definition?: RealtimeDefinition,
 ): void {
+	if (topic.resourceType === "route") return;
 	const result = admitRealtimeTopicPolicy(topic, {
 		changeCapture: app.config?.realtime?.changeCapture,
 		rowLiveQueries: app.config?.realtime?.rowLiveQueries,
@@ -436,6 +459,15 @@ function edgeStageRejection(
 }
 
 function normalizeTopicOperation(topic: TopicInput): NormalizedTopicInput {
+	if (topic.resourceType === "route") {
+		if (topic.operation !== "query" || !topic.method)
+			throw routeTopicRejection(
+				topic,
+				"operation_shape",
+				"Route watches require query and method",
+			);
+		return topic as TopicInput & RouteQueryTopic;
+	}
 	if (topic.resourceType !== "collection" && topic.resourceType !== "global") {
 		throw new Error("Invalid realtime resource type");
 	}
@@ -494,11 +526,22 @@ function mergeAccessWhere(
 	return where ? { AND: [access, where] } : access;
 }
 
+function evaluateTopicAccess(
+	app: Questpie<any>,
+	topic: Exclude<ValidatedTopic, ValidatedRouteTopic>,
+	context: RealtimeRequestContext,
+): Promise<Exclude<ValidatedTopic, ValidatedRouteTopic>>;
+function evaluateTopicAccess(
+	app: Questpie<any>,
+	topic: ValidatedTopic,
+	context: RealtimeRequestContext,
+): Promise<ValidatedTopic>;
 async function evaluateTopicAccess(
 	app: Questpie<any>,
 	topic: ValidatedTopic,
 	context: RealtimeRequestContext,
 ): Promise<ValidatedTopic> {
+	if (topic.type === "route") return topic;
 	if (context.accessMode === "system") {
 		enforceDependencyChangeCapture(app, topic);
 		return topic;
@@ -575,6 +618,7 @@ function enforceDependencyChangeCapture(
 	app: Questpie<any>,
 	topic: ValidatedTopic,
 ): void {
+	if (topic.type === "route") return;
 	const uncaptured = uncapturedCollections(app);
 	if (uncaptured.size === 0) return;
 	const dependencies =
@@ -622,6 +666,8 @@ function schedulerKey(topic: ValidatedTopic, accessKey: string): string {
 }
 
 function classifyValidatedTopic(topic: ValidatedTopic) {
+	if (topic.type === "route")
+		return { mode: "snapshot" as const, reason: "requested_snapshot" as const };
 	const relationNames = new Set(
 		Object.keys(topic.definition.state.relations ?? {}),
 	);
@@ -631,11 +677,11 @@ function classifyValidatedTopic(topic: ValidatedTopic) {
 	);
 }
 
-function stampValidatedTopicMode(
-	topic: ValidatedTopic,
+function stampValidatedTopicMode<T extends ValidatedTopic>(
+	topic: T,
 	mode: RealtimeDeliveryMode,
 	snapshotDefaultLimit: number,
-): ValidatedTopic {
+): T {
 	if (
 		mode === "snapshot" &&
 		topic.resourceType === "collection" &&
@@ -722,6 +768,10 @@ async function resolveIncrementalTopic(
 		throw new Error("Topic sinceSeq must be a non-negative safe integer");
 	}
 	const normalizedTopic = normalizeTopicOperation(rawTopic);
+	if (normalizedTopic.resourceType === "route") {
+		const live = prepareRouteQueryTopic(app, normalizedTopic, context);
+		return { ...live.topic, type: "route", definition: live.prepared, live };
+	}
 	const topicAdmission = admitRealtimeTopic(normalizedTopic, admission);
 	if (!topicAdmission.accepted) {
 		throw new RealtimeTopicAdmissionError(
@@ -773,6 +823,166 @@ async function resolveIncrementalTopic(
 	}
 
 	throw new Error("Invalid resource type");
+}
+
+/** One edge binding owns identity refresh, coherent evaluation and protected output. */
+function subscribeRouteQuery(options: {
+	topic: ValidatedRouteTopic;
+	resolved: AdapterContext;
+	refreshScheduler: ReturnType<typeof getRealtimeRefreshScheduler>;
+	snapshotWriter: SseLatestSnapshotWriter;
+	sessionSink: ClientSink;
+	admission: ReturnType<typeof resolveRealtimeAdmissionConfig>;
+	isActive: () => boolean;
+	onClose: () => void;
+	onTransportError: (error: unknown) => void;
+}): RealtimeEdgeBinding {
+	const { topic, resolved, snapshotWriter, sessionSink, admission } = options;
+	let closed = false;
+	let disposed = false;
+	const cancellation = new AbortController();
+	const request = new Request(topic.live.request, {
+		signal: AbortSignal.any([topic.live.request.signal, cancellation.signal]),
+	});
+	let unsubscribe = () => {};
+	const active = () => !closed && options.isActive();
+	const identity = (context: RequestContext) => {
+		const actor = context.actor;
+		return JSON.stringify([
+			realtimeControlIdentity(context),
+			context.principal && context.principal.kind !== "system"
+				? context.principal.user.id
+				: context.session?.user.id,
+			actor?.kind === "agent"
+				? [actor.kind, actor.issuer, actor.credentialId, actor.subjectId]
+				: actor
+					? [actor.kind, actor.subjectId]
+					: null,
+		]);
+	};
+	const output = new RealtimeBindingOutputGate(
+		{
+			sessionId: sessionSink.sessionId,
+			write: (frame) =>
+				active()
+					? snapshotWriter.write(topic.id, frame)
+					: Promise.resolve({ status: "accepted", bufferedBytes: null }),
+			close: () => Promise.resolve(),
+		},
+		{
+			maximumOrderedEvents: admission.maxBufferedDeltaEvents,
+			maximumBufferedBytes: admission.maxBufferedSnapshotBytes,
+			onError: options.onTransportError,
+		},
+	);
+	const invalidate = () => {
+		output.discardSnapshots();
+		void snapshotWriter.remove(topic.id).catch(options.onTransportError);
+	};
+	const fail = (error: unknown) => {
+		if (!active()) return;
+		const denied =
+			isPermanentAccessError(error) ||
+			(error instanceof ApiError && error.code === "NOT_FOUND");
+		const invalid =
+			error instanceof RealtimeTopicAdmissionError ||
+			error instanceof RealtimeSnapshotBufferOverflowError ||
+			(error instanceof ApiError &&
+				(error.code === "BAD_REQUEST" || error.code === "VALIDATION_ERROR"));
+		if (!denied && !invalid) {
+			// Like collection queries, retry only on the next dependency/age wake.
+			// Drop the client's old snapshot while fresh authority is unavailable.
+			void output
+				.write(
+					encodeSseEvent("error", {
+						code: "REALTIME_QUERY_UNAVAILABLE",
+						topicId: topic.id,
+						message: "Route query is temporarily unavailable",
+						retryable: true,
+					}),
+					"latest-snapshot",
+				)
+				.catch(options.onTransportError);
+			return;
+		}
+		closed = true;
+		cancellation.abort();
+		unsubscribe();
+		invalidate();
+		const payload =
+			error instanceof RealtimeTopicAdmissionError
+				? error.payload
+				: routeTopicRejection(
+						topic,
+						denied ? "access" : "operation_shape",
+						denied ? "Route query access denied" : "Route query is unavailable",
+					).payload;
+		void output
+			.dispose()
+			.then(() =>
+				disposed || !options.isActive()
+					? undefined
+					: snapshotWriter.write(
+							`error:${topic.id}`,
+							encodeSseEvent("error", payload),
+						),
+			)
+			.catch(options.onTransportError)
+			.finally(() => {
+				if (!disposed && options.isActive()) options.onClose();
+			});
+	};
+	unsubscribe = options.refreshScheduler.subscribe({
+		kind: "coherent",
+		key: topic.id,
+		topicId: topic.id,
+		dependencies: topic.live.dependencies,
+		maxAgeMs: topic.live.maxAgeMs,
+		onInvalidate: invalidate,
+		compute: async () => {
+			if (!active()) throw new Error("Route binding is closed");
+			const fresh = await refreshAdapterContext(resolved, {
+				request,
+				deferContextExtensions: true,
+			});
+			if (identity(fresh.appContext) !== identity(resolved.appContext))
+				throw ApiError.unauthorized();
+			const actor = fresh.appContext.actor;
+			if (actor?.kind === "agent" && actor.expiresAt <= new Date())
+				throw ApiError.unauthorized();
+			if (!active()) throw new Error("Route binding is closed");
+			return topic.live.prepared.snapshot(fresh.appContext);
+		},
+		onFrame: async (frame) => {
+			if (!active()) return;
+			if (frame.byteLength > admission.maxBufferedSnapshotBytes)
+				throw new RealtimeSnapshotBufferOverflowError(
+					admission.maxBufferedSnapshotBytes,
+				);
+			await output.write(frame, "latest-snapshot");
+		},
+		onError: fail,
+		onTransportError: (error) => {
+			if (active()) options.onTransportError(error);
+		},
+	});
+	return {
+		activate: () => {
+			if (active()) output.activate();
+		},
+		assertReady: () => {
+			if (closed) throw new Error("Route binding is closed");
+			output.assertReady();
+		},
+		close: async () => {
+			disposed = true;
+			closed = true;
+			cancellation.abort();
+			unsubscribe();
+			invalidate();
+			await output.dispose();
+		},
+	};
 }
 
 function ephemeralUnavailablePayload(id: string) {
@@ -1030,16 +1240,25 @@ export async function realtimeSubscribe(
 			for (const desired of body.topology.subscriptions) {
 				try {
 					if (desired.kind === "query") {
-						await resolveIncrementalTopic(
-							app,
-							{
-								...desired.topic,
-								id: desired.id,
-								sinceSeq: desired.sinceSeq,
-							} as TopicInput,
-							resolved.appContext,
-							admission,
-						);
+						if (desired.topic.resourceType === "route") {
+							// The owner prepares parsed input and dependencies once when staging.
+							resolveRouteQueryTopic(
+								app,
+								{ ...desired.topic, id: desired.id } as TopicInput &
+									RouteQueryTopic,
+								resolved.appContext,
+							);
+						} else
+							await resolveIncrementalTopic(
+								app,
+								{
+									...desired.topic,
+									id: desired.id,
+									sinceSeq: desired.sinceSeq,
+								} as TopicInput,
+								resolved.appContext,
+								admission,
+							);
 					} else if (desired.kind === "channel") {
 						await resolveChannelSubscription(
 							app,
@@ -1323,6 +1542,29 @@ export async function realtimeSubscribe(
 				id: rawTopic.id,
 				message: "Topic sinceSeq must be a non-negative safe integer",
 			});
+			continue;
+		}
+		if (rawTopic.resourceType === "route") {
+			try {
+				validatedTopics.push(
+					await resolveIncrementalTopic(
+						app,
+						rawTopic,
+						resolved.appContext,
+						admission,
+					),
+				);
+			} catch (error) {
+				const rejection =
+					error instanceof RealtimeTopicAdmissionError
+						? error.payload
+						: undefined;
+				topicErrors.push({
+					id: rawTopic.id,
+					message: rejection?.message ?? "Route query rejected",
+					...(rejection ? { rejection } : {}),
+				});
+			}
 			continue;
 		}
 		try {
@@ -1669,6 +1911,12 @@ export async function realtimeSubscribe(
 				baseContext: RealtimeRequestContext,
 			): Promise<RealtimeEdgeBinding> => {
 				if (closed) throw new Error("Realtime session is closed");
+				if (topic.type === "route")
+					throw routeTopicRejection(
+						topic,
+						"operation_shape",
+						"Route watches require SSE",
+					);
 				const bindingGeneration = activeOwnerGeneration;
 				if (!ownerIsActive(bindingGeneration)) {
 					throw new Error("Realtime owner is fenced");
@@ -2250,6 +2498,20 @@ export async function realtimeSubscribe(
 					topic: ValidatedTopic,
 					baseContext: RealtimeRequestContext,
 				): Promise<RealtimeEdgeBinding> => {
+					if (topic.type === "route") {
+						const generation = activeOwnerGeneration;
+						return subscribeRouteQuery({
+							topic,
+							resolved,
+							refreshScheduler,
+							snapshotWriter,
+							sessionSink,
+							admission,
+							isActive: () => ownerIsActive(generation),
+							onClose: () => teardownTopic(topic.id),
+							onTransportError: requestClose,
+						});
+					}
 					const bindingGeneration = activeOwnerGeneration;
 					if (!ownerIsActive(bindingGeneration)) {
 						throw new Error("Realtime owner is fenced");

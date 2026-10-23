@@ -1,9 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+	ErrorCode,
 	ListToolsRequestSchema,
+	McpError,
 	type ListToolsResult,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { z } from "zod";
 
+import { assertMcpCatalogByteBudget } from "./catalog-byte-budget.js";
 import { registerCrudTools } from "./crud-tools.js";
 import { registerCustomTools } from "./custom-tools.js";
 import { registerPromptProviders } from "./mcp-prompts.js";
@@ -25,29 +29,28 @@ import {
 	listWorkloadTools,
 	type WorkloadMcpBoundary,
 } from "./workload-boundary.js";
-import { applyMcpSchemaDiet } from "./zod-json-schema.js";
-
-function isProductionEnvironment(): boolean {
-	return (
-		typeof process !== "undefined" && process.env?.NODE_ENV === "production"
-	);
-}
+import {
+	applyMcpSchemaDiet,
+	toToolInputJsonSchema,
+} from "./zod-json-schema.js";
 
 /**
- * Reports a schema-diet install failure loudly instead of either crashing
- * every session (a renamed/removed SDK internal would otherwise throw deep
- * inside request handling on the very first `tools/list` call) or failing
- * silently (shipping an undieted catalogue with nobody told why). Always
- * logs; only throws outside production, so a CI/dev run surfaces the break
- * immediately while a live server degrades to the SDK's own undieted
- * `tools/list` response.
+ * Fail closed in every environment: an unwrapped SDK response would bypass
+ * both the schema diet and the hard catalog byte budget.
  */
-function reportSchemaDietInstallFailure(message: string): void {
+function reportSchemaDietInstallFailure(message: string): never {
 	const prefixed = `@questpie/mcp: ${message}`;
 	// eslint-disable-next-line no-console -- deliberate, unconditional operator-facing diagnostic.
 	console.error(prefixed);
-	if (!isProductionEnvironment()) {
-		throw new Error(prefixed);
+	throw new Error(prefixed);
+}
+
+function rejectCatalogCursor(cursor: string | undefined): void {
+	if (cursor !== undefined) {
+		throw new McpError(
+			ErrorCode.InvalidParams,
+			"MCP catalog byte budget requires a complete tools/list result; omit the pagination cursor",
+		);
 	}
 }
 
@@ -60,43 +63,64 @@ function reportSchemaDietInstallFailure(message: string): void {
  * `assertCanSetRequestHandler` check would reject a second install, and we
  * never call that), so reaching into the already-installed handler to wrap
  * it is the smallest surface that lets the diet apply without re-deriving
- * every tool's schema ourselves. */
-export function installSchemaDietListToolsHandler(server: McpServer): void {
+ * every tool's metadata ourselves. CRUD input schemas are replaced with
+ * the canonical projection of their original Zod schema, avoiding a merge
+ * between the SDK dialect and Zod metadata definitions. */
+export function installSchemaDietListToolsHandler(
+	server: McpServer,
+	maxCatalogBytes?: number,
+	inputSchemas?: ReadonlyMap<string, z.ZodTypeAny>,
+): void {
 	const handlers: unknown = Reflect.get(server.server, "_requestHandlers");
 	if (!(handlers instanceof Map)) {
 		reportSchemaDietInstallFailure(
 			"could not install the tools/list schema diet — McpServer#server's " +
 				"internal request-handler map is missing or not a Map (the MCP " +
-				"SDK's internals likely changed shape). Tools will be listed " +
-				"without the diet applied.",
+				"SDK's internals likely changed shape). Cannot enforce the catalog byte budget.",
 		);
-		return;
 	}
-	const defaultHandler = handlers.get("tools/list") as
+	const registeredTools: unknown = Reflect.get(server, "_registeredTools");
+	if (
+		!registeredTools ||
+		typeof registeredTools !== "object" ||
+		![Object.prototype, null].includes(Object.getPrototypeOf(registeredTools))
+	) {
+		reportSchemaDietInstallFailure(
+			"could not inspect the SDK registered-tool map. Cannot enforce the catalog byte budget.",
+		);
+	}
+	const defaultHandler = (handlers.get("tools/list") ??
+		(Object.keys(registeredTools).length === 0
+			? () => ({ tools: [] })
+			: undefined)) as
 		| ((request: unknown, extra: unknown) => Promise<ListToolsResult>)
 		| undefined;
 	if (!defaultHandler) {
 		reportSchemaDietInstallFailure(
 			"could not install the tools/list schema diet — no default " +
 				"tools/list handler was registered even though at least one " +
-				"tool exists. Tools will be listed without the diet applied.",
+				"tool exists. Cannot enforce the catalog byte budget.",
 		);
-		return;
 	}
 	server.server.setRequestHandler(
 		ListToolsRequestSchema,
 		async (request, extra) => {
+			rejectCatalogCursor(request.params?.cursor);
 			const result = await defaultHandler(request, extra);
-			return {
+			const projected = {
 				...result,
 				tools: result.tools.map((tool) => ({
 					...tool,
-					inputSchema: applyMcpSchemaDiet(tool.inputSchema),
+					inputSchema: inputSchemas?.has(tool.name)
+						? toToolInputJsonSchema(inputSchemas.get(tool.name))
+						: applyMcpSchemaDiet(tool.inputSchema),
 					...(tool.outputSchema
 						? { outputSchema: applyMcpSchemaDiet(tool.outputSchema) }
 						: {}),
 				})),
 			};
+			assertMcpCatalogByteBudget(projected, maxCatalogBytes);
+			return projected;
 		},
 	);
 }
@@ -151,30 +175,36 @@ async function createServer(
 			},
 		},
 	);
-	await registerCrudTools(server, scope, config as McpConfig, catalog);
+	const crudSchemas = await registerCrudTools(
+		server,
+		scope,
+		config as McpConfig,
+		catalog,
+	);
 	await registerRouteTools(server, scope, catalog);
 	registerSchemaResources(server, scope, catalog);
 	await registerCustomTools(server, scope, catalog);
 	registerPromptProviders(server, scope, catalog);
 	if (workload) {
-		server.server.setRequestHandler(ListToolsRequestSchema, (_request, extra) =>
-			listWorkloadTools(workload, release.execution, extra),
+		server.server.setRequestHandler(
+			ListToolsRequestSchema,
+			(request, extra) => {
+				rejectCatalogCursor(request.params?.cursor);
+				return listWorkloadTools(
+					workload,
+					release.execution,
+					extra,
+					release.maxCatalogBytes,
+				);
+			},
 		);
-	} else if (
-		[...catalog.collections.values()].every(
-			(entry) => entry.operations.length === 0,
-		) &&
-		[...catalog.globals.values()].every(
-			(entry) => entry.operations.length === 0,
-		) &&
-		catalog.routes.size === 0 &&
-		catalog.customTools.size === 0
-	) {
-		server.server.setRequestHandler(ListToolsRequestSchema, () => ({
-			tools: [],
-		}));
-	} else {
-		installSchemaDietListToolsHandler(server);
+	}
+	if (!workload) {
+		installSchemaDietListToolsHandler(
+			server,
+			release.maxCatalogBytes,
+			crudSchemas,
+		);
 	}
 
 	return server;

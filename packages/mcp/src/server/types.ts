@@ -5,6 +5,7 @@ import type {
 	ToolAnnotations,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { AppContext, RequestContext } from "questpie";
+import type { ApiErrorCode } from "questpie/errors";
 import type { z } from "zod";
 
 export type McpTransportKind = "http" | "stdio" | "workload";
@@ -132,6 +133,7 @@ export interface McpExecutionLimits {
 }
 
 export type McpPublicErrorCode =
+	| ApiErrorCode
 	| "access_denied"
 	| "invalid_input"
 	| "input_too_large"
@@ -159,6 +161,15 @@ export interface McpExecutionDiagnosticEvent {
 }
 
 export interface McpExecutionConfig extends McpExecutionLimits {
+	/**
+	 * Exclusive UTF-8 byte threshold for the complete advertised tools/list
+	 * result after schema diet and visibility projection, including tool and
+	 * wrapper metadata; excludes the transport's JSON-RPC envelope. Defaults to
+	 * 100000 and may only be tightened (e.g. 85000). Overflow rejects the whole
+	 * list; tools and required schemas are never removed to fit the budget.
+	 * Applies to human and workload MCP servers and workload port discovery.
+	 */
+	maxCatalogBytes?: number;
 	/**
 	 * Trusted server-side diagnostics sink. At most one unresolved callback is
 	 * retained; subsequent events are dropped until it settles.

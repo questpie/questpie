@@ -129,9 +129,9 @@ export function resolveRealtimeAdmissionConfig(
 
 type AdmissionTopic = {
 	id: string;
-	resourceType: "collection" | "global";
+	resourceType: "collection" | "global" | "route";
 	resource: string;
-	operation?: "find" | "count" | "get";
+	operation?: "find" | "count" | "get" | "query";
 	mode?: "snapshot" | "delta";
 	limit?: number;
 	with?: Record<string, unknown>;

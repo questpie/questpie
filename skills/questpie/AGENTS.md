@@ -3518,6 +3518,46 @@ Access functions receive `AppContext` with these properties:
 
 `data`/`input` are typed **per operation** by the builder, no casts, no annotations inside the defining collection. For shared rule helpers and every other "I need type X" case, see `references/type-inference.md`.
 
+### Batched Field Read Access
+
+Use `batchRead` for field permissions that need database facts for a page of
+documents. Attach the returned rule to a field with
+`.access({ read: canReadPrivateField })`.
+
+```ts
+import { batchRead } from "questpie";
+import { and, eq, inArray } from "questpie/drizzle";
+import { documentGrants } from "../db/access-grants";
+
+const canReadPrivateField = batchRead<{ id?: string }>(
+	async ({ docs, db, actor }) => {
+		const ids = docs.flatMap(({ id }) => (id ? [id] : []));
+		if (!actor || ids.length === 0) return docs.map(() => false);
+		const facts = await db
+			.select({ documentId: documentGrants.documentId })
+			.from(documentGrants)
+			.where(
+				and(
+					eq(documentGrants.subjectId, actor.subjectId),
+					inArray(documentGrants.documentId, ids),
+				),
+			);
+		const allowed = new Set(facts.map(({ documentId }) => documentId));
+		return docs.map(({ id }) => id !== undefined && allowed.has(id));
+	},
+);
+```
+
+The example assumes an application-owned grants table. Each protected field's
+callback runs once for the authorized page, before read output hooks, and returns
+one boolean per document in the same order. Documents contain selected columns;
+handle missing fields explicitly. The supplied `db` follows the current
+transaction, including a query route's read-only snapshot. Load fresh facts on
+each invocation: the framework caches no permission verdict across evaluations.
+Singleton/global reads and write responses dispatch a one-document batch.
+Batching the callback does not optimize queries performed inside a loop; acquire
+the page's facts together and test SQL growth at increasing page sizes.
+
 ### Derived Request Context in Rules
 
 `appConfig({ context })` runs once per HTTP request; its result arrives **flat** on every access rule ctx (collections, globals, routes, field access, transitions), typed by inference:
@@ -3997,6 +4037,17 @@ export default route()
 		};
 	});
 ```
+
+### Preparing an invocation
+
+Transport adapters can use `prepareJsonRoute` from `questpie/services` after
+verifying credentials. It parses the route's wire input once and returns
+`{ input, execute(context) }`. Preparation does not run product access, the
+handler, or output validation; execution runs those under the verified context.
+Use `input` for dependency preparation and call `execute` without parsing again.
+Application routes normally use the HTTP/MCP adapters instead of this lower-level
+helper. Pass an explicit user context when executing for a caller; standalone
+ordinary route execution otherwise retains its system-mode default.
 
 ### Handler Context
 
@@ -9165,6 +9216,31 @@ route()
 ```
 
 Routes without path params use the route input schema directly. Routes with params use `{ params, input }`. Route policy keys use the route key, not the overridden tool name.
+
+### Product Operation Errors
+
+Throw `ApiError` from shared route operations to return the same product code
+and public details over HTTP and MCP. MCP returns `isError: true`, canonical
+JSON in text content, and the code in `questpie/error` metadata. Error results
+omit `structuredContent` so clients do not validate them against the success
+output schema.
+
+Framework transports format errors automatically. When implementing a custom
+transport, use `formatPublicError` from `questpie/errors`:
+
+```ts
+import { formatPublicError } from "questpie/errors";
+
+const body = { error: formatPublicError(error, { t, locale }) };
+```
+
+The formatter preserves explicit public messages and bounded application
+`context.custom` details. Causes, stacks, invalid field values and database or
+hook diagnostics stay server-side. Internal and hook errors use a generic
+public message even when their diagnostic message has a custom translation key.
+Unknown exceptions and invalid handler output become opaque
+`INTERNAL_SERVER_ERROR` responses. Route input schema
+failures become `VALIDATION_ERROR` before the handler runs.
 
 ## Resources
 

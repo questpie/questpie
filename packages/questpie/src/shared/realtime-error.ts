@@ -1,4 +1,25 @@
-export type RealtimeTopicOperation = "find" | "count" | "get";
+export type RealtimeTopicOperation = "find" | "count" | "get" | "query";
+
+/** The watch remains subscribed, but its previous snapshot is no longer safe. */
+export type RealtimeQueryUnavailablePayload = {
+	code: "REALTIME_QUERY_UNAVAILABLE";
+	topicId: string;
+	message: string;
+	retryable: true;
+};
+
+export function isRealtimeQueryUnavailablePayload(
+	value: unknown,
+): value is RealtimeQueryUnavailablePayload {
+	if (!value || typeof value !== "object") return false;
+	const payload = value as Partial<RealtimeQueryUnavailablePayload>;
+	return (
+		payload.code === "REALTIME_QUERY_UNAVAILABLE" &&
+		typeof payload.topicId === "string" &&
+		typeof payload.message === "string" &&
+		payload.retryable === true
+	);
+}
 
 /**
  * Every reason a topic can be refused. This must stay the same set the server
@@ -86,7 +107,8 @@ export function isRealtimeTopicRejectedPayload(
 		typeof payload.resource === "string" &&
 		(payload.operation === "find" ||
 			payload.operation === "count" ||
-			payload.operation === "get") &&
+			payload.operation === "get" ||
+			payload.operation === "query") &&
 		payload.retryable === false &&
 		Boolean(payload.details) &&
 		REALTIME_TOPIC_REJECTION_REASONS.has(payload.details?.reason as string)
