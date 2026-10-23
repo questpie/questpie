@@ -1,5 +1,23 @@
 # @questpie/tanstack-query
 
+## 3.40.0
+
+### Minor Changes
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Explicit query({ live }) routes can stream complete authorized projections over the existing shared SSE connection. Declare data and authority dependencies on captured collections with optional scalar equality anchors. Evaluations refresh identity and request-derived context facts, run access and data in one read-only repeatable-read snapshot, and capture the visibility watermark inside it. Authority events discard in-flight and queued results; maximum-age refresh and existing outbox reconciliation cover expiry and missed notifications. This is bounded reauthorization, not a linearizable revocation fence.
+
+  Typed route method callers gain watch(input, { signal, params, locale }) only for explicitly LIVE definitions. HTTP calls accept the same path params and locale options. Wire input types remain distinct from parsed handler input, and Date snapshots retain their typed encoding. The TanStack factory adds query(input, { realtime: true }) on these routes; the initial value comes from SSE, snapshots replace data, and access denial clears only that watch's cached data. Ordinary routes remain non-realtime. Route LIVE requires native SSE; collection delta delivery remains unchanged.
+
+  Once a transaction is acquired, its LIVE evaluation callback has a 30-second deadline and PostgreSQL statements have a 30-second timeout. Queueing, identity refresh, pool acquisition and cleanup can add time; application JavaScript must honor request.signal. Read query guidance for dependency coverage, context/transaction ownership, bounded relation loading, authorization batching, indexing and SQL-growth tests before adopting LIVE projections. No database migration is required.
+
+  MCP derives readOnlyHint from a declared query route while preserving explicit delegation/handoff requirements. Recursive route schemas are converted with their protocol envelope so root references retain their meaning beneath input or value.
+
+### Patch Changes
+
+- [#432](https://github.com/questpie/questpie/pull/432) [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Keep LIVE route queries subscribed after temporary compute failures so the next dependency change or maximum-age refresh can recover. Treat hidden-resource NOT_FOUND failures like other access denials. Clear only the affected TanStack query's protected snapshot while fresh authority is unavailable, including its cancellation fallback, without interrupting sibling subscriptions.
+
+  The TanStack LIVE arm reports pending with no data while recovering, rather than success with undefined data. Cancellation leaves an empty pending cache, including after a healthy snapshot, so remounting starts a fresh watch without restoring an old protected value. Opening a watch over previously cached one-shot data can briefly report pending.
+
 ## 3.39.0
 
 ## 3.38.1

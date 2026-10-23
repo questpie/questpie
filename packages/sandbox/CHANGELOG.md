@@ -1,5 +1,13 @@
 # @questpie/sandbox
 
+## 3.40.0
+
+### Patch Changes
+
+- Updated dependencies [[`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`1ed72ab`](https://github.com/questpie/questpie/commit/1ed72abbdf993235953f81836b1c91758bb3f092), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010), [`02fe32a`](https://github.com/questpie/questpie/commit/02fe32a65bdf26ff1b1982be85d6614f0fa14010)]:
+  - questpie@3.40.0
+  - @questpie/mcp@3.40.0
+
 ## 3.39.0
 
 ### Patch Changes
