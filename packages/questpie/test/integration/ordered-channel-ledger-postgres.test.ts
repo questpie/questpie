@@ -178,6 +178,78 @@ describe.skipIf(!databaseUrl)("ordered channel ledger on PostgreSQL", () => {
 		expect(secondReceipt.eventId).toEndWith(":2");
 	});
 
+	test("two uncommitted channel cuts do not hold frame batch slots needed by another channel", async () => {
+		await reset();
+		const events = ledger({ busyRetryMs: 60_000 });
+		const publisher = ledger();
+		const rooms = ["held-cut-a", "held-cut-b", "unrelated"];
+		const sinks = rooms.map(createSink);
+		let allowed = true;
+		for (const [index, room] of rooms.entries()) {
+			await events.subscribeLocal({
+				subscriptionId: room,
+				channel: room,
+				subject: "viewer",
+				reauthorize: async () => index !== 0 || allowed,
+				sink: sinks[index],
+			});
+			await publisher.append({
+				channel: room,
+				event: "message",
+				schemaIdentity: "room:message",
+				data: { order: room },
+			});
+		}
+		let release = () => {};
+		const hold = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const ready = rooms.slice(0, 2).map(() => {
+			let resolve = () => {};
+			const promise = new Promise<void>((done) => {
+				resolve = done;
+			});
+			return { promise, resolve };
+		});
+		const cuts = rooms.slice(0, 2).map((room, index) =>
+			withTransaction(setup.app.db, async (tx) => {
+				await events.revokeAuthority(
+					{
+						channel: room,
+						subject: "viewer",
+						idempotencyKey: `cut:${room}`,
+					},
+					{ db: tx },
+				);
+				ready[index].resolve();
+				await hold;
+			}),
+		);
+		let draining: Promise<void> | undefined;
+		try {
+			await Promise.all(ready.map(({ promise }) => promise));
+			allowed = false;
+			draining = events.drain();
+			await Promise.race([
+				draining,
+				Bun.sleep(1_500).then(() => {
+					throw new Error("Unrelated channel blocked behind cuts");
+				}),
+			]);
+			expect(sinks.map((sink) => sink.frames.length)).toEqual([0, 0, 1]);
+			expect(sinks.flatMap((sink) => sink.closeReasons)).toEqual([]);
+			release();
+			await Promise.all(cuts);
+			await events.drain();
+			expect(sinks.map((sink) => sink.frames.length)).toEqual([0, 1, 1]);
+			expect(sinks[0].closeReasons).toEqual(["access_revoked"]);
+		} finally {
+			release();
+			await Promise.allSettled([...cuts, ...(draining ? [draining] : [])]);
+			await events.destroy();
+		}
+	});
+
 	test("60 concurrent publishers on one channel produce a contiguous sequence", async () => {
 		await reset();
 		const events = ledger();

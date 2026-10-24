@@ -29,11 +29,10 @@ export type ChannelAuthorityAdmission<T> =
 	| Readonly<{ admitted: false }>
 	| Readonly<{ admitted: true; value: T }>;
 
-/** Frame-only publication: no SQL, policy, transport or asynchronous callbacks. */
+/** Exact subjects compared together; no callbacks run while locks are held. */
 export type ChannelAuthorityFrameAttempt = Readonly<{
 	subject: string;
 	expectedGeneration: number;
-	publish: () => undefined;
 }>;
 
 const CHANNEL_COORDINATOR_SUBJECT = "channel-authority-coordinator";
@@ -338,78 +337,99 @@ export class ChannelAuthorityFenceStore {
 	/**
 	 * Admit a sealed batch of logical frame attempts, never future retries.
 	 * The coordinator freezes cuts while all subject locks are acquired. Results
-	 * remain private until commit; one synchronous publication failure is isolated.
+	 * remain private until commit. A contended lock returns null after rollback
+	 * so the caller can retry the oldest frame without holding a batch slot.
 	 */
 	async admitExpectedBatch(
 		channelHash: string,
 		entries: readonly ChannelAuthorityFrameAttempt[],
-	): Promise<PromiseSettledResult<ChannelAuthorityAdmission<undefined>>[]> {
+	): Promise<
+		PromiseSettledResult<ChannelAuthorityAdmission<undefined>>[] | null
+	> {
 		if (entries.length === 0) return [];
 		if (getCurrentTransaction() || is(this.db, PgTransaction)) {
 			throw new Error(
 				"Channel frame admission must own transaction completion",
 			);
 		}
-		return withTransaction(this.db, async (tx) => {
-			const [coordinator] = await tx
-				.select({ generation: questpieChannelAuthorityFenceTable.generation })
-				.from(questpieChannelAuthorityFenceTable)
-				.where(
-					and(
-						eq(questpieChannelAuthorityFenceTable.channelHash, channelHash),
-						eq(
-							questpieChannelAuthorityFenceTable.subject,
-							CHANNEL_COORDINATOR_SUBJECT,
+		try {
+			return await withTransaction(this.db, async (tx) => {
+				const [coordinator] = await tx
+					.select({ generation: questpieChannelAuthorityFenceTable.generation })
+					.from(questpieChannelAuthorityFenceTable)
+					.where(
+						and(
+							eq(questpieChannelAuthorityFenceTable.channelHash, channelHash),
+							eq(
+								questpieChannelAuthorityFenceTable.subject,
+								CHANNEL_COORDINATOR_SUBJECT,
+							),
 						),
-					),
-				)
-				.limit(1)
-				.for("share");
-			if (!coordinator) {
-				throw new Error("Channel authority coordinator is unavailable");
-			}
-			const rows = await tx
-				.select({
-					subject: questpieChannelAuthorityFenceTable.subject,
-					generation: questpieChannelAuthorityFenceTable.generation,
-				})
-				.from(questpieChannelAuthorityFenceTable)
-				.where(
-					and(
-						eq(questpieChannelAuthorityFenceTable.channelHash, channelHash),
-						inArray(questpieChannelAuthorityFenceTable.subject, [
-							...new Set(entries.map((entry) => entry.subject)),
-						]),
-					),
-				)
-				.orderBy(asc(questpieChannelAuthorityFenceTable.subject))
-				.for("share");
-			const generations = new Map<string, number>();
-			for (const row of rows) {
-				generations.set(row.subject, Number(row.generation));
-			}
-			return entries.map(
-				(entry): PromiseSettledResult<ChannelAuthorityAdmission<undefined>> => {
-					try {
-						assertOpaqueSubject(entry.subject);
-						const generation = generations.get(entry.subject);
-						if (generation === undefined) {
-							throw new Error("Channel authority fence is unavailable");
+					)
+					.limit(1)
+					.for("share", { noWait: true });
+				if (!coordinator) {
+					throw new Error("Channel authority coordinator is unavailable");
+				}
+				const rows = await tx
+					.select({
+						subject: questpieChannelAuthorityFenceTable.subject,
+						generation: questpieChannelAuthorityFenceTable.generation,
+					})
+					.from(questpieChannelAuthorityFenceTable)
+					.where(
+						and(
+							eq(questpieChannelAuthorityFenceTable.channelHash, channelHash),
+							inArray(questpieChannelAuthorityFenceTable.subject, [
+								...new Set(entries.map((entry) => entry.subject)),
+							]),
+						),
+					)
+					.orderBy(asc(questpieChannelAuthorityFenceTable.subject))
+					.for("share", { noWait: true });
+				const generations = new Map<string, number>();
+				for (const row of rows) {
+					generations.set(row.subject, Number(row.generation));
+				}
+				return entries.map(
+					(
+						entry,
+					): PromiseSettledResult<ChannelAuthorityAdmission<undefined>> => {
+						try {
+							assertOpaqueSubject(entry.subject);
+							const generation = generations.get(entry.subject);
+							if (generation === undefined) {
+								throw new Error("Channel authority fence is unavailable");
+							}
+							if (generation !== entry.expectedGeneration) {
+								return { status: "fulfilled", value: { admitted: false } };
+							}
+							return {
+								status: "fulfilled",
+								value: { admitted: true, value: undefined },
+							};
+						} catch (reason) {
+							return { status: "rejected", reason };
 						}
-						if (generation !== entry.expectedGeneration) {
-							return { status: "fulfilled", value: { admitted: false } };
-						}
-						entry.publish();
-						return {
-							status: "fulfilled",
-							value: { admitted: true, value: undefined },
-						};
-					} catch (reason) {
-						return { status: "rejected", reason };
-					}
-				},
-			);
-		});
+					},
+				);
+			});
+		} catch (error) {
+			// Drizzle wraps driver errors; only PostgreSQL lock contention is retryable.
+			let cause: unknown = error;
+			const seen = new Set<object>();
+			while (cause && typeof cause === "object" && !seen.has(cause)) {
+				seen.add(cause);
+				const failure = cause as {
+					code?: unknown;
+					errno?: unknown;
+					cause?: unknown;
+				};
+				if (failure.code === "55P03" || failure.errno === "55P03") return null;
+				cause = failure.cause;
+			}
+			throw error;
+		}
 	}
 
 	async read(input: ChannelAuthorityFenceKey): Promise<number> {

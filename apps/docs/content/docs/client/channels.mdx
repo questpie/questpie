@@ -143,10 +143,15 @@ that channel/subject generation. Concurrent frame admissions can share a databas
 transaction; a busy frame is checked again on every retry. A frame admitted
 before a cut may finish delivery afterward. Transport writes run outside the
 fence transaction so a blocked write does not delay an authority cut.
-Each ledger admits at most two batches concurrently, with at most 64 attempts per
-batch and 4,096 waiting attempts. Queue overflow fails the delivery; canceled
-bindings leave the waiting queue. Local frame delivery must run outside a
-caller-owned transaction, so a rolled-back command cannot deliver its frames.
+Frame admission queues are bounded per server process. A channel waiting on an
+authority cut retains its oldest frame for a fresh retry and releases its batch
+slot so other channels can progress. If the waiting queue fills, the affected
+binding ends with `write_failed`; reconnect with its last event id to resume
+within retention. Canceled bindings leave the waiting queue.
+
+Use the request-bound `publish()` and `invalidateAuthority()` handles inside
+transactions. Their normal delivery wake runs after commit, so rolled-back
+commands do not deliver frames.
 
 | Transport     | `transportEffect`         | Physical effect                                 |
 | ------------- | ------------------------- | ----------------------------------------------- |
