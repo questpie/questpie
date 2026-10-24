@@ -1,5 +1,5 @@
 import { runInFreshRequestScope } from "#questpie/server/config/request-scope.js";
-import { stringifyCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
+import { serializeCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
 
 import { deriveDeltaOp, type RealtimeDeliveryMode } from "./delta.js";
 import {
@@ -7,7 +7,10 @@ import {
 	type RealtimeObservation,
 	type RealtimeObserver,
 } from "./observer.js";
-import { encodeSseEvent } from "./sse-client-transport.js";
+import {
+	encodeSerializedSseEvent,
+	encodeSseEvent,
+} from "./sse-client-transport.js";
 import { sharedSseKeepAliveTicker } from "./sse-keep-alive.js";
 import type {
 	RealtimeChangeEvent,
@@ -1261,9 +1264,10 @@ export class RealtimeRefreshScheduler {
 					: computed;
 				if (group.coherent)
 					upToDate = (computed as { upToDate: string }).upToDate;
-				const serialized = group.coherent
-					? stringifyCompatibleTypedEventWire({ data })
-					: JSON.stringify(data);
+				const wire = group.coherent
+					? serializeCompatibleTypedEventWire({ data })
+					: undefined;
+				const serialized = wire ? JSON.stringify(wire) : JSON.stringify(data);
 				const hash = await sha256(serialized);
 				// Hashing yields too: an authority wake can invalidate the result here.
 				if (group.disposed) return;
@@ -1291,13 +1295,19 @@ export class RealtimeRefreshScheduler {
 				}
 
 				group.lastHash = hash;
-				group.lastFrame = encodeSseEvent("snapshot", {
+				const snapshot = {
 					topicId: group.topicId,
 					seq,
-					data,
+					data: wire ? wire.data : data,
 					reset: group.nextReset,
 					...(upToDate === undefined ? {} : { upToDate }),
-				});
+				};
+				group.lastFrame = wire
+					? encodeSerializedSseEvent(
+							"snapshot",
+							JSON.stringify({ ...snapshot, ...wire }),
+						)
+					: encodeSseEvent("snapshot", snapshot);
 				group.nextReset = false;
 				const frame = group.lastFrame;
 				this.observe({
