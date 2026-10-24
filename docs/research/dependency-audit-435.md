@@ -1,0 +1,65 @@
+# Issue 435: dependency remediation preparation
+
+Research snapshot: 2026-10-24. Checkout: `fix/dependency-audit-435`, base `6e64d0f7f76e7fba1db39791bc969885e9fa1e2b`. Task: `e9ba6f72-bbb0-42bf-b92d-fcc2c5ea9219`.
+
+Read `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `SECURITY.md`, and `bunfig.toml` first. Evidence comprises committed manifests/source/lock, official advisories/releases, npm metadata, and tarballs inspected in memory. No dependency code, installs, lock generation, tests, builds, database/load probes, policy changes, Git mutations, PR operations, or delegation ran. Only this report was written; implementation and coordinated verification belong to the parent.
+
+## Decision
+
+There are contract-compatible targets for Body-parser, Undici, and the hoisted Zod 4 copy. A shadcn major upgrade is a plausible Zod 3 remediation, requiring consumer review. **No supported Azure Identity → patched MSAL parent path was established; four-advisory closure remains blocked.** Passing a publication date does not remove that blocker.
+
+## Advisory scope and exact targets
+
+- [GHSA-xcx6-jx8p-x3h5](https://github.com/advisories/GHSA-xcx6-jx8p-x3h5): MSAL Node `>=5.0.0-beta.0 <7.1.0`; patched `7.1.0` and higher. [7.1.0 release](https://github.com/AzureAD/microsoft-authentication-library-for-js/releases/tag/msal-node-v7.1.0) identifies authorization-response sanitization, [PR 8901](https://github.com/AzureAD/microsoft-authentication-library-for-js/pull/8901). Node `>=20`; no safe 5.x/6.x version is identified by this advisory.
+- [GHSA-27r3-jxmh-p828](https://github.com/expressjs/body-parser/security/advisories/GHSA-27r3-jxmh-p828): Body-parser `>=2.0.0 <2.4.0` and `<1.20.9`; fixes `2.4.0` and `1.20.9`. Select **2.4.0**, Node `>=18`, for this tree. [Release](https://github.com/expressjs/body-parser/releases/tag/v2.4.0) and shipped `lib/read.js` show decompression-stream cleanup/error handling. This prevents process termination after malformed compressed bodies; `inflate:false` is an upstream workaround, not the proposed remediation.
+- [GHSA-xjj6-f33q-929c](https://github.com/nodejs/undici/security/advisories/GHSA-xjj6-f33q-929c): Undici `>=6.23.0 <6.29.1`, `>=7.18.0 <7.30.1`, and `>=8.0.0 <8.12.2`; respective fixes `6.29.1`, `7.30.1`, `8.12.2`. Select **7.30.1**, Node `>=20.18.1`. [Release](https://github.com/nodejs/undici/releases/tag/v7.30.1) and shipped `lib/web/fetch/index.js` validate excessive content encodings before constructing the response body. Do not jump to 8.x.
+- [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5): Zod `<4.6.6`; patched **4.6.6**, with no declared Node engine floor. [Release](https://github.com/colinhacks/zod/releases/tag/v4.6.6), [fix](https://github.com/colinhacks/zod/commit/a0ebf970f2d752e5f58527cd2942ff48be4f46bd), and [PR 6652](https://github.com/colinhacks/zod/pull/6652) establish early size rejection for bounded arrays/maps/sets. The advisory prose mentions unbounded arrays, but upstream explicitly says unbounded containers remain unchanged. Do not claim universal memory bounding.
+
+Version engine/dependency contracts were checked in the [MSAL](https://registry.npmjs.org/@azure/msal-node/7.1.0), [Body-parser](https://registry.npmjs.org/body-parser/2.4.0), [Undici](https://registry.npmjs.org/undici/7.30.1), and [Zod](https://registry.npmjs.org/zod/4.6.6) published manifests and matching tarballs.
+
+## Complete locked-copy inventory and parent contracts
+
+The [base lock](https://github.com/questpie/questpie/blob/6e64d0f7f76e7fba1db39791bc969885e9fa1e2b/bun.lock) contains exactly one MSAL `5.4.2`, Body-parser `2.3.0`, Undici `7.29.1`, and two Zod copies: hoisted `4.6.2`, private `shadcn/zod` `3.25.76`.
+
+**MSAL: unresolved parent/backport.** [Identity 4.13.1](https://registry.npmjs.org/@azure/identity/4.13.1) requires MSAL `^5.1.0`, Node `>=20`. [Latest stable Identity 4.14.0](https://registry.npmjs.org/@azure/identity/4.14.0) requires vulnerable MSAL `^6.0.0`, Node `>=22`. Inspection of the [published Identity catalog](https://registry.npmjs.org/@azure/identity) found no MSAL 7 parent. Neither “latest Identity” nor an MSAL 7 global override supplies a supported fix.
+
+Reverse edges are Tedious `18.6.2` → Identity `^4.2.1`, files-sdk `1.9.0` optional peer `^4.5.0`, and Unstorage `2.0.0-alpha.7` optional peer `^4.13.0`. Tedious comes through mssql `11.0.1` (`^18.2.1`) and `@types/mssql` `9.1.11` (`*`). Pinned Drizzle `1.0.0-beta.6-4414a19` declares mssql `^11.0.1`, **not optional in the lock**. Optional-peer labels therefore do not justify dismissing or removing this chain.
+
+Identity's published `dist/esm/msal/nodeFlows/msalClient.js:317–336` calls `acquireTokenByCode` with a constructed request and no response-payload second argument; `AuthorizationCodeCredential` reaches it. This resembles the advisory workaround, reducing evidence of exploitability through that call, but does not establish dependency remediation. Published [Tedious](https://registry.npmjs.org/tedious/18.6.2) uses managed/default/client-secret credentials; [files-sdk](https://registry.npmjs.org/files-sdk/1.9.0) uses client-secret credentials; [Unstorage](https://registry.npmjs.org/unstorage/2.0.0-alpha.7) Azure drivers use default credentials. Repository source does not establish an active attacker-controlled Azure authorization-code route. Installed presence, reachable authentication APIs, and demonstrated exploitation are distinct claims.
+
+Required resolution: an upstream-supported Identity parent accepting MSAL `>=7.1.0`, with acceptable Node floors throughout its callers, or an upstream-supported backport to the existing MSAL/Identity line. A backport below 7.1.0 additionally needs authoritative advisory-range correction before the unchanged audit can recognize closure. Before any cross-major exception could be reviewed, require upstream compatibility evidence plus Identity public/confidential/managed-identity API/type and authentication regression coverage, including authority, cache, claims, and response-routing sanitization. Source similarity alone is insufficient. Do not broaden SQL/Drizzle scope or raise Node floors implicitly.
+
+**Body-parser: compatible transitive refresh.** [Express 5.2.1](https://registry.npmjs.org/express/5.2.1) accepts `^2.2.1`, which includes 2.4.0. [SDK 1.32.1](https://registry.npmjs.org/@modelcontextprotocol/sdk/1.32.1) accepts Express `^5.2.1`; both declare Node `>=18`. Preserve the security-pinned SDK and Express versions; no parent upgrade is required. Its shipped `dist/esm/server/express.js` installs `express.json()`, establishing an affected upstream consumer. QUESTPIE's [HTTP facade](https://github.com/questpie/questpie/blob/6e64d0f7f76e7fba1db39791bc969885e9fa1e2b/packages/mcp/src/server/mcp-http.ts) instead imports the Web Standard transport. That limits the demonstrated application path, not lockfile exposure.
+
+**Undici: compatible existing override bump.** Its only locked requester is [dotenvx 1.75.1](https://registry.npmjs.org/@dotenvx/dotenvx/1.75.1), `^7.11.0`. Shipped `src/lib/helpers/http.js` imports `request`, not `fetch`; this particular fetch advisory is not proven reachable there. Still replace the vulnerable locked copy. npm overrides do not patch Node/Bun's embedded fetch implementation.
+
+**Zod 3: change the owner, not its dependency major.** The [Zod catalog](https://registry.npmjs.org/zod) has no stable 3.x backport beyond 3.25.76; the advisory identifies none. [shadcn 3.8.5](https://registry.npmjs.org/shadcn/3.8.5), latest stable 3.x, requires `^3.24.1`; its CLI imports Zod and calls `zodToJsonSchema`. Forcing Zod 4 violates that contract. [shadcn 4.22.1](https://registry.npmjs.org/shadcn/4.22.1) requires Zod `^4.2.0`, Node `>=20.18.1`, and SDK `^1.32.0`, compatible with pinned 1.32.1. Its new [registry 0.2.0](https://registry.npmjs.org/@shadcn/registry/0.2.0) also accepts Zod 4 and Undici `^7.29.1`. Both can select the patched targets.
+
+This is a candidate, not verified adoption: both tarballs export `shadcn/tailwind.css`, but CSS changes from 1,669 to 16,340 bytes. Admin ships that CSS import; docs also consume it. Require Tailwind output/visual review and CLI/config/registry/MCP schema conversion checks. Also inspect the remaining [env-core 0.12.0](https://registry.npmjs.org/@t3-oss/env-core/0.12.0) optional Zod `^3.24.0` peer used by the toy example/templates; regeneration must not introduce another vulnerable copy.
+
+The parent inventory confirms `shadcn` is a regular dependency of `packages/admin`, not merely root development tooling. Its CLI is a dev dependency in the root, docs and two examples; admin and docs import its CSS. Review the published admin dependency/Node contract explicitly before selecting 4.22.1. No new Node requirement or CSS behavior is accepted by this preparation.
+
+## Provenance, quarantine, and proposed hunks
+
+Tarball SHA-512 matched npm integrity for MSAL 7.1.0, Identity 4.13.1/4.14.0, SDK 1.32.1, Express 5.2.1, Body-parser 2.4.0, Undici 7.30.1, Zod 4.6.6, and shadcn 3.8.5/4.22.1. Body-parser, Undici, Zod, and shadcn publish provenance payloads naming their first-party repositories/workflows; this was inspection, not cryptographic attestation verification. MSAL metadata supplies no provenance attestation. Zod's release documents rewritten history: [npm commit `284243fb`](https://api.github.com/repos/colinhacks/zod/git/commits/284243fb0d6532665afdc9239188773bb624f73c) and [release commit `9c219833`](https://api.github.com/repos/colinhacks/zod/git/commits/9c219833c3a3764fa1f1ea9c5ecec8254a63c0b1) both resolve to tree `67baa8ff8a4500af08caea054afafcdbc26266b3`. See [npm attestation](https://registry.npmjs.org/-/npm/v1/attestations/zod@4.6.6) and release above.
+
+[bunfig](../../bunfig.toml) enforces 259,200 seconds without exclusions. [Registry publication metadata](https://registry.npmjs.org/body-parser) confirms 2.4.0 at **2026-10-22T11:39:38.614Z**: eligible no earlier than **2026-10-25T11:39:38.614Z**. Undici 7.30.1, Zod 4.6.6, shadcn 4.22.1, registry 0.2.0, and Body-parser's new minimum dependencies qs 6.16.1/iconv-lite 0.7.3/content-type 2.1.0 already predate that cutoff by 72 hours. The final selected graph remains ungenerated. Earliest admissible cut is the maximum publication-plus-72h across **every newly selected version**, after unresolved compatibility/MSAL proof and slot availability; October 25 alone is insufficient. No bypass/exclusion is proposed.
+
+Potential parent edits, only after prerequisites:
+
+1. Root `overrides.undici`: `7.29.1` → `7.30.1`.
+2. Refresh Body-parser to exactly 2.4.0 within Express's range; if necessary to enforce selection, an exact Body-parser override is contract-compatible for the sole current 2.x consumer. Reassess if consumers change.
+3. Raise every declared Zod 4 dependency/dev/peer lower bound to `^4.6.6`: core, MCP, OpenAPI, admin, workflows, sandbox, tanstack-query, three examples, and four scaffolder templates. Hoisted resolution alone does not protect published consumers.
+4. Conditional on review, change all existing shadcn declarations to `4.22.1`: root, admin, docs, barbershop/toy examples, Next/TanStack templates. No global Zod override. No MSAL manifest hunk is justified yet.
+
+Regenerate/review only the intended graph, preserve SDK 1.32.1, add appropriate changesets, and leave audit allowlists/baselines/quarantine untouched. The [root manifest](../../package.json) declares Node `>=18`; existing Azure/Undici branches already have higher floors. A successful Bun run cannot prove those optional consumers support Node 18 or authorize Identity's Node 22 floor.
+
+## Parent verification prerequisites
+
+Use separately coordinated finite prefixes, each within the repository's five-minute local limit. No prefix below is admitted yet, and a busy slot or timeout does not authorize another attempt.
+
+1. After quarantine and compatibility prerequisites, generate the lock with Bun 1.3.13; review all locked copies, ranges, engines and publication ages, then run the unchanged audit. The currently active local Bun is 1.4.2, so obtaining the pinned tool is a prerequisite, not an executed step.
+2. Run affected package type contracts and narrow tests: core schema/introspection and MCP `schema-refs`, `input-schema-semantics`, `route-tuple-schema`, `execution-transports`, and `mcp-http-hardening`. Verify bounded Zod rejection in interpreted/compiled paths, references and strict conversion. Add compressed-body HTTP coverage through the SDK Express consumer and applicable Undici coverage without load.
+3. Verify shadcn CSS/config/CLI consumers and scaffold Node compatibility in bounded build/browser prefixes. The larger CI suite must pass on the final head; local targeted checks do not replace it.
+
+These are required future checks, **not results**. Keep the early draft blocked until supported MSAL resolution, consumer proof, independent exact-head Spec/Standards reviews, the unchanged audit gate and current CI pass. No installation, lock generation, package manifest, baseline, quarantine or AP change is included in the initial documentation commit.
