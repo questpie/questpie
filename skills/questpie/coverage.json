@@ -192,6 +192,7 @@
 		"dispatchEvent": "workflow engine internal; ctx.workflows.dispatchEvent is the taught surface",
 		"drizzleColumnToZod": "drizzle-to-zod internal",
 		"drizzleColumnsToZod": "drizzle-to-zod internal",
+		"encodeSerializedSseEvent": "SSE wire encoder internal",
 		"encodeSseComment": "SSE wire encoder internal",
 		"encodeSseEvent": "SSE wire encoder internal",
 		"envelopeMeta": "client realtime envelope metadata helper",

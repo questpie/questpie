@@ -1264,6 +1264,7 @@ export class RealtimeRefreshScheduler {
 					: computed;
 				if (group.coherent)
 					upToDate = (computed as { upToDate: string }).upToDate;
+				// Date paths stay rooted at data in both the hash payload and snapshot.
 				const wire = group.coherent
 					? serializeCompatibleTypedEventWire({ data })
 					: undefined;
