@@ -32,6 +32,14 @@ export function encodeSseEvent(event: string, data: unknown): Uint8Array {
 		typeof data === "object" && data !== null && !Array.isArray(data)
 			? stringifyCompatibleTypedEventWire(data as Record<string, unknown>)
 			: JSON.stringify(data);
+	return encodeSerializedSseEvent(event, serialized);
+}
+
+/** Frame already normalized JSON without invoking application serializers again. */
+export function encodeSerializedSseEvent(
+	event: string,
+	serialized: string | undefined,
+): Uint8Array {
 	return new TextEncoder().encode(`event: ${event}\ndata: ${serialized}\n\n`);
 }
 
