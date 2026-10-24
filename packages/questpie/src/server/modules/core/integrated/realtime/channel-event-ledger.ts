@@ -1043,6 +1043,7 @@ export class ChannelEventLedger {
 		input: LocalChannelSubscriptionInput,
 		oldestEventId: string | null,
 	): Promise<void> {
+		this.assertLocalFrameTransaction();
 		const frame: ChannelGapFrame = {
 			type: "channel_gap",
 			channel: input.channel,
@@ -1070,6 +1071,7 @@ export class ChannelEventLedger {
 		row: ChannelEventRow,
 	): Promise<boolean> {
 		if (Number(row.seq) === subscription.readSeq + 1) return true;
+		this.assertLocalFrameTransaction();
 		this.observe({ type: "resume", outcome: "gap" });
 		this.logger?.warn(
 			`[Realtime] Channel "${subscription.channel}" delivery gap: expected seq ${
@@ -1483,13 +1485,17 @@ export class ChannelEventLedger {
 		}
 	}
 
+	private assertLocalFrameTransaction(): void {
+		if (getCurrentTransaction()) {
+			throw new Error("Channel frame delivery must own transaction completion");
+		}
+	}
+
 	private async writeAuthorizedLocalFrame(
 		subscription: LocalSubscription,
 		frame: Uint8Array,
 	): Promise<SinkWriteResult | null> {
-		if (getCurrentTransaction()) {
-			throw new Error("Channel frame delivery must own transaction completion");
-		}
+		this.assertLocalFrameTransaction();
 		if (
 			!subscription.subject ||
 			subscription.authorityGeneration === undefined ||

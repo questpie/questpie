@@ -169,6 +169,7 @@ function binding(subject: string, sink: ClientSink, seqs = [1]) {
 		closed: false,
 		active: true,
 		cursor: 0,
+		readSeq: 0,
 		pending,
 		pendingBytes: pending.length,
 		retryTimer: null as ReturnType<typeof setTimeout> | null,
@@ -189,6 +190,16 @@ function localLedger(db: ReturnType<typeof fenceDatabase>["db"]) {
 			subscription: ReturnType<typeof binding>,
 		): Promise<boolean>;
 		removeLocalSubscription(subscription: ReturnType<typeof binding>): void;
+		subscribeLocal(input: {
+			subscriptionId: string;
+			channel: string;
+			sink: ClientSink;
+			lastEventId: string;
+		}): Promise<() => Promise<void>>;
+		admitContiguous(
+			subscription: ReturnType<typeof binding>,
+			row: { seq: number },
+		): Promise<boolean>;
 	};
 	return delivery;
 }
@@ -462,6 +473,52 @@ test("direct frame batches refuse ambient transactions before invoking publicati
 		),
 	).rejects.toThrow("own transaction");
 	expect(published).toBe(false);
+	expect(db.queries).toEqual([]);
+});
+
+test("subscribeLocal refuses gap output before an outer rollback", async () => {
+	const db = fenceDatabase({});
+	const events = localLedger(db.db);
+	let writes = 0;
+	await expect(
+		withTransaction(db.db, async () => {
+			await events.subscribeLocal({
+				subscriptionId: "ambient-gap",
+				channel: "room",
+				lastEventId: "invalid-resume-id",
+				sink: {
+					sessionId: "ambient-gap",
+					async write() {
+						writes++;
+						return { status: "accepted", bufferedBytes: 0 };
+					},
+					async close() {},
+				},
+			});
+			throw new Error("outer rollback");
+		}),
+	).rejects.toThrow("own transaction");
+	expect(writes).toBe(0);
+});
+
+test("a connected log gap cannot write from an ambient transaction", async () => {
+	const db = fenceDatabase({});
+	const events = localLedger(db.db);
+	let writes = 0;
+	const subscription = binding("viewer", {
+		sessionId: "ambient-connected-gap",
+		async write() {
+			writes++;
+			return { status: "accepted", bufferedBytes: 0 };
+		},
+		async close() {},
+	});
+	await expect(
+		withTransaction(db.db, () =>
+			events.admitContiguous(subscription, { seq: 3 }),
+		),
+	).rejects.toThrow("own transaction");
+	expect(writes).toBe(0);
 	expect(db.queries).toEqual([]);
 });
 
