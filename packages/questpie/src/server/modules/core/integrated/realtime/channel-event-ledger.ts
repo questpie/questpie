@@ -186,7 +186,7 @@ type LocalSubscription = {
 
 type PendingFrameAdmission = ChannelAuthorityFrameAttempt & {
 	subscription: LocalSubscription;
-	resolve: (result: ChannelAuthorityAdmission<undefined>) => void;
+	resolve: (result: ChannelAuthorityAdmission<undefined> | null) => void;
 	reject: (reason: unknown) => void;
 };
 
@@ -437,6 +437,7 @@ export class ChannelEventLedger {
 	async subscribeLocal(
 		input: LocalChannelSubscriptionInput,
 	): Promise<() => Promise<void>> {
+		this.assertLocalFrameTransaction();
 		if (
 			this.clientTransport &&
 			this.clientTransport.channelDeliveryScope !== "local-sessions"
@@ -848,6 +849,8 @@ export class ChannelEventLedger {
 	}
 
 	async drain(channelHash?: string): Promise<void> {
+		if (this.clientTransport?.channelDeliveryScope !== "shared-provider")
+			this.assertLocalFrameTransaction();
 		try {
 			await this.reconcileLocalAuthorities(channelHash);
 			if (this.clientTransport?.channelDeliveryScope === "shared-provider") {
@@ -1391,21 +1394,15 @@ export class ChannelEventLedger {
 		await subscription.sink.close(reason);
 	}
 
-	private admitLocalFrame(
+	private async admitLocalFrame(
 		subscription: LocalSubscription,
 		expectedGeneration: number,
-	): Promise<ChannelAuthorityAdmission<undefined>> {
-		if (getCurrentTransaction()) {
-			throw new Error(
-				"Channel frame admission must own transaction completion",
-			);
-		}
+	): Promise<ChannelAuthorityAdmission<undefined> | null> {
 		if (this.pendingFrameAdmissions >= MAX_PENDING_FRAME_ADMISSIONS) {
-			return Promise.reject(new Error("Channel frame admission queue is full"));
+			throw new Error("Channel frame admission queue is full");
 		}
 		const channelHash = subscription.channelHash;
-		const subject = subscription.subject;
-		if (!subject) throw new Error("Channel frame admission requires a subject");
+		const subject = subscription.subject!;
 		return new Promise((resolve, reject) => {
 			const queue: FrameAdmissionQueue = this.frameAdmissions.get(
 				channelHash,
@@ -1417,8 +1414,6 @@ export class ChannelEventLedger {
 				subject,
 				expectedGeneration,
 				subscription,
-				// Binding state is published only after the transaction commits.
-				publish: () => undefined,
 				resolve,
 				reject,
 			});
@@ -1468,6 +1463,10 @@ export class ChannelEventLedger {
 				channelHash,
 				batch,
 			);
+			if (results === null) {
+				for (const attempt of batch) attempt.resolve(null);
+				return;
+			}
 			for (const [index, result] of results.entries()) {
 				if (result.status === "fulfilled") batch[index].resolve(result.value);
 				else batch[index].reject(result.reason);
@@ -1528,6 +1527,8 @@ export class ChannelEventLedger {
 				expectedGeneration,
 			);
 			if (subscription.closed || !subscription.active) return null;
+			// Release the slot and retry this same oldest frame after lock contention.
+			if (admission === null) return { status: "busy", bufferedBytes: 0 };
 			// A newer reconciliation must not be overwritten by this completion.
 			if (subscription.authorityGeneration !== previousGeneration) {
 				generation = subscription.authorityGeneration;

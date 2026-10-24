@@ -21,6 +21,11 @@ function fenceDatabase(
 	options: {
 		holdCommit?: boolean;
 		beforeCoordinator?: () => void;
+		beforeLock?: (
+			channel: string,
+			coordinator: boolean,
+			noWait: boolean,
+		) => void;
 		commitError?: Error;
 		afterCommit?: () => void;
 	} = {},
@@ -59,7 +64,12 @@ function fenceDatabase(
 				order = dialect.sqlToQuery(condition).sql;
 				return builder;
 			},
-			for(mode: string) {
+			for(mode: string, config?: { noWait?: boolean }) {
+				options.beforeLock?.(
+					String(params[0]),
+					params[1] === "channel-authority-coordinator",
+					config?.noWait === true,
+				);
 				locks.push(
 					`${params[1] === "channel-authority-coordinator" ? "coordinator" : "subjects"}:${mode}`,
 				);
@@ -98,37 +108,16 @@ function fenceDatabase(
 	return { store, db, beforeCommit, commit, locks, queries, stats };
 }
 
-test("frame batch compares each expected generation, isolates errors and settles after commit", async () => {
+test("frame batch compares each expected generation, isolates invalid entries and settles after commit", async () => {
 	const db = fenceDatabase({ alice: 2, bob: 0 }, { holdCommit: true });
-	const published: string[] = [];
-	const failure = new Error("one publication failed");
 	let settled = false;
 	const result = db.store
 		.admitExpectedBatch("room", [
-			{
-				subject: "alice",
-				expectedGeneration: 1,
-				publish: () => {
-					published.push("stale");
-					return undefined;
-				},
-			},
-			{
-				subject: "alice",
-				expectedGeneration: 2,
-				publish: () => {
-					throw failure;
-				},
-			},
-			{
-				subject: "bob",
-				expectedGeneration: 0,
-				publish: () => {
-					published.push("bob");
-					return undefined;
-				},
-			},
-			{ subject: "missing", expectedGeneration: 0, publish: () => undefined },
+			{ subject: "alice", expectedGeneration: 1 },
+			{ subject: "alice", expectedGeneration: 2 },
+			{ subject: "bob", expectedGeneration: 0 },
+			{ subject: "missing", expectedGeneration: 0 },
+			{ subject: "", expectedGeneration: 0 },
 		])
 		.then((value) => {
 			settled = true;
@@ -136,21 +125,21 @@ test("frame batch compares each expected generation, isolates errors and settles
 		});
 	await db.beforeCommit.promise;
 	expect(db.locks).toEqual(["coordinator:share", "subjects:share"]);
-	expect(published).toEqual(["bob"]);
 	expect(settled).toBe(false);
 	db.commit.resolve();
 	const outcomes = await result;
+	if (!outcomes) throw new Error("Expected settled frame admissions");
 	expect(outcomes[0]).toEqual({
 		status: "fulfilled",
 		value: { admitted: false },
 	});
-	expect(outcomes[1]).toEqual({ status: "rejected", reason: failure });
-	expect(outcomes[2]).toEqual({
-		status: "fulfilled",
-		value: { admitted: true, value: undefined },
-	});
+	expect(outcomes.slice(1, 3)).toEqual([
+		{ status: "fulfilled", value: { admitted: true, value: undefined } },
+		{ status: "fulfilled", value: { admitted: true, value: undefined } },
+	]);
 	expect(outcomes[3]).toMatchObject({ status: "rejected" });
-	expect(db.queries[1].subjects).toEqual(["alice", "bob", "missing"]);
+	expect(outcomes[4]).toMatchObject({ status: "rejected" });
+	expect(db.queries[1].subjects).toEqual(["alice", "bob", "missing", ""]);
 	expect(db.queries[1].order).toBe(
 		'"questpie_channel_authority_fence"."subject" asc',
 	);
@@ -255,6 +244,67 @@ test("frame batching occupies at most two transactions across channels", async (
 	expect(db.stats.maximumActive).toBe(2);
 	expect(writes).toHaveLength(5);
 });
+
+for (const coordinator of [true, false]) {
+	test(`contended ${coordinator ? "coordinator" : "subject"} locks release batch slots while unrelated channels progress`, async () => {
+		const held = new Set(["cut-a", "cut-b"]);
+		const generations = { viewer: 0 };
+		const db = fenceDatabase(generations, {
+			beforeLock(channel, isCoordinator, noWait) {
+				expect(noWait).toBe(true);
+				if (held.has(channel) && coordinator === isCoordinator)
+					throw new Error("Drizzle query failed", {
+						cause: Object.assign(new Error("lock unavailable"), {
+							code: "55P03",
+						}),
+					});
+			},
+		});
+		const events = localLedger(db.db);
+		const writes: string[] = [];
+		const closes: string[] = [];
+		const subscriptions = ["cut-a", "cut-b", "free"].map((channel) => {
+			const subscription = binding(
+				"viewer",
+				{
+					sessionId: channel,
+					async write(frame) {
+						writes.push(`${channel}:${frame[0]}`);
+						return { status: "accepted", bufferedBytes: 0 };
+					},
+					async close(reason) {
+						closes.push(`${channel}:${reason}`);
+					},
+				},
+				[1, 2],
+			);
+			subscription.channelHash = channel;
+			return subscription;
+		});
+		try {
+			expect(
+				await Promise.all(
+					subscriptions.map((value) => events.flushLocalPending(value)),
+				),
+			).toEqual([false, false, true]);
+			expect(writes).toEqual(["free:1", "free:2"]);
+			expect(closes).toEqual([]);
+			expect(subscriptions[0].cursor).toBe(0);
+			expect(subscriptions[0].pending.map(({ seq }) => seq)).toEqual([1, 2]);
+			expect(db.stats.active).toBe(0);
+			held.clear();
+			generations.viewer = 1;
+			subscriptions[0].reauthorize = async () => false;
+			expect(await events.flushLocalPending(subscriptions[0])).toBe(false);
+			expect(await events.flushLocalPending(subscriptions[1])).toBe(true);
+			expect(writes).toEqual(["free:1", "free:2", "cut-b:1", "cut-b:2"]);
+			expect(closes).toEqual(["cut-a:access_revoked"]);
+		} finally {
+			for (const subscription of subscriptions)
+				if (subscription.retryTimer) clearTimeout(subscription.retryTimer);
+		}
+	});
+}
 
 test("an arrival after the batch is sealed needs its own fresh transaction", async () => {
 	const generations = { viewer: 0 };
@@ -455,24 +505,15 @@ test("frame delivery refuses an ambient transaction before SQL or sink writes", 
 	expect(db.queries).toEqual([]);
 });
 
-test("direct frame batches refuse ambient transactions before invoking publication", async () => {
+test("direct frame batches refuse ambient transactions before SQL", async () => {
 	const db = fenceDatabase({ viewer: 0 });
-	let published = false;
 	await expect(
 		withTransaction(db.db, () =>
 			db.store.admitExpectedBatch("room", [
-				{
-					subject: "viewer",
-					expectedGeneration: 0,
-					publish: () => {
-						published = true;
-						return undefined;
-					},
-				},
+				{ subject: "viewer", expectedGeneration: 0 },
 			]),
 		),
 	).rejects.toThrow("own transaction");
-	expect(published).toBe(false);
 	expect(db.queries).toEqual([]);
 });
 
