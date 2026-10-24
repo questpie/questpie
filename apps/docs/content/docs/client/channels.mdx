@@ -138,6 +138,16 @@ authorization. A binding that is still allowed continues; a denied binding
 ends with `access_revoked`. The receipt is
 `{ generation, transportEffect }`.
 
+Ordered frames for an exact authority binding are logically admitted against
+that channel/subject generation. Concurrent frame admissions can share a database
+transaction; a busy frame is checked again on every retry. A frame admitted
+before a cut may finish delivery afterward. Transport writes run outside the
+fence transaction so a blocked write does not delay an authority cut.
+Each ledger admits at most two batches concurrently, with at most 64 attempts per
+batch and 4,096 waiting attempts. Queue overflow fails the delivery; canceled
+bindings leave the waiting queue. Local frame delivery must run outside a
+caller-owned transaction, so a rolled-back command cannot deliver its frames.
+
 | Transport     | `transportEffect`         | Physical effect                                 |
 | ------------- | ------------------------- | ----------------------------------------------- |
 | SSE           | `"exact-binding"`         | Only the matching logical binding is cut        |
