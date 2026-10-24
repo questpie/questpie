@@ -252,6 +252,138 @@ describe("coherent route scheduler", () => {
 			close();
 		}
 	});
+	it("serializes application values once per evaluation and preserves compatible typed wire values", async () => {
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source);
+		const frames: ReturnType<typeof decode>[] = [];
+		const firstFrame = deferred();
+		const secondFrame = deferred();
+		const at = new Date("2026-10-22T12:00:00Z");
+		let getterCalls = 0;
+		let toJSONCalls = 0;
+		let evaluations = 0;
+		const close = scheduler.subscribe(
+			base(
+				async () => ({
+					data: {
+						at,
+						items: [at, undefined],
+						omitted: undefined,
+						get label() {
+							getterCalls++;
+							return "stable";
+						},
+						custom: {
+							toJSON() {
+								toJSONCalls++;
+								return { __questpieTypedWire: "nested app value" };
+							},
+						},
+					},
+					upToDate: String(++evaluations),
+				}),
+				(frame) => {
+					frames.push(decode(frame));
+					if (frames.length === 1) firstFrame.resolve();
+					else secondFrame.resolve();
+				},
+			),
+		);
+		try {
+			await firstFrame.promise;
+			expect(getterCalls).toBe(1);
+			expect(toJSONCalls).toBe(1);
+			expect(frames[0].data).toEqual({
+				at,
+				items: [at, null],
+				label: "stable",
+				custom: { __questpieTypedWire: "nested app value" },
+			});
+			source.emit("data");
+			await secondFrame.promise;
+			expect(getterCalls).toBe(2);
+			expect(toJSONCalls).toBe(2);
+			expect(frames).toHaveLength(2);
+			expect(frames[1]).toMatchObject({ type: "up-to-date", upToDate: "2" });
+		} finally {
+			close();
+		}
+	});
+	it("does not revisit data omitted by its toJSON method when framing the snapshot", async () => {
+		const scheduler = new RealtimeRefreshScheduler(new Source());
+		const frames: ReturnType<typeof decode>[] = [];
+		const delivered = deferred();
+		let calls = 0;
+		const close = scheduler.subscribe(
+			base(
+				async () => ({
+					data: { toJSON: () => (++calls === 1 ? undefined : "unexpected") },
+					upToDate: "1",
+				}),
+				(frame) => {
+					frames.push(decode(frame));
+					delivered.resolve();
+				},
+			),
+		);
+		try {
+			await delivered.promise;
+			expect(calls).toBe(1);
+			expect(frames).toHaveLength(1);
+			expect(Object.hasOwn(frames[0], "data")).toBe(false);
+		} finally {
+			close();
+		}
+	});
+	it("publishes the same normalized data that was hashed even when the source changes during hashing", async () => {
+		const source = new Source();
+		const scheduler = new RealtimeRefreshScheduler(source);
+		const hashing = deferred();
+		const release = deferred();
+		const frames: ReturnType<typeof decode>[] = [];
+		const firstFrame = deferred();
+		const secondFrame = deferred();
+		const data = { title: "before", at: new Date("2026-10-22T12:00:00Z") };
+		const original = crypto.subtle.digest.bind(crypto.subtle);
+		let hashes = 0;
+		const digest = spyOn(crypto.subtle, "digest").mockImplementation(
+			async (...args: Parameters<typeof original>) => {
+				if (++hashes === 1) {
+					hashing.resolve();
+					await release.promise;
+				}
+				return original(...args);
+			},
+		);
+		const close = scheduler.subscribe(
+			base(
+				async () => ({ data, upToDate: "1" }),
+				(frame) => {
+					frames.push(decode(frame));
+					if (frames.length === 1) firstFrame.resolve();
+					else secondFrame.resolve();
+				},
+			),
+		);
+		try {
+			await hashing.promise;
+			data.title = "after";
+			data.at.setUTCFullYear(2027);
+			release.resolve();
+			await firstFrame.promise;
+			expect(frames[0].data).toEqual({
+				title: "before",
+				at: new Date("2026-10-22T12:00:00Z"),
+			});
+			source.emit("data");
+			await secondFrame.promise;
+			expect(frames[1].data).toEqual(data);
+		} finally {
+			release.resolve();
+			close();
+			digest.mockRestore();
+		}
+	});
 	it("isolates equal route keys per binding and recomputes on reconnect", async () => {
 		const source = new Source();
 		const scheduler = new RealtimeRefreshScheduler(source);
