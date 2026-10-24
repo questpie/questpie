@@ -256,6 +256,8 @@ describe("coherent route scheduler", () => {
 		const source = new Source();
 		const scheduler = new RealtimeRefreshScheduler(source);
 		const frames: ReturnType<typeof decode>[] = [];
+		const firstFrame = deferred();
+		const secondFrame = deferred();
 		const at = new Date("2026-10-22T12:00:00Z");
 		let getterCalls = 0;
 		let toJSONCalls = 0;
@@ -282,11 +284,13 @@ describe("coherent route scheduler", () => {
 				}),
 				(frame) => {
 					frames.push(decode(frame));
+					if (frames.length === 1) firstFrame.resolve();
+					else secondFrame.resolve();
 				},
 			),
 		);
 		try {
-			await tick();
+			await firstFrame.promise;
 			expect(getterCalls).toBe(1);
 			expect(toJSONCalls).toBe(1);
 			expect(frames[0].data).toEqual({
@@ -296,7 +300,7 @@ describe("coherent route scheduler", () => {
 				custom: { __questpieTypedWire: "nested app value" },
 			});
 			source.emit("data");
-			await tick();
+			await secondFrame.promise;
 			expect(getterCalls).toBe(2);
 			expect(toJSONCalls).toBe(2);
 			expect(frames).toHaveLength(2);
@@ -308,6 +312,7 @@ describe("coherent route scheduler", () => {
 	it("does not revisit data omitted by its toJSON method when framing the snapshot", async () => {
 		const scheduler = new RealtimeRefreshScheduler(new Source());
 		const frames: ReturnType<typeof decode>[] = [];
+		const delivered = deferred();
 		let calls = 0;
 		const close = scheduler.subscribe(
 			base(
@@ -317,11 +322,12 @@ describe("coherent route scheduler", () => {
 				}),
 				(frame) => {
 					frames.push(decode(frame));
+					delivered.resolve();
 				},
 			),
 		);
 		try {
-			await tick();
+			await delivered.promise;
 			expect(calls).toBe(1);
 			expect(frames).toHaveLength(1);
 			expect(Object.hasOwn(frames[0], "data")).toBe(false);
@@ -335,6 +341,8 @@ describe("coherent route scheduler", () => {
 		const hashing = deferred();
 		const release = deferred();
 		const frames: ReturnType<typeof decode>[] = [];
+		const firstFrame = deferred();
+		const secondFrame = deferred();
 		const data = { title: "before", at: new Date("2026-10-22T12:00:00Z") };
 		const original = crypto.subtle.digest.bind(crypto.subtle);
 		let hashes = 0;
@@ -352,6 +360,8 @@ describe("coherent route scheduler", () => {
 				async () => ({ data, upToDate: "1" }),
 				(frame) => {
 					frames.push(decode(frame));
+					if (frames.length === 1) firstFrame.resolve();
+					else secondFrame.resolve();
 				},
 			),
 		);
@@ -360,13 +370,13 @@ describe("coherent route scheduler", () => {
 			data.title = "after";
 			data.at.setUTCFullYear(2027);
 			release.resolve();
-			await tick();
+			await firstFrame.promise;
 			expect(frames[0].data).toEqual({
 				title: "before",
 				at: new Date("2026-10-22T12:00:00Z"),
 			});
 			source.emit("data");
-			await tick();
+			await secondFrame.promise;
 			expect(frames[1].data).toEqual(data);
 		} finally {
 			release.resolve();
