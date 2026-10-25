@@ -23,6 +23,7 @@ import {
 import { routeSchemas } from "./route-tools.js";
 import type { RuntimeScope } from "./runtime.js";
 import { jsonResource, toRequestContext } from "./runtime.js";
+import { applyMcpSchemaDiet } from "./zod-json-schema.js";
 
 function fallbackExtra(requestId: string): McpHandlerExtra {
 	return {
@@ -207,9 +208,9 @@ async function routeCatalog(scope: RuntimeScope, catalog: ResolvedMcpCatalog) {
 			hasInputSchema: isJsonRoute(route.definition),
 			hasOutputSchema:
 				isJsonRoute(route.definition) && !!route.definition.outputSchema,
-			inputSchema: schemas.routeInput,
-			outputSchema: schemas.routeOutput,
-			toolInputSchema: schemas.input,
+			inputSchema: applyMcpSchemaDiet(schemas.routeInput),
+			outputSchema: applyMcpSchemaDiet(schemas.routeOutput),
+			toolInputSchema: applyMcpSchemaDiet(schemas.input),
 		});
 	}
 	return routes;
