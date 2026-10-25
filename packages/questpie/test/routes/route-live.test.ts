@@ -507,7 +507,7 @@ describe("explicit route LIVE", () => {
 			.catch((error) => error);
 		expect(failure?.cause?.code).toBe("25006");
 	});
-	it("captures the watermark as the first snapshot statement, before context facts", async () => {
+	it("captures the watermark and bounds statements in one SQL before context facts", async () => {
 		const context = await createAdapterContext(
 			setup.app,
 			new Request("http://localhost/api/realtime"),
@@ -539,13 +539,72 @@ describe("explicit route LIVE", () => {
 				.handler(() => ({}));
 			await prepareJsonRoute(setup.app, probe, {}).snapshot(fresh.appContext);
 			const queries = statements;
+			expect(queries).toHaveLength(3);
 			expect(queries[0]).toContain("pg_snapshot_xmin(pg_current_snapshot())");
-			expect(queries[1]).toContain("statement_timeout");
-			expect(queries[2]).toContain("transaction_isolation");
+			expect(queries[0]).toContain("statement_timeout");
+			expect(queries[1]).toContain("transaction_isolation");
+			expect(queries[2]).toContain('"live_memberships"');
 		} finally {
 			transaction.mockRestore();
 		}
 	});
+
+	for (const [configured, expected] of [
+		["0", "30s"],
+		["5000", "5s"],
+		["45000", "30s"],
+	] as const) {
+		it(`caps LIVE statements without raising the configured ${configured}ms timeout`, async () => {
+			await setup.app.db.execute(
+				sql`select set_config('statement_timeout', ${configured}, false)`,
+			);
+			try {
+				const probe = route()
+					.post()
+					.schema(z.object({}))
+					.outputSchema(
+						z.object({
+							timeout: z.string(),
+							isolation: z.string(),
+							readOnly: z.string(),
+						}),
+					)
+					.access(true)
+					.query()
+					.handler(async ({ db }) => {
+						const [settings] = rowsOf<{
+							timeout: string;
+							isolation: string;
+							readOnly: string;
+						}>(
+							await db.execute(
+								sql`select current_setting('statement_timeout') as timeout, current_setting('transaction_isolation') as isolation, current_setting('transaction_read_only') as "readOnly"`,
+							),
+						);
+						return settings!;
+					});
+				const result = await prepareJsonRoute(setup.app, probe, {}).snapshot({
+					accessMode: "system",
+				});
+				expect(result.data).toEqual({
+					timeout: expected,
+					isolation: "repeatable read",
+					readOnly: "on",
+				});
+				expect(result.upToDate).toMatch(/^\d+$/);
+				const [outside] = rowsOf<{ timeout: string }>(
+					await setup.app.db.execute(
+						sql`select current_setting('statement_timeout') as timeout`,
+					),
+				);
+				expect(outside!.timeout).toBe(
+					configured === "0" ? "0" : `${Number(configured) / 1000}s`,
+				);
+			} finally {
+				await setup.app.db.execute(sql`reset statement_timeout`);
+			}
+		});
+	}
 
 	it("cancels a closed evaluation before application access or reads begin", async () => {
 		const controller = new AbortController();
