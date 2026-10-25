@@ -143,6 +143,8 @@ That is intentional.
 - **`@modelcontextprotocol/sdk: 1.32.1`** — fixes experimental-task session binding
   (GHSA-22jm-h49p-29qw) and HTTP validation memory exhaustion
   (GHSA-46jr-4wx8-v453). Keep workspace consumers on the patched SDK.
+- **`bun-types: 1.4.3`** — retains the existing workspace type version. Floating
+  `latest` declarations otherwise change the lockfile during CI installs.
 - **`vite: 8.1.6`** — the 8.1 patch release that fixes the bundled editor launcher
   Windows existence-check bypass (GHSA-587h-7wmj-h5pm). The standalone
   `launch-editor: 2.14.2` override keeps all other launcher consumers on the
