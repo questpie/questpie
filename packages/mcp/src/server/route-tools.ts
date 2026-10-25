@@ -39,7 +39,7 @@ function advertisedSchema(json: Record<string, unknown>) {
 	return schema;
 }
 
-function routeSchemas(route: IntrospectedRoute) {
+export function routeSchemas(route: IntrospectedRoute) {
 	if (!isJsonRoute(route.definition)) throw new Error("MCP route must be JSON");
 	const definition = route.definition;
 	const project = (schema: z.ZodType, io: "input" | "output") => {
@@ -64,12 +64,15 @@ function routeSchemas(route: IntrospectedRoute) {
 	};
 	let input: Record<string, unknown>;
 	let output: Record<string, unknown> | undefined;
+	let routeInput: Record<string, unknown>;
+	let routeOutput: Record<string, unknown> | undefined;
 	let wrapped: boolean;
 	let wrappedOutput: boolean;
 	try {
 		input = definition.schema
 			? project(definition.schema, "input")
 			: { type: "object", properties: {} };
+		routeInput = input;
 		wrapped = route.params.length > 0 || input.type !== "object";
 		if (wrapped) {
 			// Convert the envelope as a whole, so root-recursive refs retain their
@@ -97,6 +100,7 @@ function routeSchemas(route: IntrospectedRoute) {
 		output = definition.outputSchema
 			? project(definition.outputSchema, "output")
 			: undefined;
+		routeOutput = output;
 		wrappedOutput = !!output && output.type !== "object";
 		if (definition.outputSchema && wrappedOutput) {
 			output = project(
@@ -114,6 +118,8 @@ function routeSchemas(route: IntrospectedRoute) {
 		outputSchema: output ? advertisedSchema(output) : undefined,
 		input,
 		output,
+		routeInput,
+		routeOutput,
 		wrapped,
 		wrappedOutput,
 	};

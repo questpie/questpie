@@ -3,16 +3,12 @@ import {
 	type McpServer,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
-	evaluateRouteAccess,
-	extractAppServices,
 	introspectCollection,
 	introspectGlobal,
 	isJsonRoute,
 	type CollectionSchema,
 	type GlobalSchema,
-	type IntrospectedRoute,
 } from "questpie";
-import { z } from "zod";
 
 import type { ResolvedMcpCatalog } from "./catalog.js";
 import type { McpHandlerExtra } from "./execution-boundary.js";
@@ -24,9 +20,9 @@ import {
 	scopeGateAllows,
 	scopesFromContext,
 } from "./policy.js";
+import { routeSchemas } from "./route-tools.js";
 import type { RuntimeScope } from "./runtime.js";
 import { jsonResource, toRequestContext } from "./runtime.js";
-import { toJsonSchema } from "./zod-json-schema.js";
 
 function fallbackExtra(requestId: string): McpHandlerExtra {
 	return {
@@ -161,27 +157,8 @@ async function visibleGlobals(
 	return entries;
 }
 
-function routeToolInputSchema(route: IntrospectedRoute) {
-	if (!isJsonRoute(route.definition)) return undefined;
-	const params = route.params ?? [];
-	if (params.length === 0) return route.definition.schema;
-	const shape: Record<string, z.ZodString> = {};
-	for (const param of params) shape[param] = z.string();
-	return z.object({
-		params: z.object(shape),
-		input: route.definition.schema,
-	});
-}
-
 async function routeCatalog(scope: RuntimeScope, catalog: ResolvedMcpCatalog) {
 	const ctx = await scope.getContext();
-	const services = extractAppServices(scope.app, {
-		db: ctx.db ?? scope.app.db,
-		session: ctx.session,
-		locale: ctx.locale,
-		accessMode: ctx.accessMode,
-		principal: ctx.principal,
-	});
 
 	const routes = [];
 	for (const routeKey of catalog.resources.routes) {
@@ -189,6 +166,12 @@ async function routeCatalog(scope: RuntimeScope, catalog: ResolvedMcpCatalog) {
 		if (!catalogEntry) continue;
 		const route = catalogEntry.route;
 		if (!isJsonRoute(route.definition)) continue;
+		const access = route.definition.access;
+		if (
+			access === false ||
+			(typeof access === "object" && access?.execute === false)
+		)
+			continue;
 		const policy = catalogEntry.policy;
 
 		const mcpAllowed = await evaluateMcpRule(operationRule(policy, "execute"), {
@@ -212,17 +195,7 @@ async function routeCatalog(scope: RuntimeScope, catalog: ResolvedMcpCatalog) {
 			continue;
 		}
 
-		const params = Object.fromEntries(
-			(route.params ?? []).map((param) => [param, ""]),
-		);
-		const routeAllowed = await evaluateRouteAccess(route.definition.access, {
-			...services,
-			...(ctx["~contextExtensions"] ?? {}),
-			locale: ctx.locale,
-			request: scope.request,
-			params,
-		});
-		if (!routeAllowed) continue;
+		const schemas = routeSchemas(route);
 
 		routes.push({
 			key: route.key,
@@ -234,9 +207,9 @@ async function routeCatalog(scope: RuntimeScope, catalog: ResolvedMcpCatalog) {
 			hasInputSchema: isJsonRoute(route.definition),
 			hasOutputSchema:
 				isJsonRoute(route.definition) && !!route.definition.outputSchema,
-			inputSchema: toJsonSchema(route.definition.schema),
-			outputSchema: toJsonSchema(route.definition.outputSchema),
-			toolInputSchema: toJsonSchema(routeToolInputSchema(route)),
+			inputSchema: schemas.routeInput,
+			outputSchema: schemas.routeOutput,
+			toolInputSchema: schemas.input,
 		});
 	}
 	return routes;
