@@ -232,8 +232,27 @@ export function createQueueClient<
 
 		for (const jobDef of Object.values(sourceJobs)) {
 			const handleAttempt: QueueHandlerMap[string] = async (job) => {
-				const context = await getContextOrThrow();
 				const secretPayload = job.secretPayload === true;
+				let context: QueueRuntimeContext;
+				try {
+					context = await getContextOrThrow();
+				} catch (error) {
+					// Context resolution is part of the attempt: report it like any
+					// other failure (a secret job only ever reports its redacted
+					// error), then rethrow the original so retry/ack is unchanged.
+					if (!job.signal?.aborted) {
+						reportJobFailure(
+							secretPayload
+								? redactedSecretQueueError(
+										"QUESTPIE Queue secret job handling failed",
+									)
+								: error,
+							jobDef.name,
+							job.finalAttempt,
+						);
+					}
+					throw error;
+				}
 				let executionToken: string | undefined;
 				let executionHeartbeat: ReturnType<typeof setInterval> | undefined;
 				let completionPersisted = false;

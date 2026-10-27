@@ -13,7 +13,9 @@ import type {
 	ErrorReport,
 	ErrorReportingAdapter,
 } from "../../src/server/modules/core/integrated/errors/types.js";
+import { createQueueClient } from "../../src/server/modules/core/integrated/queue/service.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
+import { MockQueueAdapter } from "../utils/mocks/queue.adapter.js";
 import { runTestDbMigrations } from "../utils/test-db";
 
 interface Captured {
@@ -614,6 +616,50 @@ describe("queue error reporting", () => {
 		await handler({ id: "1", data: {}, finalAttempt: true }).catch(() => {});
 
 		expect(captured.map((c) => c.report.source)).toEqual(["manual", "manual"]);
+	});
+
+	it("reports a context-resolution failure and rethrows the original", async () => {
+		const contextFailure = new Error(`context store said ${SECRET}`);
+		const rec = capturingAdapter();
+		const errors = new ErrorReportingService({ adapter: rec.adapter });
+		const adapter = new MockQueueAdapter();
+		const queue = createQueueClient({ failing }, adapter, {
+			createContext: () => Promise.reject(contextFailure),
+			getApp: () => ({ errors }),
+		});
+		await queue.listen({ gracefulShutdown: false } as any);
+		const handler = (adapter as any).workers.find(
+			(w: any) => w.handlers.explode,
+		).handlers.explode as (job: Record<string, unknown>) => Promise<void>;
+
+		const plain = await handler({
+			id: "1",
+			data: {},
+			finalAttempt: true,
+		}).catch((error) => error);
+		const secret = await handler({
+			id: "2",
+			data: {},
+			secretPayload: true,
+			finalAttempt: true,
+		}).catch((error) => error);
+		const aborted = new AbortController();
+		aborted.abort();
+		await handler({ id: "3", data: {}, signal: aborted.signal }).catch(
+			() => {},
+		);
+
+		expect(plain).toBe(contextFailure);
+		expect(secret).toBe(contextFailure);
+		expect(rec.captured).toHaveLength(2);
+		expect(rec.captured[0]).toEqual({
+			error: contextFailure,
+			report: { source: "job", job: "explode", final: true },
+		});
+		const redacted = rec.captured[1]!.error as Error;
+		expect(redacted.message).toBe("QUESTPIE Queue secret job handling failed");
+		expect(String(redacted.stack)).not.toContain(SECRET);
+		await queue.stop();
 	});
 
 	it("does not report a cancelled attempt", async () => {
