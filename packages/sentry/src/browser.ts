@@ -40,22 +40,13 @@ export interface BrowserErrorReporterOptions extends DeliveryOptions {
 	 */
 	maxReportsPerMinute?: number;
 	/**
-	 * Read stacks the runtime formats on first access (V8 in Node and
-	 * browsers, Gecko). Off by default: such a stack is produced by the
-	 * runtime's stack formatter, which runs whatever `Error.prepareStackTrace`
-	 * the error's realm has installed (Node's default, a source-map hook, or an
-	 * app's own) exactly as reading `error.stack` does. Without it, a stack is
-	 * read only where inspecting it formats nothing (Node 22+, browsers with
-	 * native `Error.isError`) and it is already plain data; on Node 20 and Bun
-	 * even inspecting it formats, so nothing about it is read. With it, the formatter that runs is whatever is installed and
-	 * may itself call getters or other code; only the reporter's own reads of
-	 * `name`, `message` and `code` are kept free of getters and proxies. The
-	 * reporter itself never modifies globals.
-	 *
-	 * In the browser this option also enables inspecting the thrown value at
-	 * all. Without it every thrown object is reported as `Error` with no
-	 * frames, because the only brand check, `Error.isError`, may be a polyfill
-	 * (core-js's reads `Symbol.toStringTag`) that runs getters on the value.
+	 * Enable inspecting the thrown value and reading its stack. Without it,
+	 * objects are reported as `Error` and primitives as `NonError`, without
+	 * frames. With it, the runtime's `Error.isError` may be a polyfill that
+	 * runs getters, and lazy stack formatting may call any installed
+	 * `Error.prepareStackTrace` hook. That code may run getters or modify
+	 * globals. Only the reporter's own reads of `name`, `message` and `code`
+	 * are kept free of getters and proxies; the reporter never modifies globals.
 	 * @default false
 	 */
 	formattedStacks?: boolean;

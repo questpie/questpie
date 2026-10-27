@@ -230,19 +230,21 @@ paths is a pattern match, not a guarantee.
 
 By default, inspecting a thrown value runs none of its code (no getter, proxy
 trap, `toJSON` or `toString` of the error) and no stack-formatting hook, and
-the reporter never modifies globals. That rules out some errors, which are
-then sent as `Error` with no frames:
+the reporter never modifies globals. Values that cannot be verified are
+reported without frames:
 
 - On the server, a value is inspected only after Node's own brand checks
   (`isNativeError`, `isProxy`), which a proxy cannot intercept. A proxy is
-  opaque, and so is a `DOMException` in Bun.
+  reported as `NonError`, and so is a `DOMException` in Bun.
 - In the browser, by default the thrown value is not inspected at all: every
-  thrown object is reported as `Error` with no frames, in every browser. The
-  only browser brand check is `Error.isError`, and a polyfill of it (core-js
+  thrown object is reported as `Error` and each primitive as `NonError`,
+  without frames, in every browser. The only browser brand check is
+  `Error.isError`, and a polyfill of it (core-js
   ships one that reads `Symbol.toStringTag` and reports itself as native code)
   can run getters on the value. With `formattedStacks` (below) the value is
   inspected using the runtime's `Error.isError`, whatever it is; without one,
-  every value stays opaque.
+  every value is reported as `NonError`. Values that fail that check are
+  also reported as `NonError`.
 - Only the error's own properties are read. Its prototype is read only when it
   is a built-in error prototype, so a custom class reports its type only when
   it sets `name` on the instance (`this.name = "ApiError"` or a class field)

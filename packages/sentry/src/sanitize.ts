@@ -17,18 +17,18 @@
  *
  * Messages are never sent.
  *
- * Inspection runs no user code. A value is examined only after a native brand
- * check that cannot be intercepted (`isNativeError` + `isProxy` on the server,
- * `Error.isError` in the browser); a proxy, or any runtime without such a
- * check, gets an opaque `Error` with no frames. Only OWN properties of the
- * value are read, through descriptors. A prototype's descriptors are read only
- * when it is a built-in error prototype, or, on the server, a custom prototype
- * `isProxy` has cleared (to confirm `name`/`message`/`code` are plain data before the runtime
- * formats the stack); a proxy prototype is never touched, and no prototype
- * accessor is called. Accessors are called only when they are the runtime's
- * own native getters, and a lazily formatted stack only with
- * `formattedStacks` (that runs the runtime's stack formatter, including any
- * `Error.prepareStackTrace`, as `error.stack` does, and whatever that runs).
+ * By default, server values are examined only after native brand checks
+ * (`isNativeError` + `isProxy`); unverified values become `NonError`. Browser
+ * values are not examined: objects become `Error`, primitives `NonError`.
+ * Only OWN properties of verified errors are read, through descriptors.
+ * A prototype's descriptors are read only when it is a built-in error
+ * prototype, or, on the server, a custom prototype `isProxy` has cleared (to
+ * confirm `name`/`message`/`code` are plain data before the runtime formats the
+ * stack); a proxy prototype is never touched, and no prototype
+ * accessor is called by those descriptor reads. With `formattedStacks`, the
+ * browser's brand check may be a polyfill that runs getters. Stack access may
+ * run the runtime's formatter, including any `Error.prepareStackTrace` hook
+ * and whatever that calls.
  * The sanitizer itself never modifies globals and never calls
  * `toJSON`/`toString`.
  */
