@@ -212,12 +212,13 @@ describe("Pusher realtime client transport", () => {
 			await waitFor(() => snapshots === 6);
 			expect(allIds().has(reservedId)).toBe(true);
 			expect(allIds().size).toBe(5);
+			const automaticId = bodies.at(-1)!.topology!.subscriptions.at(-1)!.id;
 			const errors: Error[] = [];
 			client.realtime.subscribe(
 				{ resourceType: "global", resource: "conflict" },
 				() => observe(),
 				undefined,
-				reservedId,
+				automaticId,
 				(error) => errors.push(error),
 			);
 			await waitFor(() => errors.length === 1);

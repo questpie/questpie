@@ -574,17 +574,20 @@ describe("client live queries", () => {
 				topic: { resource: string };
 			}>;
 			expect(
-				subscriptions.find((entry) => entry.topic.resource === "reserved").id,
+				subscriptions.find((entry) => entry.topic.resource === "reserved")!.id,
 			).toBe(reservedId);
 			expect(
-				subscriptions.find((entry) => entry.topic.resource === "automatic").id,
+				subscriptions.find((entry) => entry.topic.resource === "automatic")!.id,
 			).not.toBe(reservedId);
+			const automaticId = subscriptions.find(
+				(entry) => entry.topic.resource === "automatic",
+			)!.id;
 			expect(() =>
 				mux.subscribe(
 					{ resourceType: "global", resource: "conflict" },
 					() => {},
 					undefined,
-					reservedId,
+					automaticId,
 				),
 			).toThrow("already registered for a different topic");
 			expect(mux.topicCount).toBe(3);
