@@ -796,4 +796,58 @@ describe("error reporting lifecycle", () => {
 		await built.cleanup();
 		expect(rec.shutdowns()).toBe(1);
 	});
+
+	it("delivers pending reports before a gracefully shut down worker exits", async () => {
+		let delivered = false;
+		const errors = new ErrorReportingService({
+			adapter: {
+				report: () =>
+					new Promise((resolve) =>
+						setTimeout(() => {
+							delivered = true;
+							resolve(undefined);
+						}, 50),
+					),
+			},
+		});
+		const adapter = new MockQueueAdapter();
+		const queue = createQueueClient(
+			{
+				failing: job({
+					name: "explode",
+					schema: z.object({}),
+					handler: async () => {
+						throw new Error("handler blew up");
+					},
+				}),
+			},
+			adapter,
+			{ createContext: async () => ({}) as never, getApp: () => ({ errors }) },
+		);
+		await queue.listen({
+			shutdownSignals: ["SIGUSR2"],
+			shutdownTimeoutMs: 2_000,
+		} as any);
+		const handler = (adapter as any).workers.find(
+			(w: any) => w.handlers.explode,
+		).handlers.explode as (job: Record<string, unknown>) => Promise<void>;
+		await handler({ id: "1", data: {}, finalAttempt: true }).catch(() => {});
+
+		const originalExit = process.exit;
+		let deliveredAtExit: boolean | undefined;
+		const exited = new Promise<void>((resolve) => {
+			process.exit = (() => {
+				deliveredAtExit = delivered;
+				resolve();
+			}) as never;
+		});
+		try {
+			process.emit("SIGUSR2" as never);
+			await exited;
+		} finally {
+			process.exit = originalExit;
+		}
+
+		expect(deliveredAtExit).toBe(true);
+	});
 });

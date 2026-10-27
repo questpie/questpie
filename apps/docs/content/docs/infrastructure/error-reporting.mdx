@@ -27,6 +27,25 @@ A returned 5xx has no original error, so the adapter receives `undefined`
 rather than a made-up one. A secret-payload job only ever hands the reporter its
 redacted, cause-free error.
 
+Jobs are reported the same way from `app.queue.listen()` and
+`app.queue.runOnce()`, once per failed attempt, so a job that is retried twice
+and then fails produces three reports. What `final` and cancellation mean
+depends on the queue adapter:
+
+| Queue adapter     | `final`                              | Cancelled attempts, not reported                  |
+| ----------------- | ------------------------------------ | ------------------------------------------------- |
+| pg-boss           | From the job's retry count and limit | None: there is no abort signal                    |
+| Graphile Worker   | From the dispatch's attempts         | Worker shutdown, and an `expireInSeconds` timeout |
+| BullMQ            | From `attemptsMade` and `attempts`   | None: there is no abort signal                    |
+| Cloudflare Queues | Omitted: the report has no `final`   | None: there is no abort signal                    |
+
+Without an abort signal an attempt runs to its outcome, and a failure is
+reported even when the worker is stopping. With Graphile Worker an attempt that
+exceeds `expireInSeconds` is cancelled, not reported. When `listen()` handles
+`SIGINT` or `SIGTERM` (its default graceful shutdown), pending reports are
+delivered before the process exits, within the queue's `shutdownTimeoutMs`. If
+you stop a worker yourself, call `app.destroy()`, which drains them.
+
 Reporting never changes the outcome. `report()` is synchronous, never throws
 and never awaits delivery. The response, the thrown error, the transaction and
 the job's retry and ack decision are identical with or without an adapter, and

@@ -226,6 +226,17 @@ export function createQueueClient<
 		}
 	};
 
+	const flushErrorReports = async (timeoutMs: number) => {
+		try {
+			const app = runtimeOptions.getApp?.() as
+				| { errors?: ErrorReportingService }
+				| undefined;
+			await app?.errors?.flush(timeoutMs);
+		} catch {
+			// No app resolver: nothing to flush.
+		}
+	};
+
 	const buildHandlers = (selectedJobs?: TJobs): QueueHandlerMap => {
 		const sourceJobs = selectedJobs ?? jobs;
 		const handlers: QueueHandlerMap = {};
@@ -644,7 +655,11 @@ export function createQueueClient<
 					`[QUESTPIE Queue] Received ${signal}. Starting graceful shutdown...`,
 				);
 
-				const shutdownPromise = stopInternal();
+				// The process exits right after, so deliver pending error reports
+				// first; the race below still bounds the whole shutdown.
+				const shutdownPromise = stopInternal().then(() =>
+					flushErrorReports(timeoutMs),
+				);
 				const timeoutPromise =
 					timeoutMs > 0
 						? new Promise<"timeout">((resolve) => {
