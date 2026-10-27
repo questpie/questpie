@@ -245,10 +245,13 @@ Inspecting a thrown value runs none of its code: no getter, proxy trap,
   lookups. The stack is read only when `name` and `message` are plain strings
   on the error itself or on built-in prototypes; on the server, also on custom
   prototypes that are verified not to be proxies.
-- V8 also calls `Error.prepareStackTrace` while formatting. When anything is
-  installed there (an accessor, or a formatter such as `source-map-support`),
-  the stack is not read and errors are sent without frames. Upload source maps
-  with `questpieSentryVite` instead.
+- V8 also calls `Error.prepareStackTrace` while formatting, and Node installs
+  its own default there. The hook is never called: while the stack is read it
+  is shadowed, so the runtime's default formatting is used, then restored.
+  That is only done when the hook is absent or is Node's default. If your app
+  installs its own formatter (`source-map-support`, an accessor), its errors
+  are sent without frames and your formatter keeps formatting them; upload
+  source maps with `questpieSentryVite` instead.
 
 ### Coexisting with OpenTelemetry
 

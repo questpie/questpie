@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isNativeError, isProxy } from "node:util/types";
 
@@ -398,47 +399,129 @@ describe("sanitizeFilename", () => {
 
 describe("on V8 (node)", () => {
 	// Bun stores `stack` as data; V8 formats it lazily through a native getter
-	// that consults Error.prepareStackTrace. Run the sanitizer under node.
+	// that consults Error.prepareStackTrace, which Node 22+ sets to its own
+	// default. Each scenario runs the sanitizer in a fresh node process.
 	const node = Bun.which("node");
 	const v8It = node ? it : it.skip;
 
-	v8It("never runs an Error.prepareStackTrace accessor or formatter", () => {
+	function runScenario(scenario: string) {
 		const source = new Bun.Transpiler({ loader: "ts" }).transformSync(
 			readFileSync(join(import.meta.dir, "../src/sanitize.ts"), "utf8"),
 		);
-		const harness = `${source}
+		const harness = `
 import { isNativeError, isProxy } from "node:util/types";
-const options = { isProxy, isNativeError };
-const out = { v8: typeof Object.getOwnPropertyDescriptor(new Error("p"), "stack")?.get === "function" };
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+const scenario = ${JSON.stringify(scenario)};
 let calls = 0;
-
-const withAccessor = new Error("x");
-Object.defineProperty(Error, "prepareStackTrace", { configurable: true, get() { calls++; return undefined; } });
+const custom = function prepareStackTrace() {
+	calls++;
+	return "Error: forged\\n    at fake (/app/x.js:1:1)";
+};
+if (scenario === "custom-before") Error.prepareStackTrace = custom;
+if (scenario === "accessor-before") {
+	Object.defineProperty(Error, "prepareStackTrace", {
+		configurable: true,
+		get() { calls++; return undefined; },
+	});
+}
+${source}
+if (scenario === "custom-after") Error.prepareStackTrace = custom;
+if (scenario === "inherited") {
+	delete Error.prepareStackTrace;
+	Object.defineProperty(Function.prototype, "prepareStackTrace", {
+		configurable: true,
+		get() { calls++; return undefined; },
+	});
+}
+const here = fileURLToPath(import.meta.url);
+const options = {
+	isProxy,
+	isNativeError,
+	filenameRoot: dirname(here),
+	registeredFiles: { has: (raw) => raw === import.meta.url || raw === here },
+};
+const before = Object.getOwnPropertyDescriptor(Error, "prepareStackTrace");
+function thrower() { return new RangeError("x"); }
+const error = thrower();
 calls = 0;
-out.accessor = { frames: sanitizeError(withAccessor, options)[0].frames.length, calls };
-delete Error.prepareStackTrace;
-
-const withFormatter = new Error("x");
-Error.prepareStackTrace = () => { calls++; return "Error: x\\n    at fake (/app/x.js:1:1)"; };
+const [result] = sanitizeError(error, options);
+const sanitizeCalls = calls;
+const after = Object.getOwnPropertyDescriptor(Error, "prepareStackTrace");
+const restored = before === undefined
+	? after === undefined
+	: after !== undefined && ["value", "get", "set", "writable", "configurable", "enumerable"].every((k) => before[k] === after[k]);
 calls = 0;
-out.formatter = { frames: sanitizeError(withFormatter, options)[0].frames.length, calls };
-delete Error.prepareStackTrace;
-
-const builtin = sanitizeError(new RangeError("x"), options)[0];
-out.builtin = { type: builtin.type, frames: builtin.frames.length };
-console.log(JSON.stringify(out));
+const appStack = error.stack;
+console.log(JSON.stringify({
+	hook: before === undefined ? "absent" : "value" in before ? typeof before.value : "accessor",
+	sanitizeCalls,
+	frames: result.frames.length,
+	files: result.frames.filter((f) => f.filename).map((f) => f.filename),
+	restored,
+	appCalls: calls,
+	appForged: appStack.includes("forged"),
+}));
 `;
-		const result = spawnSync(node!, ["--input-type=module"], {
-			input: harness,
-			encoding: "utf8",
-			timeout: 20_000,
+		const dir = mkdtempSync(join(tmpdir(), "questpie-sentry-v8-"));
+		const file = join(dir, "harness.mjs");
+		writeFileSync(file, harness);
+		try {
+			const result = spawnSync(node!, [file], {
+				encoding: "utf8",
+				timeout: 20_000,
+			});
+			expect(result.stderr).toBe("");
+			return JSON.parse(result.stdout);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}
+
+	v8It(
+		"keeps default stacks and debug-id locations in an untouched runtime",
+		() => {
+			const out = runScenario("default");
+			expect(out.sanitizeCalls).toBe(0);
+			expect(out.frames).toBeGreaterThan(0);
+			expect(out.files).toContain("app:///harness.mjs");
+			expect(out.restored).toBe(true);
+			expect(out.appForged).toBe(false);
+		},
+	);
+
+	for (const scenario of ["custom-before", "custom-after"]) {
+		v8It(
+			`${scenario}: never calls an app formatter and leaves it in charge`,
+			() => {
+				const out = runScenario(scenario);
+				expect(out.sanitizeCalls).toBe(0);
+				expect(out.frames).toBe(0);
+				expect(out.restored).toBe(true);
+				// The app still formats its own error afterwards.
+				expect(out.appCalls).toBe(1);
+				expect(out.appForged).toBe(true);
+			},
+		);
+	}
+
+	v8It("accessor-before: never calls a prepareStackTrace getter", () => {
+		const out = runScenario("accessor-before");
+		expect(out).toMatchObject({
+			hook: "accessor",
+			sanitizeCalls: 0,
+			frames: 0,
+			restored: true,
 		});
-		expect(result.stderr).toBe("");
-		const out = JSON.parse(result.stdout);
-		expect(out.v8).toBe(true);
-		expect(out.accessor).toEqual({ frames: 0, calls: 0 });
-		expect(out.formatter).toEqual({ frames: 0, calls: 0 });
-		expect(out.builtin.type).toBe("RangeError");
-		expect(out.builtin.frames).toBeGreaterThan(0);
+	});
+
+	v8It("inherited: never calls a Function.prototype getter", () => {
+		const out = runScenario("inherited");
+		expect(out).toMatchObject({
+			hook: "absent",
+			sanitizeCalls: 0,
+			restored: true,
+		});
+		expect(out.frames).toBeGreaterThan(0);
 	});
 });

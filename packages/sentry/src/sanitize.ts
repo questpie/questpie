@@ -26,8 +26,9 @@
  * `isProxy` has cleared (to confirm `name`/`message` are plain data before V8
  * formats the stack); a proxy prototype is never touched, and no prototype
  * accessor is called. Accessors are called only when they are the runtime's
- * own native getters captured at load, and V8's stack getter only while
- * `Error.prepareStackTrace` is unset. `toJSON`/`toString` are never called.
+ * own native getters captured at load; V8's stack getter runs with
+ * `Error.prepareStackTrace` shadowed, so no formatter hook is ever called.
+ * `toJSON`/`toString` are never called.
  */
 
 import type { StackFrame } from "@sentry/core";
@@ -285,28 +286,110 @@ function readStack(target: object, options: SanitizeOptions): unknown {
 	if (
 		!resolvesToPlainData(target, "name", options) ||
 		!resolvesToPlainData(target, "message", options) ||
-		!usesDefaultStackFormatter()
+		!inheritsRealmError(target, options)
 	) {
 		return undefined;
 	}
-	return callNative(getter, target);
+	return withDefaultStackFormatter(options, () => callNative(getter, target));
 }
 
 /** The realm's `Error`, captured at load. */
 const NATIVE_ERROR = Error;
 
 /**
- * V8 looks up and calls `Error.prepareStackTrace` while formatting a stack.
- * Only its absence (or a plain `undefined`) is the runtime's own formatter; an
- * accessor or a custom formatter (e.g. a source-map hook) is app code, so lazy
- * formatting is skipped and the error is sent without frames.
+ * Run `read` with the runtime's own stack formatting, never the app's.
+ *
+ * V8 looks up `Error.prepareStackTrace` (own or inherited, getters included)
+ * and calls it while formatting, and Node installs its own default there
+ * (`ErrorPrepareStackTrace`). The hook is never called: for the duration of
+ * the read it is shadowed by an own `undefined`, which formats exactly like
+ * Node's default (source maps included), and then restored as it was.
+ *
+ * Shadowing is only done when the hook looks like the runtime's: absent,
+ * `undefined`, or (with `isProxy`) a function named `ErrorPrepareStackTrace`.
+ * The name is not trusted for safety — the hook is never called either way —
+ * it only decides whether bypassing the hook could change what the app sees.
+ * Any other formatter (a source-map hook, an accessor) is the app's, so the
+ * stack is not read and that app's errors carry no frames.
  */
-function usesDefaultStackFormatter(): boolean {
-	const descriptor = ownDescriptor(NATIVE_ERROR, "prepareStackTrace");
+function withDefaultStackFormatter(
+	options: SanitizeOptions,
+	read: () => unknown,
+): unknown {
+	const hook = ownDescriptor(NATIVE_ERROR, "prepareStackTrace");
+	if (
+		hook &&
+		!(hook.configurable && looksLikeRuntimeFormatter(hook, options))
+	) {
+		return undefined;
+	}
+	// Node reads the hook through the error realm's global `Error`.
+	const globalError = ownDescriptor(globalThis, "Error");
+	if (!globalError || !("value" in globalError)) return undefined;
+	if (globalError.value !== NATIVE_ERROR) return undefined;
+	try {
+		Object.defineProperty(NATIVE_ERROR, "prepareStackTrace", {
+			value: undefined,
+			writable: true,
+			configurable: true,
+		});
+	} catch {
+		return undefined;
+	}
+	try {
+		return read();
+	} finally {
+		try {
+			if (hook) Object.defineProperty(NATIVE_ERROR, "prepareStackTrace", hook);
+			else
+				delete (NATIVE_ERROR as { prepareStackTrace?: unknown })
+					.prepareStackTrace;
+		} catch {
+			// Restoring a property we just defined cannot fail on a native Error.
+		}
+	}
+}
+
+function looksLikeRuntimeFormatter(
+	hook: PropertyDescriptor,
+	options: SanitizeOptions,
+): boolean {
+	if (!("value" in hook)) return false;
+	if (hook.value === undefined) return true;
+	if (typeof hook.value !== "function" || !options.isProxy) return false;
+	if (options.isProxy(hook.value)) return false;
+	const name = ownDescriptor(hook.value, "name");
 	return (
-		descriptor === undefined ||
-		("value" in descriptor && descriptor.value === undefined)
+		name !== undefined &&
+		"value" in name &&
+		name.value === "ErrorPrepareStackTrace"
 	);
+}
+
+/**
+ * True when the shadowing above reaches the hook that will format `target`.
+ *
+ * Without an embedder callback (browsers) V8 reads the hook from the CURRENT
+ * realm's `Error` — ours. Node's callback reads it from the error's own realm,
+ * so on the server (where `isProxy` makes the walk safe) the error must
+ * inherit from this realm's `Error.prototype`; a `vm`-context error does not.
+ */
+function inheritsRealmError(target: object, options: SanitizeOptions): boolean {
+	if (!options.isProxy) return true;
+	try {
+		let current = Object.getPrototypeOf(target) as object | null;
+		for (let depth = 0; current && depth < MAX_PROTOTYPE_DEPTH; depth++) {
+			if (current === NATIVE_ERROR.prototype) return true;
+			const trusted =
+				BUILTIN_PROTOTYPES.has(current) ||
+				(options.isProxy !== undefined && !options.isProxy(current));
+			if (!trusted) return false;
+			current = Object.getPrototypeOf(current) as object | null;
+		}
+	} catch {
+		// Fall through: not provably this realm's.
+	}
+	return false;
 }
 
 /**
