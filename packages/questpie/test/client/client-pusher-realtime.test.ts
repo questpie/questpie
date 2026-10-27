@@ -107,6 +107,14 @@ describe("Pusher realtime client transport", () => {
 	});
 
 	test("uses compact exact topic IDs through provider topology changes", async () => {
+		const uuidDescriptor = Object.getOwnPropertyDescriptor(
+			globalThis.crypto,
+			"randomUUID",
+		);
+		Object.defineProperty(globalThis.crypto, "randomUUID", {
+			configurable: true,
+			value: undefined,
+		});
 		const bodies: Array<{
 			topics?: Array<{ id: string }>;
 			topology?: { subscriptions: Array<{ id: string }> };
@@ -186,6 +194,9 @@ describe("Pusher realtime client transport", () => {
 			expect(client.realtime.topicCount).toBe(2);
 		} finally {
 			client.realtime.destroy();
+			if (uuidDescriptor)
+				Object.defineProperty(globalThis.crypto, "randomUUID", uuidDescriptor);
+			else Reflect.deleteProperty(globalThis.crypto, "randomUUID");
 		}
 	});
 

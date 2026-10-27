@@ -474,6 +474,14 @@ describe("client live queries", () => {
 	});
 
 	it("keeps compact IDs stable across reconnect, key reordering and late unsubscribe", async () => {
+		const uuidDescriptor = Object.getOwnPropertyDescriptor(
+			globalThis.crypto,
+			"randomUUID",
+		);
+		Object.defineProperty(globalThis.crypto, "randomUUID", {
+			configurable: true,
+			value: undefined,
+		});
 		const mux = new RealtimeMultiplexer("http://localhost:3000", true, 0, {
 			retryBaseMs: 10,
 			maxRetryMs: 10,
@@ -551,6 +559,9 @@ describe("client live queries", () => {
 			replacement();
 		} finally {
 			mux.destroy();
+			if (uuidDescriptor)
+				Object.defineProperty(globalThis.crypto, "randomUUID", uuidDescriptor);
+			else Reflect.deleteProperty(globalThis.crypto, "randomUUID");
 		}
 	});
 

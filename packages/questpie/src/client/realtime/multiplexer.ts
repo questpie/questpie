@@ -170,19 +170,11 @@ function topicWire(topic: TopicConfig): TopicConfig {
 }
 
 /** Complete local identity; transports allocate separate bounded wire IDs. */
-export function realtimeTopicId(topic: TopicConfig): string {
-	const normalized = stableStringify(topicWire(topic));
-	if (typeof Buffer !== "undefined") {
-		return Buffer.from(normalized, "utf8").toString("base64url");
-	}
-	const bytes = new TextEncoder().encode(normalized);
-	let binary = "";
-	for (const byte of bytes) binary += String.fromCharCode(byte);
-	return btoa(binary)
-		.replace(/\+/g, "-")
-		.replace(/\//g, "_")
-		.replace(/=+$/, "");
+export function realtimeTopicKey(topic: TopicConfig): string {
+	return stableStringify(topicWire(topic));
 }
+
+let nextTopicId = 0n;
 
 // ============================================================================
 // Multiplexer
@@ -248,9 +240,9 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		customId?: string,
 		onError?: ErrorCallback,
 	): () => void {
-		const topicKey = realtimeTopicId(topic);
+		const topicKey = realtimeTopicKey(topic);
 		const topicId =
-			customId ?? this.topicIds.get(topicKey) ?? `query:${crypto.randomUUID()}`;
+			customId ?? this.topicIds.get(topicKey) ?? `query:sse:${++nextTopicId}`;
 		if (!customId) this.topicIds.set(topicKey, topicId);
 
 		if (!this.subscribers.has(topicId)) {

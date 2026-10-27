@@ -1,6 +1,6 @@
 import type { GetAuthHeaders } from "../auth.js";
 import { RealtimeCrdtBindingRejectedError } from "./crdt-error.js";
-import { realtimeTopicId, type TopicConfig } from "./multiplexer.js";
+import { realtimeTopicKey, type TopicConfig } from "./multiplexer.js";
 import {
 	type ManagedPusherSubscription,
 	PusherConnectionManager,
@@ -98,6 +98,8 @@ function topicPayload(topicId: string, topic: TopicConfig) {
 	};
 }
 
+let nextTopicId = 0n;
+
 /** Lazy managed-Pusher driver. Provider frames are private refetch hints only. */
 export class PusherRealtimeTransport implements RealtimeClientTransport {
 	private readonly topics = new Map<string, TopicEntry>();
@@ -145,9 +147,11 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		customId?: string,
 		onError?: RealtimeErrorCallback,
 	): () => void {
-		const topicKey = realtimeTopicId(topic);
+		const topicKey = realtimeTopicKey(topic);
 		const topicId =
-			customId ?? this.topicIds.get(topicKey) ?? `query:${crypto.randomUUID()}`;
+			customId ??
+			this.topicIds.get(topicKey) ??
+			`query:pusher:${++nextTopicId}`;
 		if (!customId) this.topicIds.set(topicKey, topicId);
 		let entry = this.topics.get(topicId);
 		if (!entry) {
