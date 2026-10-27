@@ -11,6 +11,8 @@ import { IDENT_SECRET, SECRET } from "./helpers.js";
 const serialized = (value: unknown) => JSON.stringify(value);
 /** Bun formats a stack when its descriptor is read, so frames need the opt-in. */
 const readStacks = { formattedStacks: true };
+/** The server's trusted brand check; without it the value is not inspected. */
+const trustedBrand = { isProxy, isNativeError };
 
 describe("sanitizeError", () => {
 	const root = process.cwd();
@@ -61,20 +63,18 @@ describe("sanitizeError", () => {
 		class ApiError extends Error {
 			override name = "ApiError";
 		}
-		expect(sanitizeError(new CustomerError("x"))[0]!.type).toBe("Error");
-		expect(sanitizeError(new ApiError("x"))[0]!.type).toBe("Error");
-		expect(
-			sanitizeError(new ApiError("x"), {
-				errorNames: new Set(["ApiError"]),
-			})[0]!.type,
-		).toBe("ApiError");
-		expect(sanitizeError(new RangeError("x"))[0]!.type).toBe("RangeError");
+		const type = (value: unknown, extra = {}) =>
+			sanitizeError(value, { ...trustedBrand, ...extra })[0]!.type;
+		expect(type(new CustomerError("x"))).toBe("Error");
+		expect(type(new ApiError("x"))).toBe("Error");
+		expect(type(new ApiError("x"), { errorNames: new Set(["ApiError"]) })).toBe(
+			"ApiError",
+		);
+		expect(type(new RangeError("x"))).toBe("RangeError");
 		// Browsers and Node brand DOMException as an error; Bun 1.3 does not, so
 		// there it is opaque.
 		const dom = new DOMException("x", "AbortError");
-		expect(sanitizeError(dom)[0]!.type).toBe(
-			(Error as any).isError(dom) ? "AbortError" : "NonError",
-		);
+		expect(type(dom)).toBe(isNativeError(dom) ? "AbortError" : "NonError");
 	});
 
 	it("never sends function names", () => {
@@ -143,7 +143,8 @@ describe("sanitizeError", () => {
 	}
 
 	const serverMode = { isProxy, isNativeError };
-	const browserMode = {}; // the runtime's own Error.isError
+	// Browser inspection only happens on opt-in, with the runtime's Error.isError.
+	const browserMode = { formattedStacks: true };
 
 	for (const [mode, options] of [
 		["server", serverMode],
@@ -218,7 +219,7 @@ describe("sanitizeError", () => {
 		try {
 			const { sanitizeError: withoutBrand } =
 				await import("../src/sanitize.ts?no-error-is-error");
-			expect(withoutBrand(new Error("x"))).toEqual([
+			expect(withoutBrand(new Error("x"), readStacks)).toEqual([
 				{ type: "NonError", frames: [], rawFilenames: new Map() },
 			]);
 		} finally {
@@ -226,24 +227,76 @@ describe("sanitizeError", () => {
 		}
 	});
 
+	it("browser default inspects nothing, even under a core-js-shaped Error.isError", async () => {
+		// core-js implements Error.isError with classof(), which reads
+		// Symbol.toStringTag, marks it `sham`, and makes Function.prototype.toString
+		// report native code for it — nothing public tells it from the real one.
+		const original = (Error as any).isError;
+		const nativeToString = Function.prototype.toString;
+		let calls = 0;
+		const polyfill = function isError(arg: unknown) {
+			return Object.prototype.toString.call(arg) === "[object Error]";
+		};
+		(polyfill as any).sham = true;
+		// oxlint-disable-next-line no-extend-native -- simulates core-js disguising its polyfill as native code
+		Function.prototype.toString = function (this: unknown) {
+			return this === polyfill
+				? "function isError() { [native code] }"
+				: nativeToString.call(this as () => void);
+		};
+		(Error as any).isError = polyfill;
+		try {
+			const { sanitizeError: polyfilled } =
+				await import("../src/sanitize.ts?core-js-error-is-error");
+			const tagged = new Error(SECRET);
+			Object.defineProperty(tagged, Symbol.toStringTag, {
+				get() {
+					calls += 1;
+					return "Error";
+				},
+			});
+			const counter = { calls: 0 };
+			const proxy = new Proxy(new Error(SECRET), countingHandler(counter));
+			for (const value of [tagged, proxy]) {
+				expect(polyfilled(value)).toEqual([
+					{ type: "Error", frames: [], rawFilenames: new Map() },
+				]);
+			}
+			expect(calls).toBe(0);
+			expect(counter.calls).toBe(0);
+			// The opt-in uses the runtime's Error.isError, whatever it is.
+			polyfilled(tagged, readStacks);
+			expect(calls).toBeGreaterThan(0);
+		} finally {
+			(Error as any).isError = original;
+			// oxlint-disable-next-line no-extend-native -- simulates core-js disguising its polyfill as native code
+			Function.prototype.toString = nativeToString;
+		}
+	});
+
 	it("follows a bounded, cycle-safe cause chain", () => {
 		const a = new Error(`a ${SECRET}`);
 		const b = new RangeError(`b ${SECRET}`, { cause: a });
 		(a as any).cause = b;
-		const chain = sanitizeError(new Error("top", { cause: b }));
+		const chain = sanitizeError(new Error("top", { cause: b }), trustedBrand);
 		expect(chain.map((e) => e.type)).toEqual(["Error", "RangeError", "Error"]);
 
 		let deep: Error = new Error("0");
 		for (let i = 1; i < 10; i++) deep = new Error(String(i), { cause: deep });
-		expect(sanitizeError(deep)).toHaveLength(4);
+		expect(sanitizeError(deep, trustedBrand)).toHaveLength(4);
 		expect(serialized(chain)).not.toContain(SECRET);
 	});
 
 	it("reports thrown non-errors by kind only", () => {
 		for (const value of [SECRET, { token: SECRET }, 42, null]) {
-			const result = sanitizeError(value);
-			expect(result[0]!.type).toBe("NonError");
-			expect(serialized(result)).not.toContain(SECRET);
+			const inspected = sanitizeError(value, trustedBrand);
+			const opaque = sanitizeError(value);
+			expect(inspected[0]!.type).toBe("NonError");
+			// Without a trusted brand check an object is not inspected: "Error".
+			expect(opaque[0]!.type).toBe(
+				typeof value === "object" && value !== null ? "Error" : "NonError",
+			);
+			expect(serialized([inspected, opaque])).not.toContain(SECRET);
 		}
 	});
 

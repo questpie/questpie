@@ -46,7 +46,8 @@ provider is initialised.
 By default no code of the thrown error and no stack-formatting hook runs, so
 on Node, Bun and in browsers, where stacks are formatted lazily, errors are
 reported without frames; on Node 20 and Bun the stack property is not even
-inspected.
+inspected, and in the browser the thrown value is not inspected at all (every
+thrown object is reported as `Error`).
 `formattedStacks: true` reads those stacks as `error.stack` does, which runs
 whatever `Error.prepareStackTrace` is installed; see the guide before turning
 it on.

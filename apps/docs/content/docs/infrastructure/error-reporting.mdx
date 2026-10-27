@@ -233,11 +233,16 @@ trap, `toJSON` or `toString` of the error) and no stack-formatting hook, and
 the reporter never modifies globals. That rules out some errors, which are
 then sent as `Error` with no frames:
 
-- A value is inspected only after a native brand check that a proxy cannot
-  intercept: `isNativeError` and `isProxy` on the server, `Error.isError` in
-  the browser. A proxy is opaque. So is every value in a browser without
-  `Error.isError` (it shipped across major browsers in 2025), and a
-  `DOMException` in Bun.
+- On the server, a value is inspected only after Node's own brand checks
+  (`isNativeError`, `isProxy`), which a proxy cannot intercept. A proxy is
+  opaque, and so is a `DOMException` in Bun.
+- In the browser, by default the thrown value is not inspected at all: every
+  thrown object is reported as `Error` with no frames, in every browser. The
+  only browser brand check is `Error.isError`, and a polyfill of it (core-js
+  ships one that reads `Symbol.toStringTag` and reports itself as native code)
+  can run getters on the value. With `formattedStacks` (below) the value is
+  inspected using the runtime's `Error.isError`, whatever it is; without one,
+  every value stays opaque.
 - Only the error's own properties are read. Its prototype is read only when it
   is a built-in error prototype, so a custom class reports its type only when
   it sets `name` on the instance (`this.name = "ApiError"` or a class field)
@@ -258,11 +263,11 @@ Node 20 and Bun even inspecting the `stack` property, without reading it,
 formats the stack.
 
 So by default stacks are not read. On Node 20 and Bun nothing about `stack` is
-touched. On Node 22+ and in browsers with native `Error.isError`, where
-inspecting it formats nothing, a `stack` that is already a plain data property
-is read and anything else is left alone. In practice, on Node, Bun and
-Chromium errors are reported with their type but without frames, and
-therefore without source-mapped locations.
+touched. On Node 22+, where inspecting it formats nothing, a `stack` that is
+already a plain data property is read and anything else is left alone. In
+browsers the value is not inspected at all by default (see above). In
+practice, on Node, Bun and in every browser errors are reported without
+frames, and therefore without source-mapped locations.
 
 To get frames there, opt in explicitly:
 

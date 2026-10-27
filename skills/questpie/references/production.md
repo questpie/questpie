@@ -391,7 +391,9 @@ frames.
 
 **Stacks on Node, Bun and in browsers are formatted lazily** (on Node 20 and
 Bun even inspecting `stack` formats it), so by default those errors are
-reported without frames. Frames there need an explicit opt-in, `formattedStacks: true` on the
+reported without frames; in the browser the thrown value is not inspected at
+all by default (its only brand check, `Error.isError`, may be a polyfill that
+runs getters), so every thrown object is reported as `Error`. Frames there need an explicit opt-in, `formattedStacks: true` on the
 server adapter or browser reporter. It reads the stack as `error.stack` does,
 running whatever `Error.prepareStackTrace` is installed, which may run any
 code; only the reporter's own reads stay getter-free. Do not enable it by

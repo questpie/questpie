@@ -51,6 +51,11 @@ export interface BrowserErrorReporterOptions extends DeliveryOptions {
 	 * may itself call getters or other code; only the reporter's own reads of
 	 * `name`, `message` and `code` are kept free of getters and proxies. The
 	 * reporter itself never modifies globals.
+	 *
+	 * In the browser this option also enables inspecting the thrown value at
+	 * all. Without it every thrown object is reported as `Error` with no
+	 * frames, because the only brand check, `Error.isError`, may be a polyfill
+	 * (core-js's reads `Symbol.toStringTag`) that runs getters on the value.
 	 * @default false
 	 */
 	formattedStacks?: boolean;

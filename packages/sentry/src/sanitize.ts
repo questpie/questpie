@@ -55,7 +55,9 @@ export interface SanitizeOptions {
 	isProxy?: (value: unknown) => boolean;
 	/**
 	 * Native error brand check that runs no traps (server: `isNativeError`).
-	 * Defaults to the runtime's `Error.isError`, captured at load.
+	 * Without it the value is not inspected unless `formattedStacks` is set;
+	 * then the runtime's `Error.isError`, captured at load, is used, and it
+	 * may be a polyfill that runs getters.
 	 */
 	isNativeError?: (value: unknown) => boolean;
 	/**
@@ -183,6 +185,23 @@ export function sanitizeError(
 	error: unknown,
 	options: SanitizeOptions = {},
 ): SanitizedException[] {
+	// Without a trusted brand check (the browser), even `Error.isError` may be a
+	// polyfill that reads `Symbol.toStringTag` (core-js does, and disguises its
+	// source as native code). So by default the value is not inspected at all;
+	// `typeof` runs no code and only separates primitives from objects.
+	if (!options.isNativeError && !options.formattedStacks) {
+		return [
+			{
+				type:
+					error !== null &&
+					(typeof error === "object" || typeof error === "function")
+						? "Error"
+						: "NonError",
+				frames: [],
+				rawFilenames: new Map(),
+			},
+		];
+	}
 	const chain: SanitizedException[] = [];
 	const seen = new Set<unknown>();
 	let current: unknown = error;

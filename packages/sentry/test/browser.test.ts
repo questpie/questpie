@@ -71,6 +71,48 @@ describe("browser error reporter", () => {
 		expect(event).not.toHaveProperty("breadcrumbs");
 	});
 
+	it("by default reports the type only and runs nothing on the value", async () => {
+		const capture = captureTransport();
+		const reporter = createBrowserErrorReporter({
+			dsn: DSN,
+			send: capture.send,
+		});
+		let calls = 0;
+		const tagged = new RangeError(SECRET);
+		Object.defineProperty(tagged, Symbol.toStringTag, {
+			get() {
+				calls += 1;
+				return "Error";
+			},
+		});
+		const proxied = new Proxy(new Error(SECRET), {
+			get(target, key, receiver) {
+				calls += 1;
+				return Reflect.get(target, key, receiver);
+			},
+			getOwnPropertyDescriptor(target, key) {
+				calls += 1;
+				return Reflect.getOwnPropertyDescriptor(target, key);
+			},
+			getPrototypeOf(target) {
+				calls += 1;
+				return Reflect.getPrototypeOf(target);
+			},
+		});
+		reporter.report(tagged);
+		reporter.report(proxied);
+		await reporter.flush();
+
+		expect(calls).toBe(0);
+		for (const envelope of capture.envelopes) {
+			expect(envelope.raw).not.toContain(SECRET);
+			const [value] = envelope.items[0]!.payload.exception.values;
+			expect(value.type).toBe("Error");
+			expect(value).not.toHaveProperty("stacktrace");
+		}
+		expect(capture.envelopes).toHaveLength(2);
+	});
+
 	it("drops a raw URL passed as the route", async () => {
 		const capture = captureTransport();
 		const reporter = createBrowserErrorReporter({
