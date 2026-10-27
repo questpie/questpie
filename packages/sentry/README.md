@@ -31,10 +31,16 @@ export default runtimeConfig({
 | `@questpie/sentry/browser` | `createBrowserErrorReporter`, `installGlobalErrorHandlers`, `createRouterErrorReporter` |
 | `@questpie/sentry/vite`    | `questpieSentryVite`                                                                    |
 
-Events are built from an allowlist: error type, sanitized stack frames and the
-framework's validated report fields. Error messages, requests, sessions,
-payloads, breadcrumbs, tracing, logs and replays are never sent. No Sentry
-client or OpenTelemetry provider is initialised.
+Events are built from an allowlist:
+
+- the error type, if it is a built-in name or listed in `errorNames`;
+- stack frames, keeping a file only when it is one of your build locations,
+  rebased to `app:///`;
+- the framework's validated report fields.
+
+Error messages, function names, requests, sessions, payloads, breadcrumbs,
+tracing, logs and replays are never sent. No Sentry client or OpenTelemetry
+provider is initialised.
 
 Requires Node 20.19+, 22.12+ or 23.2+ (the Sentry 11 SDK floor).
 

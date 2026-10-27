@@ -11,11 +11,18 @@ import { sanitizeError, type SanitizedException } from "./sanitize.js";
 
 export interface SentryServerOptions extends Omit<DeliveryOptions, "tunnel"> {
 	/**
-	 * Absolute path of the deployed app (e.g. `process.cwd()`), rewritten to
-	 * `app:///` in frame filenames so they match uploaded source maps and do
-	 * not disclose the host's directory layout.
+	 * Absolute path of the deployed app. Frames in files under it are sent as
+	 * `app:///<relative path>`; frames anywhere else keep line and column but
+	 * lose their filename.
+	 * @default process.cwd()
 	 */
 	filenameRoot?: string;
+	/**
+	 * Your own error class names that are safe to send as the exception type
+	 * (e.g. `["ApiError"]`). Built-in names (`TypeError`, …) are always sent;
+	 * any other name is reported as `Error`.
+	 */
+	errorNames?: readonly string[];
 }
 
 /**
@@ -34,6 +41,8 @@ export function sentryErrorReporting(
 ): ErrorReportingAdapter {
 	const delivery = createDelivery(options);
 	if (!delivery) return { report() {} };
+	const filenameRoot = options.filenameRoot ?? process.cwd();
+	const errorNames = new Set(options.errorNames);
 	let closed = false;
 
 	return {
@@ -45,7 +54,8 @@ export function sentryErrorReporting(
 					: sanitizeError(error, {
 							isProxy,
 							isNativeError,
-							filenameRoot: options.filenameRoot,
+							filenameRoot,
+							errorNames,
 						});
 			return delivery.send(
 				buildEvent({

@@ -192,22 +192,36 @@ build.
 The Sentry adapter builds the event from an allowlist, and the event below is
 the complete payload:
 
-- `exception`: for the error and up to three causes, a type name and parsed
-  stack frames. The type is kept only when it looks like a class name ending
-  in `Error` or `Exception`; anything else becomes `Error`. Frames carry
-  function name, file, line and column. Query strings, fragments and
-  credentials are cut from file names, and path segments after `/invite/`,
-  UUIDs, e-mail addresses and token-like strings are masked. The value is a
-  description built from `report` (`HTTP 500 POST items/:id (thrown)`), not the
-  error message.
+- `exception`: for the error and up to three causes, a type and stack frames.
+  - The type is a built-in name (`TypeError`, `RangeError`, `AbortError`, …)
+    or one you list in `errorNames`. Every other class is reported as `Error`:
+    a name like `AcmeCustomerError` looks exactly like a safe one, so shape is
+    not trusted.
+  - Frames carry line and column, and a file only when it is one of your build
+    locations. On the server that is a path under `filenameRoot` (default
+    `process.cwd()`), sent as `app:///dist/server.mjs`. In the browser it is a
+    script under `assetPathPrefixes` (default `/assets/`), sent as
+    `app:///assets/index-Ab12.js` without host or query. Inline scripts,
+    third-party scripts and paths elsewhere on disk keep their line and column
+    and lose the file. Inside a kept path, segments after `/invite/`, UUIDs,
+    e-mail addresses and long token-like strings are also masked.
+  - Function names are not sent. Sentry restores them, with the original
+    files, from your uploaded source maps, matched by debug id.
+  - The value is a description built from `report`
+    (`HTTP 500 POST items/:id (thrown)`), not the error message.
 - `tags` and `transaction`: the validated `report` fields.
 - `release`, `environment`, `platform`, `level`, `timestamp`, `event_id`.
 - `contexts.trace`, only when a span was active.
 - `debug_meta`, the debug ids needed for source maps.
 
-Never sent: the error message, `cause` messages, local variables, source
-context lines, the request (URL, headers, cookies, body, IP), the session or
-user, job payloads, SQL, logs, breadcrumbs, spans, sessions and replays.
+Never sent: the error message, `cause` messages, custom error names you have
+not listed, function names, local variables, source context lines, the request
+(URL, headers, cookies, body, IP), the session or user, job payloads, SQL,
+logs, breadcrumbs, spans, sessions and replays.
+
+What is sent is still yours to judge. File paths under your app root and the
+names you list in `errorNames` go out as they are, and the masking inside kept
+paths is a pattern match, not a guarantee.
 
 The sanitizer reads properties through descriptors. A custom getter, `toJSON`
 or `toString` on a thrown value is never called. On the server, a proxy is

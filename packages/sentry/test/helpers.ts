@@ -1,4 +1,6 @@
 export const SECRET = "sk_live_SENTINEL_7a6b5c4d3e2f";
+/** Identifier-shaped sentinel: passes any "looks like a class name" check. */
+export const IDENT_SECRET = "AcmeTenantSentinel";
 export const DSN = "https://publickey@o1.ingest.example.com/42";
 
 export interface CapturedEnvelope {

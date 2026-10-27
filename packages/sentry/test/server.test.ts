@@ -9,6 +9,7 @@ import {
 	ALLOWED_EVENT_KEYS,
 	captureTransport,
 	DSN,
+	IDENT_SECRET,
 	SECRET,
 } from "./helpers.js";
 
@@ -98,6 +99,46 @@ describe("sentryErrorReporting", () => {
 				]).toContain(key);
 			}
 		}
+	});
+
+	it("keeps identifier-shaped app data out of type, functions and files", async () => {
+		const capture = captureTransport();
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			send: capture.send,
+			errorNames: ["ApiError"],
+		});
+		class TenantError extends Error {
+			override name = `${IDENT_SECRET}Error`;
+		}
+		function AcmeTenantSentinelLoader() {
+			return new TenantError("x");
+		}
+		const outside = new Error("outside root");
+		Object.defineProperty(outside, "stack", {
+			value: `Error: outside root\n    at load (/srv/${IDENT_SECRET}/x.js:1:1)\n    at run (https://${IDENT_SECRET}.example/app.js:2:2)`,
+		});
+		class ApiError extends Error {
+			override name = "ApiError";
+		}
+		await adapter.report(AcmeTenantSentinelLoader(), { source: "manual" });
+		await adapter.report(outside, { source: "manual" });
+		await adapter.report(new ApiError("x"), { source: "manual" });
+
+		for (const envelope of capture.envelopes) {
+			expect(envelope.raw).not.toContain(IDENT_SECRET);
+		}
+		const types = capture.envelopes.map(
+			(e) => e.items[0]!.payload.exception.values[0].type,
+		);
+		expect(types).toEqual(["Error", "Error", "ApiError"]);
+		const outsideFrames =
+			capture.envelopes[1]!.items[0]!.payload.exception.values[0].stacktrace
+				.frames;
+		expect(outsideFrames).toEqual([
+			{ lineno: 2, colno: 2 },
+			{ lineno: 1, colno: 1 },
+		]);
 	});
 
 	it("reports a returned 5xx without a stack", async () => {

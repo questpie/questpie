@@ -2,32 +2,56 @@ import { describe, expect, it } from "bun:test";
 import { isNativeError, isProxy } from "node:util/types";
 
 import { sanitizeError, sanitizeFilename } from "../src/sanitize.js";
-import { SECRET } from "./helpers.js";
+import { IDENT_SECRET, SECRET } from "./helpers.js";
 
 const serialized = (value: unknown) => JSON.stringify(value);
 
 describe("sanitizeError", () => {
-	it("never carries the message and keeps parsed frames", () => {
-		const [exception] = sanitizeError(new TypeError(`token ${SECRET}`));
+	const root = process.cwd();
+
+	it("never carries the message and keeps located frames", () => {
+		const [exception] = sanitizeError(new TypeError(`token ${SECRET}`), {
+			filenameRoot: root,
+		});
 		expect(exception!.type).toBe("TypeError");
 		expect(exception!.frames.length).toBeGreaterThan(0);
-		expect(exception!.frames.at(-1)!.function).toBeDefined();
+		expect(exception!.frames.at(-1)!.filename).toBe(
+			"app:///test/sanitize.test.ts",
+		);
 		expect(serialized(exception)).not.toContain(SECRET);
 	});
 
-	it("keeps identifier-shaped type names and normalizes everything else", () => {
-		class ValidationError extends Error {
-			override name = "ValidationError";
+	it("sends only built-in or registered type names", () => {
+		class CustomerError extends Error {
+			override name = `${IDENT_SECRET}Error`;
 		}
-		const dynamic = new Error("x");
-		dynamic.name = SECRET;
-		const spaced = new Error("x");
-		spaced.name = "Error for user@example.com";
-		expect(sanitizeError(new ValidationError("x"))[0]!.type).toBe(
-			"ValidationError",
+		class ApiError extends Error {
+			override name = "ApiError";
+		}
+		expect(sanitizeError(new CustomerError("x"))[0]!.type).toBe("Error");
+		expect(sanitizeError(new ApiError("x"))[0]!.type).toBe("Error");
+		expect(
+			sanitizeError(new ApiError("x"), {
+				errorNames: new Set(["ApiError"]),
+			})[0]!.type,
+		).toBe("ApiError");
+		expect(sanitizeError(new RangeError("x"))[0]!.type).toBe("RangeError");
+		expect(sanitizeError(new DOMException("x", "AbortError"))[0]!.type).toBe(
+			"AbortError",
 		);
-		expect(sanitizeError(dynamic)[0]!.type).toBe("Error");
-		expect(sanitizeError(spaced)[0]!.type).toBe("Error");
+	});
+
+	it("never sends function names", () => {
+		function AcmeTenantSentinelHandler() {
+			return new Error("x");
+		}
+		const result = sanitizeError(AcmeTenantSentinelHandler(), {
+			filenameRoot: root,
+		});
+		expect(serialized(result)).not.toContain(IDENT_SECRET);
+		expect(result[0]!.frames.every((frame) => !("function" in frame))).toBe(
+			true,
+		);
 	});
 
 	it("does not mistake frame-shaped message lines for frames", () => {
@@ -139,69 +163,114 @@ describe("sanitizeError", () => {
 		}
 	});
 
-	it("parses Gecko/WebKit stacks", () => {
+	it("parses Gecko/WebKit stacks and keeps only built asset URLs", () => {
 		const error = new Error("x");
 		Object.defineProperty(error, "stack", {
-			value: `handleClick@https://app.example.com/assets/index-Ab12.js?v=${SECRET}:10:5\n@https://app.example.com/assets/index-Ab12.js:1:1`,
+			value: [
+				`handleClick@https://${IDENT_SECRET.toLowerCase()}.example.com/assets/index-Ab12.js?v=${SECRET}:10:5`,
+				`@https://app.example.com/invite/${SECRET}:3:7`,
+				`@https://private-company.example/short-secret.js:1:1`,
+			].join("\n"),
 		});
 		const [exception] = sanitizeError(error);
 		expect(exception!.frames).toEqual([
+			{ lineno: 1, colno: 1 },
+			{ lineno: 3, colno: 7 },
 			{
-				filename: "https://app.example.com/assets/index-Ab12.js",
-				abs_path: "https://app.example.com/assets/index-Ab12.js",
-				in_app: true,
-				lineno: 1,
-				colno: 1,
-			},
-			{
-				function: "handleClick",
-				filename: "https://app.example.com/assets/index-Ab12.js",
-				abs_path: "https://app.example.com/assets/index-Ab12.js",
+				filename: "app:///assets/index-Ab12.js",
+				abs_path: "app:///assets/index-Ab12.js",
 				in_app: true,
 				lineno: 10,
 				colno: 5,
 			},
 		]);
+		const text = serialized(exception);
+		for (const secret of [
+			SECRET,
+			IDENT_SECRET.toLowerCase(),
+			"short-secret",
+			"private-company",
+			"handleClick",
+		]) {
+			expect(text).not.toContain(secret);
+		}
 	});
 });
 
 describe("sanitizeFilename", () => {
-	it("drops credentials, query and fragment", () => {
+	it("keeps only paths under the app root, rebased", () => {
 		expect(
-			sanitizeFilename(
-				`https://user:${SECRET}@cdn.example.com/a.js?t=${SECRET}#x`,
-			),
-		).toBe("https://cdn.example.com/a.js");
+			sanitizeFilename("/home/deploy/app/dist/server.mjs", {
+				filenameRoot: "/home/deploy/app",
+			}),
+		).toBe("app:///dist/server.mjs");
+		expect(
+			sanitizeFilename("file:///home/deploy/app/dist/server.mjs?x=1", {
+				filenameRoot: "/home/deploy/app/",
+			}),
+		).toBe("app:///dist/server.mjs");
+		expect(
+			sanitizeFilename(`/srv/${IDENT_SECRET}/x.js`, {
+				filenameRoot: "/home/deploy/app",
+			}),
+		).toBeUndefined();
+		expect(
+			sanitizeFilename("/home/deploy/app-other/x.js", {
+				filenameRoot: "/home/deploy/app",
+			}),
+		).toBeUndefined();
+		expect(sanitizeFilename("/home/deploy/app/x.js")).toBeUndefined();
 	});
 
-	it("masks invite tokens, ids, e-mails and token-like segments", () => {
-		expect(
-			sanitizeFilename(`https://app.example.com/invite/${SECRET}/page.js`),
-		).toBe("https://app.example.com/invite/[redacted]/page.js");
+	it("keeps only asset URLs, without host, credentials, query or fragment", () => {
 		expect(
 			sanitizeFilename(
-				"/srv/users/3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e/alice@example.com/x.js",
+				`https://user:${SECRET}@tenant.example.com/assets/a.js?t=${SECRET}#x`,
 			),
-		).toBe("/srv/users/[redacted]/[redacted]/x.js");
-		expect(sanitizeFilename(`/srv/${SECRET}/x.js`)).toBe(
-			"/srv/[redacted]/x.js",
+		).toBe("app:///assets/a.js");
+		expect(
+			sanitizeFilename("https://cdn.example.com/static/js/a.js", {
+				assetPathPrefixes: ["/static/"],
+			}),
+		).toBe("app:///static/js/a.js");
+		expect(
+			sanitizeFilename("https://private-company.example/short-secret.js"),
+		).toBeUndefined();
+		expect(
+			sanitizeFilename(`https://app.example.com/invite/${SECRET}`),
+		).toBeUndefined();
+		expect(sanitizeFilename("webpack://app/./src/x.ts")).toBeUndefined();
+	});
+
+	it("masks id-like segments inside kept paths as a second layer", () => {
+		expect(
+			sanitizeFilename(
+				"/app/uploads/3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e/alice@example.com/x.js",
+				{ filenameRoot: "/app" },
+			),
+		).toBe("app:///uploads/[redacted]/[redacted]/x.js");
+		expect(
+			sanitizeFilename(`/app/${SECRET}/x.js`, { filenameRoot: "/app" }),
+		).toBe("app:///[redacted]/x.js");
+	});
+
+	it("keeps node builtins and package paths under the root", () => {
+		expect(sanitizeFilename("node:internal/process/task_queues")).toBe(
+			"node:internal/process/task_queues",
 		);
-	});
-
-	it("keeps package store paths and rewrites the app root", () => {
 		expect(
 			sanitizeFilename(
 				"/app/node_modules/.bun/zod@4.6.2/node_modules/zod/index.js",
+				{ filenameRoot: "/app" },
 			),
-		).toBe("/app/node_modules/.bun/zod@4.6.2/node_modules/zod/index.js");
-		expect(
-			sanitizeFilename("/home/deploy/app/dist/server.mjs", "/home/deploy/app"),
-		).toBe("app:///dist/server.mjs");
+		).toBe("app:///node_modules/.bun/zod@4.6.2/node_modules/zod/index.js");
 	});
 
 	it("refuses filenames outside the safe character set", () => {
 		expect(
-			sanitizeFilename("eval at fn (/srv/x.js:1:1), <anonymous>"),
+			sanitizeFilename("/app/eval at fn (x.js:1:1), <anonymous>", {
+				filenameRoot: "/app",
+			}),
 		).toBeUndefined();
 	});
 });

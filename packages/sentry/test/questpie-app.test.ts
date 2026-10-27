@@ -9,7 +9,7 @@ import { z } from "zod";
 import { buildMockApp } from "../../questpie/test/utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../../questpie/test/utils/test-db";
 import { sentryErrorReporting } from "../src/server.js";
-import { captureTransport, DSN, SECRET } from "./helpers.js";
+import { captureTransport, DSN, IDENT_SECRET, SECRET } from "./helpers.js";
 
 /**
  * End to end: a real app, the framework's own HTTP and queue boundaries, and
@@ -55,7 +55,10 @@ describe("QUESTPIE + @questpie/sentry", () => {
 			.raw()
 			.handler(async ({ request }) => {
 				const body = await request.text();
-				throw new Error(`failed for ${body}`, {
+				class TenantError extends Error {
+					override name = `${IDENT_SECRET}Error`;
+				}
+				throw new TenantError(`failed for ${body}`, {
 					cause: new Error(`db said ${SECRET}`),
 				});
 			}),
@@ -90,6 +93,7 @@ describe("QUESTPIE + @questpie/sentry", () => {
 		expect(capture.envelopes).toHaveLength(1);
 		const [envelope] = capture.envelopes;
 		expect(envelope!.raw).not.toContain(SECRET);
+		expect(envelope!.raw).not.toContain(IDENT_SECRET);
 		expect(envelope!.raw).not.toContain("req-1");
 		expect(envelope!.raw).not.toContain("localhost");
 		const event = envelope!.items[0]!.payload;
