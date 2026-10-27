@@ -15,6 +15,7 @@ We use **bun 1.3.13** (pinned in `packageManager`) and **turbo**. Node 18+ works
 consuming the published core package, but developing the repo needs bun. Optional
 SMTP support requires Nodemailer 10.0.9+ and Node 20+ when running on Node;
 Nodemailer 9.x is no longer a supported peer.
+The admin package and generated projects require Node 20.18.1+ for shadcn.
 
 **`questpie` will not be on your PATH, and that is expected.** Its `bin` points at
 `dist/cli.mjs`, which is built rather than committed, and `bun install` skips the
