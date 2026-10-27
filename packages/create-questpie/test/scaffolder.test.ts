@@ -29,6 +29,45 @@ afterEach(async () => {
 });
 
 describe("scaffold", () => {
+	test("preserves security pins for every supported package manager in generated projects", async () => {
+		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
+		process.chdir(tempDir);
+		for (const templateId of [
+			"next",
+			"tanstack-start",
+			"hono",
+			"elysia",
+		] as const) {
+			await scaffold({
+				projectName: `${templateId}-security`,
+				templateId,
+				databaseName: "security",
+				modules: defaultModuleIds(templateId),
+				installDeps: false,
+				initGit: false,
+				installSkills: false,
+				runCodegen: false,
+			});
+			const manifest = JSON.parse(
+				await readFile(
+					join(tempDir, `${templateId}-security`, "package.json"),
+					"utf8",
+				),
+			);
+			const pins = {
+				"@azure/identity": "4.13.0",
+				"body-parser": "2.4.0",
+				undici: "7.30.1",
+			};
+			expect(manifest.overrides).toEqual(pins);
+			expect(manifest.pnpm.overrides).toEqual(pins);
+			expect(manifest.resolutions).toEqual(pins);
+			expect(manifest.dependencies.zod).toBe("^4.6.6");
+			expect(manifest.dependencies["@t3-oss/env-core"]).toBe("^0.13.11");
+			expect(manifest.engines.node).toBe(">=20.18.1");
+		}
+	});
+
 	test("creates a runnable project shell with env and scripts (skills not vendored)", async () => {
 		tempDir = await mkdtemp(join(tmpdir(), "create-questpie-"));
 		process.chdir(tempDir);
