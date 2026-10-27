@@ -27,6 +27,18 @@ export interface SentryServerOptions extends Omit<DeliveryOptions, "tunnel"> {
 	 */
 	trustedFiles?: readonly string[];
 	/**
+	 * Read stacks the runtime formats on first access (V8 in Node and
+	 * browsers, Gecko). Off by default: such a stack is produced by the
+	 * runtime's stack formatter, which runs whatever `Error.prepareStackTrace`
+	 * the error's realm has installed (Node's default, a source-map hook, or an
+	 * app's own) exactly as reading `error.stack` does. Without it, frames are
+	 * sent only for stacks that are already plain data (Bun, an assigned
+	 * string). Either way the error's own getters and proxies never run and
+	 * nothing global is modified.
+	 * @default false
+	 */
+	formattedStacks?: boolean;
+	/**
 	 * Your own error class names that are safe to send as the exception type
 	 * (e.g. `["ApiError"]`). Built-in names (`TypeError`, …) are always sent;
 	 * any other name is reported as `Error`.
@@ -68,6 +80,7 @@ export function sentryErrorReporting(
 							filenameRoot,
 							errorNames,
 							trustedFiles,
+							formattedStacks: options.formattedStacks === true,
 							registeredFiles: registeredFiles(),
 						});
 			return delivery.send(

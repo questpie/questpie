@@ -106,6 +106,8 @@ export default runtimeConfig({
 			release: process.env.RELEASE,
 			environment: process.env.NODE_ENV,
 			filenameRoot: process.cwd(),
+			// Node formats stacks lazily; read them. See "Reading stacks" below.
+			formattedStacks: true,
 		}),
 	},
 });
@@ -128,6 +130,7 @@ export const errorReporter = createBrowserErrorReporter({
 	dsn: import.meta.env.VITE_SENTRY_DSN,
 	release: import.meta.env.VITE_RELEASE,
 	environment: import.meta.env.MODE,
+	formattedStacks: true, // see "Reading stacks" below
 });
 
 if (typeof window !== "undefined") {
@@ -229,8 +232,8 @@ names you list in `errorNames` go out as they are, and the masking inside kept
 paths is a pattern match, not a guarantee.
 
 Inspecting a thrown value runs none of its code: no getter, proxy trap,
-`toJSON` or `toString`. That rules out some errors, which are then sent as
-`Error` with no frames:
+`toJSON` or `toString` of the error, and nothing global is modified. That rules
+out some errors, which are then sent as `Error` with no frames:
 
 - A value is inspected only after a native brand check that a proxy cannot
   intercept: `isNativeError` and `isProxy` on the server, `Error.isError` in
@@ -241,17 +244,28 @@ Inspecting a thrown value runs none of its code: no getter, proxy trap,
   is a built-in error prototype, so a custom class reports its type only when
   it sets `name` on the instance (`this.name = "ApiError"` or a class field)
   and you list it in `errorNames`.
-- In V8, reading `stack` formats `"Name: message"` through ordinary property
-  lookups. The stack is read only when `name` and `message` are plain strings
-  on the error itself or on built-in prototypes; on the server, also on custom
+- A formatted stack builds its header from `name`, `message` and, for Node's
+  own errors, `code`. The stack is read only when those are plain data on the
+  error itself or on built-in prototypes; on the server, also on custom
   prototypes that are verified not to be proxies.
-- V8 also calls `Error.prepareStackTrace` while formatting, and Node installs
-  its own default there. The hook is never called: while the stack is read it
-  is shadowed, so the runtime's default formatting is used, then restored.
-  That is only done when the hook is absent or is Node's default. If your app
-  installs its own formatter (`source-map-support`, an accessor), its errors
-  are sent without frames and your formatter keeps formatting them; upload
-  source maps with `questpieSentryVite` instead.
+
+### Reading stacks
+
+Bun keeps an error's stack as a plain string, and so does an error whose
+`stack` your code assigned; those are always read. Node and browsers produce
+the stack the first time it is read, by running the runtime's stack
+formatter: in V8 that is whatever `Error.prepareStackTrace` the error's realm
+has installed (Node's own default, a source-map hook such as
+`source-map-support`, or one of yours), and which realm an error came from
+cannot be determined reliably. So by default such stacks are not read, and on
+Node and in browsers errors are sent without frames.
+
+`formattedStacks: true` reads them, exactly as `error.stack` does in your own
+logging: the formatter runs, and nothing about it is changed or bypassed.
+Everything else still holds: the error's own getters and proxies never run,
+nothing global is modified, and file locations follow the rules above. Turn it
+on unless something in your process installs an `Error.prepareStackTrace` you
+do not want run while reporting.
 
 ### Coexisting with OpenTelemetry
 

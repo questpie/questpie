@@ -30,6 +30,18 @@ export interface BrowserErrorReporterOptions extends DeliveryOptions {
 	 * flooding the project. @default 30
 	 */
 	maxReportsPerMinute?: number;
+	/**
+	 * Read stacks the runtime formats on first access (V8 in Node and
+	 * browsers, Gecko). Off by default: such a stack is produced by the
+	 * runtime's stack formatter, which runs whatever `Error.prepareStackTrace`
+	 * the error's realm has installed (Node's default, a source-map hook, or an
+	 * app's own) exactly as reading `error.stack` does. Without it, frames are
+	 * sent only for stacks that are already plain data (Bun, an assigned
+	 * string). Either way the error's own getters and proxies never run and
+	 * nothing global is modified.
+	 * @default false
+	 */
+	formattedStacks?: boolean;
 }
 
 export interface BrowserErrorReporter {
@@ -69,6 +81,7 @@ export function createBrowserErrorReporter(
 	const release = options.release ?? injectedRelease();
 	const sanitizeOptions = {
 		errorNames: new Set(options.errorNames),
+		formattedStacks: options.formattedStacks === true,
 	};
 	let windowStart = Date.now();
 	let sentInWindow = 0;

@@ -7422,6 +7422,7 @@ export default runtimeConfig({
 			release: process.env.RELEASE,
 			environment: process.env.NODE_ENV,
 			filenameRoot: process.cwd(), // rewrites sent paths; must not be "/"
+			formattedStacks: true, // read Node's lazily formatted stacks (runs Error.prepareStackTrace)
 			errorNames: ["ApiError"], // custom names safe to send; others become Error
 		}),
 	},
@@ -7444,7 +7445,12 @@ safe.
 **Browser and build** (`@questpie/sentry/browser`, `@questpie/sentry/vite`):
 
 ```ts
-const reporter = createBrowserErrorReporter({ dsn, release, environment });
+const reporter = createBrowserErrorReporter({
+	dsn,
+	release,
+	environment,
+	formattedStacks: true,
+});
 installGlobalErrorHandlers(reporter, window);
 createRouter({
 	routeTree,
@@ -7462,9 +7468,12 @@ plugins: [questpieSentryVite({ org, project, release })];
 frames with line/column and a file only for a build artifact registered by
 debug id or listed in `trustedFiles` (rewritten to `app:///`), and the
 validated `info`. Never the message,
-function names, request, session, payload or breadcrumbs. Inspection runs no
-user code (getters, proxy traps, `toJSON`); proxies and errors the native brand
-check cannot vouch for are sent as `Error` with no frames. No Sentry client or
+function names, request, session, payload or breadcrumbs. Inspection runs none
+of the error's code (getters, proxy traps, `toJSON`) and modifies nothing
+global; proxies and errors the native brand check cannot vouch for are sent as
+`Error` with no frames. Node and browsers format stacks lazily through
+`Error.prepareStackTrace`; those are read only with `formattedStacks: true`,
+which runs that formatter as `error.stack` does. No Sentry client or
 OpenTelemetry provider is initialised, so it coexists with
 `@questpie/observability`.
 

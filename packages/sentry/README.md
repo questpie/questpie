@@ -20,6 +20,7 @@ export default runtimeConfig({
 			release: process.env.RELEASE,
 			environment: process.env.NODE_ENV,
 			filenameRoot: process.cwd(),
+			formattedStacks: true, // read Node's lazily formatted stacks
 		}),
 	},
 });

@@ -23,12 +23,13 @@
  * check, gets an opaque `Error` with no frames. Only OWN properties of the
  * value are read, through descriptors. A prototype's descriptors are read only
  * when it is a built-in error prototype, or, on the server, a custom prototype
- * `isProxy` has cleared (to confirm `name`/`message` are plain data before V8
+ * `isProxy` has cleared (to confirm `name`/`message`/`code` are plain data before the runtime
  * formats the stack); a proxy prototype is never touched, and no prototype
  * accessor is called. Accessors are called only when they are the runtime's
- * own native getters captured at load; V8's stack getter runs with
- * `Error.prepareStackTrace` shadowed, so no formatter hook is ever called.
- * `toJSON`/`toString` are never called.
+ * own native getters captured at load, and a lazily formatted stack only with
+ * `formattedStacks` (that runs the runtime's stack formatter, including any
+ * `Error.prepareStackTrace`, as `error.stack` does). Nothing global is ever
+ * modified. `toJSON`/`toString` are never called.
  */
 
 import type { StackFrame } from "@sentry/core";
@@ -69,6 +70,13 @@ export interface SanitizeOptions {
 	registeredFiles?: { has(raw: string): boolean };
 	/** Exact rewritten names (`app:///dist/worker.mjs`) the app vouches for. */
 	trustedFiles?: ReadonlySet<string>;
+	/**
+	 * Read stacks the runtime formats lazily (V8, Gecko). Reading one runs the
+	 * runtime's stack formatter, as `error.stack` does: Node's default, or any
+	 * `Error.prepareStackTrace` installed in the error's realm. Without it only
+	 * a stack that is already plain data (Bun, an assigned string) is read.
+	 */
+	formattedStacks?: boolean;
 	/** Error class names the app vouches for, sent as the type as-is. */
 	errorNames?: ReadonlySet<string>;
 }
@@ -174,8 +182,13 @@ function sanitizeOne(
 		return { type: "NonError", frames: [], rawFilenames: new Map() };
 	}
 	const name = readName(error as object);
-	const message = ownValue(error as object, "message");
 	const stack = readStack(error as object, options);
+	// The header to cut off is built from what the formatter itself read:
+	// the name may live on a custom prototype (Node's own error classes).
+	const header = (key: string, allowNumber = false) => {
+		const resolved = plainData(error as object, key, options, allowNumber);
+		return resolved.value === undefined ? undefined : String(resolved.value);
+	};
 	const type =
 		typeof name === "string" &&
 		(BUILTIN_ERROR_NAMES.has(name) || options.errorNames?.has(name))
@@ -187,8 +200,9 @@ function sanitizeOne(
 	if (typeof stack === "string") {
 		for (const raw of parseFrames(
 			stack,
-			typeof name === "string" ? name : "",
-			typeof message === "string" ? message : "",
+			header("name") ?? "",
+			header("message") ?? "",
+			header("code", true),
 		)) {
 			const frame = sanitizeFrame(raw, options);
 			if (frame.filename && raw.filename) {
@@ -271,6 +285,10 @@ function readName(target: object): unknown {
 function readStack(target: object, options: SanitizeOptions): unknown {
 	const own = ownDescriptor(target, "stack");
 	if (own && "value" in own) return own.value;
+	// A lazily formatted stack runs the runtime's formatter, including any
+	// `Error.prepareStackTrace` of the realm the error came from, which cannot
+	// be identified. Read only with the explicit opt-in.
+	if (!options.formattedStacks) return undefined;
 	const getter = own
 		? own.get === NATIVE_OWN_STACK_GETTER
 			? own.get
@@ -279,122 +297,23 @@ function readStack(target: object, options: SanitizeOptions): unknown {
 			// native getter on the error rather than walking its prototype chain.
 			NATIVE_PROTO_STACK_GETTER;
 	if (!getter) return undefined;
-	// A native getter is not inert: V8 formats the "Name: message" header on
-	// first access with ordinary property gets, which walk the prototype chain
-	// and can reach a proxy trap or a user getter. Call it only when both
-	// resolve to plain data without touching anything untrusted.
+	// The formatter also builds the header with ordinary property gets on the
+	// error, which walk its prototype chain: V8 reads `name` and `message`,
+	// Node's default formatter also `code` ("Name [CODE]: message"). Those must
+	// resolve to plain data so no getter or proxy trap of the ERROR runs.
 	if (
 		!resolvesToPlainData(target, "name", options) ||
 		!resolvesToPlainData(target, "message", options) ||
-		!inheritsRealmError(target, options)
+		!resolvesToPlainData(target, "code", options, true)
 	) {
 		return undefined;
 	}
-	return withDefaultStackFormatter(options, () => callNative(getter, target));
-}
-
-/** The realm's `Error`, captured at load. */
-const NATIVE_ERROR = Error;
-
-/**
- * Run `read` with the runtime's own stack formatting, never the app's.
- *
- * V8 looks up `Error.prepareStackTrace` (own or inherited, getters included)
- * and calls it while formatting, and Node installs its own default there
- * (`ErrorPrepareStackTrace`). The hook is never called: for the duration of
- * the read it is shadowed by an own `undefined`, which formats exactly like
- * Node's default (source maps included), and then restored as it was.
- *
- * Shadowing is only done when the hook looks like the runtime's: absent,
- * `undefined`, or (with `isProxy`) a function named `ErrorPrepareStackTrace`.
- * The name is not trusted for safety — the hook is never called either way —
- * it only decides whether bypassing the hook could change what the app sees.
- * Any other formatter (a source-map hook, an accessor) is the app's, so the
- * stack is not read and that app's errors carry no frames.
- */
-function withDefaultStackFormatter(
-	options: SanitizeOptions,
-	read: () => unknown,
-): unknown {
-	const hook = ownDescriptor(NATIVE_ERROR, "prepareStackTrace");
-	if (
-		hook &&
-		!(hook.configurable && looksLikeRuntimeFormatter(hook, options))
-	) {
-		return undefined;
-	}
-	// Node reads the hook through the error realm's global `Error`.
-	const globalError = ownDescriptor(globalThis, "Error");
-	if (!globalError || !("value" in globalError)) return undefined;
-	if (globalError.value !== NATIVE_ERROR) return undefined;
-	try {
-		Object.defineProperty(NATIVE_ERROR, "prepareStackTrace", {
-			value: undefined,
-			writable: true,
-			configurable: true,
-		});
-	} catch {
-		return undefined;
-	}
-	try {
-		return read();
-	} finally {
-		try {
-			if (hook) Object.defineProperty(NATIVE_ERROR, "prepareStackTrace", hook);
-			else
-				delete (NATIVE_ERROR as { prepareStackTrace?: unknown })
-					.prepareStackTrace;
-		} catch {
-			// Restoring a property we just defined cannot fail on a native Error.
-		}
-	}
-}
-
-function looksLikeRuntimeFormatter(
-	hook: PropertyDescriptor,
-	options: SanitizeOptions,
-): boolean {
-	if (!("value" in hook)) return false;
-	if (hook.value === undefined) return true;
-	if (typeof hook.value !== "function" || !options.isProxy) return false;
-	if (options.isProxy(hook.value)) return false;
-	const name = ownDescriptor(hook.value, "name");
-	return (
-		name !== undefined &&
-		"value" in name &&
-		name.value === "ErrorPrepareStackTrace"
-	);
+	return callNative(getter, target);
 }
 
 /**
- * True when the shadowing above reaches the hook that will format `target`.
- *
- * Without an embedder callback (browsers) V8 reads the hook from the CURRENT
- * realm's `Error` — ours. Node's callback reads it from the error's own realm,
- * so on the server (where `isProxy` makes the walk safe) the error must
- * inherit from this realm's `Error.prototype`; a `vm`-context error does not.
- */
-function inheritsRealmError(target: object, options: SanitizeOptions): boolean {
-	if (!options.isProxy) return true;
-	try {
-		let current = Object.getPrototypeOf(target) as object | null;
-		for (let depth = 0; current && depth < MAX_PROTOTYPE_DEPTH; depth++) {
-			if (current === NATIVE_ERROR.prototype) return true;
-			const trusted =
-				BUILTIN_PROTOTYPES.has(current) ||
-				(options.isProxy !== undefined && !options.isProxy(current));
-			if (!trusted) return false;
-			current = Object.getPrototypeOf(current) as object | null;
-		}
-	} catch {
-		// Fall through: not provably this realm's.
-	}
-	return false;
-}
-
-/**
- * True when `target[key]` resolves to a string (or nothing) through data
- * properties only. With `isProxy` (server) the whole chain is checked link by
+ * True when `target[key]` resolves to a string (or nothing; a number too with
+ * `allowNumber`) through data properties only. With `isProxy` (server) the whole chain is checked link by
  * link; without it (browser) only the error itself and a built-in prototype
  * are trusted, since a custom prototype cannot be told apart from a proxy.
  */
@@ -402,26 +321,46 @@ function resolvesToPlainData(
 	target: object,
 	key: string,
 	options: SanitizeOptions,
+	allowNumber = false,
 ): boolean {
-	const isPlain = (descriptor: PropertyDescriptor) =>
-		"value" in descriptor &&
-		(typeof descriptor.value === "string" || descriptor.value === undefined);
+	return plainData(target, key, options, allowNumber).plain;
+}
+
+/** `resolvesToPlainData`, also returning the value it resolved to. */
+function plainData(
+	target: object,
+	key: string,
+	options: SanitizeOptions,
+	allowNumber = false,
+): { plain: boolean; value?: string | number } {
+	const fromDescriptor = (descriptor: PropertyDescriptor) => {
+		if (!("value" in descriptor)) return { plain: false };
+		const value: unknown = descriptor.value;
+		if (value === undefined) return { plain: true };
+		if (
+			typeof value === "string" ||
+			(allowNumber && typeof value === "number")
+		) {
+			return { plain: true, value };
+		}
+		return { plain: false };
+	};
 	const own = ownDescriptor(target, key);
-	if (own) return isPlain(own);
+	if (own) return fromDescriptor(own);
 	try {
 		let current = Object.getPrototypeOf(target) as object | null;
 		for (let depth = 0; current; depth++) {
 			const trusted =
 				BUILTIN_PROTOTYPES.has(current) ||
 				(options.isProxy !== undefined && !options.isProxy(current));
-			if (!trusted || depth >= MAX_PROTOTYPE_DEPTH) return false;
+			if (!trusted || depth >= MAX_PROTOTYPE_DEPTH) return { plain: false };
 			const descriptor = Object.getOwnPropertyDescriptor(current, key);
-			if (descriptor) return isPlain(descriptor);
+			if (descriptor) return fromDescriptor(descriptor);
 			current = Object.getPrototypeOf(current) as object | null;
 		}
-		return true;
+		return { plain: true };
 	} catch {
-		return false;
+		return { plain: false };
 	}
 }
 
@@ -444,18 +383,30 @@ export function parseFrames(
 	stack: string,
 	name = "",
 	message = "",
+	code?: string,
 ): RawFrame[] {
 	let body = stack.slice(0, MAX_STACK_LENGTH);
-	const header = name && message ? `${name}: ${message}` : name || message;
+	// Node formats its own errors as "Name [CODE]: message".
+	const headers = [
+		name && message ? `${name}: ${message}` : name || message,
+		code !== undefined && name
+			? message
+				? `${name} [${code}]: ${message}`
+				: `${name} [${code}]`
+			: "",
+	];
 	// The header must end exactly at a line break (or the end): a stack
 	// captured before the message changed would otherwise be cut mid-line and
 	// leave the old message's frame-shaped lines behind as frames.
-	const boundary = body.charAt(header.length);
-	if (
-		header &&
-		body.startsWith(header) &&
-		(boundary === "\n" || boundary === "")
-	) {
+	const header = headers.find((candidate) => {
+		const boundary = body.charAt(candidate.length);
+		return (
+			candidate !== "" &&
+			body.startsWith(candidate) &&
+			(boundary === "\n" || boundary === "")
+		);
+	});
+	if (header !== undefined) {
 		body = body.slice(header.length);
 	} else {
 		const firstLine = body.split("\n", 1)[0] ?? "";

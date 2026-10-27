@@ -399,12 +399,12 @@ describe("sanitizeFilename", () => {
 
 describe("on V8 (node)", () => {
 	// Bun stores `stack` as data; V8 formats it lazily through a native getter
-	// that consults Error.prepareStackTrace, which Node 22+ sets to its own
-	// default. Each scenario runs the sanitizer in a fresh node process.
+	// that runs the realm's Error.prepareStackTrace (Node 22+ installs its own).
+	// Each scenario runs the sanitizer in a fresh node process.
 	const node = Bun.which("node");
 	const v8It = node ? it : it.skip;
 
-	function runScenario(scenario: string) {
+	function runScenario(scenario: string, formattedStacks: boolean) {
 		const source = new Bun.Transpiler({ loader: "ts" }).transformSync(
 			readFileSync(join(import.meta.dir, "../src/sanitize.ts"), "utf8"),
 		);
@@ -412,6 +412,7 @@ describe("on V8 (node)", () => {
 import { isNativeError, isProxy } from "node:util/types";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+import vm from "node:vm";
 const scenario = ${JSON.stringify(scenario)};
 let calls = 0;
 const custom = function prepareStackTrace() {
@@ -440,25 +441,46 @@ const options = {
 	isNativeError,
 	filenameRoot: dirname(here),
 	registeredFiles: { has: (raw) => raw === import.meta.url || raw === here },
+	formattedStacks: ${formattedStacks},
 };
-const before = Object.getOwnPropertyDescriptor(Error, "prepareStackTrace");
 function thrower() { return new RangeError("x"); }
-const error = thrower();
+let error = thrower();
+if (scenario.startsWith("node-error")) {
+	try { Buffer.alloc(-1); } catch (caught) { error = caught; }
+}
+if (scenario === "node-error-code-getter") {
+	const code = error.code;
+	Object.defineProperty(error, "code", {
+		configurable: true,
+		get() { calls++; return code; },
+	});
+}
+if (scenario === "vm-graft") {
+	// A foreign-realm error with its own formatter, grafted onto this realm's
+	// prototype and carrying this realm's native stack accessor.
+	const context = vm.createContext({ count: () => { calls++; } });
+	error = vm.runInContext(
+		"Error.prepareStackTrace = () => { count(); return 'Error: x'; }; new Error('x')",
+		context,
+	);
+	Object.defineProperty(error, "stack", Object.getOwnPropertyDescriptor(new Error("p"), "stack"));
+	Object.setPrototypeOf(error, Error.prototype);
+}
+const before = Object.getOwnPropertyDescriptor(Error, "prepareStackTrace");
 calls = 0;
 const [result] = sanitizeError(error, options);
 const sanitizeCalls = calls;
 const after = Object.getOwnPropertyDescriptor(Error, "prepareStackTrace");
-const restored = before === undefined
+const untouched = before === undefined
 	? after === undefined
 	: after !== undefined && ["value", "get", "set", "writable", "configurable", "enumerable"].every((k) => before[k] === after[k]);
 calls = 0;
-const appStack = error.stack;
+const appStack = String(error.stack);
 console.log(JSON.stringify({
-	hook: before === undefined ? "absent" : "value" in before ? typeof before.value : "accessor",
 	sanitizeCalls,
 	frames: result.frames.length,
 	files: result.frames.filter((f) => f.filename).map((f) => f.filename),
-	restored,
+	untouched,
 	appCalls: calls,
 	appForged: appStack.includes("forged"),
 }));
@@ -478,50 +500,72 @@ console.log(JSON.stringify({
 		}
 	}
 
+	const scenarios = [
+		"default",
+		"node-error",
+		"node-error-code-getter",
+		"custom-before",
+		"custom-after",
+		"accessor-before",
+		"inherited",
+		"vm-graft",
+	];
+
 	v8It(
-		"keeps default stacks and debug-id locations in an untouched runtime",
+		"by default runs nothing and modifies nothing, for every scenario",
 		() => {
-			const out = runScenario("default");
-			expect(out.sanitizeCalls).toBe(0);
-			expect(out.frames).toBeGreaterThan(0);
-			expect(out.files).toContain("app:///harness.mjs");
-			expect(out.restored).toBe(true);
-			expect(out.appForged).toBe(false);
+			for (const scenario of scenarios) {
+				const out = runScenario(scenario, false);
+				expect({ scenario, ...out }).toMatchObject({
+					scenario,
+					sanitizeCalls: 0,
+					frames: 0,
+					untouched: true,
+				});
+			}
+			// The app's own formatter stays in charge of its errors.
+			expect(runScenario("custom-before", false)).toMatchObject({
+				appCalls: 1,
+				appForged: true,
+			});
 		},
 	);
 
-	for (const scenario of ["custom-before", "custom-after"]) {
-		v8It(
-			`${scenario}: never calls an app formatter and leaves it in charge`,
-			() => {
-				const out = runScenario(scenario);
+	v8It(
+		"formattedStacks: default and Node errors keep frames and locations",
+		() => {
+			for (const scenario of ["default", "node-error"]) {
+				const out = runScenario(scenario, true);
 				expect(out.sanitizeCalls).toBe(0);
-				expect(out.frames).toBe(0);
-				expect(out.restored).toBe(true);
-				// The app still formats its own error afterwards.
-				expect(out.appCalls).toBe(1);
-				expect(out.appForged).toBe(true);
-			},
-		);
-	}
+				expect(out.untouched).toBe(true);
+				expect(out.frames).toBeGreaterThan(0);
+				expect(out.files).toContain("app:///harness.mjs");
+			}
+		},
+	);
 
-	v8It("accessor-before: never calls a prepareStackTrace getter", () => {
-		const out = runScenario("accessor-before");
-		expect(out).toMatchObject({
-			hook: "accessor",
+	v8It("formattedStacks: the error's own code getter never runs", () => {
+		expect(runScenario("node-error-code-getter", true)).toMatchObject({
 			sanitizeCalls: 0,
 			frames: 0,
-			restored: true,
+			untouched: true,
 		});
 	});
 
-	v8It("inherited: never calls a Function.prototype getter", () => {
-		const out = runScenario("inherited");
-		expect(out).toMatchObject({
-			hook: "absent",
-			sanitizeCalls: 0,
-			restored: true,
-		});
-		expect(out.frames).toBeGreaterThan(0);
-	});
+	v8It(
+		"formattedStacks: an installed formatter runs, as error.stack would",
+		() => {
+			// The documented contract of the opt-in: the runtime's formatting,
+			// including an app's or a foreign realm's hook, and nothing global
+			// changed by the sanitizer.
+			for (const scenario of ["custom-before", "custom-after", "vm-graft"]) {
+				const out = runScenario(scenario, true);
+				expect({
+					scenario,
+					calls: out.sanitizeCalls,
+					untouched: out.untouched,
+				}).toEqual({ scenario, calls: 1, untouched: true });
+			}
+		},
+	);
 });
