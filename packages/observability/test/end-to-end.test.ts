@@ -15,6 +15,7 @@ import { ConsoleAdapter } from "questpie/adapters/console";
 import { MemoryKVAdapter } from "questpie/adapters/memory-kv";
 import { createApp, module } from "questpie/app";
 import { collection } from "questpie/builders";
+import type { ErrorReport, ErrorReportingAdapter } from "questpie/errors";
 import { createFetchHandler } from "questpie/http";
 
 import { otelObservability } from "../src/otel-adapter.js";
@@ -54,7 +55,10 @@ function harness() {
 	return { spans, logs, adapter };
 }
 
-async function buildApp(adapter?: ReturnType<typeof otelObservability>) {
+async function buildApp(
+	adapter?: ReturnType<typeof otelObservability>,
+	errors?: { adapter: ErrorReportingAdapter },
+) {
 	// pg_trgm has to be bundled AND created: the framework no longer creates
 	// extensions itself, and auto-migration fails without it.
 	const client = await PGlite.create({ extensions: { pg_trgm } });
@@ -71,6 +75,7 @@ async function buildApp(adapter?: ReturnType<typeof otelObservability>) {
 			// fails too. The first version of this file did exactly that.
 			autoMigrate: true,
 			...(adapter ? { observability: { adapter } } : {}),
+			...(errors ? { errors } : {}),
 		} as never,
 	)) as never;
 }
@@ -171,6 +176,36 @@ describe("observability end to end", () => {
 		const find = spans.find((s) => s.name === "collection.find");
 		expect(find).toBeDefined();
 		expect(find!.parentSpanContext?.spanId).toBe(root!.spanContext().spanId);
+	});
+
+	it("reports a 500 to error reporting while tracing samples nothing", async () => {
+		const spans = new InMemorySpanExporter();
+		const adapter = otelObservability({
+			serviceName: "e2e",
+			samplingRatio: 0,
+			spanProcessors: [new SimpleSpanProcessor(spans)],
+		});
+		const reports: ErrorReport[] = [];
+		const app = await buildApp(adapter, {
+			adapter: {
+				report(_error, report) {
+					reports.push(report);
+				},
+			},
+		});
+		// No schema sync: the notes table does not exist, so the request 500s.
+		const handle = createFetchHandler(app);
+		spans.reset();
+
+		const response = await handle(new Request("http://localhost:3000/notes"));
+
+		const finished = spans.getFinishedSpans();
+		await adapter.shutdown();
+
+		expect(response.status).toBe(500);
+		expect(requestTrace(finished).root).toBeUndefined();
+		expect(reports).toHaveLength(1);
+		expect(reports[0]).toMatchObject({ source: "http", status: 500 });
 	});
 
 	it("reaches the database, and the query span sits under the CRUD span", async () => {
