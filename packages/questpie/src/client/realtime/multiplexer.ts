@@ -241,9 +241,19 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		onError?: ErrorCallback,
 	): () => void {
 		const topicKey = realtimeTopicKey(topic);
-		const topicId =
-			customId ?? this.topicIds.get(topicKey) ?? `query:sse:${++nextTopicId}`;
-		if (!customId) this.topicIds.set(topicKey, topicId);
+		let topicId = customId ?? this.topicIds.get(topicKey);
+		if (topicId === undefined) {
+			do {
+				topicId = `query:sse:${++nextTopicId}`;
+			} while (this.topics.has(topicId));
+		}
+		const existing = this.topics.get(topicId);
+		if (existing && realtimeTopicKey(existing) !== topicKey) {
+			throw new Error(
+				"Realtime topic ID already registered for a different topic",
+			);
+		}
+		if (customId === undefined) this.topicIds.set(topicKey, topicId);
 
 		if (!this.subscribers.has(topicId)) {
 			this.subscribers.set(topicId, new Set());

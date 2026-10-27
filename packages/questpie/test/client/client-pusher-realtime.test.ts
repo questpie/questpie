@@ -192,6 +192,39 @@ describe("Pusher realtime client transport", () => {
 			duplicate();
 			expect(allIds().size).toBe(3);
 			expect(client.realtime.topicCount).toBe(2);
+			const last = [...allIds()]
+				.map((id) => BigInt(id.split(":").at(-1)!))
+				.reduce((a, b) => (a > b ? a : b));
+			const reservedId = `query:pusher:${last + 1n}`;
+			client.realtime.subscribe(
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: { reserved: true },
+				},
+				() => observe(),
+				undefined,
+				reservedId,
+			);
+			client.collections.posts.live({ where: { automatic: true } }, () =>
+				observe(),
+			);
+			await waitFor(() => snapshots === 6);
+			expect(allIds().has(reservedId)).toBe(true);
+			expect(allIds().size).toBe(5);
+			const errors: Error[] = [];
+			client.realtime.subscribe(
+				{ resourceType: "global", resource: "conflict" },
+				() => observe(),
+				undefined,
+				reservedId,
+				(error) => errors.push(error),
+			);
+			await waitFor(() => errors.length === 1);
+			expect(errors[0].message).toContain(
+				"already registered for a different topic",
+			);
+			expect(client.realtime.topicCount).toBe(4);
 		} finally {
 			client.realtime.destroy();
 			if (uuidDescriptor)

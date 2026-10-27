@@ -557,6 +557,37 @@ describe("client live queries", () => {
 			]);
 			expect(mux.topicCount).toBe(2);
 			replacement();
+			const reservedId = `query:sse:${BigInt(newId.split(":").at(-1)!) + 1n}`;
+			mux.subscribe(
+				{ resourceType: "collection", resource: "reserved" },
+				() => {},
+				undefined,
+				reservedId,
+			);
+			mux.subscribe(
+				{ resourceType: "collection", resource: "automatic" },
+				() => {},
+			);
+			await waitFor(() => controlTopologies.at(-1)?.subscriptions.length === 3);
+			const subscriptions = controlTopologies.at(-1)!.subscriptions as Array<{
+				id: string;
+				topic: { resource: string };
+			}>;
+			expect(
+				subscriptions.find((entry) => entry.topic.resource === "reserved").id,
+			).toBe(reservedId);
+			expect(
+				subscriptions.find((entry) => entry.topic.resource === "automatic").id,
+			).not.toBe(reservedId);
+			expect(() =>
+				mux.subscribe(
+					{ resourceType: "global", resource: "conflict" },
+					() => {},
+					undefined,
+					reservedId,
+				),
+			).toThrow("already registered for a different topic");
+			expect(mux.topicCount).toBe(3);
 		} finally {
 			mux.destroy();
 			if (uuidDescriptor)

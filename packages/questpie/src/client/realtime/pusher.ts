@@ -148,12 +148,19 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		onError?: RealtimeErrorCallback,
 	): () => void {
 		const topicKey = realtimeTopicKey(topic);
-		const topicId =
-			customId ??
-			this.topicIds.get(topicKey) ??
-			`query:pusher:${++nextTopicId}`;
-		if (!customId) this.topicIds.set(topicKey, topicId);
+		let topicId = customId ?? this.topicIds.get(topicKey);
+		if (topicId === undefined) {
+			do {
+				topicId = `query:pusher:${++nextTopicId}`;
+			} while (this.topics.has(topicId));
+		}
 		let entry = this.topics.get(topicId);
+		if (entry && realtimeTopicKey(entry.topic) !== topicKey) {
+			throw new Error(
+				"Realtime topic ID already registered for a different topic",
+			);
+		}
+		if (customId === undefined) this.topicIds.set(topicKey, topicId);
 		if (!entry) {
 			entry = {
 				topic,
