@@ -282,7 +282,7 @@ describe("explicit route LIVE", () => {
 				at: new Date("2026-10-22T12:00:00Z"),
 			};
 			const options = {
-			params: { company: input.tenant },
+				params: { company: input.tenant },
 				signal: abort.signal,
 			};
 			const other = { ...input, at: new Date(input.at.getTime() + 1) };
