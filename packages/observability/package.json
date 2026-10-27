@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/observability",
-	"version": "3.40.0",
+	"version": "3.41.0",
 	"description": "OpenTelemetry adapter for QUESTPIE — traces and metrics via OTLP",
 	"license": "MIT",
 	"repository": {
