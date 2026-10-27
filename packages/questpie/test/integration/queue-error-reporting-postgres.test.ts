@@ -318,28 +318,37 @@ describe.skipIf(!databaseUrl)("queue error reporting on PostgreSQL", () => {
 			});
 		});
 
-		test("does not report an attempt cancelled by its execution timeout", async () => {
-			let aborted = false;
+		test("reports an attempt that runs past its execution timeout, once", async () => {
+			let finished = false;
 			const slow = {
 				name: "errors-graphile-timeout",
 				schema: z.object({}),
-				handler: async ({ signal }: { signal?: AbortSignal }) => {
-					await new Promise<never>((_, reject) =>
-						signal?.addEventListener("abort", () => {
-							aborted = true;
-							reject(new Error("aborted by timeout"));
-						}),
-					);
+				// Ignores the signal and finishes well after the deadline.
+				handler: async () => {
+					await Bun.sleep(600);
+					finished = true;
 				},
 			};
 			const queue = makeQueue({ slow }, await graphile());
 
 			await queue.slow.publish({}, { retryLimit: 0, expireInSeconds: 0.2 });
 			await queue.listen({ gracefulShutdown: false });
-			await until(() => aborted);
+			// Reported at the deadline, before the handler is done.
+			await until(() => reportsFor("errors-graphile-timeout").length === 1);
+			expect(finished).toBe(false);
+			await until(() => finished);
 			await Bun.sleep(300);
 
-			expect(reportsFor("errors-graphile-timeout")).toHaveLength(0);
+			const reports = reportsFor("errors-graphile-timeout");
+			expect(reports).toHaveLength(1);
+			expect((reports[0]!.error as Error).name).toBe(
+				"QueueExecutionTimeoutError",
+			);
+			expect(reports[0]!.report).toEqual({
+				source: "job",
+				job: "errors-graphile-timeout",
+				final: true,
+			});
 		});
 
 		test("does not report an attempt cancelled by worker shutdown", async () => {

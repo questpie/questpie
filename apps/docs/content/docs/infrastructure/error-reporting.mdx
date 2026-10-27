@@ -32,16 +32,18 @@ Jobs are reported the same way from `app.queue.listen()` and
 and then fails produces three reports. What `final` and cancellation mean
 depends on the queue adapter:
 
-| Queue adapter     | `final`                              | Cancelled attempts, not reported                  |
-| ----------------- | ------------------------------------ | ------------------------------------------------- |
-| pg-boss           | From the job's retry count and limit | None: there is no abort signal                    |
-| Graphile Worker   | From the dispatch's attempts         | Worker shutdown, and an `expireInSeconds` timeout |
-| BullMQ            | From `attemptsMade` and `attempts`   | None: there is no abort signal                    |
-| Cloudflare Queues | Omitted: the report has no `final`   | None: there is no abort signal                    |
+| Queue adapter     | `final`                              | Cancelled attempts, not reported |
+| ----------------- | ------------------------------------ | -------------------------------- |
+| pg-boss           | From the job's retry count and limit | None: there is no abort signal   |
+| Graphile Worker   | From the dispatch's attempts         | Worker shutdown                  |
+| BullMQ            | From `attemptsMade` and `attempts`   | None: there is no abort signal   |
+| Cloudflare Queues | Omitted: the report has no `final`   | None: there is no abort signal   |
 
 Without an abort signal an attempt runs to its outcome, and a failure is
 reported even when the worker is stopping. With Graphile Worker an attempt that
-exceeds `expireInSeconds` is cancelled, not reported. When `listen()` handles
+runs past `expireInSeconds` is reported as a `QueueExecutionTimeoutError` the
+moment the deadline passes, even if its handler ignores the signal and never
+settles; whatever the attempt does afterwards is not reported again. When `listen()` handles
 `SIGINT` or `SIGTERM` (its default graceful shutdown), pending reports are
 delivered before the process exits, within the queue's `shutdownTimeoutMs`. If
 you stop a worker yourself, call `app.destroy()`, which drains them.

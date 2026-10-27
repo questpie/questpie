@@ -34,7 +34,11 @@ import {
 	reserveQueueDispatch,
 	stableQueueDispatchId,
 } from "./dispatch-store.js";
-import { QueueAdmissionError, withQueueAbort } from "./execution-signal.js";
+import {
+	abortedByTimeout,
+	QueueAdmissionError,
+	withQueueAbort,
+} from "./execution-signal.js";
 import {
 	decryptQueueSecretPayload,
 	encryptQueueSecretPayload,
@@ -235,6 +239,31 @@ export function createQueueClient<
 		} catch {
 			// No app resolver: nothing to flush.
 		}
+	};
+
+	/**
+	 * An attempt that runs past its execution deadline failed; it was not
+	 * cancelled. Report it the moment the deadline aborts it, so a handler that
+	 * ignores the signal and never settles is still seen. The attempt's own
+	 * failure afterwards is not reported again, because its signal is aborted.
+	 */
+	const watchExecutionTimeout = (
+		job: Parameters<QueueHandlerMap[string]>[0],
+		jobName: string,
+	): (() => void) => {
+		const signal = job.signal;
+		if (!signal || !reporterEnabled()) return () => {};
+		const onAbort = () => {
+			if (abortedByTimeout(signal)) {
+				reportJobFailure(signal.reason, jobName, job.finalAttempt);
+			}
+		};
+		if (signal.aborted) {
+			onAbort();
+			return () => {};
+		}
+		signal.addEventListener("abort", onAbort, { once: true });
+		return () => signal.removeEventListener("abort", onAbort);
 	};
 
 	const buildHandlers = (selectedJobs?: TJobs): QueueHandlerMap => {
@@ -461,9 +490,10 @@ export function createQueueClient<
 									);
 					}
 					// Reported per attempt, after redaction: a secret job's original
-					// error never reaches the reporter. A lease expiry or shutdown
-					// abort is cancellation, not an incident. Reporting cannot change
-					// what is thrown, so the adapter's retry/ack decision is untouched.
+					// error never reaches the reporter. A shutdown abort is
+					// cancellation, not an incident; a timeout abort was already
+					// reported when it fired. Reporting cannot change what is thrown,
+					// so the adapter's retry/ack decision is untouched.
 					if (!job.signal?.aborted) {
 						reportJobFailure(failure, jobDef.name, job.finalAttempt);
 					}
@@ -478,7 +508,14 @@ export function createQueueClient<
 			handlers[jobDef.name] = (job) =>
 				runInErrorReportOccurrence(
 					reporterEnabled() ? createErrorReportOccurrence() : undefined,
-					() => handleAttempt(job),
+					async () => {
+						const unwatch = watchExecutionTimeout(job, jobDef.name);
+						try {
+							return await handleAttempt(job);
+						} finally {
+							unwatch();
+						}
+					},
 				);
 		}
 

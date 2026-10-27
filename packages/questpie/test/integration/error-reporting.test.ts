@@ -13,6 +13,7 @@ import type {
 	ErrorReport,
 	ErrorReportingAdapter,
 } from "../../src/server/modules/core/integrated/errors/types.js";
+import { QueueExecutionTimeoutError } from "../../src/server/modules/core/integrated/queue/execution-signal.js";
 import { createQueueClient } from "../../src/server/modules/core/integrated/queue/service.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { MockQueueAdapter } from "../utils/mocks/queue.adapter.js";
@@ -770,6 +771,40 @@ describe("queue error reporting", () => {
 		expect(captured).toHaveLength(0);
 	});
 
+	it("reports a timed-out attempt when the deadline fires, once, even if the handler ignores it", async () => {
+		let finish!: () => void;
+		const hanging = job({
+			name: "hang",
+			schema: z.object({}),
+			// Ignores the signal and settles only when the test lets it.
+			handler: () => new Promise<void>((resolve) => (finish = resolve)),
+		});
+		const { handlerFor, captured } = await setup({ hanging });
+		const deadline = new AbortController();
+
+		const attempt = handlerFor("hang")({
+			id: "1",
+			data: {},
+			finalAttempt: true,
+			signal: deadline.signal,
+		}).catch((error) => error);
+		await waitUntil(() => finish !== undefined);
+		deadline.abort(new QueueExecutionTimeoutError());
+
+		// Reported at the deadline, while the handler is still running.
+		expect(captured).toHaveLength(1);
+		expect(captured[0]!.error).toBeInstanceOf(QueueExecutionTimeoutError);
+		expect(captured[0]!.report).toEqual({
+			source: "job",
+			job: "hang",
+			final: true,
+		});
+
+		finish();
+		expect(await attempt).toBeInstanceOf(Error);
+		expect(captured).toHaveLength(1);
+	});
+
 	it("only ever hands the redacted error of a secret job to the reporter", async () => {
 		const { app, captured } = await setup({ secretFailing });
 		await app.queue.secretFailing.publish(
@@ -851,3 +886,11 @@ describe("error reporting lifecycle", () => {
 		expect(deliveredAtExit).toBe(true);
 	});
 });
+
+async function waitUntil(predicate: () => boolean, timeout = 5_000) {
+	const deadline = Date.now() + timeout;
+	while (!predicate()) {
+		if (Date.now() > deadline) throw new Error("Timed out waiting");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+	}
+}
