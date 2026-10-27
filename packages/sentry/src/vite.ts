@@ -26,6 +26,15 @@ export interface QuestpieSentryViteOptions {
 	filesToDeleteAfterUpload?: string | string[];
 }
 
+/** The plugin that hides and deletes source maps; a structural Vite plugin. */
+export interface QuestpieSentrySourcemapsPlugin {
+	name: string;
+	config(config: {
+		build?: { sourcemap?: unknown };
+	}): { build: { sourcemap: "hidden" } } | undefined;
+	configResolved(config: { root: string; build: { outDir: string } }): void;
+}
+
 /**
  * Source maps for Sentry: debug-id injection, upload, and keeping the maps
  * private.
@@ -36,14 +45,18 @@ export interface QuestpieSentryViteOptions {
  * - Release injection, commit association, deploys, telemetry and component
  *   annotation are off; the release is passed explicitly at runtime instead.
  */
-export function questpieSentryVite(options: QuestpieSentryViteOptions) {
+export function questpieSentryVite(
+	options: QuestpieSentryViteOptions,
+): Array<
+	QuestpieSentrySourcemapsPlugin | ReturnType<typeof sentryVitePlugin>[number]
+> {
 	const authToken = options.authToken ?? process.env.SENTRY_AUTH_TOKEN;
 	let resolveDeleteGlobs!: (globs: string[]) => void;
 	const defaultDeleteGlobs = new Promise<string[]>((done) => {
 		resolveDeleteGlobs = done;
 	});
 
-	const hideSourcemaps = {
+	const hideSourcemaps: QuestpieSentrySourcemapsPlugin = {
 		name: "questpie-sentry-sourcemaps",
 		config(config: { build?: { sourcemap?: unknown } }) {
 			if (config.build?.sourcemap === undefined) {

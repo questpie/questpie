@@ -6,17 +6,26 @@ import {
 	buildEvent,
 	createDelivery,
 	type DeliveryOptions,
+	registeredFiles,
 } from "./envelope.js";
 import { sanitizeError, type SanitizedException } from "./sanitize.js";
 
 export interface SentryServerOptions extends Omit<DeliveryOptions, "tunnel"> {
 	/**
-	 * Absolute path of the deployed app. Frames in files under it are sent as
-	 * `app:///<relative path>`; frames anywhere else keep line and column but
-	 * lose their filename.
+	 * Absolute path of the deployed app, used to rewrite a sent file location
+	 * to `app:///<relative path>`. It decides how a location is written, not
+	 * whether it is sent. A filesystem or drive root (`/`, `C:\\`) is not a
+	 * root: set this explicitly when the process runs from `/`.
 	 * @default process.cwd()
 	 */
 	filenameRoot?: string;
+	/**
+	 * Files whose location may be sent although no bundler registered them —
+	 * for a worker run unbundled. Exact rewritten names, e.g.
+	 * `["app:///dist/worker.mjs"]`. Bundles built with `questpieSentryVite`
+	 * are registered by debug id and need no entry here.
+	 */
+	trustedFiles?: readonly string[];
 	/**
 	 * Your own error class names that are safe to send as the exception type
 	 * (e.g. `["ApiError"]`). Built-in names (`TypeError`, …) are always sent;
@@ -33,16 +42,18 @@ export interface SentryServerOptions extends Omit<DeliveryOptions, "tunnel"> {
  * and no OpenTelemetry provider, propagator or context manager is registered.
  * Your `@questpie/observability` setup is untouched.
  *
- * Without a `dsn` the adapter is a no-op, so it can be wired unconditionally
+ * Without a `dsn` this returns `undefined`, which leaves `errors` disabled —
+ * no per-request or per-job work at all — so it can be wired unconditionally
  * and enabled by environment.
  */
 export function sentryErrorReporting(
 	options: SentryServerOptions = {},
-): ErrorReportingAdapter {
+): ErrorReportingAdapter | undefined {
 	const delivery = createDelivery(options);
-	if (!delivery) return { report() {} };
+	if (!delivery) return undefined;
 	const filenameRoot = options.filenameRoot ?? process.cwd();
 	const errorNames = new Set(options.errorNames);
+	const trustedFiles = new Set(options.trustedFiles);
 	let closed = false;
 
 	return {
@@ -56,6 +67,8 @@ export function sentryErrorReporting(
 							isNativeError,
 							filenameRoot,
 							errorNames,
+							trustedFiles,
+							registeredFiles: registeredFiles(),
 						});
 			return delivery.send(
 				buildEvent({

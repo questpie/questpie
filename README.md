@@ -39,6 +39,7 @@ QUESTPIE derives them automatically from your backend schema.
 | [`@questpie/crdt-yjs`](./packages/crdt-yjs)                       | Yjs text engines for collaborative aggregates                          |
 | [`@questpie/workflows`](./packages/workflows)                     | Durable, replay-based workflow engine                                  |
 | [`@questpie/observability`](./packages/observability)             | OpenTelemetry adapter: traces, metrics and log export                  |
+| [`@questpie/sentry`](./packages/sentry)                           | Sentry error reporting: server adapter, browser reporter, source maps  |
 | [`@questpie/openapi`](./packages/openapi)                         | OpenAPI document generation and Scalar reference UI                    |
 | [`@questpie/mcp`](./packages/mcp)                                 | Model Context Protocol server under the app's own access rules         |
 | [`@questpie/sandbox`](./packages/sandbox)                         | Hardened isolated-script execution                                     |

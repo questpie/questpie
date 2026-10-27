@@ -34,8 +34,9 @@ export default runtimeConfig({
 Events are built from an allowlist:
 
 - the error type, if it is a built-in name or listed in `errorNames`;
-- stack frames, keeping a file only when it is one of your build locations,
-  rebased to `app:///`;
+- stack frames with line and column, keeping a file only when it is a build
+  artifact registered by debug id or listed in `trustedFiles`, rewritten to
+  `app:///`;
 - the framework's validated report fields.
 
 Error messages, function names, requests, sessions, payloads, breadcrumbs,

@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { ErrorReportingService } from "questpie/errors";
 
+import { SDK_VERSION } from "../src/envelope.js";
 import { sentryErrorReporting } from "../src/server.js";
 import {
 	ALLOWED_EVENT_KEYS,
@@ -25,7 +26,7 @@ describe("sentryErrorReporting", () => {
 			release: "app@1.2.3",
 			environment: "staging",
 			send: capture.send,
-		});
+		})!;
 		const cause = new Error(`upstream said ${SECRET}`);
 		const error = new Error(
 			`query failed: SELECT * FROM t WHERE token='${SECRET}'`,
@@ -107,7 +108,7 @@ describe("sentryErrorReporting", () => {
 			dsn: DSN,
 			send: capture.send,
 			errorNames: ["ApiError"],
-		});
+		})!;
 		class TenantError extends Error {
 			override name = `${IDENT_SECRET}Error`;
 		}
@@ -143,7 +144,7 @@ describe("sentryErrorReporting", () => {
 
 	it("reports a returned 5xx without a stack", async () => {
 		const capture = captureTransport();
-		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send });
+		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
 		await adapter.report(undefined, {
 			source: "http",
 			kind: "returned",
@@ -158,7 +159,7 @@ describe("sentryErrorReporting", () => {
 
 	it("classifies job attempts", async () => {
 		const capture = captureTransport();
-		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send });
+		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
 		await adapter.report(new Error(SECRET), {
 			source: "job",
 			job: "send-digest",
@@ -174,11 +175,24 @@ describe("sentryErrorReporting", () => {
 		expect(capture.envelopes[0]!.raw).not.toContain(SECRET);
 	});
 
-	it("is a no-op without a DSN", async () => {
-		const adapter = sentryErrorReporting({});
-		expect(
-			adapter.report(new Error("x"), { source: "manual" }),
-		).toBeUndefined();
+	it("returns no adapter without a DSN, leaving errors disabled", () => {
+		const adapter = sentryErrorReporting({ dsn: undefined });
+		expect(adapter).toBeUndefined();
+		expect(new ErrorReportingService({ adapter }).enabled).toBe(false);
+	});
+
+	it("pins SDK_VERSION to the @sentry/core it is built on", () => {
+		const manifest = JSON.parse(
+			readFileSync(join(import.meta.dir, "../package.json"), "utf8"),
+		);
+		const installed = JSON.parse(
+			readFileSync(
+				join(import.meta.dir, "../node_modules/@sentry/core/package.json"),
+				"utf8",
+			),
+		);
+		expect(manifest.dependencies["@sentry/core"]).toBe(SDK_VERSION);
+		expect(installed.version).toBe(SDK_VERSION);
 	});
 
 	it("emits debug-id images under the sanitized filename", async () => {
@@ -188,7 +202,7 @@ describe("sentryErrorReporting", () => {
 		(globalThis as any)._sentryDebugIds = {
 			[`Error\n${topFrame}`]: "c0ffee00-0000-4000-8000-000000000001",
 		};
-		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send });
+		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
 		await adapter.report(error, { source: "manual" });
 		const event = capture.envelopes[0]!.items[0]!.payload;
 		const frames = event.exception.values[0].stacktrace.frames;
@@ -220,7 +234,7 @@ describe("sentryErrorReporting", () => {
 			dsn: DSN,
 			send: capture.send,
 			filenameRoot: "/root",
-		});
+		})!;
 		await adapter.report(error, { source: "manual" });
 		const images = capture.envelopes[0]!.items[0]!.payload.debug_meta.images;
 		expect(
@@ -235,7 +249,7 @@ describe("sentryErrorReporting", () => {
 
 	it("stops sending after shutdown and keeps the core contract on transport failure", async () => {
 		const capture = captureTransport();
-		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send });
+		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
 		await adapter.shutdown!(100);
 		await adapter.report(new Error("late"), { source: "manual" });
 		expect(capture.envelopes).toHaveLength(0);
@@ -254,7 +268,7 @@ describe("sentryErrorReporting", () => {
 
 	it("registers no global Sentry client or OpenTelemetry provider", async () => {
 		const capture = captureTransport();
-		await sentryErrorReporting({ dsn: DSN, send: capture.send }).report(
+		await sentryErrorReporting({ dsn: DSN, send: capture.send })!.report(
 			new Error("x"),
 			{ source: "manual" },
 		);

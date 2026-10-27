@@ -9,16 +9,38 @@ const serialized = (value: unknown) => JSON.stringify(value);
 describe("sanitizeError", () => {
 	const root = process.cwd();
 
-	it("never carries the message and keeps located frames", () => {
-		const [exception] = sanitizeError(new TypeError(`token ${SECRET}`), {
+	it("never carries the message; files are dropped unless trusted", () => {
+		const error = new TypeError(`token ${SECRET}`);
+		const [untrusted] = sanitizeError(error, { filenameRoot: root });
+		expect(untrusted!.type).toBe("TypeError");
+		expect(untrusted!.frames.length).toBeGreaterThan(0);
+		expect(untrusted!.frames.every((f) => !("filename" in f))).toBe(true);
+		expect(untrusted!.frames.at(-1)!.lineno).toBeGreaterThan(0);
+
+		const [trusted] = sanitizeError(error, {
 			filenameRoot: root,
+			trustedFiles: new Set(["app:///test/sanitize.test.ts"]),
 		});
-		expect(exception!.type).toBe("TypeError");
-		expect(exception!.frames.length).toBeGreaterThan(0);
-		expect(exception!.frames.at(-1)!.filename).toBe(
+		expect(trusted!.frames.at(-1)!.filename).toBe(
 			"app:///test/sanitize.test.ts",
 		);
-		expect(serialized(exception)).not.toContain(SECRET);
+		expect(serialized([untrusted, trusted])).not.toContain(SECRET);
+	});
+
+	it("cuts the header only at a full line boundary", () => {
+		// A stack captured while the message was multi-line, read after the
+		// message was cleared: "Error" is a prefix of "Error: first", not the
+		// whole header line, so the frame-shaped message line must not survive.
+		const forged = new Error("");
+		Object.defineProperty(forged, "stack", {
+			value: `Error: first\n    at stealToken (/app/${IDENT_SECRET}.js:1:1)\n    at real (/app/dist/a.js:2:2)`,
+		});
+		expect(
+			sanitizeError(forged, {
+				filenameRoot: "/app",
+				trustedFiles: new Set([`app:///${IDENT_SECRET}.js`]),
+			})[0]!.frames,
+		).toEqual([]);
 	});
 
 	it("sends only built-in or registered type names", () => {
@@ -214,7 +236,7 @@ describe("sanitizeError", () => {
 		}
 	});
 
-	it("parses Gecko/WebKit stacks and keeps only built asset URLs", () => {
+	it("parses Gecko/WebKit stacks and keeps only registered artifacts", () => {
 		const error = new Error("x");
 		Object.defineProperty(error, "stack", {
 			value: [
@@ -223,7 +245,10 @@ describe("sanitizeError", () => {
 				`@https://private-company.example/short-secret.js:1:1`,
 			].join("\n"),
 		});
-		const [exception] = sanitizeError(error);
+		const registered = `https://${IDENT_SECRET.toLowerCase()}.example.com/assets/index-Ab12.js?v=${SECRET}`;
+		const [exception] = sanitizeError(error, {
+			registeredFiles: new Set([registered]),
+		});
 		expect(exception!.frames).toEqual([
 			{ lineno: 1, colno: 1 },
 			{ lineno: 3, colno: 7 },
@@ -249,78 +274,105 @@ describe("sanitizeError", () => {
 });
 
 describe("sanitizeFilename", () => {
-	it("keeps only paths under the app root, rebased", () => {
+	const trustAll = { has: () => true };
+
+	it("drops every file by default, whatever the root or path", () => {
+		for (const [raw, root] of [
+			["https://private.example/assets/7312.js", undefined],
+			[`${process.cwd()}/uploads/7312.js`, process.cwd()],
+			["/app/dist/server.mjs", "/app"],
+			["file:///app/dist/server.mjs", "/app"],
+		] as const) {
+			expect(sanitizeFilename(raw, { filenameRoot: root })).toBeUndefined();
+		}
+	});
+
+	it("sends a registered artifact rewritten without host, query or root", () => {
+		const registered = new Set([
+			`https://user:${SECRET}@tenant.example.com/assets/a.js?t=${SECRET}#x`,
+			"/home/deploy/app/dist/server.mjs",
+			"file:///home/deploy/app/dist/chunk.mjs?x=1",
+		]);
+		const options = {
+			registeredFiles: registered,
+			filenameRoot: "/home/deploy/app/",
+		};
+		expect(sanitizeFilename([...registered][0]!, options)).toBe(
+			"app:///assets/a.js",
+		);
+		expect(sanitizeFilename("/home/deploy/app/dist/server.mjs", options)).toBe(
+			"app:///dist/server.mjs",
+		);
 		expect(
-			sanitizeFilename("/home/deploy/app/dist/server.mjs", {
+			sanitizeFilename("file:///home/deploy/app/dist/chunk.mjs?x=1", options),
+		).toBe("app:///dist/chunk.mjs");
+		// Registered but outside the root: cannot be rewritten, so dropped.
+		expect(
+			sanitizeFilename("/srv/other/x.js", {
+				registeredFiles: new Set(["/srv/other/x.js"]),
 				filenameRoot: "/home/deploy/app",
+			}),
+		).toBeUndefined();
+	});
+
+	it("sends an exactly listed file and nothing next to it", () => {
+		const options = {
+			filenameRoot: "/app",
+			trustedFiles: new Set(["app:///dist/worker.mjs"]),
+		};
+		expect(sanitizeFilename("/app/dist/worker.mjs", options)).toBe(
+			"app:///dist/worker.mjs",
+		);
+		expect(sanitizeFilename("/app/dist/worker-2.mjs", options)).toBeUndefined();
+		expect(sanitizeFilename("/app/uploads/7312.js", options)).toBeUndefined();
+	});
+
+	it("treats a filesystem or drive root as no root at all", () => {
+		for (const [root, path] of [
+			["/", "/home/alice/.ssh/id_rsa.js"],
+			["//", "/etc/app/config.js"],
+			["C:\\", "C:\\Users\\alice\\secret.js"],
+			["C:/", "C:/Users/alice/secret.js"],
+		]) {
+			expect(
+				sanitizeFilename(path!, {
+					filenameRoot: root,
+					registeredFiles: trustAll,
+				}),
+			).toBeUndefined();
+		}
+		expect(
+			sanitizeFilename("C:\\app\\dist\\server.mjs", {
+				filenameRoot: "C:\\app",
+				registeredFiles: trustAll,
 			}),
 		).toBe("app:///dist/server.mjs");
-		expect(
-			sanitizeFilename("file:///home/deploy/app/dist/server.mjs?x=1", {
-				filenameRoot: "/home/deploy/app/",
-			}),
-		).toBe("app:///dist/server.mjs");
-		expect(
-			sanitizeFilename(`/srv/${IDENT_SECRET}/x.js`, {
-				filenameRoot: "/home/deploy/app",
-			}),
-		).toBeUndefined();
-		expect(
-			sanitizeFilename("/home/deploy/app-other/x.js", {
-				filenameRoot: "/home/deploy/app",
-			}),
-		).toBeUndefined();
-		expect(sanitizeFilename("/home/deploy/app/x.js")).toBeUndefined();
 	});
 
-	it("keeps only asset URLs, without host, credentials, query or fragment", () => {
-		expect(
-			sanitizeFilename(
-				`https://user:${SECRET}@tenant.example.com/assets/a.js?t=${SECRET}#x`,
-			),
-		).toBe("app:///assets/a.js");
-		expect(
-			sanitizeFilename("https://cdn.example.com/static/js/a.js", {
-				assetPathPrefixes: ["/static/"],
-			}),
-		).toBe("app:///static/js/a.js");
-		expect(
-			sanitizeFilename("https://private-company.example/short-secret.js"),
-		).toBeUndefined();
-		expect(
-			sanitizeFilename(`https://app.example.com/invite/${SECRET}`),
-		).toBeUndefined();
-		expect(sanitizeFilename("webpack://app/./src/x.ts")).toBeUndefined();
+	it("drops paths with dot segments instead of resolving them", () => {
+		for (const raw of [
+			"/app/../tenant-acme/7312.js",
+			"/app/./dist/x.js",
+			"https://app.example.com/assets/../invite/abc.js",
+			"https://app.example.com/",
+		]) {
+			expect(
+				sanitizeFilename(raw, {
+					filenameRoot: "/app",
+					registeredFiles: trustAll,
+				}),
+			).toBeUndefined();
+		}
 	});
 
-	it("masks id-like segments inside kept paths as a second layer", () => {
-		expect(
-			sanitizeFilename(
-				"/app/uploads/3f2b8c1e-4d5a-4b6c-8d7e-9f0a1b2c3d4e/alice@example.com/x.js",
-				{ filenameRoot: "/app" },
-			),
-		).toBe("app:///uploads/[redacted]/[redacted]/x.js");
-		expect(
-			sanitizeFilename(`/app/${SECRET}/x.js`, { filenameRoot: "/app" }),
-		).toBe("app:///[redacted]/x.js");
-	});
-
-	it("keeps node builtins and package paths under the root", () => {
+	it("keeps node builtins and refuses unsafe characters", () => {
 		expect(sanitizeFilename("node:internal/process/task_queues")).toBe(
 			"node:internal/process/task_queues",
 		);
 		expect(
-			sanitizeFilename(
-				"/app/node_modules/.bun/zod@4.6.2/node_modules/zod/index.js",
-				{ filenameRoot: "/app" },
-			),
-		).toBe("app:///node_modules/.bun/zod@4.6.2/node_modules/zod/index.js");
-	});
-
-	it("refuses filenames outside the safe character set", () => {
-		expect(
 			sanitizeFilename("/app/eval at fn (x.js:1:1), <anonymous>", {
 				filenameRoot: "/app",
+				registeredFiles: trustAll,
 			}),
 		).toBeUndefined();
 	});

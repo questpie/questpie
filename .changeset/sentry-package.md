@@ -11,7 +11,7 @@ New package: `@questpie/sentry`, Sentry error reporting for QUESTPIE.
 Events are built from an allowlist:
 
 - the type: a built-in error name or one listed in `errorNames`, otherwise `Error`;
-- stack frames: line and column, plus the file only when it is under the server's `filenameRoot` or a browser `assetPathPrefixes` path, rebased to `app:///` without host or query;
+- stack frames: line and column, plus the file only when it is a build artifact registered by debug id (`questpieSentryVite`) or listed exactly in the server's `trustedFiles`, rewritten to `app:///` without host or query;
 - the validated report fields.
 
 Function names are not sent; Sentry restores them from source maps by debug id. Error and cause messages, local variables, source context, requests, sessions, users, payloads, breadcrumbs, spans, logs and replays are never sent. Inspection runs none of the thrown value's code (getters, proxy traps, `toJSON`, `toString`). It relies on a native brand check (`isNativeError`/`isProxy` on the server, `Error.isError` in the browser); proxies, and every value in a browser without `Error.isError`, are reported as `Error` with no frames.

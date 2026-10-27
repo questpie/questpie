@@ -2,6 +2,7 @@ import {
 	buildEvent,
 	createDelivery,
 	type DeliveryOptions,
+	registeredFiles,
 } from "./envelope.js";
 import { createRecentSet } from "./recent.js";
 import { sanitizeError } from "./sanitize.js";
@@ -19,13 +20,6 @@ export interface BrowserErrorInfo {
 }
 
 export interface BrowserErrorReporterOptions extends DeliveryOptions {
-	/**
-	 * URL path prefixes of your built assets. Frames in scripts under one are
-	 * sent as `app:///<path>` (no host or query); frames anywhere else — inline
-	 * scripts, third-party scripts — keep line and column but lose their URL.
-	 * @default ["/assets/"]
-	 */
-	assetPathPrefixes?: readonly string[];
 	/**
 	 * Your own error class names that are safe to send as the exception type.
 	 * Built-in names are always sent; any other name is reported as `Error`.
@@ -74,7 +68,6 @@ export function createBrowserErrorReporter(
 	const maxPerMinute = options.maxReportsPerMinute ?? 30;
 	const release = options.release ?? injectedRelease();
 	const sanitizeOptions = {
-		assetPathPrefixes: options.assetPathPrefixes,
 		errorNames: new Set(options.errorNames),
 	};
 	let windowStart = Date.now();
@@ -108,7 +101,10 @@ export function createBrowserErrorReporter(
 					.send(
 						buildEvent({
 							platform: "javascript",
-							exceptions: sanitizeError(error, sanitizeOptions),
+							exceptions: sanitizeError(error, {
+								...sanitizeOptions,
+								registeredFiles: registeredFiles(),
+							}),
 							value: route ? `Browser error on ${route}` : "Browser error",
 							mechanism: `questpie.browser.${kind}`,
 							handled: kind === "manual" || kind === "boundary",

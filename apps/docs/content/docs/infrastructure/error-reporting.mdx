@@ -1,6 +1,6 @@
 ---
 title: Error reporting
-description: One report per unexpected failure from HTTP, jobs and the browser, through a vendor-neutral seam. The Sentry adapter sends an allowlisted event built from the error's type and stack frames — never its message, the request, the session or a payload.
+description: One report per unexpected failure from HTTP, jobs and the browser, through a vendor-neutral seam. The Sentry adapter sends an allowlisted event built from the error's type and stack frames, never its message, the request, the session or a payload.
 kind: guide
 package: "@questpie/sentry"
 ---
@@ -39,7 +39,7 @@ import type { ErrorReportingAdapter } from "questpie/errors";
 
 const adapter: ErrorReportingAdapter = {
 	report(error, report) {
-		// error: the raw thrown value — stays in your process
+		// error: the raw thrown value, which stays in your process
 		// report: { source, kind?, method?, route?, status?, job?, final?, trace? }
 	},
 	flush: async (timeoutMs) => {},
@@ -112,8 +112,9 @@ export default runtimeConfig({
 ```
 
 The HTTP server and a standalone `app.queue.listen()` worker read the same
-config, so both report. Without `dsn` the adapter does nothing, so you can wire
-it unconditionally and enable it per environment.
+config, so both report. Without `dsn`, `sentryErrorReporting()` returns
+`undefined` and error reporting stays off with no per-request cost, so you can
+wire it unconditionally and enable it per environment.
 
 ### Browser
 
@@ -197,14 +198,18 @@ the complete payload:
     or one you list in `errorNames`. Every other class is reported as `Error`:
     a name like `AcmeCustomerError` looks exactly like a safe one, so shape is
     not trusted.
-  - Frames carry line and column, and a file only when it is one of your build
-    locations. On the server that is a path under `filenameRoot` (default
-    `process.cwd()`), sent as `app:///dist/server.mjs`. In the browser it is a
-    script under `assetPathPrefixes` (default `/assets/`), sent as
-    `app:///assets/index-Ab12.js` without host or query. Inline scripts,
-    third-party scripts and paths elsewhere on disk keep their line and column
-    and lose the file. Inside a kept path, segments after `/invite/`, UUIDs,
-    e-mail addresses and long token-like strings are also masked.
+  - Frames always carry line and column. A frame carries its file only when
+    that file is a build artifact registered by `questpieSentryVite` (its
+    debug id), or a server file you list exactly in `trustedFiles`, for a
+    worker you run unbundled. Every other file is dropped, whatever its path:
+    a script on another host, an inline script on `/invite/<token>`, a file
+    under `uploads/`. A kept file is sent without host, credentials or query,
+    as `app:///assets/index-Ab12.js` in the browser or, on the server,
+    relative to `filenameRoot` (default `process.cwd()`) as
+    `app:///dist/server.mjs`. `filenameRoot` only decides how a file is
+    written, not whether it is sent; a filesystem or drive root (`/`, `C:\`)
+    is not a root, so set it explicitly when the process runs from `/`. Paths
+    with `.` or `..` segments are dropped.
   - Function names are not sent. Sentry restores them, with the original
     files, from your uploaded source maps, matched by debug id.
   - The value is a description built from `report`

@@ -39,7 +39,7 @@ describe("QUESTPIE + @questpie/sentry", () => {
 						environment: "test",
 						filenameRoot: process.cwd(),
 						send: capture.send,
-					}),
+					})!,
 				},
 				secret: "queue-secret-root-key-at-least-32-bytes",
 			} as any,
@@ -100,10 +100,11 @@ describe("QUESTPIE + @questpie/sentry", () => {
 		expect(event.tags["http.route"]).toBe("items/:id");
 		expect(event.transaction).toBe("POST items/:id");
 		expect(event.exception.values).toHaveLength(2);
+		// No bundler registered these test files and none is listed, so every
+		// frame keeps line and column but no location.
 		const frames = event.exception.values[1].stacktrace.frames;
-		expect(
-			frames.some((f: any) => String(f.filename).startsWith("app:///")),
-		).toBe(true);
+		expect(frames.length).toBeGreaterThan(0);
+		expect(frames.every((f: any) => !("filename" in f))).toBe(true);
 	});
 
 	it("reports concurrent failures independently", async () => {

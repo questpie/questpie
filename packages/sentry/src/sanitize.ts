@@ -8,9 +8,9 @@
  * `CustomerAcmeError` from `TypeError`, so the output is allowlist-only:
  *
  * - the type is a built-in error name or one the app registered, else `Error`;
- * - frames keep line and column; a filename is kept only when it is a known
- *   build location (under the server app root, or a browser asset path), and
- *   is rebased to `app:///` so no host or tenant URL leaves the process;
+ * - frames keep line and column; a filename is kept only for a build artifact
+ *   the bundler registered with a debug id, or a file the app listed exactly,
+ *   rewritten to `app:///` so no host or tenant URL leaves the process;
  * - function names are never sent — symbolication restores them from the
  *   uploaded source maps, matched by debug id;
  * - the same for up to {@link MAX_CAUSES} causes.
@@ -51,17 +51,18 @@ export interface SanitizeOptions {
 	 */
 	isNativeError?: (value: unknown) => boolean;
 	/**
-	 * Server: absolute path of the deployed app. File paths under it are sent
-	 * as `app:///<relative path>`; any other path is dropped.
+	 * Absolute path of the deployed app, used only to REWRITE a trusted file
+	 * path to `app:///<relative path>`. It does not make a file trusted.
 	 */
 	filenameRoot?: string;
 	/**
-	 * Browser: URL path prefixes of the built assets (e.g. `/assets/`). Script
-	 * URLs under one are sent as `app:///<path>` without host or query; any
-	 * other URL — an inline script on `/invite/<token>`, a third-party script,
-	 * a tenant domain — is dropped.
+	 * Raw frame filenames the bundler registered with a debug id (the keys of
+	 * Sentry's `getFilenameToDebugIdMap`). A registered file is a build
+	 * artifact, so its location may be sent.
 	 */
-	assetPathPrefixes?: readonly string[];
+	registeredFiles?: { has(raw: string): boolean };
+	/** Exact rewritten names (`app:///dist/worker.mjs`) the app vouches for. */
+	trustedFiles?: ReadonlySet<string>;
 	/** Error class names the app vouches for, sent as the type as-is. */
 	errorNames?: ReadonlySet<string>;
 }
@@ -97,12 +98,7 @@ const FILENAME = /^[A-Za-z0-9_\-./@:~+%[\]]{1,512}$/;
 const NODE_BUILTIN = /^node:[a-z_/]{1,128}$/;
 const V8_FRAME = /^\s*at (?:(.+?) \()?(.+?):(\d+):(\d+)\)?$/;
 const GECKO_FRAME = /^(?:(.*?)@)?(.+?):(\d+):(\d+)$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TOKEN_LIKE = /^[A-Za-z0-9_-]{20,}$/;
-const EMAIL_LIKE = /^[^@]+@[^@]+\.[A-Za-z]{2,}$/;
 const URL_PREFIX = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)/i;
-const DEFAULT_ASSET_PATH_PREFIXES = ["/assets/"];
-const REDACTED = "[redacted]";
 
 /** `Error.isError`: a brand check that is false for proxies and runs no traps. */
 const NATIVE_IS_ERROR = (Error as { isError?: (value: unknown) => boolean })
@@ -344,7 +340,15 @@ export function parseFrames(
 ): RawFrame[] {
 	let body = stack.slice(0, MAX_STACK_LENGTH);
 	const header = name && message ? `${name}: ${message}` : name || message;
-	if (header && body.startsWith(header)) {
+	// The header must end exactly at a line break (or the end): a stack
+	// captured before the message changed would otherwise be cut mid-line and
+	// leave the old message's frame-shaped lines behind as frames.
+	const boundary = body.charAt(header.length);
+	if (
+		header &&
+		body.startsWith(header) &&
+		(boundary === "\n" || boundary === "")
+	) {
 		body = body.slice(header.length);
 	} else {
 		const firstLine = body.split("\n", 1)[0] ?? "";
@@ -389,58 +393,59 @@ function sanitizeFrame(
 }
 
 /**
- * Map a raw frame location to a known build location, or drop it.
+ * The location sent for a frame, or undefined to drop it.
  *
- * - `node:` builtins are kept.
- * - A file path (or `file://` URL) under `filenameRoot` becomes
- *   `app:///<relative path>`.
- * - An `http(s)` URL whose path starts with an asset prefix becomes
- *   `app:///<path>`: host, credentials, query and fragment are dropped.
- * - Everything else is dropped.
+ * Dropped by default. A location is sent only when the raw filename was
+ * registered by the bundler with a debug id, or its rewritten name is listed in
+ * `trustedFiles`; `node:` builtins are runtime constants and always kept. A
+ * kept location is rewritten without host, credentials, query or fragment:
  *
- * Inside a kept path, segments after `/invite/`, UUIDs, e-mail addresses and
- * long token-like strings are additionally masked. That masking is defence in
- * depth for the app's own build layout, not the privacy boundary — the
- * allowlist above is.
+ * - `http(s)` URL → `app:///<path>`;
+ * - file path or `file://` URL under `filenameRoot` → `app:///<relative path>`
+ *   (a filesystem or drive root such as `/` or `C:\\` is not a root).
+ *
+ * A path with `.` or `..` segments, or one that cannot be rewritten, is dropped.
  */
 export function sanitizeFilename(
 	raw: string,
-	options: Pick<SanitizeOptions, "filenameRoot" | "assetPathPrefixes"> = {},
+	options: Pick<
+		SanitizeOptions,
+		"filenameRoot" | "registeredFiles" | "trustedFiles"
+	> = {},
 ): string | undefined {
 	if (raw.length > 2048) return undefined;
 	if (NODE_BUILTIN.test(raw)) return raw;
+	const rewritten = rewriteLocation(raw, options.filenameRoot);
+	if (!rewritten) return undefined;
+	const trusted =
+		options.registeredFiles?.has(raw) === true ||
+		options.trustedFiles?.has(rewritten) === true;
+	return trusted ? rewritten : undefined;
+}
 
+function rewriteLocation(
+	raw: string,
+	filenameRoot: string | undefined,
+): string | undefined {
 	let path: string | undefined;
 	const url = URL_PREFIX.exec(raw);
 	if (url) {
 		const scheme = url[1]!.toLowerCase();
-		const urlPath = url[3] ?? "";
 		if (scheme === "file") {
-			path = underRoot(safeDecode(urlPath), options.filenameRoot);
+			path = underRoot(safeDecode(url[3] ?? ""), filenameRoot);
 		} else if (scheme === "http" || scheme === "https") {
-			const prefixes = options.assetPathPrefixes ?? DEFAULT_ASSET_PATH_PREFIXES;
-			if (prefixes.some((prefix) => urlPath.startsWith(prefix))) {
-				path = urlPath;
-			}
+			path = url[3] ?? "";
 		}
 	} else {
-		path = underRoot(raw.replace(/[?#].*$/, ""), options.filenameRoot);
+		path = underRoot(raw.replace(/[?#].*$/, ""), filenameRoot);
 	}
 	if (path === undefined) return undefined;
-
 	const segments = path.split("/").filter(Boolean);
-	for (let i = 0; i < segments.length; i++) {
-		const segment = segments[i]!;
-		if (
-			segments[i - 1]?.toLowerCase() === "invite" ||
-			UUID.test(segment) ||
-			EMAIL_LIKE.test(segment) ||
-			(TOKEN_LIKE.test(segment) &&
-				/\d/.test(segment) &&
-				/[A-Za-z]/.test(segment))
-		) {
-			segments[i] = REDACTED;
-		}
+	if (
+		segments.length === 0 ||
+		segments.some((segment) => segment === "." || segment === "..")
+	) {
+		return undefined;
 	}
 	const value = `app:///${segments.join("/")}`;
 	return FILENAME.test(value) ? value : undefined;
@@ -450,6 +455,10 @@ function underRoot(path: string, root: string | undefined): string | undefined {
 	if (!root) return undefined;
 	const normalizedPath = path.replaceAll("\\", "/");
 	const normalizedRoot = root.replaceAll("\\", "/").replace(/\/+$/, "");
+	// "/" and "C:\" normalize to "" and "C:": a root that admits everything.
+	if (normalizedRoot === "" || /^[A-Za-z]:$/.test(normalizedRoot)) {
+		return undefined;
+	}
 	if (!normalizedPath.startsWith(`${normalizedRoot}/`)) return undefined;
 	return normalizedPath.slice(normalizedRoot.length + 1);
 }

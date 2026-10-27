@@ -202,17 +202,12 @@ export function buildEvent(input: EventInput): Event {
  * `code_file` matches the frame's `abs_path` on the wire.
  */
 function debugImages(exceptions: SanitizedException[]): DebugImage[] {
-	let map: Record<string, string>;
-	try {
-		map = getFilenameToDebugIdMap(stackParser);
-	} catch {
-		return [];
-	}
+	const registered = registeredFiles();
 	const images: DebugImage[] = [];
 	const seen = new Set<string>();
 	for (const exception of exceptions) {
 		for (const [sanitized, raw] of exception.rawFilenames) {
-			const debugId = map[raw];
+			const debugId = registered.get(raw);
 			if (!debugId || seen.has(sanitized)) continue;
 			seen.add(sanitized);
 			images.push({
@@ -223,6 +218,19 @@ function debugImages(exceptions: SanitizedException[]): DebugImage[] {
 		}
 	}
 	return images;
+}
+
+/**
+ * Raw filename → debug id for every build artifact the bundler plugin
+ * registered in this process. These are the only files whose location is
+ * trusted by default.
+ */
+export function registeredFiles(): ReadonlyMap<string, string> {
+	try {
+		return new Map(Object.entries(getFilenameToDebugIdMap(stackParser)));
+	} catch {
+		return new Map();
+	}
 }
 
 // Keys are `new Error().stack` captured by the bundler snippet: V8 prefixes
