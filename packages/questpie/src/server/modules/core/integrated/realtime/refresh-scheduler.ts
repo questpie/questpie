@@ -1,5 +1,5 @@
 import { runInFreshRequestScope } from "#questpie/server/config/request-scope.js";
-import { stringifyCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
+import { serializeCompatibleTypedEventWire } from "#questpie/shared/typed-wire.js";
 
 import { deriveDeltaOp, type RealtimeDeliveryMode } from "./delta.js";
 import {
@@ -7,7 +7,10 @@ import {
 	type RealtimeObservation,
 	type RealtimeObserver,
 } from "./observer.js";
-import { encodeSseEvent } from "./sse-client-transport.js";
+import {
+	encodeSerializedSseEvent,
+	encodeSseEvent,
+} from "./sse-client-transport.js";
 import { sharedSseKeepAliveTicker } from "./sse-keep-alive.js";
 import type {
 	RealtimeChangeEvent,
@@ -435,7 +438,10 @@ function eventRecordIds(event: RealtimeChangeEvent): string[] | null {
 export class RealtimeRefreshScheduler {
 	private readonly groups = new Map<string, SchedulerGroup>();
 	private readonly deltaGroups = new Map<string, DeltaGroup>();
-	private readonly pendingComputations: Array<() => void> = [];
+	private readonly pendingComputations = new Set<{
+		group: SchedulerGroup | DeltaGroup;
+		resolve: (admitted: boolean) => void;
+	}>();
 	private activeComputations = 0;
 
 	constructor(
@@ -596,6 +602,7 @@ export class RealtimeRefreshScheduler {
 				return;
 			}
 			group!.disposed = true;
+			this.cancelPendingComputations(group!);
 			if (group!.heartbeatTimer) clearInterval(group!.heartbeatTimer);
 			group!.unsubscribe();
 			group!.unregisterMaxAge?.();
@@ -706,6 +713,7 @@ export class RealtimeRefreshScheduler {
 				return;
 			}
 			group!.disposed = true;
+			this.cancelPendingComputations(group!);
 			this.observe({
 				type: "delta.buffer",
 				scope: "group",
@@ -739,7 +747,8 @@ export class RealtimeRefreshScheduler {
 					type: "routing.authoritative_db",
 					operation: "find",
 				});
-				const data = await this.runBounded(group.compute);
+				const data = await this.runBounded(group, () => group.compute());
+				if (group.disposed || !group.subscribers.has(subscriber)) return;
 				const postComputeSeq = group.ready
 					? bootstrapSeq
 					: await this.realtime.getLatestSeq();
@@ -1036,7 +1045,8 @@ export class RealtimeRefreshScheduler {
 			type: "routing.authoritative_db",
 			operation: "find",
 		});
-		const data = await this.runBounded(group.compute);
+		const data = await this.runBounded(group, () => group.compute());
+		if (group.disposed) return;
 		await this.replaceDeltaHashes(group, snapshotRows(data));
 		group.latestSeq = Math.max(group.latestSeq, seq);
 		group.lastDeliveredSeq = Math.max(group.lastDeliveredSeq, seq);
@@ -1239,7 +1249,7 @@ export class RealtimeRefreshScheduler {
 				this.observe({ type: "routing.authoritative_db", operation });
 				let computed: unknown;
 				try {
-					computed = await this.runBounded(() => {
+					computed = await this.runBounded(group, () => {
 						if (group.coherent) {
 							// The owned snapshot begins after this queue wait. It
 							// includes earlier commits; only later wakes need a rerun.
@@ -1261,9 +1271,11 @@ export class RealtimeRefreshScheduler {
 					: computed;
 				if (group.coherent)
 					upToDate = (computed as { upToDate: string }).upToDate;
-				const serialized = group.coherent
-					? stringifyCompatibleTypedEventWire({ data })
-					: JSON.stringify(data);
+				// Date paths stay rooted at data in both the hash payload and snapshot.
+				const wire = group.coherent
+					? serializeCompatibleTypedEventWire({ data })
+					: undefined;
+				const serialized = wire ? JSON.stringify(wire) : JSON.stringify(data);
 				const hash = await sha256(serialized);
 				// Hashing yields too: an authority wake can invalidate the result here.
 				if (group.disposed) return;
@@ -1291,13 +1303,19 @@ export class RealtimeRefreshScheduler {
 				}
 
 				group.lastHash = hash;
-				group.lastFrame = encodeSseEvent("snapshot", {
+				const snapshot = {
 					topicId: group.topicId,
 					seq,
-					data,
+					data: wire ? wire.data : data,
 					reset: group.nextReset,
 					...(upToDate === undefined ? {} : { upToDate }),
-				});
+				};
+				group.lastFrame = wire
+					? encodeSerializedSseEvent(
+							"snapshot",
+							JSON.stringify({ ...snapshot, ...wire }),
+						)
+					: encodeSseEvent("snapshot", snapshot);
 				group.nextReset = false;
 				const frame = group.lastFrame;
 				this.observe({
@@ -1342,20 +1360,41 @@ export class RealtimeRefreshScheduler {
 		}
 	}
 
-	private async runBounded<T>(compute: () => Promise<T>): Promise<T> {
-		if (this.activeComputations >= this.maxConcurrency) {
-			if (this.pendingComputations.length >= 1024)
-				throw new Error("Realtime compute queue is full");
-			await new Promise<void>((resolve) =>
-				this.pendingComputations.push(resolve),
-			);
+	private cancelPendingComputations(group: SchedulerGroup | DeltaGroup): void {
+		for (const pending of this.pendingComputations) {
+			if (pending.group !== group) continue;
+			this.pendingComputations.delete(pending);
+			pending.resolve(false);
 		}
-		this.activeComputations += 1;
+	}
+
+	private async runBounded<T>(
+		group: SchedulerGroup | DeltaGroup,
+		compute: () => Promise<T>,
+	): Promise<T | undefined> {
+		if (group.disposed) return;
+		if (this.activeComputations >= this.maxConcurrency) {
+			if (this.pendingComputations.size >= 1024)
+				throw new Error("Realtime compute queue is full");
+			const admitted = await new Promise<boolean>((resolve) => {
+				this.pendingComputations.add({ group, resolve });
+			});
+			if (!admitted) return;
+		} else {
+			this.activeComputations += 1;
+		}
 		try {
+			if (group.disposed) return;
 			return await compute();
 		} finally {
-			this.activeComputations -= 1;
-			this.pendingComputations.shift()?.();
+			const next = this.pendingComputations.values().next();
+			if (next.done) {
+				this.activeComputations -= 1;
+			} else {
+				// Transfer the occupied slot before waking the next waiter.
+				this.pendingComputations.delete(next.value);
+				next.value.resolve(true);
+			}
 		}
 	}
 }

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, spyOn } from "bun:test";
 
 import { createClient } from "../../src/client/index.js";
 import {
-	realtimeTopicId,
+	realtimeTopicKey,
 	type TopicConfig,
 } from "../../src/client/realtime/multiplexer.js";
 import {
@@ -251,14 +251,14 @@ describe("route LIVE client", () => {
 			input: { at },
 		});
 		const at = new Date("2026-10-22T12:00:00.000Z");
-		expect(realtimeTopicId(topic(at))).not.toBe(
-			realtimeTopicId(topic(at.toISOString())),
+		expect(realtimeTopicKey(topic(at))).not.toBe(
+			realtimeTopicKey(topic(at.toISOString())),
 		);
-		expect(realtimeTopicId(topic(at))).not.toBe(
-			realtimeTopicId(topic(new Date(at.getTime() + 1))),
+		expect(realtimeTopicKey(topic(at))).not.toBe(
+			realtimeTopicKey(topic(new Date(at.getTime() + 1))),
 		);
-		expect(realtimeTopicId(topic(at))).toBe(
-			realtimeTopicId(topic(new Date(at))),
+		expect(realtimeTopicKey(topic(at))).toBe(
+			realtimeTopicKey(topic(new Date(at))),
 		);
 	});
 });

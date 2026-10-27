@@ -25,9 +25,9 @@ import {
 import { attachInternalAdapterContext } from "#questpie/server/config/internal-context.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
 import { runInFreshRequestScope } from "#questpie/server/config/request-scope.js";
+import { rowsOf } from "#questpie/server/db/driver-result.js";
 import { transactionLifetime } from "#questpie/server/db/transaction-lifetime.js";
 import { ApiError } from "#questpie/server/errors/index.js";
-import { captureRealtimeWatermark } from "#questpie/server/modules/core/integrated/realtime/snapshot.js";
 
 import type {
 	JsonRouteDefinition,
@@ -411,13 +411,19 @@ async function executeQueryRoute<
 		runInFreshRequestScope(app, async () => {
 			const evaluate = async (evaluationRequest = request) => {
 				// The visibility watermark must establish the snapshot before facts or reads.
-				const upToDate = captureWatermark
-					? await captureRealtimeWatermark({ db: tx })
-					: undefined;
-				if (captureWatermark)
-					await tx.execute(
-						sql`select set_config('statement_timeout', least(nullif(setting::bigint, 0), 30000)::text, true) from pg_settings where name = 'statement_timeout'`,
+				let upToDate: string | undefined;
+				if (captureWatermark) {
+					const [snapshot] = rowsOf<{ upToDate: unknown }>(
+						await tx.execute(
+							sql`select pg_snapshot_xmin(pg_current_snapshot())::text as "upToDate", set_config('statement_timeout', least(nullif(setting::bigint, 0), 30000)::text, true) from pg_settings where name = 'statement_timeout'`,
+						),
 					);
+					if (typeof snapshot?.upToDate !== "string")
+						throw new Error(
+							"PostgreSQL did not return a realtime transaction watermark",
+						);
+					upToDate = snapshot.upToDate;
+				}
 				const snapshotContext = (await deriveRequestContextOnDb(
 					app,
 					{
