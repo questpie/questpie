@@ -451,6 +451,59 @@ describe("HTTP error reporting", () => {
 		});
 	});
 
+	it("does not report a failure after the client aborted, but still answers 500", async () => {
+		const abortDuringHandler = new AbortController();
+		const abortDuringContext = new AbortController();
+		const rec = capturingAdapter();
+		const built = await buildMockApp(
+			{
+				routes: {
+					handler: route()
+						.get()
+						.raw()
+						.handler(() => {
+							abortDuringHandler.abort();
+							throw new Error("cancelled work failed");
+						}),
+					ctx: route()
+						.get()
+						.raw()
+						.handler(() => new Response("unreachable")),
+				},
+				config: {
+					app: {
+						context: ({ request }: { request: Request }) => {
+							if (new URL(request.url).pathname === "/ctx") {
+								abortDuringContext.abort();
+								throw new Error("context cancelled");
+							}
+							return {};
+						},
+					},
+				},
+			} as any,
+			{ errors: { adapter: rec.adapter } },
+		);
+		cleanup = built.cleanup;
+		await runTestDbMigrations(built.app);
+		const handler = createFetchHandler(built.app);
+
+		const fromHandler = await handler(
+			new Request("http://localhost/handler", {
+				signal: abortDuringHandler.signal,
+			}),
+		);
+		const fromContext = await handler(
+			new Request("http://localhost/ctx", {
+				signal: abortDuringContext.signal,
+			}),
+		);
+
+		expect(fromHandler?.status).toBe(500);
+		expect(fromContext?.status).toBe(500);
+		expect(rec.captured).toHaveLength(0);
+	});
+
 	it("does not report a stream cancelled by the client", async () => {
 		const abort = new AbortController();
 		const { handler, captured } = await setup({

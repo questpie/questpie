@@ -412,9 +412,11 @@ export const createFetchHandler = (
 				});
 
 			// One incident per unexpected failure. 4xx are expected outcomes
-			// (validation, auth, not found, conflict) and are not reported. The
-			// route is the matched TEMPLATE; an unmatched raw path is never sent.
-			if (response.status >= 500) {
+			// (validation, auth, not found, conflict) and are not reported, and
+			// neither is a failure after the client went away: work cancelled by
+			// a disconnect is not a server incident. The route is the matched
+			// TEMPLATE; an unmatched raw path is never sent.
+			if (response.status >= 500 && !request.signal.aborted) {
 				appInstance.errors?.report(error, {
 					source: "http",
 					kind: error === undefined ? "returned" : "thrown",
