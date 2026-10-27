@@ -140,9 +140,19 @@ That is intentional.
   never touched. Anyone building under plain Node took the other branch and got
   `ERR_MODULE_NOT_FOUND`.
 
+- **`@azure/identity: 4.13.0`** — retains the supported MSAL 3 dependency line,
+  outside GHSA-xcx6-jx8p-x3h5's affected MSAL 5/6 range. This version satisfies
+  the Identity ranges declared by Tedious, files-sdk and unstorage; do not
+  override their MSAL dependency across a major version.
 - **`@modelcontextprotocol/sdk: 1.32.1`** — fixes experimental-task session binding
   (GHSA-22jm-h49p-29qw) and HTTP validation memory exhaustion
   (GHSA-46jr-4wx8-v453). Keep workspace consumers on the patched SDK.
+- **`bun-types: 1.4.3`** — retains the existing workspace type version. Floating
+  `latest` declarations otherwise change the lockfile during CI installs.
+- **`body-parser: 2.4.0`** — fixes malformed compressed-body stream cleanup
+  (GHSA-27r3-jxmh-p828) within Express's existing 2.x dependency range.
+- **`undici: 7.30.1`** — fixes excessive content-encoding handling
+  (GHSA-xjj6-f33q-929c) within the existing 7.x dependency range.
 - **`vite: 8.1.6`** — the 8.1 patch release that fixes the bundled editor launcher
   Windows existence-check bypass (GHSA-587h-7wmj-h5pm). The standalone
   `launch-editor: 2.14.2` override keeps all other launcher consumers on the
