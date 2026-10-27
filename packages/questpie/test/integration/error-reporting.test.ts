@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 
 import { z } from "zod";
 
-import { ApiError, job, route } from "../../src/exports/index.js";
+import { ApiError, job, route, service } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import {
 	createErrorReportOccurrence,
@@ -430,11 +430,12 @@ describe("HTTP error reporting", () => {
 		});
 	});
 
-	it("keeps the response identical when the reporter throws or hangs", async () => {
+	it("keeps the response identical when the reporter throws, rejects or hangs", async () => {
 		for (const behaviour of [
 			() => {
 				throw new Error("reporter broke");
 			},
+			() => Promise.reject(new Error("reporter rejected")),
 			() => new Promise(() => {}),
 		]) {
 			const { handler } = await setup(
@@ -489,6 +490,63 @@ describe("HTTP error reporting", () => {
 			status: 200,
 			method: "GET",
 		});
+	});
+
+	it("keeps a failing stream and its scope disposal unchanged when the reporter throws, rejects or hangs", async () => {
+		for (const behaviour of [
+			() => {
+				throw new Error("reporter broke");
+			},
+			() => Promise.reject(new Error("reporter rejected")),
+			() => new Promise(() => {}),
+		]) {
+			const streamError = new Error("stream broke");
+			let disposed = 0;
+			const rec = capturingAdapter(behaviour);
+			const built = await buildMockApp(
+				{
+					routes: {
+						stream: route()
+							.get()
+							.raw()
+							.handler(({ services }: any) => {
+								void services.scoped;
+								return new Response(
+									new ReadableStream({
+										pull(controller) {
+											controller.error(streamError);
+										},
+									}),
+								);
+							}),
+					},
+					services: {
+						scoped: service()
+							.lifecycle("request")
+							.create(() => ({}))
+							.dispose(() => {
+								disposed++;
+							}),
+					},
+				} as any,
+				// A hanging reporter would otherwise hold app.destroy() for the
+				// default 5 s shutdown deadline.
+				{ errors: { adapter: rec.adapter, shutdownTimeoutMs: 50 } },
+			);
+			cleanup = built.cleanup;
+			await runTestDbMigrations(built.app);
+
+			const response = await createFetchHandler(built.app)(
+				new Request("http://localhost/stream"),
+			);
+			expect(response?.status).toBe(200);
+			await expect(response!.text()).rejects.toBe(streamError);
+			expect(rec.captured).toHaveLength(1);
+			expect(disposed).toBe(1);
+
+			await cleanup?.();
+			cleanup = undefined;
+		}
 	});
 
 	it("does not report a failure after the client aborted, but still answers 500", async () => {

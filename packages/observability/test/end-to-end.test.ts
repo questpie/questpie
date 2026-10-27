@@ -208,6 +208,33 @@ describe("observability end to end", () => {
 		expect(reports[0]).toMatchObject({ source: "http", status: 500 });
 	});
 
+	it("reports a failed CRUD request once while every span is recorded", async () => {
+		const h = harness();
+		const reports: ErrorReport[] = [];
+		const app = await buildApp(h.adapter, {
+			adapter: {
+				report(_error, report) {
+					reports.push(report);
+				},
+			},
+		});
+		// No schema sync: the query fails inside nested CRUD and SQL spans.
+		const handle = createFetchHandler(app);
+		h.spans.reset();
+
+		const response = await handle(new Request("http://localhost:3000/notes"));
+
+		const finished = h.spans.getFinishedSpans();
+		await h.adapter.shutdown();
+
+		expect(response.status).toBe(500);
+		const { root, spans } = requestTrace(finished);
+		expect(root).toBeDefined();
+		expect(spans.length).toBeGreaterThan(1);
+		expect(reports).toHaveLength(1);
+		expect(reports[0]).toMatchObject({ source: "http", status: 500 });
+	});
+
 	it("reaches the database, and the query span sits under the CRUD span", async () => {
 		const h = harness();
 		const app = await buildApp(h.adapter);
