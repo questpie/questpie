@@ -55,6 +55,7 @@ QUESTPIE derives them automatically from your backend schema.
 Optional adapters have their own runtime requirements. SMTP requires Nodemailer
 10.0.9+ and Node.js 20+ when running on Node; Nodemailer 9.x is no longer a
 supported peer. The core package without SMTP retains its Node.js 18+ requirement.
+The admin package and generated projects require Node.js 20.18.1+ for shadcn.
 
 ### Installation
 

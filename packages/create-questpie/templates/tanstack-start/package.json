@@ -29,7 +29,7 @@
 		"@questpie/admin": "latest",
 		"@questpie/openapi": "latest",
 		"@questpie/tanstack-query": "latest",
-		"@t3-oss/env-core": "^0.12.0",
+		"@t3-oss/env-core": "^0.13.11",
 		"@tanstack/react-query": "^5.62.11",
 		"@tanstack/react-router": "^1.132.0",
 		"@tanstack/react-start": "^1.132.0",
@@ -42,7 +42,7 @@
 		"questpie": "latest",
 		"react": "~19.2.8",
 		"react-dom": "~19.2.8",
-		"zod": "^4.2.1"
+		"zod": "^4.6.6"
 	},
 	"devDependencies": {
 		"@tailwindcss/vite": "^4.0.0",
@@ -56,11 +56,31 @@
 		"bun-types": "latest",
 		"drizzle-kit": "1.0.0-beta.6-4414a19",
 		"nitro": "latest",
-		"shadcn": "^3.6.1",
+		"shadcn": "^4.22.1",
 		"tailwindcss": "^4.0.0",
 		"tw-animate-css": "^1.0.0",
 		"typescript": "^5.9.2",
 		"vite": "^8.0.0",
 		"vite-tsconfig-paths": "^6.1.1"
+	},
+	"resolutions": {
+		"@azure/identity": "4.13.0",
+		"body-parser": "2.4.0",
+		"undici": "7.30.1"
+	},
+	"overrides": {
+		"@azure/identity": "4.13.0",
+		"body-parser": "2.4.0",
+		"undici": "7.30.1"
+	},
+	"engines": {
+		"node": ">=20.18.1"
+	},
+	"pnpm": {
+		"overrides": {
+			"@azure/identity": "4.13.0",
+			"body-parser": "2.4.0",
+			"undici": "7.30.1"
+		}
 	}
 }

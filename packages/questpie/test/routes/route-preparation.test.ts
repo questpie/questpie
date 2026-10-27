@@ -117,6 +117,38 @@ describe("ordinary JSON route preparation", () => {
 		expect(calls).toBe(0);
 	});
 
+	it("rejects oversized bounded input before parsing its elements or running access", () => {
+		let elements = 0;
+		let access = 0;
+		const definition = route()
+			.post()
+			.schema(
+				z.object({
+					items: z
+						.array(
+							z.string().transform((value) => {
+								elements++;
+								return value;
+							}),
+						)
+						.max(2),
+				}),
+			)
+			.access(() => {
+				access++;
+				return true;
+			})
+			.handler(({ input }) => input);
+		try {
+			prepareJsonRoute(setup.app, definition, { items: ["a", "b", "c"] });
+			throw new Error("expected input validation to fail");
+		} catch (error) {
+			expect(error).toMatchObject({ code: "VALIDATION_ERROR" });
+		}
+		expect(elements).toBe(0);
+		expect(access).toBe(0);
+	});
+
 	it("uses parsed input for the same product rule through executeJsonRoute", async () => {
 		let transforms = 0;
 		const definition = route()
