@@ -215,7 +215,7 @@
     },
     "packages/admin": {
       "name": "@questpie/admin",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "@base-ui/react": "^1.0.0",
         "@dnd-kit/core": "^6.3.1",
@@ -292,7 +292,7 @@
     },
     "packages/crdt-yjs": {
       "name": "@questpie/crdt-yjs",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "yjs": "13.6.31",
       },
@@ -307,7 +307,7 @@
     },
     "packages/create-questpie": {
       "name": "create-questpie",
-      "version": "2.4.3",
+      "version": "2.5.0",
       "bin": {
         "create-questpie": "./dist/index.mjs",
       },
@@ -324,7 +324,7 @@
     },
     "packages/elysia": {
       "name": "@questpie/elysia",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "@elysiajs/eden": "^1.2.6",
         "elysia": "^1.2.14",
@@ -341,7 +341,7 @@
     },
     "packages/hono": {
       "name": "@questpie/hono",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "hono": "^4.12.25",
         "questpie": "workspace:*",
@@ -357,7 +357,7 @@
     },
     "packages/mcp": {
       "name": "@questpie/mcp",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "1.32.1",
         "questpie": "workspace:*",
@@ -376,7 +376,7 @@
     },
     "packages/next": {
       "name": "@questpie/next",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "questpie": "workspace:*",
       },
@@ -390,7 +390,7 @@
     },
     "packages/observability": {
       "name": "@questpie/observability",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/api-logs": "^0.221.0",
@@ -418,7 +418,7 @@
     },
     "packages/openapi": {
       "name": "@questpie/openapi",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "questpie": "workspace:*",
         "zod": "^4.6.6",
@@ -433,7 +433,7 @@
     },
     "packages/questpie": {
       "name": "questpie",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "bin": {
         "questpie": "./bin/questpie.mjs",
       },
@@ -501,7 +501,7 @@
     },
     "packages/sandbox": {
       "name": "@questpie/sandbox",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "@questpie/mcp": "workspace:*",
         "questpie": "workspace:*",
@@ -517,7 +517,7 @@
     },
     "packages/sentry": {
       "name": "@questpie/sentry",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "@sentry/core": "11.9.0",
       },
@@ -537,7 +537,7 @@
     },
     "packages/tanstack-db": {
       "name": "@questpie/tanstack-db",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "devDependencies": {
         "@tanstack/db": "0.6.16",
         "@tanstack/query-db-collection": "1.1.0",
@@ -556,7 +556,7 @@
     },
     "packages/tanstack-query": {
       "name": "@questpie/tanstack-query",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "devDependencies": {
         "bun-types": "latest",
         "seroval": "1.6.3",
@@ -570,7 +570,7 @@
     },
     "packages/testing": {
       "name": "@questpie/testing",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "@electric-sql/pglite": "^0.3.14",
         "pg": "^8.13.1",
@@ -617,7 +617,7 @@
     },
     "packages/workflows": {
       "name": "@questpie/workflows",
-      "version": "3.40.0",
+      "version": "3.41.0",
       "dependencies": {
         "@iconify/react": "^6.0.2",
         "@questpie/admin": "workspace:*",
