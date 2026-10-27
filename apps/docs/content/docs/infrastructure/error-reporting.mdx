@@ -68,9 +68,10 @@ export default route()
 	});
 ```
 
-The same error object is reported once within a minute or two, so reporting it
-and then rethrowing does not produce a second event. The window rotates; an
-error object is never remembered for the life of the process.
+Within one HTTP request or one job attempt, the same error object is reported
+once, so reporting it and then rethrowing does not produce a second event. The
+same object failing another request, or the next retry, is a new occurrence and
+is reported again. Outside a request or job, every call reports.
 
 Delivery is bounded: at most `maxPending` (100) reports in flight, each released
 after `timeoutMs` (5 s). `app.destroy()` drains what is pending and shuts the

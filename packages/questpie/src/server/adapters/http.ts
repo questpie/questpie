@@ -17,6 +17,11 @@ import {
 	runWithRequestScope,
 } from "../config/request-scope.js";
 import { ApiError } from "../errors/index.js";
+import {
+	createErrorReportOccurrence,
+	type ErrorReportOccurrence,
+	runInErrorReportOccurrence,
+} from "../modules/core/integrated/errors/service.js";
 import type {
 	RequestLoggingConfig,
 	RequestLogMeta,
@@ -253,6 +258,7 @@ async function bindScopeToResponse(
 	response: Response,
 	scope: RequestScope,
 	route: string | undefined,
+	occurrence: ErrorReportOccurrence,
 ): Promise<Response> {
 	if (!response.body) {
 		await scope.dispose();
@@ -293,13 +299,15 @@ async function bindScopeToResponse(
 				// A client disconnect cancels the body; that is not a server
 				// incident. Anything else failed mid-stream, after the status line.
 				if (!request.signal.aborted) {
-					app.errors?.report(error, {
-						source: "http",
-						kind: "stream",
-						method: request.method,
-						route,
-						status: response.status,
-					});
+					runInErrorReportOccurrence(occurrence, () =>
+						app.errors?.report(error, {
+							source: "http",
+							kind: "stream",
+							method: request.method,
+							route,
+							status: response.status,
+						}),
+					);
 				}
 				await finalize().catch(() => {});
 				controller.error(error);
@@ -440,11 +448,13 @@ export const createFetchHandler = (
 		if (!matchesBase) return null;
 
 		const requestScope = new RequestScope();
+		// One error-report occurrence per request: a handler that reports an
+		// error and rethrows it is reported once, while the same error object
+		// failing another request is reported again.
+		const occurrence = createErrorReportOccurrence();
 		try {
-			const response = await runWithRequestScope(
-				appInstance,
-				requestScope,
-				() =>
+			const response = await runInErrorReportOccurrence(occurrence, () =>
+				runWithRequestScope(appInstance, requestScope, () =>
 					appInstance.observability.span(
 						`${request.method} ${routePattern ?? pathname}`,
 						async (span) => {
@@ -616,6 +626,7 @@ export const createFetchHandler = (
 							},
 						},
 					),
+				),
 			);
 			if (!(response instanceof Response)) {
 				await requestScope.dispose();
@@ -627,6 +638,7 @@ export const createFetchHandler = (
 				response,
 				requestScope,
 				routePattern,
+				occurrence,
 			);
 		} catch (error) {
 			return disposeRequestScopeAfterError(requestScope, error);

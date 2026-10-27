@@ -6,7 +6,11 @@ import {
 } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 
-import type { ErrorReportingService } from "../errors/service.js";
+import {
+	createErrorReportOccurrence,
+	type ErrorReportingService,
+	runInErrorReportOccurrence,
+} from "../errors/service.js";
 import type { ObservabilityService } from "../observability/service.js";
 import type {
 	QueueAdapter,
@@ -213,7 +217,7 @@ export function createQueueClient<
 		const handlers: QueueHandlerMap = {};
 
 		for (const jobDef of Object.values(sourceJobs)) {
-			handlers[jobDef.name] = async (job) => {
+			const handleAttempt: QueueHandlerMap[string] = async (job) => {
 				const context = await getContextOrThrow();
 				const secretPayload = job.secretPayload === true;
 				let executionToken: string | undefined;
@@ -424,6 +428,13 @@ export function createQueueClient<
 					await releaseExecution();
 				}
 			};
+			// One error-report occurrence per attempt: a manual report plus
+			// rethrow inside the handler is reported once; a retry is reported
+			// again.
+			handlers[jobDef.name] = (job) =>
+				runInErrorReportOccurrence(createErrorReportOccurrence(), () =>
+					handleAttempt(job),
+				);
 		}
 
 		return handlers;

@@ -4,7 +4,11 @@ import { z } from "zod";
 
 import { ApiError, job, route } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
-import { ErrorReportingService } from "../../src/server/modules/core/integrated/errors/service.js";
+import {
+	createErrorReportOccurrence,
+	ErrorReportingService,
+	runInErrorReportOccurrence,
+} from "../../src/server/modules/core/integrated/errors/service.js";
 import type {
 	ErrorReport,
 	ErrorReportingAdapter,
@@ -102,14 +106,28 @@ describe("ErrorReportingService", () => {
 		]);
 	});
 
-	it("drops the same error object reported twice in a row", () => {
+	it("dedupes the same error only within one occurrence", () => {
 		const { adapter, captured } = capturingAdapter();
 		const service = new ErrorReportingService({ adapter });
-		const error = new Error("once");
+		const error = new Error("shared");
+
+		const first = createErrorReportOccurrence();
+		runInErrorReportOccurrence(first, () => {
+			service.report(error, { source: "manual" });
+			service.report(error, { source: "http" });
+		});
+		runInErrorReportOccurrence(createErrorReportOccurrence(), () =>
+			service.report(error, { source: "http" }),
+		);
+		// Re-entering the first occurrence later still dedupes.
+		runInErrorReportOccurrence(first, () =>
+			service.report(error, { source: "http" }),
+		);
+		// Outside any occurrence every call reports.
 		service.report(error, { source: "manual" });
-		service.report(error, { source: "http" });
-		service.report(new Error("other"), { source: "manual" });
-		expect(captured).toHaveLength(2);
+		service.report(error, { source: "manual" });
+
+		expect(captured).toHaveLength(4);
 	});
 
 	it("bounds pending reports and releases slots after the deadline", async () => {
@@ -149,6 +167,51 @@ describe("ErrorReportingService", () => {
 		service.report(new Error("late"), { source: "manual" });
 		expect(captured).toHaveLength(1);
 		expect(service.enabled).toBe(false);
+	});
+
+	it("refuses reports from the moment shutdown starts and shuts down once", async () => {
+		let release!: () => void;
+		let shutdowns = 0;
+		const captured: unknown[] = [];
+		const service = new ErrorReportingService({
+			adapter: {
+				report(error) {
+					captured.push(error);
+					return new Promise<void>((resolve) => {
+						release = resolve;
+					});
+				},
+				shutdown: async () => {
+					shutdowns += 1;
+				},
+			},
+		});
+		service.report(new Error("in flight"), { source: "manual" });
+		const first = service.shutdown();
+		const second = service.shutdown();
+		expect(second).toBe(first);
+		expect(service.enabled).toBe(false);
+		service.report(new Error("during teardown"), { source: "manual" });
+		expect(captured).toHaveLength(1);
+		expect(shutdowns).toBe(0);
+		release();
+		await Promise.all([first, second, service.shutdown()]);
+		expect(shutdowns).toBe(1);
+	});
+
+	it("never rejects from flush or shutdown when the adapter throws or rejects", async () => {
+		for (const fail of [
+			() => {
+				throw new Error("sync");
+			},
+			() => Promise.reject(new Error("async")),
+		]) {
+			const service = new ErrorReportingService({
+				adapter: { report() {}, flush: fail as any, shutdown: fail as any },
+			});
+			await expect(service.flush(50)).resolves.toBeUndefined();
+			await expect(service.shutdown()).resolves.toBeUndefined();
+		}
 	});
 
 	it("bounds shutdown by its deadline even if the adapter hangs", async () => {
@@ -216,6 +279,63 @@ describe("HTTP error reporting", () => {
 			status: 500,
 		});
 		expect(captured[0]!.report.route).not.toContain(SECRET);
+	});
+
+	it("reports the same error object once per request, even after a manual report", async () => {
+		const shared = new Error("shared");
+		const { handler, captured } = await setup({
+			shared: route()
+				.get()
+				.raw()
+				.handler(({ errors }: any) => {
+					errors.report(shared, { source: "manual" });
+					throw shared;
+				}),
+		});
+
+		await handler(new Request("http://localhost/shared"));
+		await handler(new Request("http://localhost/shared"));
+
+		expect(captured.map((c) => c.report.source)).toEqual(["manual", "manual"]);
+		expect(captured.every((c) => c.error === shared)).toBe(true);
+	});
+
+	it("reports a failure while resolving the request context", async () => {
+		const failure = new Error(`context resolver said ${SECRET}`);
+		const rec = capturingAdapter();
+		const built = await buildMockApp(
+			{
+				routes: {
+					ctx: route()
+						.get()
+						.raw()
+						.handler(() => new Response("unreachable")),
+				},
+				config: {
+					app: {
+						context: () => {
+							throw failure;
+						},
+					},
+				},
+			} as any,
+			{ errors: { adapter: rec.adapter } },
+		);
+		cleanup = built.cleanup;
+		await runTestDbMigrations(built.app);
+
+		const response = await createFetchHandler(built.app)(
+			new Request("http://localhost/ctx"),
+		);
+
+		expect(response?.status).toBe(500);
+		expect(rec.captured).toHaveLength(1);
+		expect(rec.captured[0]!.error).toBe(failure);
+		expect(rec.captured[0]!.report).toMatchObject({
+			kind: "thrown",
+			route: "ctx",
+			status: 500,
+		});
 	});
 
 	it("does not report expected 4xx outcomes or unmatched routes", async () => {
@@ -409,6 +529,25 @@ describe("queue error reporting", () => {
 			{ source: "job", job: "explode", final: false },
 			{ source: "job", job: "explode", final: true },
 		]);
+	});
+
+	it("reports a reused error once per attempt, even after a manual report", async () => {
+		const shared = new Error("same object every attempt");
+		const reused = job({
+			name: "reused",
+			schema: z.object({}),
+			handler: async ({ errors }: any) => {
+				errors.report(shared, { source: "manual" });
+				throw shared;
+			},
+		});
+		const { handlerFor, captured } = await setup({ reused });
+		const handler = handlerFor("reused");
+
+		await handler({ id: "1", data: {}, finalAttempt: false }).catch(() => {});
+		await handler({ id: "1", data: {}, finalAttempt: true }).catch(() => {});
+
+		expect(captured.map((c) => c.report.source)).toEqual(["manual", "manual"]);
 	});
 
 	it("does not report a cancelled attempt", async () => {

@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import type {
 	ErrorReport,
 	ErrorReportInfo,
@@ -10,13 +12,28 @@ const DEFAULT_MAX_PENDING = 100;
 const DEFAULT_TIMEOUT_MS = 5_000;
 
 /**
- * The same error object reported again within this window is dropped, so a
- * manual `errors.report(error)` followed by a rethrow does not reach the
- * backend twice. Two rotating WeakSets bound it in time without holding the
- * error alive — a single WeakSet kept for the life of the process would
- * silently swallow a long-lived error object thrown again hours later.
+ * Errors already reported in the current occurrence — one HTTP request or one
+ * job attempt. A manual `errors.report(error)` followed by a rethrow reaches
+ * the backend once; the same error object failing another request or another
+ * attempt is a new occurrence and is reported again. The set dies with the
+ * occurrence. Outside any occurrence there is no dedupe: every call reports.
  */
-const DEDUPE_WINDOW_MS = 60_000;
+const occurrenceStorage = new AsyncLocalStorage<WeakSet<object>>();
+
+export type ErrorReportOccurrence = WeakSet<object>;
+
+/** Start a new occurrence. Pass the same one again to re-enter it later. */
+export function createErrorReportOccurrence(): ErrorReportOccurrence {
+	return new WeakSet();
+}
+
+/** Run `callback` inside `occurrence` (framework-internal). */
+export function runInErrorReportOccurrence<T>(
+	occurrence: ErrorReportOccurrence,
+	callback: () => T,
+): T {
+	return occurrenceStorage.run(occurrence, callback);
+}
 
 const SOURCES = new Set<ErrorReportSource>([
 	"http",
@@ -56,9 +73,7 @@ export class ErrorReportingService {
 		| undefined;
 	private readonly pending = new Set<Promise<void>>();
 	private closed = false;
-	private recent = new WeakSet<object>();
-	private previous = new WeakSet<object>();
-	private rotatedAt = Date.now();
+	private shutdownPromise: Promise<void> | undefined;
 
 	constructor(
 		config: ErrorReportingConfig = {},
@@ -94,30 +109,46 @@ export class ErrorReportingService {
 		}
 	}
 
-	/** Wait for pending reports and the adapter's buffer, up to `timeoutMs`. */
+	/**
+	 * Wait for pending reports and the adapter's buffer, up to `timeoutMs`.
+	 * Never rejects, even if the adapter throws.
+	 */
 	async flush(timeoutMs = DEFAULT_TIMEOUT_MS): Promise<void> {
 		const deadline = Date.now() + timeoutMs;
 		await withDeadline(Promise.allSettled(this.pending), timeoutMs);
 		const adapter = this.config.adapter;
 		if (adapter?.flush) {
+			const remaining = Math.max(0, deadline - Date.now());
 			await withDeadline(
-				adapter.flush(Math.max(0, deadline - Date.now())),
-				Math.max(0, deadline - Date.now()),
+				invoke(() => adapter.flush!(remaining)),
+				remaining,
 			);
 		}
 	}
 
-	/** Stop accepting reports, drain, and shut the adapter down. Idempotent. */
-	async shutdown(): Promise<void> {
-		if (this.closed) return;
+	/**
+	 * Stop accepting reports, drain what is pending, and shut the adapter down,
+	 * all within `shutdownTimeoutMs`. Reports are refused from the moment this
+	 * is called; concurrent and repeated calls share one shutdown. Never
+	 * rejects, even if the adapter throws.
+	 */
+	shutdown(): Promise<void> {
+		this.closed = true;
+		this.shutdownPromise ??= this.drainAndShutdown();
+		return this.shutdownPromise;
+	}
+
+	private async drainAndShutdown(): Promise<void> {
 		const timeoutMs = this.config.shutdownTimeoutMs ?? DEFAULT_TIMEOUT_MS;
 		const deadline = Date.now() + timeoutMs;
 		await withDeadline(Promise.allSettled(this.pending), timeoutMs);
-		this.closed = true;
 		const adapter = this.config.adapter;
 		if (adapter?.shutdown) {
 			const remaining = Math.max(0, deadline - Date.now());
-			await withDeadline(adapter.shutdown(remaining), remaining);
+			await withDeadline(
+				invoke(() => adapter.shutdown!(remaining)),
+				remaining,
+			);
 		}
 	}
 
@@ -132,22 +163,16 @@ export class ErrorReportingService {
 	}
 
 	private alreadyReported(error: unknown): boolean {
+		const occurrence = occurrenceStorage.getStore();
 		if (
+			!occurrence ||
 			error === null ||
 			(typeof error !== "object" && typeof error !== "function")
 		) {
 			return false;
 		}
-		const now = Date.now();
-		const elapsed = now - this.rotatedAt;
-		if (elapsed >= DEDUPE_WINDOW_MS) {
-			this.previous =
-				elapsed >= DEDUPE_WINDOW_MS * 2 ? new WeakSet() : this.recent;
-			this.recent = new WeakSet();
-			this.rotatedAt = now;
-		}
-		if (this.recent.has(error) || this.previous.has(error)) return true;
-		this.recent.add(error);
+		if (occurrence.has(error)) return true;
+		occurrence.add(error);
 		return false;
 	}
 
@@ -187,6 +212,11 @@ export class ErrorReportingService {
 		}
 		return report;
 	}
+}
+
+/** Call an adapter method; a synchronous throw becomes a rejection. */
+function invoke(callback: () => PromiseLike<unknown>): Promise<unknown> {
+	return new Promise((resolve) => resolve(callback()));
 }
 
 /** Resolve when `promise` settles or `timeoutMs` passes; never rejects. */
