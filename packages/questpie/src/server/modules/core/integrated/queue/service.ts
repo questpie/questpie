@@ -193,6 +193,20 @@ export function createQueueClient<
 		return runtimeOptions.getApp();
 	};
 
+	// Probes the app only to skip per-attempt work when nothing reports. A
+	// missing resolver is swallowed here so the attempt still fails with its
+	// own error, in its own order (context first, then app).
+	const reporterEnabled = () => {
+		try {
+			const app = runtimeOptions.getApp?.() as
+				| { errors?: ErrorReportingService }
+				| undefined;
+			return app?.errors?.enabled === true;
+		} catch {
+			return false;
+		}
+	};
+
 	const reportJobFailure = (
 		error: unknown,
 		jobName: string,
@@ -430,10 +444,11 @@ export function createQueueClient<
 			};
 			// One error-report occurrence per attempt: a manual report plus
 			// rethrow inside the handler is reported once; a retry is reported
-			// again.
+			// again. Skipped entirely when no reporter is configured.
 			handlers[jobDef.name] = (job) =>
-				runInErrorReportOccurrence(createErrorReportOccurrence(), () =>
-					handleAttempt(job),
+				runInErrorReportOccurrence(
+					reporterEnabled() ? createErrorReportOccurrence() : undefined,
+					() => handleAttempt(job),
 				);
 		}
 

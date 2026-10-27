@@ -169,6 +169,19 @@ describe("ErrorReportingService", () => {
 		expect(service.enabled).toBe(false);
 	});
 
+	it("calls straight through when there is no occurrence", () => {
+		const { adapter, captured } = capturingAdapter();
+		const service = new ErrorReportingService({ adapter });
+		const error = new Error("x");
+		const result = runInErrorReportOccurrence(undefined, () => {
+			service.report(error, { source: "manual" });
+			service.report(error, { source: "manual" });
+			return "done";
+		});
+		expect(result).toBe("done");
+		expect(captured).toHaveLength(2);
+	});
+
 	it("refuses reports from the moment shutdown starts and shuts down once", async () => {
 		let release!: () => void;
 		let shutdowns = 0;

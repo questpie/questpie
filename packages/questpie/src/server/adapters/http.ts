@@ -258,7 +258,7 @@ async function bindScopeToResponse(
 	response: Response,
 	scope: RequestScope,
 	route: string | undefined,
-	occurrence: ErrorReportOccurrence,
+	occurrence: ErrorReportOccurrence | undefined,
 ): Promise<Response> {
 	if (!response.body) {
 		await scope.dispose();
@@ -450,8 +450,11 @@ export const createFetchHandler = (
 		const requestScope = new RequestScope();
 		// One error-report occurrence per request: a handler that reports an
 		// error and rethrows it is reported once, while the same error object
-		// failing another request is reported again.
-		const occurrence = createErrorReportOccurrence();
+		// failing another request is reported again. Skipped entirely when no
+		// reporter is configured.
+		const occurrence = appInstance.errors?.enabled
+			? createErrorReportOccurrence()
+			: undefined;
 		try {
 			const response = await runInErrorReportOccurrence(occurrence, () =>
 				runWithRequestScope(appInstance, requestScope, () =>

@@ -27,12 +27,16 @@ export function createErrorReportOccurrence(): ErrorReportOccurrence {
 	return new WeakSet();
 }
 
-/** Run `callback` inside `occurrence` (framework-internal). */
+/**
+ * Run `callback` inside `occurrence` (framework-internal). Without one — no
+ * reporter configured — it calls straight through, so the no-op default
+ * allocates nothing and enters no async context.
+ */
 export function runInErrorReportOccurrence<T>(
-	occurrence: ErrorReportOccurrence,
+	occurrence: ErrorReportOccurrence | undefined,
 	callback: () => T,
 ): T {
-	return occurrenceStorage.run(occurrence, callback);
+	return occurrence ? occurrenceStorage.run(occurrence, callback) : callback();
 }
 
 const SOURCES = new Set<ErrorReportSource>([
