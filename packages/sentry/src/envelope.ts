@@ -75,7 +75,7 @@ export function createDelivery(
 		version: SDK_VERSION,
 	});
 	const timeoutMs = options.timeoutMs ?? 5_000;
-	const executor = options.send
+	const request = options.send
 		? (request: TransportRequest) =>
 				options.send!({ url, body: request.body }).then(toTransportResponse)
 		: (request: TransportRequest) =>
@@ -99,6 +99,16 @@ export function createDelivery(
 					}),
 				);
 
+	// Every request, custom or fetch, settles by the deadline so its buffer
+	// slot is released; a late rejection is absorbed.
+	const executor = (transportRequest: TransportRequest) =>
+		withTimeout(
+			new Promise<TransportMakeRequestResponse>((resolve) =>
+				resolve(request(transportRequest)),
+			),
+			timeoutMs,
+		);
+
 	const transport: Transport = createTransport(
 		{
 			bufferSize: options.bufferSize ?? 30,
@@ -121,6 +131,26 @@ export function createDelivery(
 			return transport.flush(timeoutMs);
 		},
 	};
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(
+			() => reject(new Error("Sentry envelope request timed out")),
+			timeoutMs,
+		);
+		(timer as { unref?: () => void }).unref?.();
+		promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(error: unknown) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
 }
 
 function toTransportResponse(response: {
@@ -153,7 +183,8 @@ export interface EventInput {
 
 /** The complete event. Every field is listed here; nothing else is sent. */
 export function buildEvent(input: EventInput): Event {
-	const values = input.exceptions
+	const { exceptions, locations } = withoutAmbiguousLocations(input.exceptions);
+	const values = exceptions
 		.map((exception, index) => ({
 			type: exception.type,
 			value: index === 0 ? input.value : "[redacted]",
@@ -170,7 +201,7 @@ export function buildEvent(input: EventInput): Event {
 		// Sentry lists the outermost exception last.
 		.toReversed();
 
-	const images = debugImages(input.exceptions);
+	const images = debugImages(locations);
 	return {
 		event_id: uuid4(),
 		timestamp: dateTimestampInSeconds(),
@@ -201,15 +232,12 @@ export function buildEvent(input: EventInput): Event {
  * built from the RAW filenames, then emitted under the sanitized filename so
  * `code_file` matches the frame's `abs_path` on the wire.
  */
-function debugImages(exceptions: SanitizedException[]): DebugImage[] {
+function debugImages(locations: ReadonlyMap<string, string>): DebugImage[] {
 	const registered = registeredFiles();
 	const images: DebugImage[] = [];
-	const seen = new Set<string>();
-	for (const exception of exceptions) {
-		for (const [sanitized, raw] of exception.rawFilenames) {
-			const debugId = registered.get(raw);
-			if (!debugId || seen.has(sanitized)) continue;
-			seen.add(sanitized);
+	for (const [sanitized, raw] of locations) {
+		const debugId = registered.get(raw);
+		if (debugId) {
 			images.push({
 				type: "sourcemap",
 				code_file: sanitized,
@@ -218,6 +246,45 @@ function debugImages(exceptions: SanitizedException[]): DebugImage[] {
 		}
 	}
 	return images;
+}
+
+/**
+ * Two different files can rewrite to one location (the same `/assets/main.js`
+ * on two hosts). A debug image per location could then symbolicate one file's
+ * frames with the other's source map, so an ambiguous location is dropped from
+ * every frame instead — they keep line and column. Returns the exceptions and
+ * each remaining location's single raw filename.
+ */
+function withoutAmbiguousLocations(exceptions: SanitizedException[]): {
+	exceptions: SanitizedException[];
+	locations: Map<string, string>;
+} {
+	const raws = new Map<string, Set<string>>();
+	for (const exception of exceptions) {
+		for (const [location, names] of exception.rawFilenames) {
+			const all = raws.get(location) ?? new Set<string>();
+			for (const name of names) all.add(name);
+			raws.set(location, all);
+		}
+	}
+	const locations = new Map<string, string>();
+	const ambiguous = new Set<string>();
+	for (const [location, names] of raws) {
+		if (names.size === 1) locations.set(location, [...names][0]!);
+		else ambiguous.add(location);
+	}
+	if (ambiguous.size === 0) return { exceptions, locations };
+	return {
+		locations,
+		exceptions: exceptions.map((exception) => ({
+			...exception,
+			frames: exception.frames.map((frame) =>
+				frame.filename !== undefined && ambiguous.has(frame.filename)
+					? { lineno: frame.lineno, colno: frame.colno }
+					: frame,
+			),
+		})),
+	};
 }
 
 /**

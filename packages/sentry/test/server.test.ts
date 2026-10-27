@@ -175,6 +175,42 @@ describe("sentryErrorReporting", () => {
 		expect(capture.envelopes[0]!.raw).not.toContain(SECRET);
 	});
 
+	it("bounds a custom transport by the deadline and frees its slot", async () => {
+		let calls = 0;
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			timeoutMs: 5,
+			bufferSize: 1,
+			send: () => {
+				calls += 1;
+				if (calls === 1) return new Promise(() => {});
+				if (calls === 2) {
+					return new Promise((_, reject) =>
+						setTimeout(() => reject(new Error("late failure")), 20),
+					);
+				}
+				return Promise.resolve({ statusCode: 200 });
+			},
+		})!;
+		const hung = Promise.resolve(
+			adapter.report(new Error("a"), { source: "manual" }),
+		).catch(() => "timed out");
+		await new Promise((resolve) => setTimeout(resolve, 15));
+		const late = Promise.resolve(
+			adapter.report(new Error("b"), { source: "manual" }),
+		).catch(() => "timed out");
+		expect(calls).toBe(2);
+		expect(await hung).toBe("timed out");
+		expect(await late).toBe("timed out");
+		// The late rejection lands after its deadline and must be absorbed.
+		await new Promise((resolve) => setTimeout(resolve, 30));
+		await adapter.report(new Error("c"), { source: "manual" });
+		expect(calls).toBe(3);
+		const started = Date.now();
+		expect(await adapter.flush!(50)).toBe(true);
+		expect(Date.now() - started).toBeLessThan(50);
+	});
+
 	it("returns no adapter without a DSN, leaving errors disabled", () => {
 		const adapter = sentryErrorReporting({ dsn: undefined });
 		expect(adapter).toBeUndefined();
@@ -245,6 +281,54 @@ describe("sentryErrorReporting", () => {
 			"app:///assets/chunk-B.js": "bbbbbbbb-0000-4000-8000-00000000000b",
 			"app:///assets/entry-A.js": "aaaaaaaa-0000-4000-8000-00000000000a",
 		});
+	});
+
+	it("drops a location two registered bundles share instead of mis-symbolicating", async () => {
+		const capture = captureTransport();
+		// Three keys: Sentry caches the map by key count, and another test
+		// registers two.
+		(globalThis as any)._sentryDebugIds = {
+			"Error\n    at a (https://cdn-a.example/assets/main.js:1:1)":
+				"aaaaaaaa-0000-4000-8000-0000000000aa",
+			"Error\n    at b (https://cdn-b.example/assets/main.js:1:1)":
+				"bbbbbbbb-0000-4000-8000-0000000000bb",
+			"Error\n    at c (https://cdn-a.example/assets/other.js:1:1)":
+				"cccccccc-0000-4000-8000-0000000000cc",
+		};
+		const cause = new Error("from b");
+		Object.defineProperty(cause, "stack", {
+			value:
+				"Error: from b\n    at g (https://cdn-b.example/assets/main.js:9:9)",
+		});
+		const error = new Error("from a", { cause });
+		Object.defineProperty(error, "stack", {
+			value:
+				"Error: from a\n    at f (https://cdn-a.example/assets/main.js:5:5)\n    at h (https://cdn-a.example/assets/other.js:7:7)",
+		});
+		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
+		await adapter.report(error, { source: "manual" });
+
+		const event = capture.envelopes[0]!.items[0]!.payload;
+		const [causeValue, errorValue] = event.exception.values;
+		expect(errorValue.stacktrace.frames).toEqual([
+			{
+				filename: "app:///assets/other.js",
+				abs_path: "app:///assets/other.js",
+				in_app: true,
+				lineno: 7,
+				colno: 7,
+			},
+			{ lineno: 5, colno: 5 },
+		]);
+		expect(causeValue.stacktrace.frames).toEqual([{ lineno: 9, colno: 9 }]);
+		expect(event.debug_meta.images).toEqual([
+			{
+				type: "sourcemap",
+				code_file: "app:///assets/other.js",
+				debug_id: "cccccccc-0000-4000-8000-0000000000cc",
+			},
+		]);
+		expect(capture.envelopes[0]!.raw).not.toContain("cdn-");
 	});
 
 	it("stops sending after shutdown and keeps the core contract on transport failure", async () => {

@@ -21,11 +21,13 @@
  * check that cannot be intercepted (`isNativeError` + `isProxy` on the server,
  * `Error.isError` in the browser); a proxy, or any runtime without such a
  * check, gets an opaque `Error` with no frames. Only OWN properties of the
- * value are read, through descriptors. Its prototype is looked at only when it
- * is one of the built-in error prototypes, so a proxy or getter-laden custom
- * prototype is never touched. Accessors are called only when they are the
- * runtime's own native getters captured at load. `toJSON`/`toString` are
- * never called.
+ * value are read, through descriptors. A prototype's descriptors are read only
+ * when it is a built-in error prototype, or, on the server, a custom prototype
+ * `isProxy` has cleared (to confirm `name`/`message` are plain data before V8
+ * formats the stack); a proxy prototype is never touched, and no prototype
+ * accessor is called. Accessors are called only when they are the runtime's
+ * own native getters captured at load, and V8's stack getter only while
+ * `Error.prepareStackTrace` is unset. `toJSON`/`toString` are never called.
  */
 
 import type { StackFrame } from "@sentry/core";
@@ -33,8 +35,11 @@ import type { StackFrame } from "@sentry/core";
 export interface SanitizedException {
 	type: string;
 	frames: SanitizedFrame[];
-	/** Raw frame filenames, only for debug-id lookup inside the process. */
-	rawFilenames: Map<string, string>;
+	/**
+	 * Sent location → the raw filenames it was rewritten from. Kept inside the
+	 * process for debug-id lookup and to detect two files sharing a location.
+	 */
+	rawFilenames: Map<string, Set<string>>;
 }
 
 export type SanitizedFrame = Pick<
@@ -177,7 +182,7 @@ function sanitizeOne(
 			: "Error";
 
 	const frames: SanitizedFrame[] = [];
-	const rawFilenames = new Map<string, string>();
+	const rawFilenames = new Map<string, Set<string>>();
 	if (typeof stack === "string") {
 		for (const raw of parseFrames(
 			stack,
@@ -186,7 +191,9 @@ function sanitizeOne(
 		)) {
 			const frame = sanitizeFrame(raw, options);
 			if (frame.filename && raw.filename) {
-				rawFilenames.set(frame.filename, raw.filename);
+				const raws = rawFilenames.get(frame.filename) ?? new Set<string>();
+				raws.add(raw.filename);
+				rawFilenames.set(frame.filename, raws);
 			}
 			frames.push(frame);
 		}
@@ -277,11 +284,29 @@ function readStack(target: object, options: SanitizeOptions): unknown {
 	// resolve to plain data without touching anything untrusted.
 	if (
 		!resolvesToPlainData(target, "name", options) ||
-		!resolvesToPlainData(target, "message", options)
+		!resolvesToPlainData(target, "message", options) ||
+		!usesDefaultStackFormatter()
 	) {
 		return undefined;
 	}
 	return callNative(getter, target);
+}
+
+/** The realm's `Error`, captured at load. */
+const NATIVE_ERROR = Error;
+
+/**
+ * V8 looks up and calls `Error.prepareStackTrace` while formatting a stack.
+ * Only its absence (or a plain `undefined`) is the runtime's own formatter; an
+ * accessor or a custom formatter (e.g. a source-map hook) is app code, so lazy
+ * formatting is skipped and the error is sent without frames.
+ */
+function usesDefaultStackFormatter(): boolean {
+	const descriptor = ownDescriptor(NATIVE_ERROR, "prepareStackTrace");
+	return (
+		descriptor === undefined ||
+		("value" in descriptor && descriptor.value === undefined)
+	);
 }
 
 /**

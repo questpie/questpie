@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { isNativeError, isProxy } from "node:util/types";
 
 import { sanitizeError, sanitizeFilename } from "../src/sanitize.js";
@@ -390,5 +393,52 @@ describe("sanitizeFilename", () => {
 				registeredFiles: trustAll,
 			}),
 		).toBeUndefined();
+	});
+});
+
+describe("on V8 (node)", () => {
+	// Bun stores `stack` as data; V8 formats it lazily through a native getter
+	// that consults Error.prepareStackTrace. Run the sanitizer under node.
+	const node = Bun.which("node");
+	const v8It = node ? it : it.skip;
+
+	v8It("never runs an Error.prepareStackTrace accessor or formatter", () => {
+		const source = new Bun.Transpiler({ loader: "ts" }).transformSync(
+			readFileSync(join(import.meta.dir, "../src/sanitize.ts"), "utf8"),
+		);
+		const harness = `${source}
+import { isNativeError, isProxy } from "node:util/types";
+const options = { isProxy, isNativeError };
+const out = { v8: typeof Object.getOwnPropertyDescriptor(new Error("p"), "stack")?.get === "function" };
+let calls = 0;
+
+const withAccessor = new Error("x");
+Object.defineProperty(Error, "prepareStackTrace", { configurable: true, get() { calls++; return undefined; } });
+calls = 0;
+out.accessor = { frames: sanitizeError(withAccessor, options)[0].frames.length, calls };
+delete Error.prepareStackTrace;
+
+const withFormatter = new Error("x");
+Error.prepareStackTrace = () => { calls++; return "Error: x\\n    at fake (/app/x.js:1:1)"; };
+calls = 0;
+out.formatter = { frames: sanitizeError(withFormatter, options)[0].frames.length, calls };
+delete Error.prepareStackTrace;
+
+const builtin = sanitizeError(new RangeError("x"), options)[0];
+out.builtin = { type: builtin.type, frames: builtin.frames.length };
+console.log(JSON.stringify(out));
+`;
+		const result = spawnSync(node!, ["--input-type=module"], {
+			input: harness,
+			encoding: "utf8",
+			timeout: 20_000,
+		});
+		expect(result.stderr).toBe("");
+		const out = JSON.parse(result.stdout);
+		expect(out.v8).toBe(true);
+		expect(out.accessor).toEqual({ frames: 0, calls: 0 });
+		expect(out.formatter).toEqual({ frames: 0, calls: 0 });
+		expect(out.builtin.type).toBe("RangeError");
+		expect(out.builtin.frames).toBeGreaterThan(0);
 	});
 });
