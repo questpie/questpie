@@ -101,6 +101,7 @@ type _AppInfraRecord = {
 	realtime: _AppQuestpie["realtime"];
 	executor: _AppQuestpie["executor"];
 	observability: _AppQuestpie["observability"];
+	errors: _AppQuestpie["errors"];
 	channels: Channels<AppChannels>;
 	crdt: AppCrdtServer;
 

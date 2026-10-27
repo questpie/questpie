@@ -1,0 +1,81 @@
+{
+	"name": "@questpie/sentry",
+	"version": "3.40.0",
+	"description": "Sentry error reporting for QUESTPIE — server adapter, browser reporter and source map upload",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/questpie/questpie.git",
+		"directory": "packages/sentry"
+	},
+	"files": [
+		"dist"
+	],
+	"type": "module",
+	"sideEffects": false,
+	"exports": {
+		"./browser": {
+			"types": "./src/exports/browser.ts",
+			"default": "./src/exports/browser.ts"
+		},
+		"./server": {
+			"types": "./src/exports/server.ts",
+			"default": "./src/exports/server.ts"
+		},
+		"./vite": {
+			"types": "./src/exports/vite.ts",
+			"default": "./src/exports/vite.ts"
+		},
+		"./package.json": {
+			"types": "./package.json",
+			"default": "./package.json"
+		}
+	},
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			"./browser": {
+				"types": "./dist/browser.d.mts",
+				"default": "./dist/browser.mjs"
+			},
+			"./server": {
+				"types": "./dist/server.d.mts",
+				"default": "./dist/server.mjs"
+			},
+			"./vite": {
+				"types": "./dist/vite.d.mts",
+				"default": "./dist/vite.mjs"
+			},
+			"./package.json": {
+				"types": "./package.json",
+				"default": "./package.json"
+			}
+		}
+	},
+	"scripts": {
+		"build": "tsdown",
+		"check-types": "tsc --noEmit",
+		"test": "bun test --timeout=60000 test/"
+	},
+	"dependencies": {
+		"@sentry/core": "11.9.0"
+	},
+	"devDependencies": {
+		"@sentry/vite-plugin": "11.9.0",
+		"bun-types": "latest",
+		"tsdown": "^0.18.3",
+		"zod": "^4.6.6"
+	},
+	"peerDependencies": {
+		"@sentry/vite-plugin": "11.9.0",
+		"questpie": "workspace:^"
+	},
+	"peerDependenciesMeta": {
+		"@sentry/vite-plugin": {
+			"optional": true
+		}
+	},
+	"engines": {
+		"node": ">=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0"
+	}
+}

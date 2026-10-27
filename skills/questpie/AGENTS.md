@@ -7098,6 +7098,7 @@ For normative soundness details, inspect
 - [Deployment](#deployment), Docker, env vars, checklist, health check
 - [Realtime and Live Preview](#realtime-and-live-preview)
 - [Observability](#observability), tracing, metrics, log correlation
+- [Error Reporting](#error-reporting), one report per unexpected failure, Sentry
 - [Common Mistakes](#common-mistakes)
 
 ## Overview
@@ -7402,6 +7403,82 @@ process.on("SIGTERM", async () => {
 	await app.observability.shutdown();
 });
 ```
+
+## Error Reporting
+
+Separate from tracing: one report per unexpected failure, whether or not an
+observability adapter is configured or sampling. Opt-in through
+`runtimeConfig({ errors: { adapter } })`; without an adapter `ctx.errors` is a
+no-op and the framework does no per-request or per-job work for it.
+
+```ts title="questpie.config.ts"
+import { sentryErrorReporting } from "@questpie/sentry/server";
+
+export default runtimeConfig({
+	errors: {
+		// undefined without a DSN, which leaves reporting off
+		adapter: sentryErrorReporting({
+			dsn: process.env.SENTRY_DSN,
+			release: process.env.RELEASE,
+			environment: process.env.NODE_ENV,
+			filenameRoot: process.cwd(), // rewrites sent paths; must not be "/"
+			errorNames: ["ApiError"], // custom names safe to send; others become Error
+		}),
+	},
+});
+```
+
+**Reported by the framework, not by wrapping handlers:** an HTTP 5xx (thrown,
+returned without throwing, or a response stream that failed later) and every
+failed job attempt (with `final` when no retry follows). Not reported: 4xx,
+unmatched routes, client disconnects, aborted attempts. A secret-payload job
+reports only its redacted error. Reporting never changes the response, the
+thrown error, or retry and ack.
+
+**Manual reports** from any handler: `errors.report(error, { source: "background" })`.
+`info` is closed (`source`, `kind`, `method`, `route` template, `status`, static
+`job` name, `final`); anything else is dropped. Within one request or job
+attempt the same error object is reported once, so report-then-rethrow is
+safe.
+
+**Browser and build** (`@questpie/sentry/browser`, `@questpie/sentry/vite`):
+
+```ts
+const reporter = createBrowserErrorReporter({ dsn, release, environment });
+installGlobalErrorHandlers(reporter, window);
+createRouter({
+	routeTree,
+	defaultOnCatch: createRouterErrorReporter(
+		reporter,
+		() => router.state.matches.at(-1)?.routeId,
+	),
+});
+
+// vite.config.ts: debug ids, upload with SENTRY_AUTH_TOKEN, hidden maps
+plugins: [questpieSentryVite({ org, project, release })];
+```
+
+**What leaves the process** is an allowlist: built-in or listed error names,
+frames with line/column and a file only for a build artifact registered by
+debug id or listed in `trustedFiles` (rewritten to `app:///`), and the
+validated `info`. Never the message,
+function names, request, session, payload or breadcrumbs. By default
+inspection runs none of the error's code (getters, proxy traps, `toJSON`) and
+no stack-formatting hook, and the reporter never modifies globals; proxies and
+errors the native brand check cannot vouch for are sent as `Error` with no
+frames.
+
+**Stacks on Node, Bun and in browsers are formatted lazily** (on Node 20 and
+Bun even inspecting `stack` formats it), so by default those errors are
+reported without frames; in the browser the thrown value is not inspected at
+all by default (its only brand check, `Error.isError`, may be a polyfill that
+runs getters), so every thrown object is reported as `Error`. Frames there need an explicit opt-in, `formattedStacks: true` on the
+server adapter or browser reporter. It reads the stack as `error.stack` does,
+running whatever `Error.prepareStackTrace` is installed, which may run any
+code; only the reporter's own reads stay getter-free. Do not enable it by
+default in generated code. No Sentry client or
+OpenTelemetry provider is initialised, so it coexists with
+`@questpie/observability`.
 
 ## Common Mistakes
 

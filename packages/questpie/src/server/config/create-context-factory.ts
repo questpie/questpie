@@ -107,6 +107,7 @@ function bindServiceSurfaces(
 		"collections",
 		"db",
 		"email",
+		"errors",
 		"executor",
 		"globals",
 		"kv",

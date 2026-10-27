@@ -46,6 +46,7 @@ import {
 	type CrdtRegistry,
 } from "#questpie/server/modules/core/integrated/crdt/registry.js";
 import { questpieCrdtTables } from "#questpie/server/modules/core/integrated/crdt/schema.js";
+import type { ErrorReportingService } from "#questpie/server/modules/core/integrated/errors/service.js";
 import type { ExecutorService } from "#questpie/server/modules/core/integrated/executor/service.js";
 import type { KVService } from "#questpie/server/modules/core/integrated/kv/service.js";
 import type { LoggerService } from "#questpie/server/modules/core/integrated/logger/service.js";
@@ -235,6 +236,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 	public executor!: ExecutorService;
 	public logger!: LoggerService;
 	public observability!: ObservabilityService;
+	public errors!: ErrorReportingService;
 	public search!: SearchService;
 	public realtime!: RealtimeService;
 	/** @internal App-owned CRDT operational coordinator; request APIs resolve through the service container. */
@@ -489,6 +491,9 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 		// Tier 0 on purpose: the HTTP adapter opens the root span before any
 		// other service is touched, so observability must exist by then.
 		["observability", "observability"],
+		// Right after observability: disposed just before it, once every
+		// service that can fail has stopped, so its final reports are drained.
+		["errors", "errors"],
 		["kv", "kv"],
 		["executor", "executor"],
 		["db", "db"],
@@ -604,6 +609,7 @@ export class Questpie<TConfig extends QuestpieConfig = QuestpieConfig> {
 			executor: this.executor,
 			logger: this.logger,
 			observability: this.observability,
+			errors: this.errors,
 			search: this.search,
 			realtime: this.realtime,
 			email: this.email,

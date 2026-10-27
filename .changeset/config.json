@@ -17,6 +17,7 @@
 			"@questpie/observability",
 			"@questpie/openapi",
 			"@questpie/sandbox",
+			"@questpie/sentry",
 			"@questpie/tanstack-db",
 			"@questpie/tanstack-query",
 			"@questpie/testing",

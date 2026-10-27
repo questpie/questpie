@@ -1,0 +1,313 @@
+---
+title: Error reporting
+description: One report per unexpected failure from HTTP, jobs and the browser, through a vendor-neutral seam. The Sentry adapter sends an allowlisted event built from the error's type and stack frames, never its message, the request, the session or a payload.
+kind: guide
+package: "@questpie/sentry"
+---
+
+Tracing tells you how requests behave. Error reporting tells you that one
+failed and where. QUESTPIE keeps the two separate. A span records every failure
+in every enclosing span, is sampled, and carries the error message as its
+status. An incident report needs the opposite: exactly one report per failure,
+whether or not tracing is on, with nothing in it the framework cannot vouch for.
+
+## What the framework reports
+
+With an adapter configured, the framework reports these failures itself. You
+do not wrap routes or jobs.
+
+| Where | Reported                                                           | Not reported                                 |
+| ----- | ------------------------------------------------------------------ | -------------------------------------------- |
+| HTTP  | A thrown error that became a 5xx (`kind: "thrown"`)                | 4xx: validation, auth, not found, conflict   |
+|       | A 5xx the handler returned without throwing (`kind: "returned"`)   | Unmatched routes                             |
+|       | A response body that failed after the status was sent (`"stream"`) | A body the client cancelled                  |
+| Queue | Every failed attempt, with `final: true` when no retry follows     | Attempts aborted by lease expiry or shutdown |
+
+A returned 5xx has no original error, so the adapter receives `undefined`
+rather than a made-up one. A secret-payload job only ever hands the reporter its
+redacted, cause-free error.
+
+Reporting never changes the outcome. `report()` is synchronous, never throws
+and never awaits delivery. The response, the thrown error, the transaction and
+the job's retry and ack decision are identical with or without an adapter, and
+identical when the adapter throws, rejects or hangs.
+
+## The contract
+
+```ts
+import type { ErrorReportingAdapter } from "questpie/errors";
+
+const adapter: ErrorReportingAdapter = {
+	report(error, report) {
+		// error: the raw thrown value, which stays in your process
+		// report: { source, kind?, method?, route?, status?, job?, final?, trace? }
+	},
+	flush: async (timeoutMs) => {},
+	shutdown: async (timeoutMs) => {},
+};
+```
+
+`report` is closed. `source` is `http`, `job`, `background` or `manual`.
+`route` is the matched route template (`items/:id`), never the raw path. `job`
+is the static job name, never a dispatch or idempotency id. Anything else you
+pass is dropped before the adapter sees it. `trace` is added only when an
+observability adapter has a span open at the time.
+
+Report your own failures from any handler:
+
+```ts
+export default route()
+	.post()
+	.handler(async ({ errors }) => {
+		try {
+			await syncInventory();
+		} catch (error) {
+			errors.report(error, { source: "background" });
+		}
+		return { ok: true };
+	});
+```
+
+Within one HTTP request or one job attempt, the same error object is reported
+once, so reporting it and then rethrowing does not produce a second event. The
+same object failing another request, or the next retry, is a new occurrence and
+is reported again. Outside a request or job, every call reports.
+
+Delivery is bounded: at most `maxPending` (100) reports in flight, each released
+after `timeoutMs` (5 s). `app.destroy()` drains what is pending and shuts the
+adapter down within `shutdownTimeoutMs` (5 s).
+
+## Sentry
+
+```bash
+bun add @questpie/sentry
+```
+
+`@questpie/sentry` needs Node 20.19+, 22.12+ or 23.2+, the same floor as the
+Sentry 11 SDK it builds on. It has three entrypoints. The browser bundle does
+not import Node code, and the server does not import browser or build code.
+
+| Entrypoint                 | For                                         | Depends on                   |
+| -------------------------- | ------------------------------------------- | ---------------------------- |
+| `@questpie/sentry/server`  | HTTP, jobs and workers                      | `@sentry/core`               |
+| `@questpie/sentry/browser` | Uncaught errors and router error boundaries | `@sentry/core`               |
+| `@questpie/sentry/vite`    | Source map upload at build time             | `@sentry/vite-plugin` (peer) |
+
+### Server and worker
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { sentryErrorReporting } from "@questpie/sentry/server";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	errors: {
+		adapter: sentryErrorReporting({
+			dsn: process.env.SENTRY_DSN,
+			release: process.env.RELEASE,
+			environment: process.env.NODE_ENV,
+			filenameRoot: process.cwd(),
+		}),
+	},
+});
+```
+
+The HTTP server and a standalone `app.queue.listen()` worker read the same
+config, so both report. Without `dsn`, `sentryErrorReporting()` returns
+`undefined` and error reporting stays off with no per-request cost, so you can
+wire it unconditionally and enable it per environment.
+
+### Browser
+
+```ts title="src/lib/error-reporter.ts"
+import {
+	createBrowserErrorReporter,
+	installGlobalErrorHandlers,
+} from "@questpie/sentry/browser";
+
+export const errorReporter = createBrowserErrorReporter({
+	dsn: import.meta.env.VITE_SENTRY_DSN,
+	release: import.meta.env.VITE_RELEASE,
+	environment: import.meta.env.MODE,
+});
+
+if (typeof window !== "undefined") {
+	installGlobalErrorHandlers(errorReporter, window);
+}
+```
+
+Report router error boundaries with the matched route **template**, so
+`/invite/$token` is reported and the token is not:
+
+```ts title="src/router.tsx"
+import { createRouterErrorReporter } from "@questpie/sentry/browser";
+import { createRouter } from "@tanstack/react-router";
+
+import { errorReporter } from "./lib/error-reporter";
+
+export function getRouter() {
+	const router = createRouter({
+		routeTree,
+		defaultOnCatch: createRouterErrorReporter(
+			errorReporter,
+			() => router.state.matches.at(-1)?.routeId,
+		),
+	});
+	return router;
+}
+```
+
+`createRouterErrorReporter` returns a plain `(error) => void`, so it fits any
+router's catch hook. The reporter caps itself at 30 events a minute so a render
+loop cannot flood the project.
+
+### Source maps
+
+```ts title="vite.config.ts"
+import { questpieSentryVite } from "@questpie/sentry/vite";
+
+export default defineConfig({
+	plugins: [
+		// ...your framework plugins
+		questpieSentryVite({
+			org: "my-org",
+			project: "my-app",
+			release: process.env.RELEASE!,
+		}),
+	],
+});
+```
+
+The plugin injects debug ids into each bundle and uploads the maps with
+`SENTRY_AUTH_TOKEN`. It sets `build.sourcemap` to `"hidden"` unless you set it,
+so bundles do not reference their maps. After upload it deletes `**/*.map`
+under the build output so your web server cannot serve them. Keep the token in
+a CI secret; it is a build credential and never part of a bundle. Without a
+token, debug ids are still injected and nothing is uploaded.
+
+Use one `release` value for the build, the server and the browser. Events are
+symbolicated by debug id, so a frame resolves only against maps from the same
+build.
+
+## What leaves the process
+
+The Sentry adapter builds the event from an allowlist, and the event below is
+the complete payload:
+
+- `exception`: for the error and up to three causes, a type and stack frames.
+  - The type is a built-in name (`TypeError`, `RangeError`, `AbortError`, …)
+    or one you list in `errorNames`. Every other class is reported as `Error`:
+    a name like `AcmeCustomerError` looks exactly like a safe one, so shape is
+    not trusted.
+  - Frames always carry line and column. A frame carries its file only when
+    that file is a build artifact registered by `questpieSentryVite` (its
+    debug id), or a server file you list exactly in `trustedFiles`, for a
+    worker you run unbundled. Every other file is dropped, whatever its path:
+    a script on another host, an inline script on `/invite/<token>`, a file
+    under `uploads/`. A kept file is sent without host, credentials or query,
+    as `app:///assets/index-Ab12.js` in the browser or, on the server,
+    relative to `filenameRoot` (default `process.cwd()`) as
+    `app:///dist/server.mjs`. `filenameRoot` only decides how a file is
+    written, not whether it is sent; a filesystem or drive root (`/`, `C:\`)
+    is not a root, so set it explicitly when the process runs from `/`. Paths
+    with `.` or `..` segments are dropped.
+  - Function names are not sent. Sentry restores them, with the original
+    files, from your uploaded source maps, matched by debug id.
+  - The value is a description built from `report`
+    (`HTTP 500 POST items/:id (thrown)`), not the error message.
+- `tags` and `transaction`: the validated `report` fields.
+- `release`, `environment`, `platform`, `level`, `timestamp`, `event_id`.
+- `contexts.trace`, only when a span was active.
+- `debug_meta`, the debug ids needed for source maps.
+
+Never sent: the error message, `cause` messages, custom error names you have
+not listed, function names, local variables, source context lines, the request
+(URL, headers, cookies, body, IP), the session or user, job payloads, SQL,
+logs, breadcrumbs, spans, sessions and replays.
+
+What is sent is still yours to judge. File paths under your app root and the
+names you list in `errorNames` go out as they are, and the masking inside kept
+paths is a pattern match, not a guarantee.
+
+By default, inspecting a thrown value runs none of its code (no getter, proxy
+trap, `toJSON` or `toString` of the error) and no stack-formatting hook, and
+the reporter never modifies globals. Values that cannot be verified are
+reported without frames:
+
+- On the server, a value is inspected only after Node's own brand checks
+  (`isNativeError`, `isProxy`), which a proxy cannot intercept. A proxy is
+  reported as `NonError`, and so is a `DOMException` in Bun.
+- In the browser, by default the thrown value is not inspected at all: every
+  thrown object is reported as `Error` and each primitive as `NonError`,
+  without frames, in every browser. The only browser brand check is
+  `Error.isError`, and a polyfill of it (core-js
+  ships one that reads `Symbol.toStringTag` and reports itself as native code)
+  can run getters on the value. With `formattedStacks` (below) the value is
+  inspected using the runtime's `Error.isError`, whatever it is; without one,
+  every value is reported as `NonError`. Values that fail that check are
+  also reported as `NonError`.
+- Only the error's own properties are read. Its prototype is read only when it
+  is a built-in error prototype, so a custom class reports its type only when
+  it sets `name` on the instance (`this.name = "ApiError"` or a class field)
+  and you list it in `errorNames`.
+- With `formattedStacks` (below), a stack is formatted with a header built from
+  `name`, `message` and, for Node's own errors, `code`. It is read only when
+  those are plain data on the error itself or on built-in prototypes; on the
+  server, also on custom prototypes that are verified not to be proxies.
+
+### Reading stacks
+
+Most runtimes produce an error's stack the first time it is read, by running
+the runtime's stack formatter: in V8 and Bun that is whatever
+`Error.prepareStackTrace` the error's realm has installed (Node's and Bun's
+own defaults, a source-map hook such as `source-map-support`, or one of
+yours), and which realm an error came from cannot be determined reliably. On
+Node 20 and Bun even inspecting the `stack` property, without reading it,
+formats the stack.
+
+So by default stacks are not read. On Node 20 and Bun nothing about `stack` is
+touched. On Node 22+, where inspecting it formats nothing, a `stack` that is
+already a plain data property is read and anything else is left alone. In
+browsers the value is not inspected at all by default (see above). In
+practice, on Node, Bun and in every browser errors are reported without
+frames, and therefore without source-mapped locations.
+
+To get frames there, opt in explicitly:
+
+```ts
+sentryErrorReporting({ dsn, release, formattedStacks: true });
+createBrowserErrorReporter({ dsn, release, formattedStacks: true });
+```
+
+This reads the stack exactly as `error.stack` does in your own logging, so the
+"runs none of its code" guarantee above no longer covers stacks:
+
+- Whatever formatter or `prepareStackTrace` accessor is installed runs, and it
+  can run any code, including getters on the error and changes to globals. The
+  reporter only keeps its own reads of `name`, `message` and `code` free of
+  getters and proxies, and it never modifies globals itself.
+- What a custom or source-mapping formatter puts into the stack is your
+  responsibility. File locations still follow the rules above: only registered
+  or listed files are sent.
+
+Turn it on when every stack formatter in your process is one you are content
+to have run while an error is being reported.
+
+### Coexisting with OpenTelemetry
+
+The adapter does not initialise a Sentry client. It registers no global scope,
+no integrations, and no OpenTelemetry tracer provider, propagator or context
+manager. An existing `@questpie/observability` setup, including a metrics-only
+one, keeps working as before, and error reporting does not need tracing to be
+on.
+
+### What you still configure in Sentry
+
+These live in your Sentry organisation, not in code:
+
+- **IP addresses.** The event carries no IP, but Sentry sees the connecting
+  address of whoever sends it. For the browser, turn on the project's
+  "Prevent Storing of IP Addresses" setting, or pass `tunnel: "/monitoring"`
+  and forward envelopes from your own server.
+- **Alerts.** Who gets notified, and how, is an alert rule in the project.
+- **Data scrubbing.** Server-side scrubbing is a useful second layer.
+  It does not replace the allowlist.

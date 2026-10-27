@@ -17,6 +17,11 @@ import {
 	runWithRequestScope,
 } from "../config/request-scope.js";
 import { ApiError } from "../errors/index.js";
+import {
+	createErrorReportOccurrence,
+	type ErrorReportOccurrence,
+	runInErrorReportOccurrence,
+} from "../modules/core/integrated/errors/service.js";
 import type {
 	RequestLoggingConfig,
 	RequestLogMeta,
@@ -252,6 +257,8 @@ async function bindScopeToResponse(
 	request: Request,
 	response: Response,
 	scope: RequestScope,
+	route: string | undefined,
+	occurrence: ErrorReportOccurrence | undefined,
 ): Promise<Response> {
 	if (!response.body) {
 		await scope.dispose();
@@ -289,6 +296,19 @@ async function bindScopeToResponse(
 				}
 				controller.enqueue(chunk.value);
 			} catch (error) {
+				// A client disconnect cancels the body; that is not a server
+				// incident. Anything else failed mid-stream, after the status line.
+				if (!request.signal.aborted) {
+					runInErrorReportOccurrence(occurrence, () =>
+						app.errors?.report(error, {
+							source: "http",
+							kind: "stream",
+							method: request.method,
+							route,
+							status: response.status,
+						}),
+					);
+				}
 				await finalize().catch(() => {});
 				controller.error(error);
 			}
@@ -391,6 +411,21 @@ export const createFetchHandler = (
 					...(routePattern ? { "http.route": routePattern } : {}),
 				});
 
+			// One incident per unexpected failure. 4xx are expected outcomes
+			// (validation, auth, not found, conflict) and are not reported, and
+			// neither is a failure after the client went away: work cancelled by
+			// a disconnect is not a server incident. The route is the matched
+			// TEMPLATE; an unmatched raw path is never sent.
+			if (response.status >= 500 && !request.signal.aborted) {
+				appInstance.errors?.report(error, {
+					source: "http",
+					kind: error === undefined ? "returned" : "thrown",
+					method: request.method,
+					route: routePattern,
+					status: response.status,
+				});
+			}
+
 			const meta: RequestLogMeta = {
 				event: "http.request",
 				requestId,
@@ -415,11 +450,16 @@ export const createFetchHandler = (
 		if (!matchesBase) return null;
 
 		const requestScope = new RequestScope();
+		// One error-report occurrence per request: a handler that reports an
+		// error and rethrows it is reported once, while the same error object
+		// failing another request is reported again. Skipped entirely when no
+		// reporter is configured.
+		const occurrence = appInstance.errors?.enabled
+			? createErrorReportOccurrence()
+			: undefined;
 		try {
-			const response = await runWithRequestScope(
-				appInstance,
-				requestScope,
-				() =>
+			const response = await runInErrorReportOccurrence(occurrence, () =>
+				runWithRequestScope(appInstance, requestScope, () =>
 					appInstance.observability.span(
 						`${request.method} ${routePattern ?? pathname}`,
 						async (span) => {
@@ -591,6 +631,7 @@ export const createFetchHandler = (
 							},
 						},
 					),
+				),
 			);
 			if (!(response instanceof Response)) {
 				await requestScope.dispose();
@@ -601,6 +642,8 @@ export const createFetchHandler = (
 				request,
 				response,
 				requestScope,
+				routePattern,
+				occurrence,
 			);
 		} catch (error) {
 			return disposeRequestScopeAfterError(requestScope, error);

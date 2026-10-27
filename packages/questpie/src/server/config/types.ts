@@ -605,6 +605,12 @@ export interface QuestpieConfig {
 	observability?: import("../modules/core/integrated/observability/types.js").ObservabilityConfig;
 
 	/**
+	 * Error reporting. Unconfigured = a no-op: framework boundaries still call
+	 * `errors.report(...)`, which returns immediately.
+	 */
+	errors?: import("../modules/core/integrated/errors/types.js").ErrorReportingConfig;
+
+	/**
 	 * Executor configuration (sandboxed / trusted code execution).
 	 * Unconfigured = disabled (`ctx.executor.run` throws a clear error).
 	 */

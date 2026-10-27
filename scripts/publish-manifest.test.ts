@@ -11,6 +11,7 @@ import observabilityPackageJson from "../packages/observability/package.json";
 import openApiPackageJson from "../packages/openapi/package.json";
 import questpiePackageJson from "../packages/questpie/package.json";
 import sandboxPackageJson from "../packages/sandbox/package.json";
+import sentryPackageJson from "../packages/sentry/package.json";
 import tanstackDbPackageJson from "../packages/tanstack-db/package.json";
 import tanstackQueryPackageJson from "../packages/tanstack-query/package.json";
 import workflowsPackageJson from "../packages/workflows/package.json";
@@ -81,6 +82,8 @@ describe("publish manifest workspace dependencies", () => {
 		expect(adminPackageJson.version).toBe(questpiePackageJson.version);
 		expect(observabilityPackageJson.version).toBe(questpiePackageJson.version);
 		expect(changesetConfig.fixed[0]).toContain(observabilityPackageJson.name);
+		expect(sentryPackageJson.version).toBe(questpiePackageJson.version);
+		expect(changesetConfig.fixed[0]).toContain(sentryPackageJson.name);
 		expect(
 			changesetConfig.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH
 				.onlyUpdatePeerDependentsWhenOutOfRange,

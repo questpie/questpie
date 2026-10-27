@@ -971,6 +971,7 @@ export function generateTemplate(options: TemplateOptions): TemplateResult {
 		// ctx.observability were on the object and rejected by the compiler.
 		lines.push('\texecutor: _AppQuestpie["executor"];');
 		lines.push('\tobservability: _AppQuestpie["observability"];');
+		lines.push('\terrors: _AppQuestpie["errors"];');
 		lines.push("\tchannels: Channels<AppChannels>;");
 		lines.push("\tcrdt: AppCrdtServer;");
 		lines.push("");

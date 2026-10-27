@@ -108,6 +108,7 @@
 		"MigrationRunner": "CLI migration machinery",
 		"NonDeterministicError": "engine-raised error, surfaced in run records",
 		"ObservabilityService": "class behind ctx.observability; apps configure runtimeConfig({ observability }) instead",
+		"ErrorReportingService": "class behind ctx.errors; apps configure runtimeConfig({ errors }) instead",
 		"OpenAIEmbeddingProvider": "class form; createOpenAIEmbeddingProvider() factory is the taught surface",
 		"OperationSnapshotManager": "CLI migration machinery",
 		"PLUNK_API_BASE_URL": "adapter default constant",

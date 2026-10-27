@@ -6,6 +6,11 @@ import {
 } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 
+import {
+	createErrorReportOccurrence,
+	type ErrorReportingService,
+	runInErrorReportOccurrence,
+} from "../errors/service.js";
 import type { ObservabilityService } from "../observability/service.js";
 import type {
 	QueueAdapter,
@@ -188,14 +193,66 @@ export function createQueueClient<
 		return runtimeOptions.getApp();
 	};
 
+	// Probes the app only to skip per-attempt work when nothing reports. A
+	// missing resolver is swallowed here so the attempt still fails with its
+	// own error, in its own order (context first, then app).
+	const reporterEnabled = () => {
+		try {
+			const app = runtimeOptions.getApp?.() as
+				| { errors?: ErrorReportingService }
+				| undefined;
+			return app?.errors?.enabled === true;
+		} catch {
+			return false;
+		}
+	};
+
+	const reportJobFailure = (
+		error: unknown,
+		jobName: string,
+		finalAttempt: boolean | undefined,
+	) => {
+		try {
+			const app = runtimeOptions.getApp?.() as
+				| { errors?: ErrorReportingService }
+				| undefined;
+			app?.errors?.report(error, {
+				source: "job",
+				job: jobName,
+				...(finalAttempt === undefined ? {} : { final: finalAttempt }),
+			});
+		} catch {
+			// No app resolver: nothing to report to.
+		}
+	};
+
 	const buildHandlers = (selectedJobs?: TJobs): QueueHandlerMap => {
 		const sourceJobs = selectedJobs ?? jobs;
 		const handlers: QueueHandlerMap = {};
 
 		for (const jobDef of Object.values(sourceJobs)) {
-			handlers[jobDef.name] = async (job) => {
-				const context = await getContextOrThrow();
+			const handleAttempt: QueueHandlerMap[string] = async (job) => {
 				const secretPayload = job.secretPayload === true;
+				let context: QueueRuntimeContext;
+				try {
+					context = await getContextOrThrow();
+				} catch (error) {
+					// Context resolution is part of the attempt: report it like any
+					// other failure (a secret job only ever reports its redacted
+					// error), then rethrow the original so retry/ack is unchanged.
+					if (!job.signal?.aborted) {
+						reportJobFailure(
+							secretPayload
+								? redactedSecretQueueError(
+										"QUESTPIE Queue secret job handling failed",
+									)
+								: error,
+							jobDef.name,
+							job.finalAttempt,
+						);
+					}
+					throw error;
+				}
 				let executionToken: string | undefined;
 				let executionHeartbeat: ReturnType<typeof setInterval> | undefined;
 				let completionPersisted = false;
@@ -381,20 +438,37 @@ export function createQueueClient<
 						completionPersisted = true;
 					}
 				} catch (error) {
+					let failure = error;
 					if (secretPayload) {
-						if (error instanceof QueueAdmissionError)
-							throw new QueueAdmissionError(
-								"QUESTPIE Queue secret job handling failed",
-							);
-						throw redactedSecretQueueError(
-							"QUESTPIE Queue secret job handling failed",
-						);
+						failure =
+							error instanceof QueueAdmissionError
+								? new QueueAdmissionError(
+										"QUESTPIE Queue secret job handling failed",
+									)
+								: redactedSecretQueueError(
+										"QUESTPIE Queue secret job handling failed",
+									);
 					}
-					throw error;
+					// Reported per attempt, after redaction: a secret job's original
+					// error never reaches the reporter. A lease expiry or shutdown
+					// abort is cancellation, not an incident. Reporting cannot change
+					// what is thrown, so the adapter's retry/ack decision is untouched.
+					if (!job.signal?.aborted) {
+						reportJobFailure(failure, jobDef.name, job.finalAttempt);
+					}
+					throw failure;
 				} finally {
 					await releaseExecution();
 				}
 			};
+			// One error-report occurrence per attempt: a manual report plus
+			// rethrow inside the handler is reported once; a retry is reported
+			// again. Skipped entirely when no reporter is configured.
+			handlers[jobDef.name] = (job) =>
+				runInErrorReportOccurrence(
+					reporterEnabled() ? createErrorReportOccurrence() : undefined,
+					() => handleAttempt(job),
+				);
 		}
 
 		return handlers;

@@ -17,6 +17,7 @@
 		"openapi": {},
 		"questpie": {},
 		"sandbox": {},
+		"sentry": {},
 		"scripts": {},
 		"tanstack-db": {},
 		"tanstack-query": {},

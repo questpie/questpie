@@ -339,6 +339,7 @@ type ExtractAppServicesBase = {
 	executor: unknown;
 	logger: unknown;
 	observability: unknown;
+	errors: unknown;
 	search: unknown;
 	realtime: unknown;
 	collections: unknown;
@@ -399,6 +400,7 @@ export function extractAppServices(
 		executor: app.executor,
 		logger: app.logger,
 		observability: app.observability,
+		errors: app.errors,
 		search: app.search,
 		realtime: app.realtime,
 		collections: app.collections,

@@ -45,6 +45,10 @@
 			"unpackedSize": 245345,
 			"entryCount": 23
 		},
+		"sentry": {
+			"unpackedSize": 44699,
+			"entryCount": 19
+		},
 		"tanstack-db": {
 			"unpackedSize": 19696,
 			"entryCount": 4

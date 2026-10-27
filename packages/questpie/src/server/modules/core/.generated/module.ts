@@ -66,6 +66,7 @@ import _svc_crdt from "../services/crdt";
 import _svc_crdtOperations from "../services/crdt-operations";
 import _svc_db from "../services/db";
 import _svc_email from "../services/email";
+import _svc_errors from "../services/errors";
 import _svc_executor from "../services/executor";
 import _svc_globalsApi from "../services/globals-api";
 import _svc_i18n from "../services/i18n";
@@ -193,6 +194,7 @@ export type CoreServices = {
 	crdtOperations: typeof _svc_crdtOperations;
 	db: typeof _svc_db;
 	email: typeof _svc_email;
+	errors: typeof _svc_errors;
 	executor: typeof _svc_executor;
 	globalsApi: typeof _svc_globalsApi;
 	i18n: typeof _svc_i18n;
@@ -293,6 +295,7 @@ const _module: CoreModule = {
 		crdtOperations: _svc_crdtOperations,
 		db: _svc_db,
 		email: _svc_email,
+		errors: _svc_errors,
 		executor: _svc_executor,
 		globalsApi: _svc_globalsApi,
 		i18n: _svc_i18n,
