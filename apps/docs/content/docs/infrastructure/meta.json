@@ -9,6 +9,7 @@
 		"kv",
 		"email",
 		"sandbox",
-		"observability"
+		"observability",
+		"error-reporting"
 	]
 }

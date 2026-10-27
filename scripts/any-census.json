@@ -67,6 +67,12 @@
 			"as unknown as": 3,
 			"@ts-expect-error": 0
 		},
+		"sentry": {
+			": any": 2,
+			"as any": 0,
+			"as unknown as": 1,
+			"@ts-expect-error": 0
+		},
 		"tanstack-db": {
 			": any": 0,
 			"as any": 0,

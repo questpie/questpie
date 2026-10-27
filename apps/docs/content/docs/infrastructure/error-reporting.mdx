@@ -1,0 +1,233 @@
+---
+title: Error reporting
+description: One report per unexpected failure from HTTP, jobs and the browser, through a vendor-neutral seam. The Sentry adapter sends an allowlisted event built from the error's type and stack frames — never its message, the request, the session or a payload.
+kind: guide
+package: "@questpie/sentry"
+---
+
+Tracing tells you how requests behave. Error reporting tells you that one
+failed and where. QUESTPIE keeps the two separate. A span records every failure
+in every enclosing span, is sampled, and carries the error message as its
+status. An incident report needs the opposite: exactly one report per failure,
+whether or not tracing is on, with nothing in it the framework cannot vouch for.
+
+## What the framework reports
+
+With an adapter configured, the framework reports these failures itself. You
+do not wrap routes or jobs.
+
+| Where | Reported                                                           | Not reported                                 |
+| ----- | ------------------------------------------------------------------ | -------------------------------------------- |
+| HTTP  | A thrown error that became a 5xx (`kind: "thrown"`)                | 4xx: validation, auth, not found, conflict   |
+|       | A 5xx the handler returned without throwing (`kind: "returned"`)   | Unmatched routes                             |
+|       | A response body that failed after the status was sent (`"stream"`) | A body the client cancelled                  |
+| Queue | Every failed attempt, with `final: true` when no retry follows     | Attempts aborted by lease expiry or shutdown |
+
+A returned 5xx has no original error, so the adapter receives `undefined`
+rather than a made-up one. A secret-payload job only ever hands the reporter its
+redacted, cause-free error.
+
+Reporting never changes the outcome. `report()` is synchronous, never throws
+and never awaits delivery. The response, the thrown error, the transaction and
+the job's retry and ack decision are identical with or without an adapter, and
+identical when the adapter throws, rejects or hangs.
+
+## The contract
+
+```ts
+import type { ErrorReportingAdapter } from "questpie/errors";
+
+const adapter: ErrorReportingAdapter = {
+	report(error, report) {
+		// error: the raw thrown value — stays in your process
+		// report: { source, kind?, method?, route?, status?, job?, final?, trace? }
+	},
+	flush: async (timeoutMs) => {},
+	shutdown: async (timeoutMs) => {},
+};
+```
+
+`report` is closed. `source` is `http`, `job`, `background` or `manual`.
+`route` is the matched route template (`items/:id`), never the raw path. `job`
+is the static job name, never a dispatch or idempotency id. Anything else you
+pass is dropped before the adapter sees it. `trace` is added only when an
+observability adapter has a span open at the time.
+
+Report your own failures from any handler:
+
+```ts
+export default route()
+	.post()
+	.handler(async ({ errors }) => {
+		try {
+			await syncInventory();
+		} catch (error) {
+			errors.report(error, { source: "background" });
+		}
+		return { ok: true };
+	});
+```
+
+The same error object is reported once within a minute or two, so reporting it
+and then rethrowing does not produce a second event. The window rotates; an
+error object is never remembered for the life of the process.
+
+Delivery is bounded: at most `maxPending` (100) reports in flight, each released
+after `timeoutMs` (5 s). `app.destroy()` drains what is pending and shuts the
+adapter down within `shutdownTimeoutMs` (5 s).
+
+## Sentry
+
+```bash
+bun add @questpie/sentry
+```
+
+`@questpie/sentry` needs Node 20.19+, 22.12+ or 23.2+, the same floor as the
+Sentry 11 SDK it builds on. It has three entrypoints. The browser bundle does
+not import Node code, and the server does not import browser or build code.
+
+| Entrypoint                 | For                                         | Depends on                   |
+| -------------------------- | ------------------------------------------- | ---------------------------- |
+| `@questpie/sentry/server`  | HTTP, jobs and workers                      | `@sentry/core`               |
+| `@questpie/sentry/browser` | Uncaught errors and router error boundaries | `@sentry/core`               |
+| `@questpie/sentry/vite`    | Source map upload at build time             | `@sentry/vite-plugin` (peer) |
+
+### Server and worker
+
+```ts title="src/questpie/server/questpie.config.ts"
+import { sentryErrorReporting } from "@questpie/sentry/server";
+import { runtimeConfig } from "questpie/app";
+
+export default runtimeConfig({
+	errors: {
+		adapter: sentryErrorReporting({
+			dsn: process.env.SENTRY_DSN,
+			release: process.env.RELEASE,
+			environment: process.env.NODE_ENV,
+			filenameRoot: process.cwd(),
+		}),
+	},
+});
+```
+
+The HTTP server and a standalone `app.queue.listen()` worker read the same
+config, so both report. Without `dsn` the adapter does nothing, so you can wire
+it unconditionally and enable it per environment.
+
+### Browser
+
+```ts title="src/lib/error-reporter.ts"
+import {
+	createBrowserErrorReporter,
+	installGlobalErrorHandlers,
+} from "@questpie/sentry/browser";
+
+export const errorReporter = createBrowserErrorReporter({
+	dsn: import.meta.env.VITE_SENTRY_DSN,
+	release: import.meta.env.VITE_RELEASE,
+	environment: import.meta.env.MODE,
+});
+
+if (typeof window !== "undefined") {
+	installGlobalErrorHandlers(errorReporter, window);
+}
+```
+
+Report router error boundaries with the matched route **template**, so
+`/invite/$token` is reported and the token is not:
+
+```ts title="src/router.tsx"
+import { createRouterErrorReporter } from "@questpie/sentry/browser";
+import { createRouter } from "@tanstack/react-router";
+
+import { errorReporter } from "./lib/error-reporter";
+
+export function getRouter() {
+	const router = createRouter({
+		routeTree,
+		defaultOnCatch: createRouterErrorReporter(
+			errorReporter,
+			() => router.state.matches.at(-1)?.routeId,
+		),
+	});
+	return router;
+}
+```
+
+`createRouterErrorReporter` returns a plain `(error) => void`, so it fits any
+router's catch hook. The reporter caps itself at 30 events a minute so a render
+loop cannot flood the project.
+
+### Source maps
+
+```ts title="vite.config.ts"
+import { questpieSentryVite } from "@questpie/sentry/vite";
+
+export default defineConfig({
+	plugins: [
+		// ...your framework plugins
+		questpieSentryVite({
+			org: "my-org",
+			project: "my-app",
+			release: process.env.RELEASE!,
+		}),
+	],
+});
+```
+
+The plugin injects debug ids into each bundle and uploads the maps with
+`SENTRY_AUTH_TOKEN`. It sets `build.sourcemap` to `"hidden"` unless you set it,
+so bundles do not reference their maps. After upload it deletes `**/*.map`
+under the build output so your web server cannot serve them. Keep the token in
+a CI secret; it is a build credential and never part of a bundle. Without a
+token, debug ids are still injected and nothing is uploaded.
+
+Use one `release` value for the build, the server and the browser. Events are
+symbolicated by debug id, so a frame resolves only against maps from the same
+build.
+
+## What leaves the process
+
+The Sentry adapter builds the event from an allowlist, and the event below is
+the complete payload:
+
+- `exception`: for the error and up to three causes, a type name and parsed
+  stack frames. The type is kept only when it looks like a class name ending
+  in `Error` or `Exception`; anything else becomes `Error`. Frames carry
+  function name, file, line and column. Query strings, fragments and
+  credentials are cut from file names, and path segments after `/invite/`,
+  UUIDs, e-mail addresses and token-like strings are masked. The value is a
+  description built from `report` (`HTTP 500 POST items/:id (thrown)`), not the
+  error message.
+- `tags` and `transaction`: the validated `report` fields.
+- `release`, `environment`, `platform`, `level`, `timestamp`, `event_id`.
+- `contexts.trace`, only when a span was active.
+- `debug_meta`, the debug ids needed for source maps.
+
+Never sent: the error message, `cause` messages, local variables, source
+context lines, the request (URL, headers, cookies, body, IP), the session or
+user, job payloads, SQL, logs, breadcrumbs, spans, sessions and replays.
+
+The sanitizer reads properties through descriptors. A custom getter, `toJSON`
+or `toString` on a thrown value is never called. On the server, a proxy is
+treated as opaque.
+
+### Coexisting with OpenTelemetry
+
+The adapter does not initialise a Sentry client. It registers no global scope,
+no integrations, and no OpenTelemetry tracer provider, propagator or context
+manager. An existing `@questpie/observability` setup, including a metrics-only
+one, keeps working as before, and error reporting does not need tracing to be
+on.
+
+### What you still configure in Sentry
+
+These live in your Sentry organisation, not in code:
+
+- **IP addresses.** The event carries no IP, but Sentry sees the connecting
+  address of whoever sends it. For the browser, turn on the project's
+  "Prevent Storing of IP Addresses" setting, or pass `tunnel: "/monitoring"`
+  and forward envelopes from your own server.
+- **Alerts.** Who gets notified, and how, is an alert rule in the project.
+- **Data scrubbing.** Server-side scrubbing is a useful second layer.
+  It does not replace the allowlist.
