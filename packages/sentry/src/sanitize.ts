@@ -15,9 +15,17 @@
  *   uploaded source maps, matched by debug id;
  * - the same for up to {@link MAX_CAUSES} causes.
  *
- * Messages are never sent. Properties are read through descriptors, so a
- * user-defined getter, `toJSON` or `toString` is never invoked; a proxy is
- * treated as opaque when the runtime can recognise one.
+ * Messages are never sent.
+ *
+ * Inspection runs no user code. A value is examined only after a native brand
+ * check that cannot be intercepted (`isNativeError` + `isProxy` on the server,
+ * `Error.isError` in the browser); a proxy, or any runtime without such a
+ * check, gets an opaque `Error` with no frames. Only OWN properties of the
+ * value are read, through descriptors. Its prototype is looked at only when it
+ * is one of the built-in error prototypes, so a proxy or getter-laden custom
+ * prototype is never touched. Accessors are called only when they are the
+ * runtime's own native getters captured at load. `toJSON`/`toString` are
+ * never called.
  */
 
 import type { StackFrame } from "@sentry/core";
@@ -35,9 +43,12 @@ export type SanitizedFrame = Pick<
 >;
 
 export interface SanitizeOptions {
-	/** Detects proxies (server: `node:util/types` `isProxy`). */
+	/** Detects proxies without running traps (server: `node:util/types`). */
 	isProxy?: (value: unknown) => boolean;
-	/** Detects native errors across realms (server: `isNativeError`). */
+	/**
+	 * Native error brand check that runs no traps (server: `isNativeError`).
+	 * Defaults to the runtime's `Error.isError`, captured at load.
+	 */
 	isNativeError?: (value: unknown) => boolean;
 	/**
 	 * Server: absolute path of the deployed app. File paths under it are sent
@@ -93,18 +104,46 @@ const URL_PREFIX = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)/i;
 const DEFAULT_ASSET_PATH_PREFIXES = ["/assets/"];
 const REDACTED = "[redacted]";
 
+/** `Error.isError`: a brand check that is false for proxies and runs no traps. */
+const NATIVE_IS_ERROR = (Error as { isError?: (value: unknown) => boolean })
+	.isError;
+
 /**
- * The runtime's own `stack` accessor, captured before user code can replace
- * it. V8 installs `stack` as an own accessor on every error; an error whose
- * accessor is anything else has a user-defined getter, which is not called.
+ * Native `stack` getters, captured at load before app code runs. V8 installs
+ * `stack` as an own accessor on each error; Gecko exposes it as an accessor on
+ * `Error.prototype`. JSC uses a plain data property.
  */
-const NATIVE_STACK_GETTER = findDescriptor(new Error("probe"), "stack")?.get;
+const NATIVE_OWN_STACK_GETTER = Object.getOwnPropertyDescriptor(
+	new Error("probe"),
+	"stack",
+)?.get;
+const NATIVE_PROTO_STACK_GETTER = Object.getOwnPropertyDescriptor(
+	Error.prototype,
+	"stack",
+)?.get;
 
 /** `DOMException.prototype.name` is a native WebIDL getter, not a data property. */
 const NATIVE_DOM_EXCEPTION_NAME_GETTER =
 	typeof DOMException === "function"
 		? Object.getOwnPropertyDescriptor(DOMException.prototype, "name")?.get
 		: undefined;
+
+/** Prototypes whose properties are the runtime's, never the app's. */
+const BUILTIN_PROTOTYPES: ReadonlySet<object> = new Set(
+	[
+		Error,
+		AggregateError,
+		EvalError,
+		RangeError,
+		ReferenceError,
+		SyntaxError,
+		TypeError,
+		URIError,
+		typeof DOMException === "function" ? DOMException : undefined,
+	]
+		.filter((ctor) => typeof ctor === "function")
+		.map((ctor) => (ctor as { prototype: object }).prototype),
+);
 
 export function sanitizeError(
 	error: unknown,
@@ -120,7 +159,7 @@ export function sanitizeError(
 		chain.push(sanitized);
 		if (!sanitized.frames.length && sanitized.type === "NonError") break;
 		current = isErrorLike(current, options)
-			? readValue(current as object, "cause")
+			? ownValue(current as object, "cause")
 			: undefined;
 	}
 	return chain;
@@ -134,8 +173,8 @@ function sanitizeOne(
 		return { type: "NonError", frames: [], rawFilenames: new Map() };
 	}
 	const name = readName(error as object);
-	const message = readValue(error as object, "message");
-	const stack = readStack(error as object);
+	const message = ownValue(error as object, "message");
+	const stack = readStack(error as object, options);
 	const type =
 		typeof name === "string" &&
 		(BUILTIN_ERROR_NAMES.has(name) || options.errorNames?.has(name))
@@ -164,64 +203,123 @@ function sanitizeOne(
 
 function isErrorLike(value: unknown, options: SanitizeOptions): boolean {
 	if (value === null || typeof value !== "object") return false;
+	const isNativeError = options.isNativeError ?? NATIVE_IS_ERROR;
+	if (!isNativeError) return false;
 	try {
 		if (options.isProxy?.(value)) return false;
-		if (options.isNativeError) return options.isNativeError(value);
-		return value instanceof Error;
+		return isNativeError(value);
 	} catch {
 		return false;
 	}
 }
 
-/** Read a DATA property along the prototype chain. Accessors are not called. */
-function readValue(target: object, key: string): unknown {
-	const descriptor = findDescriptor(target, key);
-	return descriptor && "value" in descriptor ? descriptor.value : undefined;
-}
-
-function readName(target: object): unknown {
-	const descriptor = findDescriptor(target, "name");
-	if (!descriptor) return undefined;
-	if ("value" in descriptor) return descriptor.value;
-	if (descriptor.get && descriptor.get === NATIVE_DOM_EXCEPTION_NAME_GETTER) {
-		try {
-			return descriptor.get.call(target);
-		} catch {
-			return undefined;
-		}
-	}
-	return undefined;
-}
-
-function readStack(target: object): unknown {
-	const descriptor = findDescriptor(target, "stack");
-	if (!descriptor) return undefined;
-	if ("value" in descriptor) return descriptor.value;
-	if (descriptor.get && descriptor.get === NATIVE_STACK_GETTER) {
-		try {
-			return descriptor.get.call(target);
-		} catch {
-			return undefined;
-		}
-	}
-	return undefined;
-}
-
-function findDescriptor(
+function ownDescriptor(
 	target: object,
 	key: string,
 ): PropertyDescriptor | undefined {
 	try {
-		let current: object | null = target;
-		for (let depth = 0; current && depth < MAX_PROTOTYPE_DEPTH; depth++) {
+		return Object.getOwnPropertyDescriptor(target, key);
+	} catch {
+		return undefined;
+	}
+}
+
+/** An own DATA property. Accessors are not called. */
+function ownValue(target: object, key: string): unknown {
+	const descriptor = ownDescriptor(target, key);
+	return descriptor && "value" in descriptor ? descriptor.value : undefined;
+}
+
+/**
+ * The built-in prototype directly behind `target`, or undefined for a custom
+ * class prototype — which may be a proxy or carry getters, and is not read.
+ */
+function builtinPrototype(target: object): object | undefined {
+	try {
+		const prototype = Object.getPrototypeOf(target) as object | null;
+		return prototype && BUILTIN_PROTOTYPES.has(prototype)
+			? prototype
+			: undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function callNative(getter: () => unknown, target: object): unknown {
+	try {
+		return getter.call(target);
+	} catch {
+		return undefined;
+	}
+}
+
+function readName(target: object): unknown {
+	const own = ownDescriptor(target, "name");
+	if (own) return "value" in own ? own.value : undefined;
+	const prototype = builtinPrototype(target);
+	const inherited = prototype && ownDescriptor(prototype, "name");
+	if (!inherited) return undefined;
+	if ("value" in inherited) return inherited.value;
+	return inherited.get && inherited.get === NATIVE_DOM_EXCEPTION_NAME_GETTER
+		? callNative(inherited.get, target)
+		: undefined;
+}
+
+function readStack(target: object, options: SanitizeOptions): unknown {
+	const own = ownDescriptor(target, "stack");
+	if (own && "value" in own) return own.value;
+	const getter = own
+		? own.get === NATIVE_OWN_STACK_GETTER
+			? own.get
+			: undefined
+		: // Gecko: the accessor lives on Error.prototype. Call the captured
+			// native getter on the error rather than walking its prototype chain.
+			NATIVE_PROTO_STACK_GETTER;
+	if (!getter) return undefined;
+	// A native getter is not inert: V8 formats the "Name: message" header on
+	// first access with ordinary property gets, which walk the prototype chain
+	// and can reach a proxy trap or a user getter. Call it only when both
+	// resolve to plain data without touching anything untrusted.
+	if (
+		!resolvesToPlainData(target, "name", options) ||
+		!resolvesToPlainData(target, "message", options)
+	) {
+		return undefined;
+	}
+	return callNative(getter, target);
+}
+
+/**
+ * True when `target[key]` resolves to a string (or nothing) through data
+ * properties only. With `isProxy` (server) the whole chain is checked link by
+ * link; without it (browser) only the error itself and a built-in prototype
+ * are trusted, since a custom prototype cannot be told apart from a proxy.
+ */
+function resolvesToPlainData(
+	target: object,
+	key: string,
+	options: SanitizeOptions,
+): boolean {
+	const isPlain = (descriptor: PropertyDescriptor) =>
+		"value" in descriptor &&
+		(typeof descriptor.value === "string" || descriptor.value === undefined);
+	const own = ownDescriptor(target, key);
+	if (own) return isPlain(own);
+	try {
+		let current = Object.getPrototypeOf(target) as object | null;
+		for (let depth = 0; current; depth++) {
+			const trusted =
+				BUILTIN_PROTOTYPES.has(current) ||
+				(options.isProxy !== undefined && !options.isProxy(current));
+			if (!trusted || depth >= MAX_PROTOTYPE_DEPTH) return false;
 			const descriptor = Object.getOwnPropertyDescriptor(current, key);
-			if (descriptor) return descriptor;
+			if (descriptor) return isPlain(descriptor);
 			current = Object.getPrototypeOf(current) as object | null;
 		}
+		return true;
 	} catch {
-		// A hostile object can throw from any reflective operation.
+		return false;
 	}
-	return undefined;
 }
 
 interface RawFrame {

@@ -201,6 +201,38 @@ describe("sentryErrorReporting", () => {
 		]);
 	});
 
+	it("maps each debug id to the chunk that registered it, not its importer", async () => {
+		const capture = captureTransport();
+		// The snippet in chunk-B runs while entry-A is importing it, so its key
+		// stack holds both files, newest (chunk-B) first.
+		(globalThis as any)._sentryDebugIds = {
+			"Error\n    at chunkInit (/root/assets/chunk-B.js:1:1)\n    at load (/root/assets/entry-A.js:2:2)":
+				"bbbbbbbb-0000-4000-8000-00000000000b",
+			"Error\n    at entryInit (/root/assets/entry-A.js:1:1)":
+				"aaaaaaaa-0000-4000-8000-00000000000a",
+		};
+		const error = new Error("x");
+		Object.defineProperty(error, "stack", {
+			value:
+				"Error: x\n    at render (/root/assets/chunk-B.js:5:5)\n    at main (/root/assets/entry-A.js:9:9)",
+		});
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			send: capture.send,
+			filenameRoot: "/root",
+		});
+		await adapter.report(error, { source: "manual" });
+		const images = capture.envelopes[0]!.items[0]!.payload.debug_meta.images;
+		expect(
+			Object.fromEntries(
+				images.map((image: any) => [image.code_file, image.debug_id]),
+			),
+		).toEqual({
+			"app:///assets/chunk-B.js": "bbbbbbbb-0000-4000-8000-00000000000b",
+			"app:///assets/entry-A.js": "aaaaaaaa-0000-4000-8000-00000000000a",
+		});
+	});
+
 	it("stops sending after shutdown and keeps the core contract on transport failure", async () => {
 		const capture = captureTransport();
 		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send });

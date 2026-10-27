@@ -226,11 +226,16 @@ function debugImages(exceptions: SanitizedException[]): DebugImage[] {
 }
 
 // Keys are `new Error().stack` captured by the bundler snippet: V8 prefixes
-// them with "Error", Gecko/WebKit do not.
+// them with "Error", Gecko/WebKit do not. Sentry's StackParser contract is
+// OLDEST frame first — `getFilenameToDebugIdMap` takes the last (newest) frame
+// as the file that registered the id, i.e. the chunk running the snippet, not
+// the entry that imported it. Stack strings list the newest first.
 const stackParser: StackParser = (stack) =>
-	parseFrames(stack, "Error").map((frame) => ({
-		filename: frame.filename,
-		function: frame.function,
-		lineno: frame.lineno,
-		colno: frame.colno,
-	}));
+	parseFrames(stack, "Error")
+		.map((frame) => ({
+			filename: frame.filename,
+			function: frame.function,
+			lineno: frame.lineno,
+			colno: frame.colno,
+		}))
+		.toReversed();

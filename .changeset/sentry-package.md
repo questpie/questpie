@@ -14,6 +14,6 @@ Events are built from an allowlist:
 - stack frames: line and column, plus the file only when it is under the server's `filenameRoot` or a browser `assetPathPrefixes` path, rebased to `app:///` without host or query;
 - the validated report fields.
 
-Function names are not sent; Sentry restores them from source maps by debug id. Error and cause messages, local variables, source context, requests, sessions, users, payloads, breadcrumbs, spans, logs and replays are never sent. The sanitizer never calls user getters, `toJSON` or `toString`.
+Function names are not sent; Sentry restores them from source maps by debug id. Error and cause messages, local variables, source context, requests, sessions, users, payloads, breadcrumbs, spans, logs and replays are never sent. Inspection runs none of the thrown value's code (getters, proxy traps, `toJSON`, `toString`). It relies on a native brand check (`isNativeError`/`isProxy` on the server, `Error.isError` in the browser); proxies, and every value in a browser without `Error.isError`, are reported as `Error` with no frames.
 
 Only `@sentry/core` 11.9.0 is used, with no `Sentry.init`, so no global Sentry scope or OpenTelemetry provider is registered and existing `@questpie/observability` setups are untouched. Requires Node 20.19+, 22.12+ or 23.2+.

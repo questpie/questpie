@@ -223,9 +223,23 @@ What is sent is still yours to judge. File paths under your app root and the
 names you list in `errorNames` go out as they are, and the masking inside kept
 paths is a pattern match, not a guarantee.
 
-The sanitizer reads properties through descriptors. A custom getter, `toJSON`
-or `toString` on a thrown value is never called. On the server, a proxy is
-treated as opaque.
+Inspecting a thrown value runs none of its code: no getter, proxy trap,
+`toJSON` or `toString`. That rules out some errors, which are then sent as
+`Error` with no frames:
+
+- A value is inspected only after a native brand check that a proxy cannot
+  intercept: `isNativeError` and `isProxy` on the server, `Error.isError` in
+  the browser. A proxy is opaque. So is every value in a browser without
+  `Error.isError` (it shipped across major browsers in 2025), and a
+  `DOMException` in Bun.
+- Only the error's own properties are read. Its prototype is read only when it
+  is a built-in error prototype, so a custom class reports its type only when
+  it sets `name` on the instance (`this.name = "ApiError"` or a class field)
+  and you list it in `errorNames`.
+- In V8, reading `stack` formats `"Name: message"` through ordinary property
+  lookups. The stack is read only when `name` and `message` are plain strings
+  on the error itself or on built-in prototypes; on the server, also on custom
+  prototypes that are verified not to be proxies.
 
 ### Coexisting with OpenTelemetry
 

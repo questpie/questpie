@@ -36,8 +36,11 @@ describe("sanitizeError", () => {
 			})[0]!.type,
 		).toBe("ApiError");
 		expect(sanitizeError(new RangeError("x"))[0]!.type).toBe("RangeError");
-		expect(sanitizeError(new DOMException("x", "AbortError"))[0]!.type).toBe(
-			"AbortError",
+		// Browsers and Node brand DOMException as an error; Bun 1.3 does not, so
+		// there it is opaque.
+		const dom = new DOMException("x", "AbortError");
+		expect(sanitizeError(dom)[0]!.type).toBe(
+			(Error as any).isError(dom) ? "AbortError" : "NonError",
 		);
 	});
 
@@ -84,62 +87,110 @@ describe("sanitizeError", () => {
 		expect(sanitizeError(forged)[0]!.frames).toEqual([]);
 	});
 
-	it("never invokes user getters, toJSON or toString", () => {
-		let invoked = 0;
-		const error = new Error("x");
-		Object.defineProperty(error, "stack", {
-			get() {
-				invoked += 1;
-				return `Error: x\n    at fn (/srv/${SECRET}.js:1:1)`;
-			},
-		});
-		Object.defineProperty(error, "name", {
-			get() {
-				invoked += 1;
-				return "TypeError";
-			},
-		});
-		Object.defineProperty(error, "cause", {
-			get() {
-				invoked += 1;
-				return new Error(SECRET);
-			},
-		});
-		(error as any).toJSON = () => {
-			invoked += 1;
-			return SECRET;
-		};
-		(error as any).toString = () => {
-			invoked += 1;
-			return SECRET;
-		};
-		const result = sanitizeError(error);
-		expect(invoked).toBe(0);
-		expect(result).toHaveLength(1);
-		expect(serialized(result)).not.toContain(SECRET);
-	});
-
-	it("treats a proxy as opaque without running its traps", () => {
-		let traps = 0;
-		const handler: ProxyHandler<Error> = {};
+	/** Counting traps that forward — a caught throw cannot hide a call. */
+	function countingHandler<T extends object>(counter: { calls: number }) {
+		const handler: ProxyHandler<T> = {};
 		for (const trap of [
 			"get",
-			"getOwnPropertyDescriptor",
-			"getPrototypeOf",
 			"has",
 			"ownKeys",
+			"getOwnPropertyDescriptor",
+			"getPrototypeOf",
+			"defineProperty",
+			"set",
+			"apply",
+			"construct",
 		] as const) {
 			(handler as any)[trap] = (...args: any[]) => {
-				traps += 1;
+				counter.calls += 1;
 				return (Reflect as any)[trap](...args);
 			};
 		}
-		const proxy = new Proxy(new Error(SECRET), handler);
-		const result = sanitizeError(proxy, { isProxy, isNativeError });
-		expect(traps).toBe(0);
-		expect(result).toEqual([
-			{ type: "NonError", frames: [], rawFilenames: new Map() },
-		]);
+		return handler;
+	}
+
+	const serverMode = { isProxy, isNativeError };
+	const browserMode = {}; // the runtime's own Error.isError
+
+	for (const [mode, options] of [
+		["server", serverMode],
+		["browser", browserMode],
+	] as const) {
+		it(`${mode}: a proxied error is opaque and no trap runs`, () => {
+			const counter = { calls: 0 };
+			const proxy = new Proxy(new Error(SECRET), countingHandler(counter));
+			const result = sanitizeError(proxy, options);
+			expect(counter.calls).toBe(0);
+			expect(result).toEqual([
+				{ type: "NonError", frames: [], rawFilenames: new Map() },
+			]);
+		});
+
+		it(`${mode}: a proxy prototype is never touched`, () => {
+			const counter = { calls: 0 };
+			const error = new TypeError(`x ${SECRET}`);
+			Object.setPrototypeOf(
+				error,
+				new Proxy(TypeError.prototype, countingHandler(counter)),
+			);
+			const result = sanitizeError(error, { ...options, filenameRoot: root });
+			expect(counter.calls).toBe(0);
+			// Its name lives on the (proxied) prototype, so it is not read.
+			expect(result[0]!.type).toBe("Error");
+			expect(serialized(result)).not.toContain(SECRET);
+		});
+
+		it(`${mode}: getters, toJSON and toString never run`, () => {
+			let calls = 0;
+			const getter = (value: unknown) => ({
+				get() {
+					calls += 1;
+					return value;
+				},
+			});
+			class Tenant extends Error {}
+			Object.defineProperty(Tenant.prototype, "name", getter("TypeError"));
+			Object.defineProperty(
+				Tenant.prototype,
+				"cause",
+				getter(new Error(SECRET)),
+			);
+			Object.defineProperty(
+				Tenant.prototype,
+				"toJSON",
+				getter(() => SECRET),
+			);
+			const error = new Tenant("x");
+			Object.defineProperty(
+				error,
+				"stack",
+				getter(`Error: x\n    at f (/srv/${SECRET}.js:1:1)`),
+			);
+			Object.defineProperty(error, "message", getter(SECRET));
+			(error as any).toString = () => {
+				calls += 1;
+				return SECRET;
+			};
+			const result = sanitizeError(error, options);
+			expect(calls).toBe(0);
+			expect(result).toEqual([
+				{ type: "Error", frames: [], rawFilenames: new Map() },
+			]);
+		});
+	}
+
+	it("without a native brand check, every value is opaque", async () => {
+		const original = (Error as any).isError;
+		delete (Error as any).isError;
+		try {
+			const { sanitizeError: withoutBrand } =
+				await import("../src/sanitize.ts?no-error-is-error");
+			expect(withoutBrand(new Error("x"))).toEqual([
+				{ type: "NonError", frames: [], rawFilenames: new Map() },
+			]);
+		} finally {
+			(Error as any).isError = original;
+		}
 	});
 
 	it("follows a bounded, cycle-safe cause chain", () => {
