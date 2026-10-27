@@ -1,5 +1,46 @@
 # questpie
 
+## 3.41.0
+
+### Minor Changes
+
+- [#442](https://github.com/questpie/questpie/pull/442) [`7996485`](https://github.com/questpie/questpie/commit/7996485771c2d7e7fa8f803d9ff4e9cf1ebc4619) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add a provider-neutral error reporting seam: `runtimeConfig({ errors: { adapter } })` exposes `app.errors` and `ctx.errors` with `errors.report(error, info)`.
+
+  Without an adapter, nothing changes. With one, the framework reports:
+
+  - **HTTP:** one report per unexpected 5xx response, whether the handler threw (`kind: "thrown"`), returned a 5xx (`kind: "returned"`, no error passed) or the response stream failed (`kind: "stream"`). 4xx outcomes and client disconnects are not reported. Only the matched route template is passed, never the raw URL.
+  - **Queues:** one report per failed attempt, with the static job name and the adapter's `final` classification. A secret-payload job only ever hands the reporter its redacted, cause-free error. Cancelled attempts (lease expiry, shutdown) are not reported.
+
+  `report()` is synchronous and never throws. It does not change a response, a thrown error, or a job's retry or ack. Delivery is bounded by `maxPending` (100) and `timeoutMs` (5 s), and `app.destroy()` drains pending reports within `shutdownTimeoutMs` before shutting the adapter down. `info` is validated down to `source`, `kind`, `method`, `route`, `status`, `job` and `final`; every other field is dropped. Reporting works with tracing disabled.
+
+  Regenerate your app (`questpie generate`) to get `ctx.errors` typed. Apps that registered their own top-level (`namespace: null`) service named `errors` must rename it.
+
+### Patch Changes
+
+- [#443](https://github.com/questpie/questpie/pull/443) [`3dd9f33`](https://github.com/questpie/questpie/commit/3dd9f3352cf614aa5ece1662226e54f21f107ee5) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Reduce database transactions during durable Channel fan-out by batching concurrent frame admissions. Each protected attempt still checks its exact subject and generation, including retries after a busy sink. Existing logical revocation semantics remain unchanged: transport writes run outside the fence transaction, and a frame admitted before a cut may finish afterward.
+
+  Batches own their transaction completion; remembered binding generations change only after a successful commit. Closing a binding removes its waiting attempts, and late completions cannot overwrite newer reconciliation. Each server-process ledger limits pending attempts to 4,096 and active batches to two, with 64 attempts per batch; overflow ends the affected binding with `write_failed`, after which the client can reconnect with its last event id. Contended coordinator or subject locks roll back without waiting, release the batch slot, and retry the same oldest frame with a fresh admission.
+
+  Local frame delivery inside a caller-owned transaction now fails before transport output. Defer delivery until after commit instead of awaiting it inside the transaction. Ordinary transactional channel publishing remains supported; its normal after-commit wake path is unchanged. This patch does not share route LIVE results or introduce an authorization cache.
+
+- [#443](https://github.com/questpie/questpie/pull/443) [`3dd9f33`](https://github.com/questpie/questpie/commit/3dd9f3352cf614aa5ece1662226e54f21f107ee5) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Fix LIVE subscriptions with large route inputs or collection filters being rejected by the topology ID limit. SSE and Pusher clients now allocate compact wire IDs per active topic while deduplicating by the complete normalized topic, including typed Dates. IDs survive reconnects and are released with the last observer. The 512-character ID limit and 262144-byte topology envelope limit remain enforced; route results and authorization are still evaluated per binding.
+
+  Explicit subscription IDs must be unique per topic. Reusing an active ID for a different topic now reports an error instead of delivering the first topic's data; use a distinct ID or let the client allocate one.
+
+- [#443](https://github.com/questpie/questpie/pull/443) [`3dd9f33`](https://github.com/questpie/questpie/commit/3dd9f3352cf614aa5ece1662226e54f21f107ee5) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Reuse each route LIVE evaluation's normalized typed payload for both change detection and SSE delivery. Emitted snapshots now visit application getters and `toJSON` methods once instead of twice; the bytes sent describe the same data that was hashed, even if the original object changes during asynchronous hashing. Keep serializers deterministic and free of side effects rather than relying on their previous duplicate invocation.
+
+  Date metadata, unchanged-result watermarks, and authority checks after hashing are preserved. Collection/global snapshot and delta behavior is unchanged. This removes duplicate payload normalization; it does not share route results across watchers or establish a measured throughput increase.
+
+- [#443](https://github.com/questpie/questpie/pull/443) [`3dd9f33`](https://github.com/questpie/questpie/commit/3dd9f3352cf614aa5ece1662226e54f21f107ee5) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Prepare each route LIVE snapshot with one SQL statement instead of two: capture its visibility watermark and apply the transaction-local statement timeout together, before resolving context facts or running access rules and the handler. Existing shorter timeouts remain in effect. One-shot query execution and collection/global realtime snapshots keep their existing behavior.
+
+- [#444](https://github.com/questpie/questpie/pull/444) [`45ba3e2`](https://github.com/questpie/questpie/commit/45ba3e264b88d29e66153da85f6863eca4961cd5) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Require Zod 4.6.6 or newer for its bounded-collection validation security fix. Update dependency and peer minimums, examples, and generated-project templates so an existing vulnerable Zod 4 version cannot satisfy the declared contract.
+
+  Upgrade shadcn to 4.22.1 and env-core to 0.13.11 so their supported dependency ranges accept Zod 4, removing the private Zod 3 copy. Existing shadcn CSS imports stay the same. The admin package and generated projects now declare Node 20.18.1 or newer to match shadcn's supported runtime; this does not change the core framework's Node requirement. Regenerate project lockfiles when upgrading these dependencies.
+
+  Repository and generated-project roots pin Azure Identity to 4.13.0, whose supported MSAL 3 LTS dependency avoids GHSA-xcx6-jx8p-x3h5. The pin satisfies the existing Tedious, files-sdk and unstorage ranges. They also pin body-parser 2.4.0 and Undici 7.30.1 for their denial-of-service fixes. Package-manager overrides are application-root configuration and do not propagate from published libraries: existing applications should add these three pins to their own Bun/npm `overrides`, pnpm `pnpm.overrides`, or Yarn `resolutions`, then regenerate the lockfile. No audit allowlist or release-age exemption is added.
+
+- [#443](https://github.com/questpie/questpie/pull/443) [`3dd9f33`](https://github.com/questpie/questpie/commit/3dd9f3352cf614aa5ece1662226e54f21f107ee5) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Remove waiting realtime computations when their last subscriber closes, immediately freeing space in the bounded compute queue. Closed snapshot and delta groups no longer start queued computation. Shared groups continue serving remaining subscribers, and active computations retain their concurrency slot until they finish.
+
 ## 3.40.0
 
 ### Minor Changes
