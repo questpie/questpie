@@ -365,10 +365,25 @@ describe("sanitizeFilename", () => {
 		}
 	});
 
-	it("keeps node builtins and refuses unsafe characters", () => {
-		expect(sanitizeFilename("node:internal/process/task_queues")).toBe(
+	it("drops node: locations and refuses unsafe characters", () => {
+		for (const raw of [
 			"node:internal/process/task_queues",
-		);
+			"node:tenantacme",
+		]) {
+			expect(
+				sanitizeFilename(raw, {
+					filenameRoot: "/app",
+					registeredFiles: trustAll,
+				}),
+			).toBeUndefined();
+		}
+		const error = new Error("x");
+		Object.defineProperty(error, "stack", {
+			value: "Error: x\n    at load (node:tenantacme:3:4)",
+		});
+		const result = sanitizeError(error, { isProxy, isNativeError });
+		expect(result[0]!.frames).toEqual([{ lineno: 3, colno: 4 }]);
+		expect(serialized(result)).not.toContain("tenantacme");
 		expect(
 			sanitizeFilename("/app/eval at fn (x.js:1:1), <anonymous>", {
 				filenameRoot: "/app",

@@ -95,7 +95,6 @@ export const BUILTIN_ERROR_NAMES: ReadonlySet<string> = new Set([
 	"TimeoutError",
 ]);
 const FILENAME = /^[A-Za-z0-9_\-./@:~+%[\]]{1,512}$/;
-const NODE_BUILTIN = /^node:[a-z_/]{1,128}$/;
 const V8_FRAME = /^\s*at (?:(.+?) \()?(.+?):(\d+):(\d+)\)?$/;
 const GECKO_FRAME = /^(?:(.*?)@)?(.+?):(\d+):(\d+)$/;
 const URL_PREFIX = /^([a-z][a-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)/i;
@@ -385,7 +384,7 @@ function sanitizeFrame(
 	if (filename) {
 		frame.filename = filename;
 		frame.abs_path = filename;
-		frame.in_app = !/(^node:|\/node_modules\/|\/\.bun\/)/.test(filename);
+		frame.in_app = !/(\/node_modules\/|\/\.bun\/)/.test(filename);
 	}
 	if (Number.isSafeInteger(raw.lineno)) frame.lineno = raw.lineno;
 	if (Number.isSafeInteger(raw.colno)) frame.colno = raw.colno;
@@ -397,14 +396,15 @@ function sanitizeFrame(
  *
  * Dropped by default. A location is sent only when the raw filename was
  * registered by the bundler with a debug id, or its rewritten name is listed in
- * `trustedFiles`; `node:` builtins are runtime constants and always kept. A
- * kept location is rewritten without host, credentials, query or fragment:
+ * `trustedFiles`. A kept location is rewritten without host, credentials,
+ * query or fragment:
  *
  * - `http(s)` URL → `app:///<path>`;
  * - file path or `file://` URL under `filenameRoot` → `app:///<relative path>`
  *   (a filesystem or drive root such as `/` or `C:\\` is not a root).
  *
- * A path with `.` or `..` segments, or one that cannot be rewritten, is dropped.
+ * A path with `.` or `..` segments, or one that cannot be rewritten (such as a
+ * `node:` location), is dropped.
  */
 export function sanitizeFilename(
 	raw: string,
@@ -414,7 +414,6 @@ export function sanitizeFilename(
 	> = {},
 ): string | undefined {
 	if (raw.length > 2048) return undefined;
-	if (NODE_BUILTIN.test(raw)) return raw;
 	const rewritten = rewriteLocation(raw, options.filenameRoot);
 	if (!rewritten) return undefined;
 	const trusted =
