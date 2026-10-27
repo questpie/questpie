@@ -28,8 +28,9 @@
  * accessor is called. Accessors are called only when they are the runtime's
  * own native getters captured at load, and a lazily formatted stack only with
  * `formattedStacks` (that runs the runtime's stack formatter, including any
- * `Error.prepareStackTrace`, as `error.stack` does). Nothing global is ever
- * modified. `toJSON`/`toString` are never called.
+ * `Error.prepareStackTrace`, as `error.stack` does, and whatever that runs).
+ * The sanitizer itself never modifies globals and never calls
+ * `toJSON`/`toString`.
  */
 
 import type { StackFrame } from "@sentry/core";
@@ -73,8 +74,10 @@ export interface SanitizeOptions {
 	/**
 	 * Read stacks the runtime formats lazily (V8, Gecko). Reading one runs the
 	 * runtime's stack formatter, as `error.stack` does: Node's default, or any
-	 * `Error.prepareStackTrace` installed in the error's realm. Without it only
-	 * a stack that is already plain data (Bun, an assigned string) is read.
+	 * `Error.prepareStackTrace` installed in the error's realm, which may run
+	 * arbitrary code. Without it only a stack that is already plain data (Bun,
+	 * an assigned string) is read, and no code of the error or the runtime's
+	 * formatting hooks runs.
 	 */
 	formattedStacks?: boolean;
 	/** Error class names the app vouches for, sent as the type as-is. */

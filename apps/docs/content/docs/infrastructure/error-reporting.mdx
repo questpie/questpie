@@ -106,8 +106,6 @@ export default runtimeConfig({
 			release: process.env.RELEASE,
 			environment: process.env.NODE_ENV,
 			filenameRoot: process.cwd(),
-			// Node formats stacks lazily; read them. See "Reading stacks" below.
-			formattedStacks: true,
 		}),
 	},
 });
@@ -130,7 +128,6 @@ export const errorReporter = createBrowserErrorReporter({
 	dsn: import.meta.env.VITE_SENTRY_DSN,
 	release: import.meta.env.VITE_RELEASE,
 	environment: import.meta.env.MODE,
-	formattedStacks: true, // see "Reading stacks" below
 });
 
 if (typeof window !== "undefined") {
@@ -231,9 +228,10 @@ What is sent is still yours to judge. File paths under your app root and the
 names you list in `errorNames` go out as they are, and the masking inside kept
 paths is a pattern match, not a guarantee.
 
-Inspecting a thrown value runs none of its code: no getter, proxy trap,
-`toJSON` or `toString` of the error, and nothing global is modified. That rules
-out some errors, which are then sent as `Error` with no frames:
+By default, inspecting a thrown value runs none of its code (no getter, proxy
+trap, `toJSON` or `toString` of the error) and no stack-formatting hook, and
+the reporter never modifies globals. That rules out some errors, which are
+then sent as `Error` with no frames:
 
 - A value is inspected only after a native brand check that a proxy cannot
   intercept: `isNativeError` and `isProxy` on the server, `Error.isError` in
@@ -244,28 +242,43 @@ out some errors, which are then sent as `Error` with no frames:
   is a built-in error prototype, so a custom class reports its type only when
   it sets `name` on the instance (`this.name = "ApiError"` or a class field)
   and you list it in `errorNames`.
-- A formatted stack builds its header from `name`, `message` and, for Node's
-  own errors, `code`. The stack is read only when those are plain data on the
-  error itself or on built-in prototypes; on the server, also on custom
-  prototypes that are verified not to be proxies.
+- With `formattedStacks` (below), a stack is formatted with a header built from
+  `name`, `message` and, for Node's own errors, `code`. It is read only when
+  those are plain data on the error itself or on built-in prototypes; on the
+  server, also on custom prototypes that are verified not to be proxies.
 
 ### Reading stacks
 
 Bun keeps an error's stack as a plain string, and so does an error whose
-`stack` your code assigned; those are always read. Node and browsers produce
-the stack the first time it is read, by running the runtime's stack
-formatter: in V8 that is whatever `Error.prepareStackTrace` the error's realm
-has installed (Node's own default, a source-map hook such as
+`stack` your code assigned; those are always read and parsed. Node and
+browsers produce the stack the first time it is read, by running the
+runtime's stack formatter: in V8 that is whatever `Error.prepareStackTrace` the
+error's realm has installed (Node's own default, a source-map hook such as
 `source-map-support`, or one of yours), and which realm an error came from
-cannot be determined reliably. So by default such stacks are not read, and on
-Node and in browsers errors are sent without frames.
+cannot be determined reliably. So by default these stacks are not read: on
+Node and in browsers errors are reported with their type but without frames,
+and therefore without source-mapped locations.
 
-`formattedStacks: true` reads them, exactly as `error.stack` does in your own
-logging: the formatter runs, and nothing about it is changed or bypassed.
-Everything else still holds: the error's own getters and proxies never run,
-nothing global is modified, and file locations follow the rules above. Turn it
-on unless something in your process installs an `Error.prepareStackTrace` you
-do not want run while reporting.
+To get frames there, opt in explicitly:
+
+```ts
+sentryErrorReporting({ dsn, release, formattedStacks: true });
+createBrowserErrorReporter({ dsn, release, formattedStacks: true });
+```
+
+This reads the stack exactly as `error.stack` does in your own logging, so the
+"runs none of its code" guarantee above no longer covers stacks:
+
+- Whatever formatter or `prepareStackTrace` accessor is installed runs, and it
+  can run any code, including getters on the error and changes to globals. The
+  reporter only keeps its own reads of `name`, `message` and `code` free of
+  getters and proxies, and it never modifies globals itself.
+- What a custom or source-mapping formatter puts into the stack is your
+  responsibility. File locations still follow the rules above: only registered
+  or listed files are sent.
+
+Turn it on when every stack formatter in your process is one you are content
+to have run while an error is being reported.
 
 ### Coexisting with OpenTelemetry
 

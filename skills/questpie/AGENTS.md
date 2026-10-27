@@ -7422,7 +7422,6 @@ export default runtimeConfig({
 			release: process.env.RELEASE,
 			environment: process.env.NODE_ENV,
 			filenameRoot: process.cwd(), // rewrites sent paths; must not be "/"
-			formattedStacks: true, // read Node's lazily formatted stacks (runs Error.prepareStackTrace)
 			errorNames: ["ApiError"], // custom names safe to send; others become Error
 		}),
 	},
@@ -7445,12 +7444,7 @@ safe.
 **Browser and build** (`@questpie/sentry/browser`, `@questpie/sentry/vite`):
 
 ```ts
-const reporter = createBrowserErrorReporter({
-	dsn,
-	release,
-	environment,
-	formattedStacks: true,
-});
+const reporter = createBrowserErrorReporter({ dsn, release, environment });
 installGlobalErrorHandlers(reporter, window);
 createRouter({
 	routeTree,
@@ -7468,12 +7462,19 @@ plugins: [questpieSentryVite({ org, project, release })];
 frames with line/column and a file only for a build artifact registered by
 debug id or listed in `trustedFiles` (rewritten to `app:///`), and the
 validated `info`. Never the message,
-function names, request, session, payload or breadcrumbs. Inspection runs none
-of the error's code (getters, proxy traps, `toJSON`) and modifies nothing
-global; proxies and errors the native brand check cannot vouch for are sent as
-`Error` with no frames. Node and browsers format stacks lazily through
-`Error.prepareStackTrace`; those are read only with `formattedStacks: true`,
-which runs that formatter as `error.stack` does. No Sentry client or
+function names, request, session, payload or breadcrumbs. By default
+inspection runs none of the error's code (getters, proxy traps, `toJSON`) and
+no stack-formatting hook, and the reporter never modifies globals; proxies and
+errors the native brand check cannot vouch for are sent as `Error` with no
+frames.
+
+**Stacks on Node and in browsers are formatted lazily**, so by default those
+errors are reported without frames (Bun's plain-string stacks are still
+parsed). Frames there need an explicit opt-in, `formattedStacks: true` on the
+server adapter or browser reporter. It reads the stack as `error.stack` does,
+running whatever `Error.prepareStackTrace` is installed, which may run any
+code; only the reporter's own reads stay getter-free. Do not enable it by
+default in generated code. No Sentry client or
 OpenTelemetry provider is initialised, so it coexists with
 `@questpie/observability`.
 

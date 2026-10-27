@@ -20,7 +20,6 @@ export default runtimeConfig({
 			release: process.env.RELEASE,
 			environment: process.env.NODE_ENV,
 			filenameRoot: process.cwd(),
-			formattedStacks: true, // read Node's lazily formatted stacks
 		}),
 	},
 });
@@ -43,6 +42,13 @@ Events are built from an allowlist:
 Error messages, function names, requests, sessions, payloads, breadcrumbs,
 tracing, logs and replays are never sent. No Sentry client or OpenTelemetry
 provider is initialised.
+
+By default no code of the thrown error and no stack-formatting hook runs, so
+on Node and in browsers, where stacks are formatted lazily, errors are
+reported without frames (plain-string stacks, as in Bun, are still parsed).
+`formattedStacks: true` reads those stacks as `error.stack` does, which runs
+whatever `Error.prepareStackTrace` is installed; see the guide before turning
+it on.
 
 Requires Node 20.19+, 22.12+ or 23.2+ (the Sentry 11 SDK floor).
 

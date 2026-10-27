@@ -37,8 +37,10 @@ export interface BrowserErrorReporterOptions extends DeliveryOptions {
 	 * the error's realm has installed (Node's default, a source-map hook, or an
 	 * app's own) exactly as reading `error.stack` does. Without it, frames are
 	 * sent only for stacks that are already plain data (Bun, an assigned
-	 * string). Either way the error's own getters and proxies never run and
-	 * nothing global is modified.
+	 * string). With it, the formatter that runs is whatever is installed and
+	 * may itself call getters or other code; only the reporter's own reads of
+	 * `name`, `message` and `code` are kept free of getters and proxies. The
+	 * reporter itself never modifies globals.
 	 * @default false
 	 */
 	formattedStacks?: boolean;
