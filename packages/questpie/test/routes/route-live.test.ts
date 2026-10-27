@@ -260,6 +260,62 @@ describe("explicit route LIVE", () => {
 		},
 	);
 
+	it("admits large route inputs with bounded IDs and distinct typed snapshots", async () => {
+		const requests: Array<{
+			topics?: Array<{ id: string }>;
+			topology?: { subscriptions: Array<{ id: string }> };
+		}> = [];
+		const client = createClient<any>({
+			baseURL: "http://localhost",
+			basePath: "/api",
+			fetch: async (url, init) => {
+				if (String(url).endsWith("/realtime"))
+					requests.push(JSON.parse(String(init?.body)));
+				return (await handle(new Request(url, init)))!;
+			},
+		});
+		const abort = new AbortController();
+		try {
+			const call = client.routes.report["[company]"].post;
+			const input = {
+				tenant: "large-input-".repeat(100),
+				at: new Date("2026-10-22T12:00:00Z"),
+			};
+			const options = {
+				params: { company: "large-input" },
+				signal: abort.signal,
+			};
+			const other = { ...input, at: new Date(input.at.getTime() + 1) };
+			const watches = [input, { ...input }, other].map((value) =>
+				call.watch(value, options)[Symbol.asyncIterator](),
+			);
+			const snapshots = await Promise.race([
+				Promise.all(watches.map(async (watch) => (await watch.next()).value)),
+				Bun.sleep(3000).then(() => {
+					throw new Error("Large route input was not admitted");
+				}),
+			]);
+			expect(snapshots.map((value) => value.at)).toEqual([
+				input.at,
+				input.at,
+				other.at,
+			]);
+			expect(snapshots[0].at).toBeInstanceOf(Date);
+			const ids = new Set(
+				requests.flatMap((request) =>
+					(request.topics ?? request.topology?.subscriptions ?? []).map(
+						({ id }) => id,
+					),
+				),
+			);
+			expect(ids.size).toBe(2);
+			for (const id of ids) expect(id.length).toBeLessThanOrEqual(512);
+		} finally {
+			abort.abort();
+			client.realtime.destroy();
+		}
+	});
+
 	it("rejects malformed percent encoding before route access or execution", async () => {
 		const before = computes;
 		const response = await handle(

@@ -473,6 +473,87 @@ describe("client live queries", () => {
 		multiplexer.destroy();
 	});
 
+	it("keeps compact IDs stable across reconnect, key reordering and late unsubscribe", async () => {
+		const mux = new RealtimeMultiplexer("http://localhost:3000", true, 0, {
+			retryBaseMs: 10,
+			maxRetryMs: 10,
+			random: () => 0.5,
+		});
+		const text = "café-".repeat(200);
+		const snapshots: unknown[] = [];
+		try {
+			const first = mux.subscribe(
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: { title: text, published: true },
+				},
+				() => {},
+			);
+			const duplicate = mux.subscribe(
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: { published: true, title: text },
+				},
+				() => {},
+			);
+			mux.subscribe(
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: { title: text + "different", published: true },
+				},
+				() => {},
+			);
+			await waitFor(() => connections.length === 1);
+			expect(connections[0].topics).toHaveLength(2);
+			const [oldId, siblingId] = connections[0].topics.map(({ id }) => id);
+			expect(oldId).not.toBe(siblingId);
+			for (const { id } of connections[0].topics)
+				expect(id.length).toBeLessThanOrEqual(512);
+			connections[0].close();
+			await waitFor(() => connections.length === 2);
+			expect(connections[1].topics.map(({ id }) => id)).toEqual([
+				oldId,
+				siblingId,
+			]);
+			first();
+			duplicate();
+			await waitFor(() =>
+				controlTopologies.some(
+					(topology) => topology.subscriptions.length === 1,
+				),
+			);
+			const replacement = mux.subscribe(
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: { published: true, title: text },
+				},
+				(snapshot) => snapshots.push(snapshot),
+			);
+			await waitFor(() => controlTopologies.at(-1)?.subscriptions.length === 2);
+			const ids = controlTopologies
+				.at(-1)!
+				.subscriptions.map((entry: { id: string }) => entry.id);
+			const newId = ids.find((id: string) => id !== siblingId)!;
+			expect(newId).not.toBe(oldId);
+			first();
+			duplicate();
+			connections[1].sendSnapshot(oldId, 1, { stale: true });
+			connections[1].sendSnapshot(newId, 1, { current: true });
+			await waitFor(() => snapshots.length === 1);
+			expect(snapshots).toEqual([
+				{ type: "snapshot", topicId: newId, seq: 1, data: { current: true } },
+			]);
+			expect(mux.topicCount).toBe(2);
+			replacement();
+		} finally {
+			mux.destroy();
+		}
+	});
+
 	it("preserves instant values across snapshots, deltas, and reconnect", async () => {
 		const instant = new Date("2025-03-30T00:30:00.123Z");
 		const resumedInstant = new Date("2025-11-02T05:30:00.000Z");

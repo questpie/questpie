@@ -169,6 +169,7 @@ function topicWire(topic: TopicConfig): TopicConfig {
 		: topic;
 }
 
+/** Complete local identity; transports allocate separate bounded wire IDs. */
 export function realtimeTopicId(topic: TopicConfig): string {
 	const normalized = stableStringify(topicWire(topic));
 	if (typeof Buffer !== "undefined") {
@@ -193,7 +194,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 	private errorCallbacks = new Map<string, Set<ErrorCallback>>();
 	private topics = new Map<string, TopicConfig>();
 	private lastSeq = new Map<string, number>();
-	private customIds = new Map<string, string>();
+	private topicIds = new Map<string, string>();
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 	private reconnectAttempts = 0;
@@ -247,12 +248,10 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		customId?: string,
 		onError?: ErrorCallback,
 	): () => void {
-		const topicHash = this.hashTopic(topic);
-		const topicId = customId ?? topicHash;
-
-		if (customId) {
-			this.customIds.set(topicHash, customId);
-		}
+		const topicKey = realtimeTopicId(topic);
+		const topicId =
+			customId ?? this.topicIds.get(topicKey) ?? `query:${crypto.randomUUID()}`;
+		if (!customId) this.topicIds.set(topicKey, topicId);
 
 		if (!this.subscribers.has(topicId)) {
 			this.subscribers.set(topicId, new Set());
@@ -286,7 +285,8 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 			if (subs.size === 0) {
 				this.subscribers.delete(topicId);
 				this.topics.delete(topicId);
-				this.customIds.delete(topicHash);
+				if (this.topicIds.get(topicKey) === topicId)
+					this.topicIds.delete(topicKey);
 				this.lastSeq.delete(topicId);
 				this.applyTopologyChange(topicId);
 			}
@@ -294,25 +294,6 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 
 		signal?.addEventListener("abort", unsubscribe);
 		return unsubscribe;
-	}
-
-	/**
-	 * Generate a deterministic id for a topic config.
-	 *
-	 * The id must be a 1:1 function of the *entire* normalized topic so distinct
-	 * subscriptions never share an id. The previous implementation truncated the
-	 * encoded topic to 24 base64 chars (~18 bytes); since `stableStringify` sorts
-	 * keys, that window captured only `{"resource":"` plus the first ~5 chars of
-	 * the resource name, dropping `where`/`with`/`limit`/`offset`/`orderBy`/
-	 * `locale` entirely. Concurrent realtime queries whose resource names shared
-	 * a 5-char prefix (e.g. `events` and `event_members`) — or that differed only
-	 * in `where` — collapsed onto one id, dropped the loser's topic from the POST
-	 * payload (first-writer-wins), and cross-wired each other's snapshots. We now
-	 * encode the full normalized topic (no truncation): collision-free by
-	 * construction, and unicode-safe.
-	 */
-	private hashTopic(topic: TopicConfig): string {
-		return realtimeTopicId(topic);
 	}
 
 	private applyTopologyChange(topicId: string): void {
@@ -453,8 +434,8 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.errorCallbacks.delete(error.topicId);
 		this.topics.delete(error.topicId);
 		this.lastSeq.delete(error.topicId);
-		for (const [topicHash, customId] of this.customIds) {
-			if (customId === error.topicId) this.customIds.delete(topicHash);
+		for (const [topicKey, wireId] of this.topicIds) {
+			if (wireId === error.topicId) this.topicIds.delete(topicKey);
 		}
 	}
 
@@ -467,8 +448,8 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.errorCallbacks.delete(topicId);
 		this.topics.delete(topicId);
 		this.lastSeq.delete(topicId);
-		for (const [topicHash, customId] of this.customIds) {
-			if (customId === topicId) this.customIds.delete(topicHash);
+		for (const [topicKey, wireId] of this.topicIds) {
+			if (wireId === topicId) this.topicIds.delete(topicKey);
 		}
 		this.applyTopologyChange(topicId);
 	}
@@ -851,7 +832,7 @@ export class RealtimeMultiplexer implements RealtimeClientTransport {
 		this.errorCallbacks.clear();
 		this.topics.clear();
 		this.lastSeq.clear();
-		this.customIds.clear();
+		this.topicIds.clear();
 		this.pendingControlTopicIds.clear();
 		this.controlFlushScheduled = false;
 		this.controlSession = null;

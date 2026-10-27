@@ -106,6 +106,89 @@ describe("Pusher realtime client transport", () => {
 		mock.restore();
 	});
 
+	test("uses compact exact topic IDs through provider topology changes", async () => {
+		const bodies: Array<{
+			topics?: Array<{ id: string }>;
+			topology?: { subscriptions: Array<{ id: string }> };
+		}> = [];
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: async (input, init) => {
+				const url = String(input);
+				if (url.endsWith("/realtime/config"))
+					return Response.json({
+						transport: "shared-provider",
+						config: {
+							provider: "pusher",
+							key: "public-key",
+							cluster: "mt1",
+							authEndpoint: "realtime/auth",
+						},
+					});
+				if (url.endsWith("/realtime/auth"))
+					return Response.json({ auth: "signed" });
+				if (url.endsWith("/realtime")) {
+					const body = JSON.parse(String(init?.body));
+					bodies.push(body);
+					if (body.sessionId)
+						return Response.json({ status: "accepted" }, { status: 202 });
+					return Response.json({
+						transport: "shared-provider",
+						sessionId: "compact",
+						token: "control",
+						channel: "private-compact",
+						control: { protocol: "questpie-realtime-topology", versions: [2] },
+					});
+				}
+				return Response.json({ docs: [], totalDocs: 0 });
+			},
+		});
+		const text = "café-".repeat(200);
+		let snapshots = 0;
+		const observe = () => {
+			snapshots++;
+		};
+		try {
+			const first = client.collections.posts.live(
+				{ where: { title: text, published: true } },
+				() => observe(),
+			);
+			const duplicate = client.collections.posts.live(
+				{ where: { published: true, title: text } },
+				() => observe(),
+			);
+			client.collections.posts.live(
+				{ where: { title: text + "different", published: true } },
+				() => observe(),
+			);
+			await waitFor(() => snapshots === 3);
+			const allIds = () =>
+				new Set(
+					bodies.flatMap((body) =>
+						(body.topics ?? body.topology?.subscriptions ?? []).map(
+							({ id }) => id,
+						),
+					),
+				);
+			expect(allIds().size).toBe(2);
+			for (const id of allIds()) expect(id.length).toBeLessThanOrEqual(512);
+			first();
+			duplicate();
+			await waitFor(() => bodies.at(-1)?.topology?.subscriptions.length === 1);
+			client.collections.posts.live(
+				{ where: { published: true, title: text } },
+				() => observe(),
+			);
+			await waitFor(() => snapshots === 4);
+			first();
+			duplicate();
+			expect(allIds().size).toBe(3);
+			expect(client.realtime.topicCount).toBe(2);
+		} finally {
+			client.realtime.destroy();
+		}
+	});
+
 	test.each(["find", "get"] as const)(
 		"refetches a %s topic on private invalidation",
 		async (operation) => {

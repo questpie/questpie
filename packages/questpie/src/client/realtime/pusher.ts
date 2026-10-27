@@ -101,6 +101,7 @@ function topicPayload(topicId: string, topic: TopicConfig) {
 /** Lazy managed-Pusher driver. Provider frames are private refetch hints only. */
 export class PusherRealtimeTransport implements RealtimeClientTransport {
 	private readonly topics = new Map<string, TopicEntry>();
+	private readonly topicIds = new Map<string, string>();
 	private readonly crdt = new Map<string, CrdtEntry>();
 	private session: SessionResponse | null = null;
 	private sessionCrdtHold = false;
@@ -144,7 +145,10 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		customId?: string,
 		onError?: RealtimeErrorCallback,
 	): () => void {
-		const topicId = customId ?? realtimeTopicId(topic);
+		const topicKey = realtimeTopicId(topic);
+		const topicId =
+			customId ?? this.topicIds.get(topicKey) ?? `query:${crypto.randomUUID()}`;
+		if (!customId) this.topicIds.set(topicKey, topicId);
 		let entry = this.topics.get(topicId);
 		if (!entry) {
 			entry = {
@@ -176,6 +180,8 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 			if (onError) current.errorCallbacks.delete(onError);
 			if (current.subscribers.size > 0) return;
 			this.topics.delete(topicId);
+			if (this.topicIds.get(topicKey) === topicId)
+				this.topicIds.delete(topicKey);
 			if (this.session) {
 				const closeAfterFlush = !this.hasDemand();
 				void this.sendDesiredTopology().finally(() => {
@@ -803,6 +809,7 @@ export class PusherRealtimeTransport implements RealtimeClientTransport {
 		if (this.destroyed) return;
 		this.destroyed = true;
 		this.topics.clear();
+		this.topicIds.clear();
 		this.crdt.clear();
 		this.holdCount = 0;
 		if (this.session) {
