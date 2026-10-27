@@ -128,6 +128,7 @@ export async function buildMockApp(
 		realtime: runtimeOverrides.realtime,
 		crdt: runtimeOverrides.crdt,
 		executor: runtimeOverrides.executor,
+		errors: runtimeOverrides.errors,
 		secret: runtimeOverrides.secret,
 	} as RuntimeConfig);
 

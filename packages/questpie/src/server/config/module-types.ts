@@ -62,6 +62,7 @@ import type {
 import type { TranslationsConfig } from "#questpie/server/i18n/types.js";
 import type { Migration } from "#questpie/server/migration/types.js";
 import type { CrdtRuntimeConfig } from "#questpie/server/modules/core/integrated/crdt/config.js";
+import type { ErrorReportingConfig } from "#questpie/server/modules/core/integrated/errors/types.js";
 import type { ExecutorConfig } from "#questpie/server/modules/core/integrated/executor/types.js";
 import type { KVConfig } from "#questpie/server/modules/core/integrated/kv/types.js";
 import type { LoggerConfig } from "#questpie/server/modules/core/integrated/logger/types.js";
@@ -389,6 +390,9 @@ export interface RuntimeConfig<
 	/** Tracing and metrics. Omit for a zero-cost no-op. */
 	observability?: ObservabilityConfig;
 
+	/** Error reporting. Omit for a no-op. */
+	errors?: ErrorReportingConfig;
+
 	/** Executor configuration (sandboxed / trusted code execution). */
 	executor?: ExecutorConfig;
 
@@ -653,6 +657,9 @@ export interface AppConfig {
 
 	/** Tracing and metrics. Omit for a zero-cost no-op. */
 	observability?: ObservabilityConfig;
+
+	/** Error reporting. Omit for a no-op. */
+	errors?: ErrorReportingConfig;
 
 	/** Executor configuration (sandboxed / trusted code execution). */
 	executor?: ExecutorConfig;

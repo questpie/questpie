@@ -395,6 +395,7 @@ const RUNTIME_CONSUMED_KEYS = new Set([
 	"cli",
 	"crdt",
 	"observability",
+	"errors",
 	"executor",
 ]);
 
@@ -723,6 +724,7 @@ async function createAppFromDefinition(
 		// dropped here, and the service came up disabled — so the documented way
 		// to turn tracing on did nothing at all.
 		observability: runtime.observability,
+		errors: runtime.errors,
 		executor: runtime.executor,
 		migrations: {
 			migrations: [...merged.migrations],

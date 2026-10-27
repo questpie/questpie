@@ -6,6 +6,7 @@ import {
 } from "#questpie/server/collection/crud/shared/transaction.js";
 import type { AnyDrizzleClient } from "#questpie/server/config/types.js";
 
+import type { ErrorReportingService } from "../errors/service.js";
 import type { ObservabilityService } from "../observability/service.js";
 import type {
 	QueueAdapter,
@@ -186,6 +187,25 @@ export function createQueueClient<
 			);
 		}
 		return runtimeOptions.getApp();
+	};
+
+	const reportJobFailure = (
+		error: unknown,
+		jobName: string,
+		finalAttempt: boolean | undefined,
+	) => {
+		try {
+			const app = runtimeOptions.getApp?.() as
+				| { errors?: ErrorReportingService }
+				| undefined;
+			app?.errors?.report(error, {
+				source: "job",
+				job: jobName,
+				...(finalAttempt === undefined ? {} : { final: finalAttempt }),
+			});
+		} catch {
+			// No app resolver: nothing to report to.
+		}
 	};
 
 	const buildHandlers = (selectedJobs?: TJobs): QueueHandlerMap => {
@@ -381,16 +401,25 @@ export function createQueueClient<
 						completionPersisted = true;
 					}
 				} catch (error) {
+					let failure = error;
 					if (secretPayload) {
-						if (error instanceof QueueAdmissionError)
-							throw new QueueAdmissionError(
-								"QUESTPIE Queue secret job handling failed",
-							);
-						throw redactedSecretQueueError(
-							"QUESTPIE Queue secret job handling failed",
-						);
+						failure =
+							error instanceof QueueAdmissionError
+								? new QueueAdmissionError(
+										"QUESTPIE Queue secret job handling failed",
+									)
+								: redactedSecretQueueError(
+										"QUESTPIE Queue secret job handling failed",
+									);
 					}
-					throw error;
+					// Reported per attempt, after redaction: a secret job's original
+					// error never reaches the reporter. A lease expiry or shutdown
+					// abort is cancellation, not an incident. Reporting cannot change
+					// what is thrown, so the adapter's retry/ack decision is untouched.
+					if (!job.signal?.aborted) {
+						reportJobFailure(failure, jobDef.name, job.finalAttempt);
+					}
+					throw failure;
 				} finally {
 					await releaseExecution();
 				}

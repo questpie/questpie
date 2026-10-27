@@ -252,6 +252,7 @@ async function bindScopeToResponse(
 	request: Request,
 	response: Response,
 	scope: RequestScope,
+	route: string | undefined,
 ): Promise<Response> {
 	if (!response.body) {
 		await scope.dispose();
@@ -289,6 +290,17 @@ async function bindScopeToResponse(
 				}
 				controller.enqueue(chunk.value);
 			} catch (error) {
+				// A client disconnect cancels the body; that is not a server
+				// incident. Anything else failed mid-stream, after the status line.
+				if (!request.signal.aborted) {
+					app.errors?.report(error, {
+						source: "http",
+						kind: "stream",
+						method: request.method,
+						route,
+						status: response.status,
+					});
+				}
 				await finalize().catch(() => {});
 				controller.error(error);
 			}
@@ -390,6 +402,19 @@ export const createFetchHandler = (
 					"http.response.status_code": response.status,
 					...(routePattern ? { "http.route": routePattern } : {}),
 				});
+
+			// One incident per unexpected failure. 4xx are expected outcomes
+			// (validation, auth, not found, conflict) and are not reported. The
+			// route is the matched TEMPLATE; an unmatched raw path is never sent.
+			if (response.status >= 500) {
+				appInstance.errors?.report(error, {
+					source: "http",
+					kind: error === undefined ? "returned" : "thrown",
+					method: request.method,
+					route: routePattern,
+					status: response.status,
+				});
+			}
 
 			const meta: RequestLogMeta = {
 				event: "http.request",
@@ -601,6 +626,7 @@ export const createFetchHandler = (
 				request,
 				response,
 				requestScope,
+				routePattern,
 			);
 		} catch (error) {
 			return disposeRequestScopeAfterError(requestScope, error);
