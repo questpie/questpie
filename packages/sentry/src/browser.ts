@@ -61,6 +61,8 @@ export interface BrowserErrorReporter {
 }
 
 const ROUTE = /^[A-Za-z0-9_\-./:$*[\]{}()]{1,256}$/;
+/** A scheme (`https://host/…`) or protocol-relative host (`//host/…`). */
+const URL_LIKE = /:\/\/|^\/\//;
 const KINDS = new Set<BrowserErrorKind>([
 	"boundary",
 	"global",
@@ -111,7 +113,9 @@ export function createBrowserErrorReporter(
 
 				const kind = info.kind && KINDS.has(info.kind) ? info.kind : "manual";
 				const route =
-					typeof info.route === "string" && ROUTE.test(info.route)
+					typeof info.route === "string" &&
+					ROUTE.test(info.route) &&
+					!URL_LIKE.test(info.route)
 						? info.route
 						: undefined;
 				const tags: Record<string, string> = {

@@ -47,11 +47,16 @@ const adapter: ErrorReportingAdapter = {
 };
 ```
 
-`report` is closed. `source` is `http`, `job`, `background` or `manual`.
-`route` is the matched route template (`items/:id`), never the raw path. `job`
-is the static job name, never a dispatch or idempotency id. Anything else you
-pass is dropped before the adapter sees it. `trace` is added only when an
-observability adapter has a span open at the time.
+`report` is closed. `source` is `http`, `job`, `background`, `manual` or
+`process`. `route` is the matched route template (`items/:id`), never the raw
+path. `job` is the static job name, never a dispatch or idempotency id. Anything
+else you pass is dropped before the adapter sees it. `trace` is added only when
+an observability adapter has a span open at the time.
+
+The framework always passes a template. When you pass `route` yourself, pass a
+template too: a value with a URL scheme or host (`https://…`, `//…`) is dropped,
+but a raw path such as `invite/abc123` has the same shape as a template and is
+sent as it is.
 
 Report your own failures from any handler:
 
@@ -115,6 +120,31 @@ The HTTP server and a standalone `app.queue.listen()` worker read the same
 config, so both report. Without `dsn`, `sentryErrorReporting()` returns
 `undefined` and error reporting stays off with no per-request cost, so you can
 wire it unconditionally and enable it per environment.
+
+#### Uncaught exceptions and unhandled rejections
+
+The framework reports failures inside requests and jobs. An error that escapes
+everything and is about to end the process is not reported unless you opt in,
+once per process, after the app is created:
+
+```ts title="src/server.ts"
+import { installProcessErrorHandlers } from "@questpie/sentry/server";
+
+installProcessErrorHandlers(app.errors);
+```
+
+It reports the error with `source: "process"` and does not change how the
+process ends. If no other `uncaughtException` listener is installed, it waits
+for delivery up to `flushTimeoutMs` (2 s), then rethrows, so the runtime prints
+the error and exits with the same code as before. The process keeps running in
+its failed state during that wait, so keep the timeout short. If your app has
+its own listener, that listener decides what happens and this only reports.
+
+Node raises an unhandled rejection as an uncaught exception by default, so one
+listener covers both; on Bun an `unhandledRejection` listener is added too.
+With `--unhandled-rejections=warn`, `warn-with-error-code` or `none`, the
+process keeps running after a rejection and rejections are not reported. The
+returned function removes the listeners.
 
 ### Browser
 

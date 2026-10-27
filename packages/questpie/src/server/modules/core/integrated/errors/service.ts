@@ -44,6 +44,7 @@ const SOURCES = new Set<ErrorReportSource>([
 	"job",
 	"background",
 	"manual",
+	"process",
 ]);
 const KINDS = new Set<ErrorReportKind>(["thrown", "returned", "stream"]);
 const METHODS = new Set([
@@ -58,6 +59,8 @@ const METHODS = new Set([
 	"TRACE",
 ]);
 const ROUTE_PATTERN = /^[A-Za-z0-9_\-./:*[\]{}]{0,256}$/;
+/** A scheme (`https://host/…`) or protocol-relative host (`//host/…`). */
+const URL_LIKE = /:\/\/|^\/\//;
 const JOB_PATTERN = /^[A-Za-z0-9_\-.:/]{1,128}$/;
 const TRACE_ID = /^[0-9a-f]{32}$/;
 const SPAN_ID = /^[0-9a-f]{16}$/;
@@ -101,9 +104,11 @@ export class ErrorReportingService {
 		const adapter = this.config.adapter;
 		if (!adapter || this.closed) return;
 		try {
-			if (this.alreadyReported(error)) return;
+			// Check capacity first: a report dropped here must not mark the error
+			// as reported, or a later report of it in this occurrence is lost.
 			if (this.pending.size >= (this.config.maxPending ?? DEFAULT_MAX_PENDING))
 				return;
+			if (this.alreadyReported(error)) return;
 			const result = adapter.report(error, this.normalize(info));
 			if (result && typeof (result as Promise<unknown>).then === "function") {
 				this.track(result as Promise<unknown>);
@@ -189,7 +194,11 @@ export class ErrorReportingService {
 			const method = info.method.toUpperCase();
 			report.method = METHODS.has(method) ? method : "OTHER";
 		}
-		if (typeof info?.route === "string" && ROUTE_PATTERN.test(info.route)) {
+		if (
+			typeof info?.route === "string" &&
+			ROUTE_PATTERN.test(info.route) &&
+			!URL_LIKE.test(info.route)
+		) {
 			report.route = info.route;
 		}
 		if (

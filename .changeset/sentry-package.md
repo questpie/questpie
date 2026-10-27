@@ -4,7 +4,7 @@
 
 New package: `@questpie/sentry`, Sentry error reporting for QUESTPIE.
 
-- `@questpie/sentry/server`: `sentryErrorReporting()`, an adapter for `runtimeConfig({ errors: { adapter } })`. It reports the framework's HTTP and queue failures and your own `errors.report()` calls.
+- `@questpie/sentry/server`: `sentryErrorReporting()`, an adapter for `runtimeConfig({ errors: { adapter } })`. It reports the framework's HTTP and queue failures and your own `errors.report()` calls. `installProcessErrorHandlers(app.errors)` opts in to reporting uncaught exceptions and unhandled rejections; it waits for delivery up to `flushTimeoutMs` (2 s) and rethrows, so the process exits as before, and only reports when the app has its own `uncaughtException` listener.
 - `@questpie/sentry/browser`: `createBrowserErrorReporter()`, `installGlobalErrorHandlers()` and `createRouterErrorReporter()`. The last one plugs into TanStack Router's `defaultOnCatch` and reports the route template, not the URL.
 - `@questpie/sentry/vite`: `questpieSentryVite()`. It injects debug ids, uploads source maps with `SENTRY_AUTH_TOKEN`, hides maps from bundles and deletes them after upload.
 

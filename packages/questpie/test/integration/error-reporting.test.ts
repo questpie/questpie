@@ -92,6 +92,23 @@ describe("ErrorReportingService", () => {
 		});
 	});
 
+	it("drops a route that carries a URL scheme or host", () => {
+		const { adapter, captured } = capturingAdapter();
+		const service = new ErrorReportingService({ adapter });
+		for (const route of [
+			`https://app.example.com/invite/${SECRET}`,
+			`//app.example.com/invite/${SECRET}`,
+		]) {
+			service.report(new Error("x"), { source: "manual", route });
+		}
+		service.report(new Error("x"), { source: "process", route: "items/:id" });
+		expect(captured.map((c) => c.report)).toEqual([
+			{ source: "manual" },
+			{ source: "manual" },
+			{ source: "process", route: "items/:id" },
+		]);
+	});
+
 	it("adds trace correlation only when a span is actually active", () => {
 		const { adapter, captured } = capturingAdapter();
 		let active: { traceId: string; spanId: string } | undefined;
@@ -147,6 +164,27 @@ describe("ErrorReportingService", () => {
 		await new Promise((resolve) => setTimeout(resolve, 40));
 		service.report(new Error("after"), { source: "manual" });
 		expect(captured).toHaveLength(3);
+	});
+
+	it("does not mark an error as reported when it was dropped for capacity", async () => {
+		const { adapter, captured } = capturingAdapter(() => new Promise(() => {}));
+		const service = new ErrorReportingService({
+			adapter,
+			maxPending: 1,
+			timeoutMs: 20,
+		});
+		const error = new Error("dropped first");
+		const occurrence = createErrorReportOccurrence();
+		runInErrorReportOccurrence(occurrence, () => {
+			service.report(new Error("fills the slot"), { source: "manual" });
+			service.report(error, { source: "manual" });
+		});
+		expect(captured).toHaveLength(1);
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		runInErrorReportOccurrence(occurrence, () =>
+			service.report(error, { source: "http" }),
+		);
+		expect(captured.map((c) => c.error)).toContain(error);
 	});
 
 	it("drains, shuts the adapter down once, and ignores later reports", async () => {

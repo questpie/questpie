@@ -1,0 +1,60 @@
+import { describe, expect, it } from "bun:test";
+import { join } from "node:path";
+
+const fixture = join(import.meta.dir, "fixtures/process-crash.ts");
+
+function run(scenario: string) {
+	const started = Date.now();
+	const result = Bun.spawnSync([process.execPath, fixture, scenario], {
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	return {
+		exitCode: result.exitCode,
+		stdout: result.stdout.toString(),
+		stderr: result.stderr.toString(),
+		ms: Date.now() - started,
+	};
+}
+
+describe("installProcessErrorHandlers", () => {
+	it("reports an uncaught exception, waits for delivery, then crashes as before", () => {
+		const { exitCode, stdout, stderr } = run("throw");
+		expect(stdout).toContain("REPORTED process boom");
+		expect(stdout.indexOf("FLUSHED")).toBeGreaterThan(
+			stdout.indexOf("REPORTED"),
+		);
+		expect(exitCode).toBe(1);
+		expect(stderr).toContain("boom");
+	});
+
+	it("reports an unhandled rejection and still crashes", () => {
+		const { exitCode, stdout, stderr } = run("reject");
+		expect(stdout).toContain("REPORTED process boom");
+		expect(exitCode).toBe(1);
+		expect(stderr).toContain("boom");
+	});
+
+	it("crashes at the deadline when delivery hangs", () => {
+		const { exitCode, stdout, ms } = run("hanging-flush");
+		expect(stdout).toContain("REPORTED process boom");
+		expect(exitCode).toBe(1);
+		expect(ms).toBeLessThan(5_000);
+	});
+
+	it("only reports when the app has its own listener, which keeps control", () => {
+		const { exitCode, stdout } = run("own-listener");
+		expect(stdout).toContain("REPORTED process boom");
+		expect(stdout).toContain("APP HANDLED");
+		expect(stdout).toContain("STILL ALIVE");
+		expect(stdout).not.toContain("FLUSHED");
+		expect(exitCode).toBe(0);
+	});
+
+	it("does nothing once uninstalled", () => {
+		const { exitCode, stdout, stderr } = run("uninstalled");
+		expect(stdout).not.toContain("REPORTED");
+		expect(exitCode).toBe(1);
+		expect(stderr).toContain("boom");
+	});
+});
