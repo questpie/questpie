@@ -106,6 +106,134 @@ describe("Pusher realtime client transport", () => {
 		mock.restore();
 	});
 
+	test("uses compact exact topic IDs through provider topology changes", async () => {
+		const uuidDescriptor = Object.getOwnPropertyDescriptor(
+			globalThis.crypto,
+			"randomUUID",
+		);
+		Object.defineProperty(globalThis.crypto, "randomUUID", {
+			configurable: true,
+			value: undefined,
+		});
+		const bodies: Array<{
+			topics?: Array<{ id: string }>;
+			topology?: { subscriptions: Array<{ id: string }> };
+		}> = [];
+		const client = createClient<any>({
+			baseURL: "http://localhost:3000",
+			fetch: async (input, init) => {
+				const url = String(input);
+				if (url.endsWith("/realtime/config"))
+					return Response.json({
+						transport: "shared-provider",
+						config: {
+							provider: "pusher",
+							key: "public-key",
+							cluster: "mt1",
+							authEndpoint: "realtime/auth",
+						},
+					});
+				if (url.endsWith("/realtime/auth"))
+					return Response.json({ auth: "signed" });
+				if (url.endsWith("/realtime")) {
+					const body = JSON.parse(String(init?.body));
+					bodies.push(body);
+					if (body.sessionId)
+						return Response.json({ status: "accepted" }, { status: 202 });
+					return Response.json({
+						transport: "shared-provider",
+						sessionId: "compact",
+						token: "control",
+						channel: "private-compact",
+						control: { protocol: "questpie-realtime-topology", versions: [2] },
+					});
+				}
+				return Response.json({ docs: [], totalDocs: 0 });
+			},
+		});
+		const text = "café-".repeat(200);
+		let snapshots = 0;
+		const observe = () => {
+			snapshots++;
+		};
+		try {
+			const first = client.collections.posts.live(
+				{ where: { title: text, published: true } },
+				() => observe(),
+			);
+			const duplicate = client.collections.posts.live(
+				{ where: { published: true, title: text } },
+				() => observe(),
+			);
+			client.collections.posts.live(
+				{ where: { title: text + "different", published: true } },
+				() => observe(),
+			);
+			await waitFor(() => snapshots === 3);
+			const allIds = () =>
+				new Set(
+					bodies.flatMap((body) =>
+						(body.topics ?? body.topology?.subscriptions ?? []).map(
+							({ id }) => id,
+						),
+					),
+				);
+			expect(allIds().size).toBe(2);
+			for (const id of allIds()) expect(id.length).toBeLessThanOrEqual(512);
+			first();
+			duplicate();
+			await waitFor(() => bodies.at(-1)?.topology?.subscriptions.length === 1);
+			client.collections.posts.live(
+				{ where: { published: true, title: text } },
+				() => observe(),
+			);
+			await waitFor(() => snapshots === 4);
+			first();
+			duplicate();
+			expect(allIds().size).toBe(3);
+			expect(client.realtime.topicCount).toBe(2);
+			const last = [...allIds()]
+				.map((id) => BigInt(id.split(":").at(-1)!))
+				.reduce((a, b) => (a > b ? a : b));
+			const reservedId = `query:pusher:${last + 1n}`;
+			client.realtime.subscribe(
+				{
+					resourceType: "collection",
+					resource: "posts",
+					where: { reserved: true },
+				},
+				() => observe(),
+				undefined,
+				reservedId,
+			);
+			client.collections.posts.live({ where: { automatic: true } }, () =>
+				observe(),
+			);
+			await waitFor(() => snapshots === 6);
+			expect(allIds().has(reservedId)).toBe(true);
+			expect(allIds().size).toBe(5);
+			const automaticId = bodies.at(-1)!.topology!.subscriptions.at(-1)!.id;
+			const errors: Error[] = [];
+			client.realtime.subscribe(
+				{ resourceType: "global", resource: "conflict" },
+				() => observe(),
+				undefined,
+				automaticId,
+				(error) => errors.push(error),
+			);
+			await waitFor(() => errors.length === 1);
+			expect(errors[0].message).toContain(
+				"already registered for a different topic",
+			);
+			expect(client.realtime.topicCount).toBe(4);
+		} finally {
+			client.realtime.destroy();
+			if (uuidDescriptor)
+				Object.defineProperty(globalThis.crypto, "randomUUID", uuidDescriptor);
+			else Reflect.deleteProperty(globalThis.crypto, "randomUUID");
+		}
+	});
+
 	test.each(["find", "get"] as const)(
 		"refetches a %s topic on private invalidation",
 		async (operation) => {

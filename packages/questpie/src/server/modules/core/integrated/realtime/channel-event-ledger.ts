@@ -19,7 +19,11 @@ import {
 	stringifyCompatibleTypedEventWire,
 } from "#questpie/shared/typed-wire.js";
 
-import { ChannelAuthorityFenceStore } from "./channel-authority-fence.js";
+import {
+	type ChannelAuthorityAdmission,
+	ChannelAuthorityFenceStore,
+	type ChannelAuthorityFrameAttempt,
+} from "./channel-authority-fence.js";
 import {
 	questpieChannelDispatchTable,
 	questpieChannelEventTable,
@@ -45,6 +49,9 @@ const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_RETRY_MS = 25;
 const DEFAULT_BATCH_SIZE = 500;
 const PROVIDER_REVOCATION_TIMEOUT_MS = 5_000;
+const FRAME_ADMISSION_BATCH_SIZE = 64;
+const MAX_CONCURRENT_FRAME_BATCHES = 2;
+const MAX_PENDING_FRAME_ADMISSIONS = 4096;
 
 export type ChannelEventLedgerConfig = {
 	/** Maximum age of replayable events. Set to 0 to disable time cleanup. */
@@ -177,6 +184,17 @@ type LocalSubscription = {
 	lifecycle?: LocalChannelBindingLifecycle;
 };
 
+type PendingFrameAdmission = ChannelAuthorityFrameAttempt & {
+	subscription: LocalSubscription;
+	resolve: (result: ChannelAuthorityAdmission<undefined> | null) => void;
+	reject: (reason: unknown) => void;
+};
+
+type FrameAdmissionQueue = {
+	pending: PendingFrameAdmission[];
+	active: boolean;
+};
+
 export function hashResolvedChannel(channel: string): string {
 	return createHash("sha256").update(channel).digest("hex");
 }
@@ -287,6 +305,10 @@ export class ChannelEventLedger {
 	private sharedDrainPending = false;
 	private sharedDrainPromise: Promise<void> | null = null;
 	private cleanupInProgress = false;
+	private readonly frameAdmissions = new Map<string, FrameAdmissionQueue>();
+	private pendingFrameAdmissions = 0;
+	private activeFrameBatches = 0;
+	private frameAdmissionScheduled = false;
 
 	constructor(
 		private readonly db: AnyDrizzleClient<any>,
@@ -415,6 +437,7 @@ export class ChannelEventLedger {
 	async subscribeLocal(
 		input: LocalChannelSubscriptionInput,
 	): Promise<() => Promise<void>> {
+		this.assertLocalFrameTransaction();
 		if (
 			this.clientTransport &&
 			this.clientTransport.channelDeliveryScope !== "local-sessions"
@@ -826,6 +849,8 @@ export class ChannelEventLedger {
 	}
 
 	async drain(channelHash?: string): Promise<void> {
+		if (this.clientTransport?.channelDeliveryScope !== "shared-provider")
+			this.assertLocalFrameTransaction();
 		try {
 			await this.reconcileLocalAuthorities(channelHash);
 			if (this.clientTransport?.channelDeliveryScope === "shared-provider") {
@@ -855,7 +880,7 @@ export class ChannelEventLedger {
 	 * on a channel with 50 local viewers cost 50 reads. The shared read only
 	 * seeds each binding's first comparison: a moved generation still gets a
 	 * fresh policy evaluation and an exact admission, a refused admission
-	 * re-reads, and every frame is still admitted on its own.
+	 * re-reads, and every frame still receives an exact admission.
 	 */
 	private async reconcileLocalAuthorities(channelHash?: string): Promise<void> {
 		const subscriptions = channelHash
@@ -1021,6 +1046,7 @@ export class ChannelEventLedger {
 		input: LocalChannelSubscriptionInput,
 		oldestEventId: string | null,
 	): Promise<void> {
+		this.assertLocalFrameTransaction();
 		const frame: ChannelGapFrame = {
 			type: "channel_gap",
 			channel: input.channel,
@@ -1048,6 +1074,7 @@ export class ChannelEventLedger {
 		row: ChannelEventRow,
 	): Promise<boolean> {
 		if (Number(row.seq) === subscription.readSeq + 1) return true;
+		this.assertLocalFrameTransaction();
 		this.observe({ type: "resume", outcome: "gap" });
 		this.logger?.warn(
 			`[Realtime] Channel "${subscription.channel}" delivery gap: expected seq ${
@@ -1316,6 +1343,17 @@ export class ChannelEventLedger {
 	private removeLocalSubscription(subscription: LocalSubscription): void {
 		if (subscription.closed) return;
 		subscription.closed = true;
+		const admissions = this.frameAdmissions.get(subscription.channelHash);
+		if (admissions) {
+			admissions.pending = admissions.pending.filter((attempt) => {
+				if (attempt.subscription !== subscription) return true;
+				this.pendingFrameAdmissions--;
+				attempt.resolve({ admitted: false });
+				return false;
+			});
+			if (!admissions.active && admissions.pending.length === 0)
+				this.frameAdmissions.delete(subscription.channelHash);
+		}
 		if (subscription.retryTimer) clearTimeout(subscription.retryTimer);
 		subscription.pending = [];
 		subscription.pendingBytes = 0;
@@ -1356,10 +1394,107 @@ export class ChannelEventLedger {
 		await subscription.sink.close(reason);
 	}
 
+	private async admitLocalFrame(
+		subscription: LocalSubscription,
+		expectedGeneration: number,
+	): Promise<ChannelAuthorityAdmission<undefined> | null> {
+		if (this.pendingFrameAdmissions >= MAX_PENDING_FRAME_ADMISSIONS) {
+			throw new Error("Channel frame admission queue is full");
+		}
+		const channelHash = subscription.channelHash;
+		const subject = subscription.subject!;
+		return new Promise((resolve, reject) => {
+			const queue: FrameAdmissionQueue = this.frameAdmissions.get(
+				channelHash,
+			) ?? {
+				pending: [],
+				active: false,
+			};
+			queue.pending.push({
+				subject,
+				expectedGeneration,
+				subscription,
+				resolve,
+				reject,
+			});
+			this.pendingFrameAdmissions++;
+			this.frameAdmissions.set(channelHash, queue);
+			this.scheduleFrameAdmissions();
+		});
+	}
+
+	private scheduleFrameAdmissions(): void {
+		if (this.frameAdmissionScheduled) return;
+		this.frameAdmissionScheduled = true;
+		queueMicrotask(() => {
+			this.frameAdmissionScheduled = false;
+			for (const [channelHash, queue] of this.frameAdmissions) {
+				if (this.activeFrameBatches >= MAX_CONCURRENT_FRAME_BATCHES) break;
+				if (queue.active) continue;
+				queue.pending = queue.pending.filter((attempt) => {
+					if (!attempt.subscription.closed && attempt.subscription.active)
+						return true;
+					this.pendingFrameAdmissions--;
+					attempt.resolve({ admitted: false });
+					return false;
+				});
+				// Seal before acquiring a connection or any locks. Later arrivals
+				// always need another transaction, even for the same subject.
+				const batch = queue.pending.splice(0, FRAME_ADMISSION_BATCH_SIZE);
+				this.pendingFrameAdmissions -= batch.length;
+				if (batch.length === 0) {
+					this.frameAdmissions.delete(channelHash);
+					continue;
+				}
+				queue.active = true;
+				this.activeFrameBatches++;
+				void this.runFrameAdmissionBatch(channelHash, queue, batch);
+			}
+		});
+	}
+
+	private async runFrameAdmissionBatch(
+		channelHash: string,
+		queue: FrameAdmissionQueue,
+		batch: PendingFrameAdmission[],
+	): Promise<void> {
+		try {
+			const results = await this.authorityFences.admitExpectedBatch(
+				channelHash,
+				batch,
+			);
+			if (results === null) {
+				for (const attempt of batch) attempt.resolve(null);
+				return;
+			}
+			for (const [index, result] of results.entries()) {
+				if (result.status === "fulfilled") batch[index].resolve(result.value);
+				else batch[index].reject(result.reason);
+			}
+		} catch (error) {
+			for (const attempt of batch) attempt.reject(error);
+		} finally {
+			queue.active = false;
+			this.activeFrameBatches--;
+			this.frameAdmissions.delete(channelHash);
+			// Rotate a busy channel behind others waiting for a batch slot.
+			if (queue.pending.length > 0)
+				this.frameAdmissions.set(channelHash, queue);
+			if (this.frameAdmissions.size > 0) this.scheduleFrameAdmissions();
+		}
+	}
+
+	private assertLocalFrameTransaction(): void {
+		if (getCurrentTransaction()) {
+			throw new Error("Channel frame delivery must own transaction completion");
+		}
+	}
+
 	private async writeAuthorizedLocalFrame(
 		subscription: LocalSubscription,
 		frame: Uint8Array,
 	): Promise<SinkWriteResult | null> {
+		this.assertLocalFrameTransaction();
 		if (
 			!subscription.subject ||
 			subscription.authorityGeneration === undefined ||
@@ -1386,18 +1521,19 @@ export class ChannelEventLedger {
 				}
 			}
 			const expectedGeneration = generation;
-			const admission = await this.authorityFences.admitExpected(
-				{
-					channelHash: subscription.channelHash,
-					subject: subscription.subject,
-					expectedGeneration,
-				},
-				{
-					publish: () => {
-						subscription.authorityGeneration = expectedGeneration;
-					},
-				},
+			const previousGeneration: number = subscription.authorityGeneration;
+			const admission = await this.admitLocalFrame(
+				subscription,
+				expectedGeneration,
 			);
+			if (subscription.closed || !subscription.active) return null;
+			// Release the slot and retry this same oldest frame after lock contention.
+			if (admission === null) return { status: "busy", bufferedBytes: 0 };
+			// A newer reconciliation must not be overwritten by this completion.
+			if (subscription.authorityGeneration !== previousGeneration) {
+				generation = subscription.authorityGeneration;
+				continue;
+			}
 			if (!admission.admitted) {
 				generation = await this.authorityFences.read({
 					channelHash: subscription.channelHash,
@@ -1405,7 +1541,7 @@ export class ChannelEventLedger {
 				});
 				continue;
 			}
-			if (subscription.closed || !subscription.active) return null;
+			subscription.authorityGeneration = expectedGeneration;
 			// The frame was logically admitted at this generation. The sink is
 			// deliberately outside the fence so revocation never waits on I/O.
 			return subscription.sink.write(frame, "ordered-channel-event");
