@@ -104,7 +104,7 @@
 		"react-hook-form": "^7.54.0",
 		"react-resizable-panels": "^4.4.2",
 		"recharts": "2.15.4",
-		"shadcn": "^3.6.1",
+		"shadcn": "^4.22.1",
 		"sonner": "^2.0.7",
 		"tailwind-merge": "^3.4.0",
 		"tailwindcss": "^4.0.6",
@@ -131,7 +131,7 @@
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"react": "^19.2.0",
 		"react-dom": "^19.2.0",
-		"zod": "^4.2.1"
+		"zod": "^4.6.6"
 	},
 	"peerDependenciesMeta": {
 		"drizzle-orm": {
@@ -140,5 +140,8 @@
 		"@tanstack/db": {
 			"optional": true
 		}
+	},
+	"engines": {
+		"node": ">=20.18.1"
 	}
 }
