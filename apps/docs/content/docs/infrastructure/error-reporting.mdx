@@ -249,15 +249,20 @@ then sent as `Error` with no frames:
 
 ### Reading stacks
 
-Bun keeps an error's stack as a plain string, and so does an error whose
-`stack` your code assigned; those are always read and parsed. Node and
-browsers produce the stack the first time it is read, by running the
-runtime's stack formatter: in V8 that is whatever `Error.prepareStackTrace` the
-error's realm has installed (Node's own default, a source-map hook such as
-`source-map-support`, or one of yours), and which realm an error came from
-cannot be determined reliably. So by default these stacks are not read: on
-Node and in browsers errors are reported with their type but without frames,
-and therefore without source-mapped locations.
+Most runtimes produce an error's stack the first time it is read, by running
+the runtime's stack formatter: in V8 and Bun that is whatever
+`Error.prepareStackTrace` the error's realm has installed (Node's and Bun's
+own defaults, a source-map hook such as `source-map-support`, or one of
+yours), and which realm an error came from cannot be determined reliably. On
+Node 20 and Bun even inspecting the `stack` property, without reading it,
+formats the stack.
+
+So by default stacks are not read. On Node 20 and Bun nothing about `stack` is
+touched. On Node 22+ and in browsers with native `Error.isError`, where
+inspecting it formats nothing, a `stack` that is already a plain data property
+is read and anything else is left alone. In practice, on Node, Bun and
+Chromium errors are reported with their type but without frames, and
+therefore without source-mapped locations.
 
 To get frames there, opt in explicitly:
 

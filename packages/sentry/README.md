@@ -44,8 +44,9 @@ tracing, logs and replays are never sent. No Sentry client or OpenTelemetry
 provider is initialised.
 
 By default no code of the thrown error and no stack-formatting hook runs, so
-on Node and in browsers, where stacks are formatted lazily, errors are
-reported without frames (plain-string stacks, as in Bun, are still parsed).
+on Node, Bun and in browsers, where stacks are formatted lazily, errors are
+reported without frames; on Node 20 and Bun the stack property is not even
+inspected.
 `formattedStacks: true` reads those stacks as `error.stack` does, which runs
 whatever `Error.prepareStackTrace` is installed; see the guide before turning
 it on.

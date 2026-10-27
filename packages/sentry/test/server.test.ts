@@ -23,6 +23,7 @@ describe("sentryErrorReporting", () => {
 		const capture = captureTransport();
 		const adapter = sentryErrorReporting({
 			dsn: DSN,
+			formattedStacks: true,
 			release: "app@1.2.3",
 			environment: "staging",
 			send: capture.send,
@@ -106,6 +107,7 @@ describe("sentryErrorReporting", () => {
 		const capture = captureTransport();
 		const adapter = sentryErrorReporting({
 			dsn: DSN,
+			formattedStacks: true,
 			send: capture.send,
 			errorNames: ["ApiError"],
 		})!;
@@ -144,7 +146,11 @@ describe("sentryErrorReporting", () => {
 
 	it("reports a returned 5xx without a stack", async () => {
 		const capture = captureTransport();
-		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			formattedStacks: true,
+			send: capture.send,
+		})!;
 		await adapter.report(undefined, {
 			source: "http",
 			kind: "returned",
@@ -159,7 +165,11 @@ describe("sentryErrorReporting", () => {
 
 	it("classifies job attempts", async () => {
 		const capture = captureTransport();
-		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			formattedStacks: true,
+			send: capture.send,
+		})!;
 		await adapter.report(new Error(SECRET), {
 			source: "job",
 			job: "send-digest",
@@ -179,6 +189,7 @@ describe("sentryErrorReporting", () => {
 		let calls = 0;
 		const adapter = sentryErrorReporting({
 			dsn: DSN,
+			formattedStacks: true,
 			timeoutMs: 5,
 			bufferSize: 1,
 			send: () => {
@@ -238,7 +249,11 @@ describe("sentryErrorReporting", () => {
 		(globalThis as any)._sentryDebugIds = {
 			[`Error\n${topFrame}`]: "c0ffee00-0000-4000-8000-000000000001",
 		};
-		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			formattedStacks: true,
+			send: capture.send,
+		})!;
 		await adapter.report(error, { source: "manual" });
 		const event = capture.envelopes[0]!.items[0]!.payload;
 		const frames = event.exception.values[0].stacktrace.frames;
@@ -268,6 +283,7 @@ describe("sentryErrorReporting", () => {
 		});
 		const adapter = sentryErrorReporting({
 			dsn: DSN,
+			formattedStacks: true,
 			send: capture.send,
 			filenameRoot: "/root",
 		})!;
@@ -305,7 +321,11 @@ describe("sentryErrorReporting", () => {
 			value:
 				"Error: from a\n    at f (https://cdn-a.example/assets/main.js:5:5)\n    at h (https://cdn-a.example/assets/other.js:7:7)",
 		});
-		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			formattedStacks: true,
+			send: capture.send,
+		})!;
 		await adapter.report(error, { source: "manual" });
 
 		const event = capture.envelopes[0]!.items[0]!.payload;
@@ -333,7 +353,11 @@ describe("sentryErrorReporting", () => {
 
 	it("stops sending after shutdown and keeps the core contract on transport failure", async () => {
 		const capture = captureTransport();
-		const adapter = sentryErrorReporting({ dsn: DSN, send: capture.send })!;
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			formattedStacks: true,
+			send: capture.send,
+		})!;
 		await adapter.shutdown!(100);
 		await adapter.report(new Error("late"), { source: "manual" });
 		expect(capture.envelopes).toHaveLength(0);
@@ -341,6 +365,7 @@ describe("sentryErrorReporting", () => {
 		const failing = new ErrorReportingService({
 			adapter: sentryErrorReporting({
 				dsn: DSN,
+				formattedStacks: true,
 				send: () => Promise.reject(new Error("network down")),
 			}),
 		});
@@ -352,10 +377,11 @@ describe("sentryErrorReporting", () => {
 
 	it("registers no global Sentry client or OpenTelemetry provider", async () => {
 		const capture = captureTransport();
-		await sentryErrorReporting({ dsn: DSN, send: capture.send })!.report(
-			new Error("x"),
-			{ source: "manual" },
-		);
+		await sentryErrorReporting({
+			dsn: DSN,
+			formattedStacks: true,
+			send: capture.send,
+		})!.report(new Error("x"), { source: "manual" });
 		const otel = Object.getOwnPropertySymbols(globalThis).filter((symbol) =>
 			String(symbol.description).startsWith("opentelemetry"),
 		);

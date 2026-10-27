@@ -1,3 +1,4 @@
+import { versions } from "node:process";
 import { isNativeError, isProxy } from "node:util/types";
 
 import type { ErrorReport, ErrorReportingAdapter } from "questpie/errors";
@@ -9,6 +10,14 @@ import {
 	registeredFiles,
 } from "./envelope.js";
 import { sanitizeError, type SanitizedException } from "./sanitize.js";
+
+/**
+ * Whether reading an error's `stack` descriptor formats nothing. On Node 20
+ * (V8 11) and Bun the read itself formats the stack, running any
+ * `Error.prepareStackTrace`; from Node 22 (V8 12.4) `stack` is an accessor.
+ */
+const INERT_STACK_DESCRIPTORS =
+	versions.bun === undefined && Number.parseInt(versions.node ?? "", 10) >= 22;
 
 export interface SentryServerOptions extends Omit<DeliveryOptions, "tunnel"> {
 	/**
@@ -31,9 +40,10 @@ export interface SentryServerOptions extends Omit<DeliveryOptions, "tunnel"> {
 	 * browsers, Gecko). Off by default: such a stack is produced by the
 	 * runtime's stack formatter, which runs whatever `Error.prepareStackTrace`
 	 * the error's realm has installed (Node's default, a source-map hook, or an
-	 * app's own) exactly as reading `error.stack` does. Without it, frames are
-	 * sent only for stacks that are already plain data (Bun, an assigned
-	 * string). With it, the formatter that runs is whatever is installed and
+	 * app's own) exactly as reading `error.stack` does. Without it, a stack is
+	 * read only where inspecting it formats nothing (Node 22+, browsers with
+	 * native `Error.isError`) and it is already plain data; on Node 20 and Bun
+	 * even inspecting it formats, so nothing about it is read. With it, the formatter that runs is whatever is installed and
 	 * may itself call getters or other code; only the reporter's own reads of
 	 * `name`, `message` and `code` are kept free of getters and proxies. The
 	 * reporter itself never modifies globals.
@@ -83,6 +93,7 @@ export function sentryErrorReporting(
 							errorNames,
 							trustedFiles,
 							formattedStacks: options.formattedStacks === true,
+							inertStackDescriptors: INERT_STACK_DESCRIPTORS,
 							registeredFiles: registeredFiles(),
 						});
 			return delivery.send(

@@ -26,7 +26,7 @@
  * `isProxy` has cleared (to confirm `name`/`message`/`code` are plain data before the runtime
  * formats the stack); a proxy prototype is never touched, and no prototype
  * accessor is called. Accessors are called only when they are the runtime's
- * own native getters captured at load, and a lazily formatted stack only with
+ * own native getters, and a lazily formatted stack only with
  * `formattedStacks` (that runs the runtime's stack formatter, including any
  * `Error.prepareStackTrace`, as `error.stack` does, and whatever that runs).
  * The sanitizer itself never modifies globals and never calls
@@ -75,11 +75,18 @@ export interface SanitizeOptions {
 	 * Read stacks the runtime formats lazily (V8, Gecko). Reading one runs the
 	 * runtime's stack formatter, as `error.stack` does: Node's default, or any
 	 * `Error.prepareStackTrace` installed in the error's realm, which may run
-	 * arbitrary code. Without it only a stack that is already plain data (Bun,
-	 * an assigned string) is read, and no code of the error or the runtime's
-	 * formatting hooks runs.
+	 * arbitrary code. Without it a stack is read only when
+	 * `inertStackDescriptors` holds and it is already plain data, and no code
+	 * of the error or the runtime's formatting hooks runs.
 	 */
 	formattedStacks?: boolean;
+	/**
+	 * Set by the entry point from trusted runtime metadata: true where reading
+	 * an error's `stack` DESCRIPTOR formats nothing (Node 22+, browsers with
+	 * native `Error.isError`). Elsewhere (Node 20, Bun) the descriptor read
+	 * itself formats the stack, so it is avoided unless `formattedStacks`.
+	 */
+	inertStackDescriptors?: boolean;
 	/** Error class names the app vouches for, sent as the type as-is. */
 	errorNames?: ReadonlySet<string>;
 }
@@ -121,18 +128,33 @@ const NATIVE_IS_ERROR = (Error as { isError?: (value: unknown) => boolean })
 	.isError;
 
 /**
- * Native `stack` getters, captured at load before app code runs. V8 installs
- * `stack` as an own accessor on each error; Gecko exposes it as an accessor on
- * `Error.prototype`. JSC uses a plain data property.
+ * Gecko exposes `stack` as an accessor on `Error.prototype`; reading that
+ * prototype's descriptor formats nothing on any engine. V8's own per-error
+ * accessor is captured lazily (see `nativeOwnStackGetter`), because on some
+ * engines merely reading an error's `stack` descriptor formats the stack.
  */
-const NATIVE_OWN_STACK_GETTER = Object.getOwnPropertyDescriptor(
-	new Error("probe"),
-	"stack",
-)?.get;
 const NATIVE_PROTO_STACK_GETTER = Object.getOwnPropertyDescriptor(
 	Error.prototype,
 	"stack",
 )?.get;
+
+/** The realm's `Object.prototype`: never a proxy; its descriptors are only read. */
+const OBJECT_PROTOTYPE: object = Object.prototype;
+
+let nativeOwnStackGetterCache: (() => unknown) | null | undefined;
+
+/**
+ * V8's native `stack` accessor (Node 22+, Chromium), read from a fresh error.
+ * Called only where `inertStackDescriptors` holds, so the read formats
+ * nothing.
+ */
+function nativeOwnStackGetter(): (() => unknown) | undefined {
+	if (nativeOwnStackGetterCache === undefined) {
+		nativeOwnStackGetterCache =
+			ownDescriptor(new Error("probe"), "stack")?.get ?? null;
+	}
+	return nativeOwnStackGetterCache ?? undefined;
+}
 
 /** `DOMException.prototype.name` is a native WebIDL getter, not a data property. */
 const NATIVE_DOM_EXCEPTION_NAME_GETTER =
@@ -286,32 +308,50 @@ function readName(target: object): unknown {
 }
 
 function readStack(target: object, options: SanitizeOptions): unknown {
+	if (!options.inertStackDescriptors) {
+		// Node 20 and Bun format the stack when its descriptor is merely read,
+		// running any `Error.prepareStackTrace`. So nothing about `stack` is
+		// touched by default, and with the opt-in only after the header fields
+		// the formatter reads are known to be plain data.
+		if (!options.formattedStacks || !headerFieldsArePlain(target, options)) {
+			return undefined;
+		}
+		const own = ownDescriptor(target, "stack");
+		return own && "value" in own ? own.value : undefined;
+	}
 	const own = ownDescriptor(target, "stack");
 	if (own && "value" in own) return own.value;
 	// A lazily formatted stack runs the runtime's formatter, including any
 	// `Error.prepareStackTrace` of the realm the error came from, which cannot
 	// be identified. Read only with the explicit opt-in.
-	if (!options.formattedStacks) return undefined;
+	if (!options.formattedStacks || !headerFieldsArePlain(target, options)) {
+		return undefined;
+	}
 	const getter = own
-		? own.get === NATIVE_OWN_STACK_GETTER
+		? own.get === nativeOwnStackGetter()
 			? own.get
 			: undefined
 		: // Gecko: the accessor lives on Error.prototype. Call the captured
 			// native getter on the error rather than walking its prototype chain.
 			NATIVE_PROTO_STACK_GETTER;
-	if (!getter) return undefined;
-	// The formatter also builds the header with ordinary property gets on the
-	// error, which walk its prototype chain: V8 reads `name` and `message`,
-	// Node's default formatter also `code` ("Name [CODE]: message"). Those must
-	// resolve to plain data so no getter or proxy trap of the ERROR runs.
-	if (
-		!resolvesToPlainData(target, "name", options) ||
-		!resolvesToPlainData(target, "message", options) ||
-		!resolvesToPlainData(target, "code", options, true)
-	) {
-		return undefined;
-	}
-	return callNative(getter, target);
+	return getter ? callNative(getter, target) : undefined;
+}
+
+/**
+ * The formatter builds the header with ordinary property gets on the error,
+ * which walk its prototype chain: V8 reads `name` and `message`, Node's
+ * default formatter also `code` ("Name [CODE]: message"). Those must resolve to
+ * plain data so no getter or proxy trap of the ERROR runs.
+ */
+function headerFieldsArePlain(
+	target: object,
+	options: SanitizeOptions,
+): boolean {
+	return (
+		resolvesToPlainData(target, "name", options) &&
+		resolvesToPlainData(target, "message", options) &&
+		resolvesToPlainData(target, "code", options, true)
+	);
 }
 
 /**
@@ -355,6 +395,7 @@ function plainData(
 		for (let depth = 0; current; depth++) {
 			const trusted =
 				BUILTIN_PROTOTYPES.has(current) ||
+				current === OBJECT_PROTOTYPE ||
 				(options.isProxy !== undefined && !options.isProxy(current));
 			if (!trusted || depth >= MAX_PROTOTYPE_DEPTH) return { plain: false };
 			const descriptor = Object.getOwnPropertyDescriptor(current, key);

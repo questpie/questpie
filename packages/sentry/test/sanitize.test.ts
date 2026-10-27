@@ -2,26 +2,32 @@ import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { isNativeError, isProxy } from "node:util/types";
 
 import { sanitizeError, sanitizeFilename } from "../src/sanitize.js";
 import { IDENT_SECRET, SECRET } from "./helpers.js";
 
 const serialized = (value: unknown) => JSON.stringify(value);
+/** Bun formats a stack when its descriptor is read, so frames need the opt-in. */
+const readStacks = { formattedStacks: true };
 
 describe("sanitizeError", () => {
 	const root = process.cwd();
 
 	it("never carries the message; files are dropped unless trusted", () => {
 		const error = new TypeError(`token ${SECRET}`);
-		const [untrusted] = sanitizeError(error, { filenameRoot: root });
+		const [untrusted] = sanitizeError(error, {
+			...readStacks,
+			filenameRoot: root,
+		});
 		expect(untrusted!.type).toBe("TypeError");
 		expect(untrusted!.frames.length).toBeGreaterThan(0);
 		expect(untrusted!.frames.every((f) => !("filename" in f))).toBe(true);
 		expect(untrusted!.frames.at(-1)!.lineno).toBeGreaterThan(0);
 
 		const [trusted] = sanitizeError(error, {
+			...readStacks,
 			filenameRoot: root,
 			trustedFiles: new Set(["app:///test/sanitize.test.ts"]),
 		});
@@ -41,6 +47,7 @@ describe("sanitizeError", () => {
 		});
 		expect(
 			sanitizeError(forged, {
+				...readStacks,
 				filenameRoot: "/app",
 				trustedFiles: new Set([`app:///${IDENT_SECRET}.js`]),
 			})[0]!.frames,
@@ -251,6 +258,7 @@ describe("sanitizeError", () => {
 		});
 		const registered = `https://${IDENT_SECRET.toLowerCase()}.example.com/assets/index-Ab12.js?v=${SECRET}`;
 		const [exception] = sanitizeError(error, {
+			...readStacks,
 			registeredFiles: new Set([registered]),
 		});
 		expect(exception!.frames).toEqual([
@@ -385,7 +393,11 @@ describe("sanitizeFilename", () => {
 		Object.defineProperty(error, "stack", {
 			value: "Error: x\n    at load (node:tenantacme:3:4)",
 		});
-		const result = sanitizeError(error, { isProxy, isNativeError });
+		const result = sanitizeError(error, {
+			...readStacks,
+			isProxy,
+			isNativeError,
+		});
 		expect(result[0]!.frames).toEqual([{ lineno: 3, colno: 4 }]);
 		expect(serialized(result)).not.toContain("tenantacme");
 		expect(
@@ -398,13 +410,24 @@ describe("sanitizeFilename", () => {
 });
 
 describe("on V8 (node)", () => {
-	// Bun stores `stack` as data; V8 formats it lazily through a native getter
-	// that runs the realm's Error.prepareStackTrace (Node 22+ installs its own).
-	// Each scenario runs the sanitizer in a fresh node process.
-	const node = Bun.which("node");
-	const v8It = node ? it : it.skip;
+	// V8 formats stacks lazily and runs the realm's Error.prepareStackTrace;
+	// on Node 20 even reading the stack DESCRIPTOR formats it. Each scenario
+	// runs in a fresh process, on `node` plus any binaries listed in
+	// QUESTPIE_TEST_NODE_BINARIES (path-separated), e.g. older supported Nodes.
+	const binaries = [
+		Bun.which("node"),
+		...(process.env.QUESTPIE_TEST_NODE_BINARIES ?? "")
+			.split(delimiter)
+			.filter(Boolean),
+	].filter((binary): binary is string => Boolean(binary));
+	const v8It = binaries.length ? it : it.skip;
 
-	function runScenario(scenario: string, formattedStacks: boolean) {
+	function runScenario(
+		binary: string,
+		scenario: string,
+		formattedStacks: boolean,
+		mode: "server" | "browser" = "server",
+	) {
 		const source = new Bun.Transpiler({ loader: "ts" }).transformSync(
 			readFileSync(join(import.meta.dir, "../src/sanitize.ts"), "utf8"),
 		);
@@ -427,6 +450,7 @@ if (scenario === "accessor-before") {
 	});
 }
 ${source}
+const importCalls = calls;
 if (scenario === "custom-after") Error.prepareStackTrace = custom;
 if (scenario === "inherited") {
 	delete Error.prepareStackTrace;
@@ -436,12 +460,16 @@ if (scenario === "inherited") {
 	});
 }
 const here = fileURLToPath(import.meta.url);
+// Same trusted-metadata rule as the server and browser entry points.
+const inertStackDescriptors = ${JSON.stringify(mode)} === "server"
+	? process.versions.bun === undefined && Number.parseInt(process.versions.node, 10) >= 22
+	: typeof Error.isError === "function" && globalThis.Bun === undefined;
 const options = {
-	isProxy,
-	isNativeError,
+	...(${JSON.stringify(mode)} === "server" ? { isProxy, isNativeError } : {}),
 	filenameRoot: dirname(here),
 	registeredFiles: { has: (raw) => raw === import.meta.url || raw === here },
 	formattedStacks: ${formattedStacks},
+	inertStackDescriptors,
 };
 function thrower() { return new RangeError("x"); }
 let error = thrower();
@@ -456,8 +484,7 @@ if (scenario === "node-error-code-getter") {
 	});
 }
 if (scenario === "vm-graft") {
-	// A foreign-realm error with its own formatter, grafted onto this realm's
-	// prototype and carrying this realm's native stack accessor.
+	// A foreign-realm error with its own formatter, grafted onto this realm.
 	const context = vm.createContext({ count: () => { calls++; } });
 	error = vm.runInContext(
 		"Error.prepareStackTrace = () => { count(); return 'Error: x'; }; new Error('x')",
@@ -477,6 +504,9 @@ const untouched = before === undefined
 calls = 0;
 const appStack = String(error.stack);
 console.log(JSON.stringify({
+	node: process.versions.node,
+	type: result.type,
+	importCalls,
 	sanitizeCalls,
 	frames: result.frames.length,
 	files: result.frames.filter((f) => f.filename).map((f) => f.filename),
@@ -489,7 +519,7 @@ console.log(JSON.stringify({
 		const file = join(dir, "harness.mjs");
 		writeFileSync(file, harness);
 		try {
-			const result = spawnSync(node!, [file], {
+			const result = spawnSync(binary, [file], {
 				encoding: "utf8",
 				timeout: 20_000,
 			});
@@ -511,60 +541,93 @@ console.log(JSON.stringify({
 		"vm-graft",
 	];
 
-	v8It(
-		"by default runs nothing and modifies nothing, for every scenario",
-		() => {
+	v8It("by default runs nothing and modifies nothing, import included", () => {
+		for (const binary of binaries) {
 			for (const scenario of scenarios) {
-				const out = runScenario(scenario, false);
+				const out = runScenario(binary, scenario, false);
 				expect({ scenario, ...out }).toMatchObject({
 					scenario,
+					importCalls: 0,
 					sanitizeCalls: 0,
 					frames: 0,
 					untouched: true,
 				});
 			}
 			// The app's own formatter stays in charge of its errors.
-			expect(runScenario("custom-before", false)).toMatchObject({
+			expect(runScenario(binary, "custom-before", false)).toMatchObject({
 				appCalls: 1,
 				appForged: true,
 			});
-		},
-	);
+		}
+	});
 
 	v8It(
 		"formattedStacks: default and Node errors keep frames and locations",
 		() => {
-			for (const scenario of ["default", "node-error"]) {
-				const out = runScenario(scenario, true);
-				expect(out.sanitizeCalls).toBe(0);
-				expect(out.untouched).toBe(true);
-				expect(out.frames).toBeGreaterThan(0);
-				expect(out.files).toContain("app:///harness.mjs");
+			for (const binary of binaries) {
+				for (const scenario of ["default", "node-error"]) {
+					const out = runScenario(binary, scenario, true);
+					expect({
+						scenario,
+						node: out.node,
+						calls: out.sanitizeCalls,
+					}).toEqual({ scenario, node: out.node, calls: 0 });
+					expect(out.untouched).toBe(true);
+					expect(out.frames).toBeGreaterThan(0);
+					expect(out.files).toContain("app:///harness.mjs");
+				}
 			}
 		},
 	);
 
 	v8It("formattedStacks: the error's own code getter never runs", () => {
-		expect(runScenario("node-error-code-getter", true)).toMatchObject({
-			sanitizeCalls: 0,
-			frames: 0,
-			untouched: true,
-		});
+		for (const binary of binaries) {
+			expect(runScenario(binary, "node-error-code-getter", true)).toMatchObject(
+				{
+					sanitizeCalls: 0,
+					frames: 0,
+					untouched: true,
+				},
+			);
+		}
 	});
 
 	v8It(
 		"formattedStacks: an installed formatter runs, as error.stack would",
 		() => {
 			// The documented contract of the opt-in: the runtime's formatting,
-			// including an app's or a foreign realm's hook, and nothing global
-			// changed by the sanitizer.
-			for (const scenario of ["custom-before", "custom-after", "vm-graft"]) {
-				const out = runScenario(scenario, true);
-				expect({
-					scenario,
-					calls: out.sanitizeCalls,
-					untouched: out.untouched,
-				}).toEqual({ scenario, calls: 1, untouched: true });
+			// including an app's or a foreign realm's hook. The sanitizer itself
+			// changes nothing global.
+			for (const binary of binaries) {
+				for (const scenario of ["custom-before", "custom-after"]) {
+					const out = runScenario(binary, scenario, true);
+					expect({
+						scenario,
+						calls: out.sanitizeCalls,
+						untouched: out.untouched,
+					}).toEqual({ scenario, calls: 1, untouched: true });
+				}
+				// Node 20 copies the graft's stack as an already formatted string, so
+				// the foreign hook runs at most once.
+				const graft = runScenario(binary, "vm-graft", true);
+				expect(graft.sanitizeCalls).toBeLessThanOrEqual(1);
+				expect(graft.untouched).toBe(true);
+			}
+		},
+	);
+
+	v8It(
+		"browser mode: an ordinary error without code keeps frames on opt-in",
+		() => {
+			for (const binary of binaries) {
+				const optIn = runScenario(binary, "default", true, "browser");
+				if (optIn.type === "NonError") continue; // no native Error.isError here
+				expect(optIn.sanitizeCalls).toBe(0);
+				expect(optIn.frames).toBeGreaterThan(0);
+				expect(runScenario(binary, "default", false, "browser")).toMatchObject({
+					sanitizeCalls: 0,
+					frames: 0,
+				});
 			}
 		},
 	);

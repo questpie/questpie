@@ -35,6 +35,7 @@ describe("QUESTPIE + @questpie/sentry", () => {
 				errors: {
 					adapter: sentryErrorReporting({
 						dsn: DSN,
+						formattedStacks: true,
 						release: "app@1.0.0",
 						environment: "test",
 						filenameRoot: process.cwd(),

@@ -389,9 +389,9 @@ no stack-formatting hook, and the reporter never modifies globals; proxies and
 errors the native brand check cannot vouch for are sent as `Error` with no
 frames.
 
-**Stacks on Node and in browsers are formatted lazily**, so by default those
-errors are reported without frames (Bun's plain-string stacks are still
-parsed). Frames there need an explicit opt-in, `formattedStacks: true` on the
+**Stacks on Node, Bun and in browsers are formatted lazily** (on Node 20 and
+Bun even inspecting `stack` formats it), so by default those errors are
+reported without frames. Frames there need an explicit opt-in, `formattedStacks: true` on the
 server adapter or browser reporter. It reads the stack as `error.stack` does,
 running whatever `Error.prepareStackTrace` is installed, which may run any
 code; only the reporter's own reads stay getter-free. Do not enable it by
