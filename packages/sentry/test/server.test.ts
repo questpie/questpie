@@ -185,6 +185,36 @@ describe("sentryErrorReporting", () => {
 		expect(capture.envelopes[0]!.raw).not.toContain(SECRET);
 	});
 
+	it("sends an AggregateError as its own type only, never its child errors", async () => {
+		const capture = captureTransport();
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			formattedStacks: true,
+			send: capture.send,
+		})!;
+		const child = new Error(`child said ${SECRET}`, {
+			cause: new Error(SECRET),
+		});
+		Object.defineProperty(child, "stack", {
+			value: `Error: child said ${SECRET}\n    at ${IDENT_SECRET} (/srv/${IDENT_SECRET}/x.js:1:1)`,
+		});
+		await adapter.report(
+			new AggregateError(
+				[child, new TypeError(SECRET)],
+				`all failed ${SECRET}`,
+			),
+			{ source: "manual" },
+		);
+
+		const [envelope] = capture.envelopes;
+		expect(envelope!.raw).not.toContain(SECRET);
+		expect(envelope!.raw).not.toContain(IDENT_SECRET);
+		const values = envelope!.items[0]!.payload.exception.values;
+		expect(values.map((value: { type: string }) => value.type)).toEqual([
+			"AggregateError",
+		]);
+	});
+
 	it("bounds a custom transport by the deadline and frees its slot", async () => {
 		let calls = 0;
 		const adapter = sentryErrorReporting({
