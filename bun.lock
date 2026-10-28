@@ -524,7 +524,9 @@
       "devDependencies": {
         "@sentry/vite-plugin": "11.9.0",
         "bun-types": "latest",
+        "source-map-js": "^1.2.2",
         "tsdown": "^0.18.3",
+        "vite": "^8.0.16",
         "zod": "^4.6.6",
       },
       "peerDependencies": {
