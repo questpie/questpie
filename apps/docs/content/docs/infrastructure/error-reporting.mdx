@@ -213,6 +213,38 @@ export function getRouter() {
 router's catch hook. The reporter caps itself at 30 events a minute so a render
 loop cannot flood the project.
 
+### Server-side rendering
+
+With TanStack Start, an error thrown while the server renders a page, in a
+loader or in a component, is reported once, by the browser. The router sends
+the failed match with the page, and `defaultOnCatch` reports it when the page
+hydrates. The server does not report it: QUESTPIE reports failures of its own
+routes, not of page rendering, so there is no second report. A page whose
+JavaScript never runs is therefore not reported.
+
+This was checked in a production build with `@tanstack/react-start` 1.168.60
+and `@tanstack/react-router` 1.170.41: a loader error and a render error, each
+reached by a full page load and by client navigation, produced one report each.
+
+### Why not `@sentry/tanstackstart-react`
+
+Sentry's TanStack Start SDK is in beta. It initialises Sentry clients on the
+server and in the browser and brings `@sentry/node`, `@sentry/react` and
+`@opentelemetry/api`, so it adds the global client, default integrations and
+OpenTelemetry setup this package leaves out. `@questpie/sentry` builds each
+event from an allowlist on `@sentry/core` alone; a router error reaches it
+through `createRouterErrorReporter` and an uncaught one through
+`installGlobalErrorHandlers`, so the SDK is not needed.
+
+### Upgrades
+
+- `@questpie/sentry` pins `@sentry/core`, and its `@sentry/vite-plugin` peer,
+  to one exact version. A Sentry upgrade arrives as a new `@questpie/sentry`
+  release; install the plugin version it names.
+- The router bridge relies only on the router calling `defaultOnCatch(error)`
+  and on `routeId` being the route template. Check both again after a TanStack
+  Router or Start upgrade.
+
 ### Source maps
 
 ```ts title="vite.config.ts"
