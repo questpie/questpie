@@ -208,12 +208,15 @@ export function buildEvent(input: EventInput): Event {
 		platform: input.platform,
 		level: "error",
 		// Without it, Sentry stores the sender's IP as the user of a browser
-		// event and derives its location.
+		// event.
 		sdk: {
 			name: SDK_NAME,
 			version: SDK_VERSION,
 			settings: { infer_ip: "never" },
 		},
+		// Sentry looks up a location from the sender's IP only when the event
+		// has none, even with "Prevent Storing of IP Addresses" on.
+		user: { geo: {} },
 		...(input.release ? { release: input.release } : {}),
 		...(input.environment ? { environment: input.environment } : {}),
 		...(input.transaction ? { transaction: input.transaction } : {}),

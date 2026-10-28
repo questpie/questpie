@@ -50,4 +50,5 @@ export const ALLOWED_EVENT_KEYS = new Set([
 	"contexts",
 	"debug_meta",
 	"sdk",
+	"user",
 ]);

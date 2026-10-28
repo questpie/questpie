@@ -307,11 +307,13 @@ the complete payload:
 - `debug_meta`, the debug ids needed for source maps.
 - `sdk`: the reporter's name and version, and `settings.infer_ip: "never"`,
   which tells Sentry not to store the sender's IP as the user.
+- `user`: only an empty `geo`. Sentry looks up a location from the sender's IP
+  only when an event has none, so this keeps it from adding one.
 
 Never sent: the error message, `cause` messages, custom error names you have
 not listed, function names, local variables, source context lines, the request
-(URL, headers, cookies, body, IP), the session or user, job payloads, SQL,
-logs, breadcrumbs, spans, sessions and replays.
+(URL, headers, cookies, body, IP), the session or any user data, job payloads,
+SQL, logs, breadcrumbs, spans, sessions and replays.
 
 What is sent is still yours to judge. File paths under your app root and the
 names you list in `errorNames` go out as they are, and the masking inside kept
@@ -393,13 +395,14 @@ on.
 
 These live in your Sentry organisation, not in code:
 
-- **IP addresses.** The event carries no IP and asks Sentry not to infer
-  one, so no IP is stored as the user. Sentry still sees the connecting
-  address and derives a location from it (`user.geo`, down to the city). For
-  a browser event that is the visitor's location. Turn on the project's
-  "Prevent Storing of IP Addresses" setting and check that new events no
-  longer show a location, or pass `tunnel: "/monitoring"` and forward
-  envelopes from your own server, so the location is your server's.
+- **IP addresses.** The event carries no IP, asks Sentry not to infer one
+  and gives an empty location, so Sentry stores neither the sender's IP nor a
+  location derived from it (checked on Sentry's EU region). Sentry still
+  sees the connecting address of whoever sends it. Turn on the project's
+  "Prevent Storing of IP Addresses" setting as a second layer; it does not by
+  itself remove the location. To keep the browser's address away from
+  Sentry entirely, pass `tunnel: "/monitoring"` and forward envelopes from
+  your own server.
 - **Alerts.** Who gets notified, and how, is an alert rule in the project.
 - **Data scrubbing.** Server-side scrubbing is a useful second layer.
   It does not replace the allowlist.

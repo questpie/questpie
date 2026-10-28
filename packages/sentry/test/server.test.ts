@@ -56,7 +56,8 @@ describe("sentryErrorReporting", () => {
 		for (const key of Object.keys(event)) {
 			expect(ALLOWED_EVENT_KEYS.has(key)).toBe(true);
 		}
-		expect(event).not.toHaveProperty("user");
+		// An empty location, so Sentry does not look one up from the IP.
+		expect(event.user).toEqual({ geo: {} });
 		expect(event).not.toHaveProperty("request");
 		expect(event).not.toHaveProperty("breadcrumbs");
 		expect(event).not.toHaveProperty("extra");

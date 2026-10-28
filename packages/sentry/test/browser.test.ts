@@ -67,10 +67,11 @@ describe("browser error reporter", () => {
 			},
 		});
 		expect(event).not.toHaveProperty("request");
-		expect(event).not.toHaveProperty("user");
 		expect(event).not.toHaveProperty("breadcrumbs");
-		// Sentry otherwise stores the sender's IP as the user.
+		// Sentry otherwise stores the sender's IP as the user and looks up its
+		// location.
 		expect(event.sdk.settings).toEqual({ infer_ip: "never" });
+		expect(event.user).toEqual({ geo: {} });
 	});
 
 	it("by default reports the type only and runs nothing on the value", async () => {
