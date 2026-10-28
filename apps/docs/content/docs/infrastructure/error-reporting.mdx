@@ -232,10 +232,12 @@ export default defineConfig({
 
 The plugin injects debug ids into each bundle and uploads the maps with
 `SENTRY_AUTH_TOKEN`. It sets `build.sourcemap` to `"hidden"` unless you set it,
-so bundles do not reference their maps. After upload it deletes `**/*.map`
-under the build output so your web server cannot serve them. Keep the token in
-a CI secret; it is a build credential and never part of a bundle. Without a
-token, debug ids are still injected and nothing is uploaded.
+so bundles do not reference their maps. After the build it deletes `**/*.map`
+under the build output so your web server cannot serve them, whether or not
+they were uploaded. Keep the token in a CI secret; it is a build credential and
+never part of a bundle. Without a token, debug ids are still injected and
+nothing is uploaded. To upload the maps in a later step instead, pass
+`filesToDeleteAfterUpload: []` and delete them yourself once they are uploaded.
 
 Use one `release` value for the build, the server and the browser. Events are
 symbolicated by debug id, so a frame resolves only against maps from the same
