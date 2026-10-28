@@ -83,11 +83,22 @@ const lockedNotes = collection("lockedNotes")
 // A fixed high port so the auth instance's `baseURL` (captured at build time)
 // matches where the JWKS is actually served (the token verifier fetches
 // `${baseURL}/jwks`). Ephemeral (`port: 0`) would break that match.
-const PORT = 34519;
-const ORIGIN = `http://localhost:${PORT}`;
-const MCP_AUD = `${ORIGIN}/api/mcp`;
-const AUTH_BASE = `${ORIGIN}/api/auth`;
+let PORT = 34519;
+let ORIGIN = `http://localhost:${PORT}`;
+let MCP_AUD = `${ORIGIN}/api/mcp`;
+let AUTH_BASE = `${ORIGIN}/api/auth`;
 const REDIRECT_URI = "http://localhost:9999/callback";
+
+// Every app signs with fresh keys, and Better Auth caches a JWKS per URL for
+// the whole process, refetching for an unknown `kid` at most once per 30 s.
+// Sharing one URL lets an earlier app's cached keys reject a later app's
+// tokens, so each served app gets its own port.
+function useNextPort() {
+	PORT += 1;
+	ORIGIN = `http://localhost:${PORT}`;
+	MCP_AUD = `${ORIGIN}/api/mcp`;
+	AUTH_BASE = `${ORIGIN}/api/auth`;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -321,6 +332,7 @@ describe("MO13 end-to-end OAuth MCP flow + system mode", () => {
 	});
 
 	async function setupApp() {
+		useNextPort();
 		const setup = await buildMockApp(
 			{
 				modules: [starterModule, mcpModule],
