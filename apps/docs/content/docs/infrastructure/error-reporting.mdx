@@ -305,6 +305,8 @@ the complete payload:
 - `release`, `environment`, `platform`, `level`, `timestamp`, `event_id`.
 - `contexts.trace`, only when a span was active.
 - `debug_meta`, the debug ids needed for source maps.
+- `sdk`: the reporter's name and version, and `settings.infer_ip: "never"`,
+  which tells Sentry not to store the sender's IP as the user.
 
 Never sent: the error message, `cause` messages, custom error names you have
 not listed, function names, local variables, source context lines, the request
@@ -391,10 +393,13 @@ on.
 
 These live in your Sentry organisation, not in code:
 
-- **IP addresses.** The event carries no IP, but Sentry sees the connecting
-  address of whoever sends it. For the browser, turn on the project's
-  "Prevent Storing of IP Addresses" setting, or pass `tunnel: "/monitoring"`
-  and forward envelopes from your own server.
+- **IP addresses.** The event carries no IP and asks Sentry not to infer
+  one, so no IP is stored as the user. Sentry still sees the connecting
+  address and derives a location from it (`user.geo`, down to the city). For
+  a browser event that is the visitor's location. Turn on the project's
+  "Prevent Storing of IP Addresses" setting and check that new events no
+  longer show a location, or pass `tunnel: "/monitoring"` and forward
+  envelopes from your own server, so the location is your server's.
 - **Alerts.** Who gets notified, and how, is an alert rule in the project.
 - **Data scrubbing.** Server-side scrubbing is a useful second layer.
   It does not replace the allowlist.

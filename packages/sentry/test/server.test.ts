@@ -62,6 +62,7 @@ describe("sentryErrorReporting", () => {
 		expect(event).not.toHaveProperty("extra");
 		expect(event).not.toHaveProperty("server_name");
 		expect(event).not.toHaveProperty("modules");
+		expect(event.sdk.settings).toEqual({ infer_ip: "never" });
 		expect(Object.keys(event.contexts)).toEqual(["trace"]);
 		expect(event).toMatchObject({
 			platform: "node",
