@@ -21,7 +21,7 @@ do not wrap routes or jobs.
 | HTTP  | A thrown error that became a 5xx (`kind: "thrown"`)                | 4xx: validation, auth, not found, conflict   |
 |       | A 5xx the handler returned without throwing (`kind: "returned"`)   | Unmatched routes                             |
 |       | A response body that failed after the status was sent (`"stream"`) | A body the client cancelled                  |
-| Queue | Every failed attempt, with `final: true` when no retry follows     | Attempts aborted by lease expiry or shutdown |
+| Queue | Every failed attempt, with `final: true` when no retry follows     | Attempts cancelled by worker shutdown        |
 
 A returned 5xx has no original error, so the adapter receives `undefined`
 rather than a made-up one. A secret-payload job only ever hands the reporter its
@@ -29,7 +29,9 @@ redacted, cause-free error.
 
 Jobs are reported the same way from `app.queue.listen()` and
 `app.queue.runOnce()`, once per failed attempt, so a job that is retried twice
-and then fails produces three reports. What `final` and cancellation mean
+and then fails produces three reports. A secret-payload job the broker delivers
+again while another attempt still holds its dispatch is not reported: that
+attempt reports its own outcome. What `final` and cancellation mean
 depends on the queue adapter:
 
 | Queue adapter     | `final`                              | Cancelled attempts, not reported |

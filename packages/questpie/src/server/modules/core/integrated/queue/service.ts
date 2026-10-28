@@ -296,6 +296,7 @@ export function createQueueClient<
 				let executionToken: string | undefined;
 				let executionHeartbeat: ReturnType<typeof setInterval> | undefined;
 				let completionPersisted = false;
+				let ownedElsewhere = false;
 				const releaseExecution = async () => {
 					if (executionHeartbeat) clearInterval(executionHeartbeat);
 					executionHeartbeat = undefined;
@@ -348,6 +349,9 @@ export function createQueueClient<
 							job.defer();
 							return;
 						}
+						// A redelivery while another attempt holds the claim; that
+						// attempt reports its own outcome.
+						ownedElsewhere = claim.status === "busy";
 						if (claim.status !== "claimed") {
 							throw new QueueAdmissionError(
 								"Secret execution claim unavailable",
@@ -492,9 +496,10 @@ export function createQueueClient<
 					// Reported per attempt, after redaction: a secret job's original
 					// error never reaches the reporter. A shutdown abort is
 					// cancellation, not an incident; a timeout abort was already
-					// reported when it fired. Reporting cannot change what is thrown,
-					// so the adapter's retry/ack decision is untouched.
-					if (!job.signal?.aborted) {
+					// reported when it fired; a dispatch owned by another attempt is
+					// reported by that attempt. Reporting cannot change what is
+					// thrown, so the adapter's retry/ack decision is untouched.
+					if (!job.signal?.aborted && !ownedElsewhere) {
 						reportJobFailure(failure, jobDef.name, job.finalAttempt);
 					}
 					throw failure;

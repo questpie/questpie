@@ -13,7 +13,7 @@ import {
 	generateDrizzleJson,
 	generateMigration,
 } from "drizzle-kit/api-postgres";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import pg from "pg";
 import postgres from "postgres";
@@ -24,6 +24,7 @@ import { PgBossAdapter } from "../../src/exports/adapters/pg-boss.js";
 import { ErrorReportingService } from "../../src/server/modules/core/integrated/errors/service.js";
 import type { ErrorReport } from "../../src/server/modules/core/integrated/errors/types.js";
 import type { QueueAdapter } from "../../src/server/modules/core/integrated/queue/adapter.js";
+import { claimQueueDispatchExecution } from "../../src/server/modules/core/integrated/queue/dispatch-store.js";
 import { questpieQueueDispatchTable } from "../../src/server/modules/core/integrated/queue/dispatch-table.js";
 import { createQueueClient } from "../../src/server/modules/core/integrated/queue/service.js";
 
@@ -160,6 +161,32 @@ describe.skipIf(!databaseUrl)("queue error reporting on PostgreSQL", () => {
 		}
 	}
 
+	async function dispatchClaim(dispatchId: string) {
+		const [row] = await db
+			.select({
+				executionClaimToken: questpieQueueDispatchTable.executionClaimToken,
+				executionClaimedUntil: questpieQueueDispatchTable.executionClaimedUntil,
+			})
+			.from(questpieQueueDispatchTable)
+			.where(eq(questpieQueueDispatchTable.dispatchId, dispatchId));
+		return row;
+	}
+
+	/** At-least-once delivery: the broker hands a settled job out once more. */
+	async function redeliverBrokerJob(id: string): Promise<void> {
+		const pool = new pg.Pool({ connectionString: url });
+		try {
+			await pool.query(
+				`UPDATE "${schema}".job
+				SET state = 'created', completed_on = NULL, start_after = now()
+				WHERE id = $1::uuid`,
+				[id],
+			);
+		} finally {
+			await pool.end();
+		}
+	}
+
 	describe("pg-boss", () => {
 		test("reports each failed attempt, with final set by the adapter on the last", async () => {
 			let attempts = 0;
@@ -226,6 +253,140 @@ describe.skipIf(!databaseUrl)("queue error reporting on PostgreSQL", () => {
 				expect(await jobStates(failing.name)).toEqual(["failed"]);
 				expect(reportsFor(failing.name)).toHaveLength(2);
 			}
+		});
+
+		test("keeps the handler's transactions and the execution claim release when the reporter throws or rejects", async () => {
+			await db.execute(
+				sql`CREATE TABLE IF NOT EXISTS queue_error_marker (name text PRIMARY KEY)`,
+			);
+			for (const behaviour of [
+				() => {
+					throw new Error("reporter broke");
+				},
+				() => Promise.reject(new Error("reporter rejected")),
+			]) {
+				reporterBehaviour = behaviour;
+				const run = randomUUID().slice(0, 8);
+				let attempts = 0;
+				const failing = {
+					name: `errors-transaction-${run}`,
+					schema: z.object({ token: z.string() }),
+					handler: async () => {
+						attempts += 1;
+						if (attempts === 1) {
+							await db.transaction(async (tx) => {
+								await tx.execute(
+									sql`INSERT INTO queue_error_marker VALUES (${`${run}-rolled-back`})`,
+								);
+								throw new Error("failed inside the transaction");
+							});
+						}
+						await db.transaction((tx) =>
+							tx.execute(
+								sql`INSERT INTO queue_error_marker VALUES (${`${run}-committed`})`,
+							),
+						);
+						throw new Error("failed after the commit");
+					},
+				};
+				const queue = makeQueue({ failing }, pgBoss());
+
+				const dispatchId = (await queue.failing.publish(
+					{ token: SECRET },
+					{
+						secretPayload: true,
+						idempotencyKey: randomUUID(),
+						retryLimit: 1,
+						retryDelay: 0,
+					},
+				))!;
+				await until(async () => {
+					await queue.runOnce().catch(() => {});
+					return attempts >= 2;
+				});
+				await queue.runOnce().catch(() => {});
+
+				// The second attempt could claim the dispatch only because the first
+				// released its claim after the reporter failed.
+				expect(attempts).toBe(2);
+				const markers = await db.execute(
+					sql`SELECT name FROM queue_error_marker WHERE name LIKE ${`${run}-%`}`,
+				);
+				expect(markers.map((row) => row.name)).toEqual([`${run}-committed`]);
+				expect(await dispatchClaim(dispatchId)).toEqual({
+					executionClaimToken: null,
+					executionClaimedUntil: null,
+				});
+				await queue.drain();
+				expect((await queue.getReceipt(dispatchId))?.status).toBe("failed");
+				expect(
+					reportsFor(failing.name).map((entry) => entry.report.final),
+				).toEqual([false, true]);
+			}
+		});
+
+		test("reports a redelivered secret job once per attempt that runs, and not when the dispatch is owned or settled", async () => {
+			let calls = 0;
+			const redelivered = {
+				name: "errors-redelivery",
+				schema: z.object({ token: z.string() }),
+				handler: async () => {
+					calls += 1;
+					throw new Error(`attempt ${calls} failed`);
+				},
+			};
+			const queue = makeQueue({ redelivered }, pgBoss());
+			const deliver = () => queue.runOnce().catch(() => {});
+
+			const dispatchId = (await queue.redelivered.publish(
+				{ token: SECRET },
+				{
+					secretPayload: true,
+					idempotencyKey: randomUUID(),
+					retryLimit: 2,
+					retryDelay: 0,
+				},
+			))!;
+
+			// Delivered while another worker's attempt still owns the dispatch:
+			// that attempt reports its own outcome, this delivery reports nothing.
+			expect((await claimQueueDispatchExecution(db, dispatchId)).status).toBe(
+				"claimed",
+			);
+			await deliver();
+			expect(calls).toBe(0);
+			expect(reportsFor("errors-redelivery")).toHaveLength(0);
+
+			// That worker crashed and its claim lapsed: the redelivered attempt runs
+			// and is reported once, as is the final attempt after it.
+			await db
+				.update(questpieQueueDispatchTable)
+				.set({ executionClaimedUntil: new Date(0) })
+				.where(eq(questpieQueueDispatchTable.dispatchId, dispatchId));
+			await until(async () => {
+				await deliver();
+				return calls === 2;
+			});
+			await queue.drain();
+			expect((await queue.getReceipt(dispatchId))?.status).toBe("failed");
+
+			// A late duplicate of the settled dispatch runs and reports nothing.
+			await redeliverBrokerJob(dispatchId);
+			await deliver();
+			expect(await jobStates("errors-redelivery")).toEqual(["completed"]);
+
+			expect(calls).toBe(2);
+			const reports = reportsFor("errors-redelivery");
+			expect(reports.map((entry) => entry.report.final)).toEqual([
+				false,
+				true,
+			]);
+			expect(
+				reports.map((entry) => (entry.error as Error).message),
+			).toEqual([
+				"QUESTPIE Queue secret job handling failed",
+				"QUESTPIE Queue secret job handling failed",
+			]);
 		});
 
 		test("reports two concurrent attempts separately, even when they throw the same error object", async () => {
