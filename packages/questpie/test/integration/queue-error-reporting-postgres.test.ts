@@ -377,13 +377,8 @@ describe.skipIf(!databaseUrl)("queue error reporting on PostgreSQL", () => {
 
 			expect(calls).toBe(2);
 			const reports = reportsFor("errors-redelivery");
-			expect(reports.map((entry) => entry.report.final)).toEqual([
-				false,
-				true,
-			]);
-			expect(
-				reports.map((entry) => (entry.error as Error).message),
-			).toEqual([
+			expect(reports.map((entry) => entry.report.final)).toEqual([false, true]);
+			expect(reports.map((entry) => (entry.error as Error).message)).toEqual([
 				"QUESTPIE Queue secret job handling failed",
 				"QUESTPIE Queue secret job handling failed",
 			]);

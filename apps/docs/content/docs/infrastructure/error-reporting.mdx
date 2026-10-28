@@ -16,12 +16,12 @@ whether or not tracing is on, with nothing in it the framework cannot vouch for.
 With an adapter configured, the framework reports these failures itself. You
 do not wrap routes or jobs.
 
-| Where | Reported                                                           | Not reported                                 |
-| ----- | ------------------------------------------------------------------ | -------------------------------------------- |
-| HTTP  | A thrown error that became a 5xx (`kind: "thrown"`)                | 4xx: validation, auth, not found, conflict   |
-|       | A 5xx the handler returned without throwing (`kind: "returned"`)   | Unmatched routes                             |
-|       | A response body that failed after the status was sent (`"stream"`) | A body the client cancelled                  |
-| Queue | Every failed attempt, with `final: true` when no retry follows     | Attempts cancelled by worker shutdown        |
+| Where | Reported                                                           | Not reported                               |
+| ----- | ------------------------------------------------------------------ | ------------------------------------------ |
+| HTTP  | A thrown error that became a 5xx (`kind: "thrown"`)                | 4xx: validation, auth, not found, conflict |
+|       | A 5xx the handler returned without throwing (`kind: "returned"`)   | Unmatched routes                           |
+|       | A response body that failed after the status was sent (`"stream"`) | A body the client cancelled                |
+| Queue | Every failed attempt, with `final: true` when no retry follows     | Attempts cancelled by worker shutdown      |
 
 A returned 5xx has no original error, so the adapter receives `undefined`
 rather than a made-up one. A secret-payload job only ever hands the reporter its

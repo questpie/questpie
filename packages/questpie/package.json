@@ -172,8 +172,8 @@
 		"dev": "bun run --watch src/index.ts"
 	},
 	"dependencies": {
-		"@better-auth/oauth-provider": "^1.7.4",
-		"better-auth": "^1.7.4",
+		"@better-auth/oauth-provider": "^1.7.12",
+		"better-auth": "^1.7.12",
 		"commander": "^14.0.2",
 		"drizzle-orm": "1.0.0-beta.6-4414a19",
 		"files-sdk": "^1.6.0",
