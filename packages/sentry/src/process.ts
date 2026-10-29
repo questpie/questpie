@@ -57,20 +57,37 @@ export function installProcessErrorHandlers(
 			uninstall();
 			setImmediate(() => {
 				// The monitors already saw this error; the rethrow must not show
-				// it to them again.
-				if (seenByMonitors) {
-					process.removeAllListeners("uncaughtExceptionMonitor");
+				// it to them again. They are back right after it, in case the
+				// process survives it.
+				const monitors = seenByMonitors
+					? process.rawListeners("uncaughtExceptionMonitor")
+					: [];
+				for (const monitor of monitors) {
+					process.off("uncaughtExceptionMonitor", monitor as never);
 				}
+				process.nextTick(() => {
+					for (const monitor of monitors) {
+						process.on("uncaughtExceptionMonitor", monitor as never);
+					}
+				});
 				throw error;
 			});
 		});
 	};
 
+	// An app listener added with `once` removes itself before it runs, so by
+	// the time `onException` runs the count may no longer include it. Monitors
+	// run before any `uncaughtException` listener, so count there.
+	let exceptionListeners: number | undefined;
+	const onMonitor = () => {
+		exceptionListeners = process.listenerCount("uncaughtException");
+	};
 	const onException = (error: unknown) => {
 		errors.report(error, { source: "process" });
-		if (!ending && process.listenerCount("uncaughtException") === 1) {
-			end(error, true);
-		}
+		const listeners =
+			exceptionListeners ?? process.listenerCount("uncaughtException");
+		exceptionListeners = undefined;
+		if (!ending && listeners === 1) end(error, true);
 	};
 	const onRejection = (reason: unknown) => {
 		errors.report(reason, { source: "process" });
@@ -78,17 +95,34 @@ export function installProcessErrorHandlers(
 			end(reason, false);
 		}
 	};
+	// Rejections have no monitor, so `onRejection` stays the first listener
+	// instead: Bun raises them only after the microtask queue has drained.
+	const onNewListener = (event: string | symbol, listener: unknown) => {
+		if (event !== "unhandledRejection" || listener === onRejection) return;
+		queueMicrotask(() => {
+			if (!process.listeners("unhandledRejection").includes(onRejection)) {
+				return;
+			}
+			process.off("unhandledRejection", onRejection);
+			process.prependListener("unhandledRejection", onRejection);
+		});
+	};
 
 	function uninstall() {
+		process.off("uncaughtExceptionMonitor", onMonitor);
 		process.off("uncaughtException", onException);
-		if (watchRejections) process.off("unhandledRejection", onRejection);
+		if (watchRejections) {
+			process.off("newListener", onNewListener);
+			process.off("unhandledRejection", onRejection);
+		}
 	}
 
-	// Prepended, so the counts above still include an app listener added with
-	// `once`, which removes itself when it runs.
+	process.on("uncaughtExceptionMonitor", onMonitor);
 	process.prependListener("uncaughtException", onException);
-	if (watchRejections)
+	if (watchRejections) {
+		process.on("newListener", onNewListener);
 		process.prependListener("unhandledRejection", onRejection);
+	}
 	return uninstall;
 }
 

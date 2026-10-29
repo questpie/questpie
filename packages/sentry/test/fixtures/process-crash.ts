@@ -36,8 +36,33 @@ const uninstall = installProcessErrorHandlers(errors as never, {
 	flushTimeoutMs: 200,
 });
 if (scenario === "uninstalled") uninstall();
+// Added after the hook and run before it, so it is gone by the time it runs.
+if (scenario === "app-first-once-listener") {
+	process.prependOnceListener("uncaughtException", () =>
+		console.log("APP HANDLED"),
+	);
+}
+if (scenario === "app-first-once-rejection-listener") {
+	process.prependOnceListener("unhandledRejection", () =>
+		console.log("APP HANDLED"),
+	);
+}
+if (scenario === "monitor-survives") {
+	process.on("uncaughtExceptionMonitor", (error) =>
+		console.log(`MONITOR ${(error as Error).message}`),
+	);
+	// The app takes over while the first error is being delivered, so the
+	// rethrow does not end the process; the monitor must still see the next one.
+	setTimeout(() => {
+		process.on("uncaughtException", () => console.log("APP HANDLED"));
+	}, 20);
+	setTimeout(() => {
+		throw new Error("second");
+	}, 400);
+	setTimeout(() => console.log("STILL ALIVE"), 600);
+}
 
-if (scenario === "reject") {
+if (scenario === "reject" || scenario === "app-first-once-rejection-listener") {
 	void Promise.reject(new Error("boom"));
 } else {
 	setTimeout(() => {
@@ -48,6 +73,8 @@ if (scenario === "reject") {
 if (
 	scenario === "own-listener" ||
 	scenario === "own-once-listener" ||
+	scenario === "app-first-once-listener" ||
+	scenario === "app-first-once-rejection-listener" ||
 	scenario === "reject"
 ) {
 	setTimeout(() => console.log("STILL ALIVE"), 300);

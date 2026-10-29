@@ -59,6 +59,29 @@ describe("installProcessErrorHandlers", () => {
 		expect(exitCode).toBe(0);
 	});
 
+	it("leaves control to an app once listener that runs before it", () => {
+		const { exitCode, stdout } = run("app-first-once-listener");
+		expect(stdout).toContain("REPORTED process boom");
+		expect(stdout).toContain("APP HANDLED");
+		expect(stdout).toContain("STILL ALIVE");
+		expect(exitCode).toBe(0);
+	});
+
+	it("leaves control to an app once rejection listener that runs before it", () => {
+		const { exitCode, stdout } = run("app-first-once-rejection-listener");
+		expect(stdout).toContain("APP HANDLED");
+		expect(stdout).toContain("STILL ALIVE");
+		expect(exitCode).toBe(0);
+	});
+
+	it("keeps an uncaughtExceptionMonitor for errors after the rethrow", () => {
+		const { exitCode, stdout } = run("monitor-survives");
+		expect(stdout.match(/MONITOR boom/g)).toHaveLength(1);
+		expect(stdout).toContain("MONITOR second");
+		expect(stdout).toContain("STILL ALIVE");
+		expect(exitCode).toBe(0);
+	});
+
 	it("shows the error to an uncaughtExceptionMonitor once", () => {
 		const { exitCode, stdout } = run("monitor");
 		expect(stdout.match(/MONITOR/g)).toHaveLength(1);
