@@ -1,5 +1,11 @@
 # create-questpie
 
+## 2.5.1
+
+### Patch Changes
+
+- [#446](https://github.com/questpie/questpie/pull/446) [`d39a5e7`](https://github.com/questpie/questpie/commit/d39a5e77cc14ca21182f919277b3b4eb9ad06a16) Thanks [@MartinRapcan](https://github.com/MartinRapcan)! - Require Better Auth 1.7.12 or newer, which fixes GHSA-965c-763c-88jm (OAuth state usable as a magic link to sign in as another user) and GHSA-r4xp-prcw-77qf (OAuth Proxy sign-in as another user). The `questpie` dependency, the `@questpie/admin` peer minimum and generated-project templates move from `^1.7.4`, so a vulnerable Better Auth version can no longer satisfy them. Regenerate your lockfile when upgrading.
+
 ## 2.5.0
 
 ### Minor Changes

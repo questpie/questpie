@@ -1,5 +1,16 @@
 # @questpie/sentry
 
+## 3.42.0
+
+### Minor Changes
+
+- [#446](https://github.com/questpie/questpie/pull/446) [`d39a5e7`](https://github.com/questpie/questpie/commit/d39a5e77cc14ca21182f919277b3b4eb9ad06a16) Thanks [@MartinRapcan](https://github.com/MartinRapcan)! - - `installProcessErrorHandlers(app.errors)` from `@questpie/sentry/server` opts in to reporting uncaught exceptions and unhandled rejections with `source: "process"`. It waits for delivery up to `flushTimeoutMs` (2 s), then rethrows, so the process prints the error and exits as before; when the app has its own `uncaughtException` listener it only reports. On Bun, which does not raise unhandled rejections as uncaught exceptions unless run with `--unhandled-rejections=strict`, an `unhandledRejection` listener is added too. Returns a function that removes the listeners.
+  - The browser reporter drops a `route` with a URL scheme or host (`https://…`, `//…`), including one without a query string.
+
+### Patch Changes
+
+- [#446](https://github.com/questpie/questpie/pull/446) [`d39a5e7`](https://github.com/questpie/questpie/commit/d39a5e77cc14ca21182f919277b3b4eb9ad06a16) Thanks [@MartinRapcan](https://github.com/MartinRapcan)! - Sentry no longer stores the sender's IP or a location derived from it. Events now carry `sdk.settings.infer_ip: "never"` and an empty `user.geo`. Before, Sentry stored the connecting IP as the user of every browser event (`user: ip:…`) and added a city-level `user.geo` to every event, although the event itself contains no IP. The project's "Prevent Storing of IP Addresses" setting alone does not remove that location.
+
 ## 3.41.0
 
 ### Minor Changes
