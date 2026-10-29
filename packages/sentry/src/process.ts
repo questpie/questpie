@@ -22,8 +22,10 @@ export interface ProcessErrorHandlerOptions {
  *
  * Node raises an unhandled rejection as an uncaught exception by default, so
  * one listener covers both. Bun does not, so there an `unhandledRejection`
- * listener is added too. With `--unhandled-rejections=warn`, `warn-with-error-code`
- * or `none`, which keep the process running, rejections are not reported.
+ * listener is added too, except with `--unhandled-rejections=strict`, where Bun
+ * raises it as an uncaught exception as well. With `--unhandled-rejections`
+ * `warn`, `warn-with-error-code` or `none`, which keep the process running,
+ * rejections are not reported.
  *
  * Returns a function that removes the listeners.
  */
@@ -33,10 +35,13 @@ export function installProcessErrorHandlers(
 ): () => void {
 	const flushTimeoutMs = options.flushTimeoutMs ?? 2_000;
 	const watchRejections =
-		process.versions.bun !== undefined && !rejectionsTolerated();
+		process.versions.bun !== undefined &&
+		!["warn", "warn-with-error-code", "none", "strict"].includes(
+			rejectionMode() ?? "",
+		);
 	let ending = false;
 
-	const end = (error: unknown) => {
+	const end = (error: unknown, seenByMonitors: boolean) => {
 		ending = true;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		// A referenced timer keeps the process alive until the rethrow, so an
@@ -51,6 +56,11 @@ export function installProcessErrorHandlers(
 			clearTimeout(timer);
 			uninstall();
 			setImmediate(() => {
+				// The monitors already saw this error; the rethrow must not show
+				// it to them again.
+				if (seenByMonitors) {
+					process.removeAllListeners("uncaughtExceptionMonitor");
+				}
 				throw error;
 			});
 		});
@@ -59,13 +69,13 @@ export function installProcessErrorHandlers(
 	const onException = (error: unknown) => {
 		errors.report(error, { source: "process" });
 		if (!ending && process.listenerCount("uncaughtException") === 1) {
-			end(error);
+			end(error, true);
 		}
 	};
 	const onRejection = (reason: unknown) => {
 		errors.report(reason, { source: "process" });
 		if (!ending && process.listenerCount("unhandledRejection") === 1) {
-			end(reason);
+			end(reason, false);
 		}
 	};
 
@@ -74,14 +84,22 @@ export function installProcessErrorHandlers(
 		if (watchRejections) process.off("unhandledRejection", onRejection);
 	}
 
-	process.on("uncaughtException", onException);
-	if (watchRejections) process.on("unhandledRejection", onRejection);
+	// Prepended, so the counts above still include an app listener added with
+	// `once`, which removes itself when it runs.
+	process.prependListener("uncaughtException", onException);
+	if (watchRejections)
+		process.prependListener("unhandledRejection", onRejection);
 	return uninstall;
 }
 
-/** Whether the runtime was told to keep running after an unhandled rejection. */
-function rejectionsTolerated(): boolean {
-	return process.execArgv.some((arg) =>
-		/^--unhandled-rejections=(warn|warn-with-error-code|none)$/.test(arg),
-	);
+/** The `--unhandled-rejections` mode, given as `--x=mode` or `--x mode`. */
+function rejectionMode(): string | undefined {
+	let mode: string | undefined;
+	process.execArgv.forEach((arg, i) => {
+		if (arg === "--unhandled-rejections") mode = process.execArgv[i + 1];
+		else if (arg.startsWith("--unhandled-rejections=")) {
+			mode = arg.slice("--unhandled-rejections=".length);
+		}
+	});
+	return mode;
 }

@@ -3,12 +3,12 @@ import { join } from "node:path";
 
 const fixture = join(import.meta.dir, "fixtures/process-crash.ts");
 
-function run(scenario: string) {
+function run(scenario: string, runtimeArgs: string[] = []) {
 	const started = Date.now();
-	const result = Bun.spawnSync([process.execPath, fixture, scenario], {
-		stdout: "pipe",
-		stderr: "pipe",
-	});
+	const result = Bun.spawnSync(
+		[process.execPath, ...runtimeArgs, fixture, scenario],
+		{ stdout: "pipe", stderr: "pipe" },
+	);
 	return {
 		exitCode: result.exitCode,
 		stdout: result.stdout.toString(),
@@ -49,6 +49,42 @@ describe("installProcessErrorHandlers", () => {
 		expect(stdout).toContain("STILL ALIVE");
 		expect(stdout).not.toContain("FLUSHED");
 		expect(exitCode).toBe(0);
+	});
+
+	it("leaves control to an app listener added with once", () => {
+		const { exitCode, stdout } = run("own-once-listener");
+		expect(stdout).toContain("REPORTED process boom");
+		expect(stdout).toContain("APP HANDLED");
+		expect(stdout).toContain("STILL ALIVE");
+		expect(exitCode).toBe(0);
+	});
+
+	it("shows the error to an uncaughtExceptionMonitor once", () => {
+		const { exitCode, stdout } = run("monitor");
+		expect(stdout.match(/MONITOR/g)).toHaveLength(1);
+		expect(exitCode).toBe(1);
+	});
+
+	for (const flags of [
+		["--unhandled-rejections=warn"],
+		["--unhandled-rejections", "warn"],
+		["--unhandled-rejections", "none"],
+	]) {
+		it(`keeps running and reports nothing with ${flags.join(" ")}`, () => {
+			const { exitCode, stdout } = run("reject", flags);
+			expect(stdout).not.toContain("REPORTED");
+			expect(stdout).toContain("STILL ALIVE");
+			expect(exitCode).toBe(0);
+		});
+	}
+
+	it("reports a rejection once with --unhandled-rejections=strict", () => {
+		const { exitCode, stdout, stderr } = run("reject", [
+			"--unhandled-rejections=strict",
+		]);
+		expect(stdout.match(/REPORTED/g)).toHaveLength(1);
+		expect(exitCode).toBe(1);
+		expect(stderr).toContain("boom");
 	});
 
 	it("does nothing once uninstalled", () => {

@@ -25,6 +25,12 @@ const errors = {
 if (scenario === "own-listener") {
 	process.on("uncaughtException", () => console.log("APP HANDLED"));
 }
+if (scenario === "own-once-listener") {
+	process.once("uncaughtException", () => console.log("APP HANDLED"));
+}
+if (scenario === "monitor") {
+	process.on("uncaughtExceptionMonitor", () => console.log("MONITOR"));
+}
 
 const uninstall = installProcessErrorHandlers(errors as never, {
 	flushTimeoutMs: 200,
@@ -39,6 +45,10 @@ if (scenario === "reject") {
 	}, 1);
 }
 
-if (scenario === "own-listener") {
+if (
+	scenario === "own-listener" ||
+	scenario === "own-once-listener" ||
+	scenario === "reject"
+) {
 	setTimeout(() => console.log("STILL ALIVE"), 300);
 }

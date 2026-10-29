@@ -55,7 +55,7 @@
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"test": "bun test --timeout=60000 test/"
+		"test": "bun test --isolate --timeout=60000 test/"
 	},
 	"dependencies": {
 		"@sentry/core": "11.9.0"

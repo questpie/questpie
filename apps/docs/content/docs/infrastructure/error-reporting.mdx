@@ -159,15 +159,18 @@ installProcessErrorHandlers(app.errors);
 It reports the error with `source: "process"` and does not change how the
 process ends. If no other `uncaughtException` listener is installed, it waits
 for delivery up to `flushTimeoutMs` (2 s), then rethrows, so the runtime prints
-the error and exits with the same code as before. The process keeps running in
+the error and exits with the same code as before. An `uncaughtExceptionMonitor`
+sees the error once, not again on the rethrow. The process keeps running in
 its failed state during that wait, so keep the timeout short. If your app has
-its own listener, that listener decides what happens and this only reports.
+its own listener, also one added with `once`, that listener decides what
+happens and this only reports.
 
 Node raises an unhandled rejection as an uncaught exception by default, so one
-listener covers both; on Bun an `unhandledRejection` listener is added too.
-With `--unhandled-rejections=warn`, `warn-with-error-code` or `none`, the
-process keeps running after a rejection and rejections are not reported. The
-returned function removes the listeners.
+listener covers both; on Bun an `unhandledRejection` listener is added too,
+except with `--unhandled-rejections=strict`, where Bun raises it as an uncaught
+exception as well. With `--unhandled-rejections` set to `warn`,
+`warn-with-error-code` or `none`, the process keeps running after a rejection
+and rejections are not reported. The returned function removes the listeners.
 
 ### Browser
 
