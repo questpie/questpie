@@ -76,15 +76,15 @@ describe("installProcessErrorHandlers", () => {
 
 	it("keeps an uncaughtExceptionMonitor for errors after the rethrow", () => {
 		const { exitCode, stdout } = run("monitor-survives");
-		expect(stdout.match(/MONITOR boom/g)).toHaveLength(1);
+		expect(stdout.match(/MONITOR boom/g)).toHaveLength(2);
 		expect(stdout).toContain("MONITOR second");
 		expect(stdout).toContain("STILL ALIVE");
 		expect(exitCode).toBe(0);
 	});
 
-	it("shows the error to an uncaughtExceptionMonitor once", () => {
+	it("shows the error to an uncaughtExceptionMonitor again on the rethrow", () => {
 		const { exitCode, stdout } = run("monitor");
-		expect(stdout.match(/MONITOR/g)).toHaveLength(1);
+		expect(stdout.match(/MONITOR/g)).toHaveLength(2);
 		expect(exitCode).toBe(1);
 	});
 

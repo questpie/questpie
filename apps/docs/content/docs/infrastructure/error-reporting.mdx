@@ -160,7 +160,7 @@ It reports the error with `source: "process"` and does not change how the
 process ends. If no other `uncaughtException` listener is installed, it waits
 for delivery up to `flushTimeoutMs` (2 s), then rethrows, so the runtime prints
 the error and exits with the same code as before. An `uncaughtExceptionMonitor`
-sees the error once, not again on the rethrow. The process keeps running in
+sees the error twice, when it happens and again on the rethrow. The process keeps running in
 its failed state during that wait, so keep the timeout short. If your app has
 its own listener, also one added with `once`, that listener decides what
 happens and this only reports.

@@ -41,7 +41,7 @@ export function installProcessErrorHandlers(
 		);
 	let ending = false;
 
-	const end = (error: unknown, seenByMonitors: boolean) => {
+	const end = (error: unknown) => {
 		ending = true;
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		// A referenced timer keeps the process alive until the rethrow, so an
@@ -56,20 +56,6 @@ export function installProcessErrorHandlers(
 			clearTimeout(timer);
 			uninstall();
 			setImmediate(() => {
-				// The monitors already saw this error; the rethrow must not show
-				// it to them again. They are back right after it, in case the
-				// process survives it.
-				const monitors = seenByMonitors
-					? process.rawListeners("uncaughtExceptionMonitor")
-					: [];
-				for (const monitor of monitors) {
-					process.off("uncaughtExceptionMonitor", monitor as never);
-				}
-				process.nextTick(() => {
-					for (const monitor of monitors) {
-						process.on("uncaughtExceptionMonitor", monitor as never);
-					}
-				});
 				throw error;
 			});
 		});
@@ -87,12 +73,12 @@ export function installProcessErrorHandlers(
 		const listeners =
 			exceptionListeners ?? process.listenerCount("uncaughtException");
 		exceptionListeners = undefined;
-		if (!ending && listeners === 1) end(error, true);
+		if (!ending && listeners === 1) end(error);
 	};
 	const onRejection = (reason: unknown) => {
 		errors.report(reason, { source: "process" });
 		if (!ending && process.listenerCount("unhandledRejection") === 1) {
-			end(reason, false);
+			end(reason);
 		}
 	};
 	// Rejections have no monitor, so `onRejection` stays the first listener
