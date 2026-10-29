@@ -27,7 +27,7 @@ export default runtimeConfig({
 
 | Entrypoint                 | Exports                                                                                 |
 | -------------------------- | --------------------------------------------------------------------------------------- |
-| `@questpie/sentry/server`  | `sentryErrorReporting`                                                                  |
+| `@questpie/sentry/server`  | `sentryErrorReporting`, `installProcessErrorHandlers`                                   |
 | `@questpie/sentry/browser` | `createBrowserErrorReporter`, `installGlobalErrorHandlers`, `createRouterErrorReporter` |
 | `@questpie/sentry/vite`    | `questpieSentryVite`                                                                    |
 

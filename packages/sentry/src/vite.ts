@@ -13,14 +13,15 @@ export interface QuestpieSentryViteOptions {
 	/**
 	 * Upload token. Read it from a CI secret — it is a build credential and
 	 * never part of the bundle. Without one, debug ids are still injected and
-	 * maps stay hidden, but nothing is uploaded.
+	 * maps are still deleted, but nothing is uploaded.
 	 * @default process.env.SENTRY_AUTH_TOKEN
 	 */
 	authToken?: string;
 	/** Self-hosted Sentry URL. */
 	url?: string;
 	/**
-	 * Source maps to delete after upload so the web server cannot serve them.
+	 * Source maps to delete after the build so the web server cannot serve
+	 * them, also when nothing was uploaded. `[]` keeps them for a later upload.
 	 * @default `<root>/<build.outDir>/**\/*.map`
 	 */
 	filesToDeleteAfterUpload?: string | string[];
@@ -41,7 +42,7 @@ export interface QuestpieSentrySourcemapsPlugin {
  *
  * - `build.sourcemap` defaults to `"hidden"`: maps are generated but bundles
  *   carry no `sourceMappingURL` comment pointing at them.
- * - After upload, the maps are deleted from the build output.
+ * - After the build, the maps are deleted from the build output, uploaded or not.
  * - Release injection, commit association, deploys, telemetry and component
  *   annotation are off; the release is passed explicitly at runtime instead.
  */

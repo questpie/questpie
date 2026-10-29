@@ -34,7 +34,11 @@ import {
 	reserveQueueDispatch,
 	stableQueueDispatchId,
 } from "./dispatch-store.js";
-import { QueueAdmissionError, withQueueAbort } from "./execution-signal.js";
+import {
+	abortedByTimeout,
+	QueueAdmissionError,
+	withQueueAbort,
+} from "./execution-signal.js";
 import {
 	decryptQueueSecretPayload,
 	encryptQueueSecretPayload,
@@ -226,6 +230,42 @@ export function createQueueClient<
 		}
 	};
 
+	const flushErrorReports = async (timeoutMs: number) => {
+		try {
+			const app = runtimeOptions.getApp?.() as
+				| { errors?: ErrorReportingService }
+				| undefined;
+			await app?.errors?.flush(timeoutMs);
+		} catch {
+			// No app resolver: nothing to flush.
+		}
+	};
+
+	/**
+	 * An attempt that runs past its execution deadline failed; it was not
+	 * cancelled. Report it the moment the deadline aborts it, so a handler that
+	 * ignores the signal and never settles is still seen. The attempt's own
+	 * failure afterwards is not reported again, because its signal is aborted.
+	 */
+	const watchExecutionTimeout = (
+		job: Parameters<QueueHandlerMap[string]>[0],
+		jobName: string,
+	): (() => void) => {
+		const signal = job.signal;
+		if (!signal || !reporterEnabled()) return () => {};
+		const onAbort = () => {
+			if (abortedByTimeout(signal)) {
+				reportJobFailure(signal.reason, jobName, job.finalAttempt);
+			}
+		};
+		if (signal.aborted) {
+			onAbort();
+			return () => {};
+		}
+		signal.addEventListener("abort", onAbort, { once: true });
+		return () => signal.removeEventListener("abort", onAbort);
+	};
+
 	const buildHandlers = (selectedJobs?: TJobs): QueueHandlerMap => {
 		const sourceJobs = selectedJobs ?? jobs;
 		const handlers: QueueHandlerMap = {};
@@ -256,6 +296,7 @@ export function createQueueClient<
 				let executionToken: string | undefined;
 				let executionHeartbeat: ReturnType<typeof setInterval> | undefined;
 				let completionPersisted = false;
+				let ownedElsewhere = false;
 				const releaseExecution = async () => {
 					if (executionHeartbeat) clearInterval(executionHeartbeat);
 					executionHeartbeat = undefined;
@@ -308,6 +349,9 @@ export function createQueueClient<
 							job.defer();
 							return;
 						}
+						// A redelivery while another attempt holds the claim; that
+						// attempt reports its own outcome.
+						ownedElsewhere = claim.status === "busy";
 						if (claim.status !== "claimed") {
 							throw new QueueAdmissionError(
 								"Secret execution claim unavailable",
@@ -450,10 +494,12 @@ export function createQueueClient<
 									);
 					}
 					// Reported per attempt, after redaction: a secret job's original
-					// error never reaches the reporter. A lease expiry or shutdown
-					// abort is cancellation, not an incident. Reporting cannot change
-					// what is thrown, so the adapter's retry/ack decision is untouched.
-					if (!job.signal?.aborted) {
+					// error never reaches the reporter. A shutdown abort is
+					// cancellation, not an incident; a timeout abort was already
+					// reported when it fired; a dispatch owned by another attempt is
+					// reported by that attempt. Reporting cannot change what is
+					// thrown, so the adapter's retry/ack decision is untouched.
+					if (!job.signal?.aborted && !ownedElsewhere) {
 						reportJobFailure(failure, jobDef.name, job.finalAttempt);
 					}
 					throw failure;
@@ -467,7 +513,14 @@ export function createQueueClient<
 			handlers[jobDef.name] = (job) =>
 				runInErrorReportOccurrence(
 					reporterEnabled() ? createErrorReportOccurrence() : undefined,
-					() => handleAttempt(job),
+					async () => {
+						const unwatch = watchExecutionTimeout(job, jobDef.name);
+						try {
+							return await handleAttempt(job);
+						} finally {
+							unwatch();
+						}
+					},
 				);
 		}
 
@@ -644,7 +697,11 @@ export function createQueueClient<
 					`[QUESTPIE Queue] Received ${signal}. Starting graceful shutdown...`,
 				);
 
-				const shutdownPromise = stopInternal();
+				// The process exits right after, so deliver pending error reports
+				// first; the race below still bounds the whole shutdown.
+				const shutdownPromise = stopInternal().then(() =>
+					flushErrorReports(timeoutMs),
+				);
 				const timeoutPromise =
 					timeoutMs > 0
 						? new Promise<"timeout">((resolve) => {

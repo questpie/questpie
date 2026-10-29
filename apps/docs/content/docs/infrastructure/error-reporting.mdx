@@ -16,16 +16,39 @@ whether or not tracing is on, with nothing in it the framework cannot vouch for.
 With an adapter configured, the framework reports these failures itself. You
 do not wrap routes or jobs.
 
-| Where | Reported                                                           | Not reported                                 |
-| ----- | ------------------------------------------------------------------ | -------------------------------------------- |
-| HTTP  | A thrown error that became a 5xx (`kind: "thrown"`)                | 4xx: validation, auth, not found, conflict   |
-|       | A 5xx the handler returned without throwing (`kind: "returned"`)   | Unmatched routes                             |
-|       | A response body that failed after the status was sent (`"stream"`) | A body the client cancelled                  |
-| Queue | Every failed attempt, with `final: true` when no retry follows     | Attempts aborted by lease expiry or shutdown |
+| Where | Reported                                                           | Not reported                               |
+| ----- | ------------------------------------------------------------------ | ------------------------------------------ |
+| HTTP  | A thrown error that became a 5xx (`kind: "thrown"`)                | 4xx: validation, auth, not found, conflict |
+|       | A 5xx the handler returned without throwing (`kind: "returned"`)   | Unmatched routes                           |
+|       | A response body that failed after the status was sent (`"stream"`) | A body the client cancelled                |
+| Queue | Every failed attempt, with `final: true` when no retry follows     | Attempts cancelled by worker shutdown      |
 
 A returned 5xx has no original error, so the adapter receives `undefined`
 rather than a made-up one. A secret-payload job only ever hands the reporter its
 redacted, cause-free error.
+
+Jobs are reported the same way from `app.queue.listen()` and
+`app.queue.runOnce()`, once per failed attempt, so a job that is retried twice
+and then fails produces three reports. A secret-payload job the broker delivers
+again while another attempt still holds its dispatch is not reported: that
+attempt reports its own outcome. What `final` and cancellation mean
+depends on the queue adapter:
+
+| Queue adapter     | `final`                              | Cancelled attempts, not reported |
+| ----------------- | ------------------------------------ | -------------------------------- |
+| pg-boss           | From the job's retry count and limit | None: there is no abort signal   |
+| Graphile Worker   | From the dispatch's attempts         | Worker shutdown                  |
+| BullMQ            | From `attemptsMade` and `attempts`   | None: there is no abort signal   |
+| Cloudflare Queues | Omitted: the report has no `final`   | None: there is no abort signal   |
+
+Without an abort signal an attempt runs to its outcome, and a failure is
+reported even when the worker is stopping. With Graphile Worker an attempt that
+runs past `expireInSeconds` is reported as a `QueueExecutionTimeoutError` the
+moment the deadline passes, even if its handler ignores the signal and never
+settles; whatever the attempt does afterwards is not reported again. When `listen()` handles
+`SIGINT` or `SIGTERM` (its default graceful shutdown), pending reports are
+delivered before the process exits, within the queue's `shutdownTimeoutMs`. If
+you stop a worker yourself, call `app.destroy()`, which drains them.
 
 Reporting never changes the outcome. `report()` is synchronous, never throws
 and never awaits delivery. The response, the thrown error, the transaction and
@@ -47,11 +70,16 @@ const adapter: ErrorReportingAdapter = {
 };
 ```
 
-`report` is closed. `source` is `http`, `job`, `background` or `manual`.
-`route` is the matched route template (`items/:id`), never the raw path. `job`
-is the static job name, never a dispatch or idempotency id. Anything else you
-pass is dropped before the adapter sees it. `trace` is added only when an
-observability adapter has a span open at the time.
+`report` is closed. `source` is `http`, `job`, `background`, `manual` or
+`process`. `route` is the matched route template (`items/:id`), never the raw
+path. `job` is the static job name, never a dispatch or idempotency id. Anything
+else you pass is dropped before the adapter sees it. `trace` is added only when
+an observability adapter has a span open at the time.
+
+The framework always passes a template. When you pass `route` yourself, pass a
+template too: a value with a URL scheme or host (`https://…`, `//…`) is dropped,
+but a raw path such as `invite/abc123` has the same shape as a template and is
+sent as it is.
 
 Report your own failures from any handler:
 
@@ -116,6 +144,34 @@ config, so both report. Without `dsn`, `sentryErrorReporting()` returns
 `undefined` and error reporting stays off with no per-request cost, so you can
 wire it unconditionally and enable it per environment.
 
+#### Uncaught exceptions and unhandled rejections
+
+The framework reports failures inside requests and jobs. An error that escapes
+everything and is about to end the process is not reported unless you opt in,
+once per process, after the app is created:
+
+```ts title="src/server.ts"
+import { installProcessErrorHandlers } from "@questpie/sentry/server";
+
+installProcessErrorHandlers(app.errors);
+```
+
+It reports the error with `source: "process"` and does not change how the
+process ends. If no other `uncaughtException` listener is installed, it waits
+for delivery up to `flushTimeoutMs` (2 s), then rethrows, so the runtime prints
+the error and exits with the same code as before. An `uncaughtExceptionMonitor`
+sees the error twice, when it happens and again on the rethrow. The process keeps running in
+its failed state during that wait, so keep the timeout short. If your app has
+its own listener, also one added with `once`, that listener decides what
+happens and this only reports.
+
+Node raises an unhandled rejection as an uncaught exception by default, so one
+listener covers both; on Bun an `unhandledRejection` listener is added too,
+except with `--unhandled-rejections=strict`, where Bun raises it as an uncaught
+exception as well. With `--unhandled-rejections` set to `warn`,
+`warn-with-error-code` or `none`, the process keeps running after a rejection
+and rejections are not reported. The returned function removes the listeners.
+
 ### Browser
 
 ```ts title="src/lib/error-reporter.ts"
@@ -160,6 +216,38 @@ export function getRouter() {
 router's catch hook. The reporter caps itself at 30 events a minute so a render
 loop cannot flood the project.
 
+### Server-side rendering
+
+With TanStack Start, an error thrown while the server renders a page, in a
+loader or in a component, is reported once, by the browser. The router sends
+the failed match with the page, and `defaultOnCatch` reports it when the page
+hydrates. The server does not report it: QUESTPIE reports failures of its own
+routes, not of page rendering, so there is no second report. A page whose
+JavaScript never runs is therefore not reported.
+
+This was checked in a production build with `@tanstack/react-start` 1.168.60
+and `@tanstack/react-router` 1.170.41: a loader error and a render error, each
+reached by a full page load and by client navigation, produced one report each.
+
+### Why not `@sentry/tanstackstart-react`
+
+Sentry's TanStack Start SDK is in beta. It initialises Sentry clients on the
+server and in the browser and brings `@sentry/node`, `@sentry/react` and
+`@opentelemetry/api`, so it adds the global client, default integrations and
+OpenTelemetry setup this package leaves out. `@questpie/sentry` builds each
+event from an allowlist on `@sentry/core` alone; a router error reaches it
+through `createRouterErrorReporter` and an uncaught one through
+`installGlobalErrorHandlers`, so the SDK is not needed.
+
+### Upgrades
+
+- `@questpie/sentry` pins `@sentry/core`, and its `@sentry/vite-plugin` peer,
+  to one exact version. A Sentry upgrade arrives as a new `@questpie/sentry`
+  release; install the plugin version it names.
+- The router bridge relies only on the router calling `defaultOnCatch(error)`
+  and on `routeId` being the route template. Check both again after a TanStack
+  Router or Start upgrade.
+
 ### Source maps
 
 ```ts title="vite.config.ts"
@@ -179,14 +267,17 @@ export default defineConfig({
 
 The plugin injects debug ids into each bundle and uploads the maps with
 `SENTRY_AUTH_TOKEN`. It sets `build.sourcemap` to `"hidden"` unless you set it,
-so bundles do not reference their maps. After upload it deletes `**/*.map`
-under the build output so your web server cannot serve them. Keep the token in
-a CI secret; it is a build credential and never part of a bundle. Without a
-token, debug ids are still injected and nothing is uploaded.
+so bundles do not reference their maps. After the build it deletes `**/*.map`
+under the build output so your web server cannot serve them, whether or not
+they were uploaded. Keep the token in a CI secret; it is a build credential and
+never part of a bundle. Without a token, debug ids are still injected and
+nothing is uploaded. To upload the maps in a later step instead, pass
+`filesToDeleteAfterUpload: []` and delete them yourself once they are uploaded.
 
 Use one `release` value for the build, the server and the browser. Events are
 symbolicated by debug id, so a frame resolves only against maps from the same
-build.
+build. The uploaded maps carry your browser source code, which Sentry stores
+and shows next to each frame.
 
 ## What leaves the process
 
@@ -218,11 +309,15 @@ the complete payload:
 - `release`, `environment`, `platform`, `level`, `timestamp`, `event_id`.
 - `contexts.trace`, only when a span was active.
 - `debug_meta`, the debug ids needed for source maps.
+- `sdk`: the reporter's name and version, and `settings.infer_ip: "never"`,
+  which tells Sentry not to store the sender's IP as the user.
+- `user`: only an empty `geo`. Sentry looks up a location from the sender's IP
+  only when an event has none, so this keeps it from adding one.
 
 Never sent: the error message, `cause` messages, custom error names you have
 not listed, function names, local variables, source context lines, the request
-(URL, headers, cookies, body, IP), the session or user, job payloads, SQL,
-logs, breadcrumbs, spans, sessions and replays.
+(URL, headers, cookies, body, IP), the session or any user data, job payloads,
+SQL, logs, breadcrumbs, spans, sessions and replays.
 
 What is sent is still yours to judge. File paths under your app root and the
 names you list in `errorNames` go out as they are, and the masking inside kept
@@ -304,10 +399,14 @@ on.
 
 These live in your Sentry organisation, not in code:
 
-- **IP addresses.** The event carries no IP, but Sentry sees the connecting
-  address of whoever sends it. For the browser, turn on the project's
-  "Prevent Storing of IP Addresses" setting, or pass `tunnel: "/monitoring"`
-  and forward envelopes from your own server.
+- **IP addresses.** The event carries no IP, asks Sentry not to infer one
+  and gives an empty location, so Sentry stores neither the sender's IP nor a
+  location derived from it (checked on Sentry's EU region). Sentry still
+  sees the connecting address of whoever sends it. Turn on the project's
+  "Prevent Storing of IP Addresses" setting as a second layer; it does not by
+  itself remove the location. To keep the browser's address away from
+  Sentry entirely, pass `tunnel: "/monitoring"` and forward envelopes from
+  your own server.
 - **Alerts.** Who gets notified, and how, is an alert rule in the project.
 - **Data scrubbing.** Server-side scrubbing is a useful second layer.
   It does not replace the allowlist.

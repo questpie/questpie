@@ -24,7 +24,11 @@ import {
 	decodeQueueDispatchEnvelope,
 	encodeQueueDispatchEnvelope,
 } from "../dispatch-envelope.js";
-import { QueueAdmissionError, withQueueAbort } from "../execution-signal.js";
+import {
+	QueueAdmissionError,
+	QueueExecutionTimeoutError,
+	withQueueAbort,
+} from "../execution-signal.js";
 import type { PublishOptions } from "../types.js";
 
 export interface GraphileWorkerAdapterOptions {
@@ -969,7 +973,10 @@ export class GraphileWorkerAdapter implements QueueAdapter {
 					this.activeControllers.set(dispatchId, controller);
 					const options = record.options as PublishOptions;
 					const duration = (options.expireInSeconds ?? 900) * 1000;
-					timer = setTimeout(() => controller!.abort(), duration);
+					timer = setTimeout(
+						() => controller!.abort(new QueueExecutionTimeoutError()),
+						duration,
+					);
 					let deferred = false;
 					let handlerStarted = record.handler_started === true;
 					let outcome: "completed" | "failed" = "completed";

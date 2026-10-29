@@ -55,7 +55,7 @@
 	"scripts": {
 		"build": "tsdown",
 		"check-types": "tsc --noEmit",
-		"test": "bun test --timeout=60000 test/"
+		"test": "bun test --isolate --timeout=60000 test/"
 	},
 	"dependencies": {
 		"@sentry/core": "11.9.0"
@@ -63,7 +63,9 @@
 	"devDependencies": {
 		"@sentry/vite-plugin": "11.9.0",
 		"bun-types": "latest",
+		"source-map-js": "^1.2.2",
 		"tsdown": "^0.18.3",
+		"vite": "^8.0.16",
 		"zod": "^4.6.6"
 	},
 	"peerDependencies": {

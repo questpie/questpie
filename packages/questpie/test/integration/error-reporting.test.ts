@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 
 import { z } from "zod";
 
-import { ApiError, job, route } from "../../src/exports/index.js";
+import { ApiError, job, route, service } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import {
 	createErrorReportOccurrence,
@@ -13,6 +13,7 @@ import type {
 	ErrorReport,
 	ErrorReportingAdapter,
 } from "../../src/server/modules/core/integrated/errors/types.js";
+import { QueueExecutionTimeoutError } from "../../src/server/modules/core/integrated/queue/execution-signal.js";
 import { createQueueClient } from "../../src/server/modules/core/integrated/queue/service.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { MockQueueAdapter } from "../utils/mocks/queue.adapter.js";
@@ -92,6 +93,23 @@ describe("ErrorReportingService", () => {
 		});
 	});
 
+	it("drops a route that carries a URL scheme or host", () => {
+		const { adapter, captured } = capturingAdapter();
+		const service = new ErrorReportingService({ adapter });
+		for (const route of [
+			`https://app.example.com/invite/${SECRET}`,
+			`//app.example.com/invite/${SECRET}`,
+		]) {
+			service.report(new Error("x"), { source: "manual", route });
+		}
+		service.report(new Error("x"), { source: "process", route: "items/:id" });
+		expect(captured.map((c) => c.report)).toEqual([
+			{ source: "manual" },
+			{ source: "manual" },
+			{ source: "process", route: "items/:id" },
+		]);
+	});
+
 	it("adds trace correlation only when a span is actually active", () => {
 		const { adapter, captured } = capturingAdapter();
 		let active: { traceId: string; spanId: string } | undefined;
@@ -147,6 +165,27 @@ describe("ErrorReportingService", () => {
 		await new Promise((resolve) => setTimeout(resolve, 40));
 		service.report(new Error("after"), { source: "manual" });
 		expect(captured).toHaveLength(3);
+	});
+
+	it("does not mark an error as reported when it was dropped for capacity", async () => {
+		const { adapter, captured } = capturingAdapter(() => new Promise(() => {}));
+		const service = new ErrorReportingService({
+			adapter,
+			maxPending: 1,
+			timeoutMs: 20,
+		});
+		const error = new Error("dropped first");
+		const occurrence = createErrorReportOccurrence();
+		runInErrorReportOccurrence(occurrence, () => {
+			service.report(new Error("fills the slot"), { source: "manual" });
+			service.report(error, { source: "manual" });
+		});
+		expect(captured).toHaveLength(1);
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		runInErrorReportOccurrence(occurrence, () =>
+			service.report(error, { source: "http" }),
+		);
+		expect(captured.map((c) => c.error)).toContain(error);
 	});
 
 	it("drains, shuts the adapter down once, and ignores later reports", async () => {
@@ -392,11 +431,12 @@ describe("HTTP error reporting", () => {
 		});
 	});
 
-	it("keeps the response identical when the reporter throws or hangs", async () => {
+	it("keeps the response identical when the reporter throws, rejects or hangs", async () => {
 		for (const behaviour of [
 			() => {
 				throw new Error("reporter broke");
 			},
+			() => Promise.reject(new Error("reporter rejected")),
 			() => new Promise(() => {}),
 		]) {
 			const { handler } = await setup(
@@ -451,6 +491,63 @@ describe("HTTP error reporting", () => {
 			status: 200,
 			method: "GET",
 		});
+	});
+
+	it("keeps a failing stream and its scope disposal unchanged when the reporter throws, rejects or hangs", async () => {
+		for (const behaviour of [
+			() => {
+				throw new Error("reporter broke");
+			},
+			() => Promise.reject(new Error("reporter rejected")),
+			() => new Promise(() => {}),
+		]) {
+			const streamError = new Error("stream broke");
+			let disposed = 0;
+			const rec = capturingAdapter(behaviour);
+			const built = await buildMockApp(
+				{
+					routes: {
+						stream: route()
+							.get()
+							.raw()
+							.handler(({ services }: any) => {
+								void services.scoped;
+								return new Response(
+									new ReadableStream({
+										pull(controller) {
+											controller.error(streamError);
+										},
+									}),
+								);
+							}),
+					},
+					services: {
+						scoped: service()
+							.lifecycle("request")
+							.create(() => ({}))
+							.dispose(() => {
+								disposed++;
+							}),
+					},
+				} as any,
+				// A hanging reporter would otherwise hold app.destroy() for the
+				// default 5 s shutdown deadline.
+				{ errors: { adapter: rec.adapter, shutdownTimeoutMs: 50 } },
+			);
+			cleanup = built.cleanup;
+			await runTestDbMigrations(built.app);
+
+			const response = await createFetchHandler(built.app)(
+				new Request("http://localhost/stream"),
+			);
+			expect(response?.status).toBe(200);
+			await expect(response!.text()).rejects.toBe(streamError);
+			expect(rec.captured).toHaveLength(1);
+			expect(disposed).toBe(1);
+
+			await cleanup?.();
+			cleanup = undefined;
+		}
 	});
 
 	it("does not report a failure after the client aborted, but still answers 500", async () => {
@@ -674,6 +771,40 @@ describe("queue error reporting", () => {
 		expect(captured).toHaveLength(0);
 	});
 
+	it("reports a timed-out attempt when the deadline fires, once, even if the handler ignores it", async () => {
+		let finish!: () => void;
+		const hanging = job({
+			name: "hang",
+			schema: z.object({}),
+			// Ignores the signal and settles only when the test lets it.
+			handler: () => new Promise<void>((resolve) => (finish = resolve)),
+		});
+		const { handlerFor, captured } = await setup({ hanging });
+		const deadline = new AbortController();
+
+		const attempt = handlerFor("hang")({
+			id: "1",
+			data: {},
+			finalAttempt: true,
+			signal: deadline.signal,
+		}).catch((error) => error);
+		await waitUntil(() => finish !== undefined);
+		deadline.abort(new QueueExecutionTimeoutError());
+
+		// Reported at the deadline, while the handler is still running.
+		expect(captured).toHaveLength(1);
+		expect(captured[0]!.error).toBeInstanceOf(QueueExecutionTimeoutError);
+		expect(captured[0]!.report).toEqual({
+			source: "job",
+			job: "hang",
+			final: true,
+		});
+
+		finish();
+		expect(await attempt).toBeInstanceOf(Error);
+		expect(captured).toHaveLength(1);
+	});
+
 	it("only ever hands the redacted error of a secret job to the reporter", async () => {
 		const { app, captured } = await setup({ secretFailing });
 		await app.queue.secretFailing.publish(
@@ -700,4 +831,66 @@ describe("error reporting lifecycle", () => {
 		await built.cleanup();
 		expect(rec.shutdowns()).toBe(1);
 	});
+
+	it("delivers pending reports before a gracefully shut down worker exits", async () => {
+		let delivered = false;
+		const errors = new ErrorReportingService({
+			adapter: {
+				report: () =>
+					new Promise((resolve) =>
+						setTimeout(() => {
+							delivered = true;
+							resolve(undefined);
+						}, 50),
+					),
+			},
+		});
+		const adapter = new MockQueueAdapter();
+		const queue = createQueueClient(
+			{
+				failing: job({
+					name: "explode",
+					schema: z.object({}),
+					handler: async () => {
+						throw new Error("handler blew up");
+					},
+				}),
+			},
+			adapter,
+			{ createContext: async () => ({}) as never, getApp: () => ({ errors }) },
+		);
+		await queue.listen({
+			shutdownSignals: ["SIGUSR2"],
+			shutdownTimeoutMs: 2_000,
+		} as any);
+		const handler = (adapter as any).workers.find(
+			(w: any) => w.handlers.explode,
+		).handlers.explode as (job: Record<string, unknown>) => Promise<void>;
+		await handler({ id: "1", data: {}, finalAttempt: true }).catch(() => {});
+
+		const originalExit = process.exit;
+		let deliveredAtExit: boolean | undefined;
+		const exited = new Promise<void>((resolve) => {
+			process.exit = (() => {
+				deliveredAtExit = delivered;
+				resolve();
+			}) as never;
+		});
+		try {
+			process.emit("SIGUSR2" as never);
+			await exited;
+		} finally {
+			process.exit = originalExit;
+		}
+
+		expect(deliveredAtExit).toBe(true);
+	});
 });
+
+async function waitUntil(predicate: () => boolean, timeout = 5_000) {
+	const deadline = Date.now() + timeout;
+	while (!predicate()) {
+		if (Date.now() > deadline) throw new Error("Timed out waiting");
+		await new Promise((resolve) => setTimeout(resolve, 5));
+	}
+}

@@ -12,8 +12,16 @@
  * URL, identifiers or free-form metadata.
  */
 
-/** Where the failure was observed. */
-export type ErrorReportSource = "http" | "job" | "background" | "manual";
+/**
+ * Where the failure was observed. `process` is an uncaught exception or
+ * unhandled rejection that is about to end the process.
+ */
+export type ErrorReportSource =
+	| "http"
+	| "job"
+	| "background"
+	| "manual"
+	| "process";
 
 /**
  * How an HTTP failure surfaced.
@@ -30,7 +38,11 @@ export interface ErrorReportInfo {
 	kind?: ErrorReportKind;
 	/** HTTP method. Non-standard methods are reported as `OTHER`. */
 	method?: string;
-	/** Matched route TEMPLATE (e.g. `collections/:collection`), never a raw path. */
+	/**
+	 * Matched route TEMPLATE (e.g. `collections/:collection`), never a raw path.
+	 * Only the character set and the absence of a URL scheme or host can be
+	 * checked here: a raw path such as `invite/abc123` passes, so pass a template.
+	 */
 	route?: string;
 	/** HTTP status code. */
 	status?: number;

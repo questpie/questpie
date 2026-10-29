@@ -67,8 +67,11 @@ describe("browser error reporter", () => {
 			},
 		});
 		expect(event).not.toHaveProperty("request");
-		expect(event).not.toHaveProperty("user");
 		expect(event).not.toHaveProperty("breadcrumbs");
+		// Sentry otherwise stores the sender's IP as the user and looks up its
+		// location.
+		expect(event.sdk.settings).toEqual({ infer_ip: "never" });
+		expect(event.user).toEqual({ geo: {} });
 	});
 
 	it("by default reports the type only and runs nothing on the value", async () => {
@@ -111,6 +114,25 @@ describe("browser error reporter", () => {
 			expect(value).not.toHaveProperty("stacktrace");
 		}
 		expect(capture.envelopes).toHaveLength(2);
+	});
+
+	it("drops a URL without a query passed as the route", async () => {
+		const capture = captureTransport();
+		const reporter = createBrowserErrorReporter({
+			dsn: DSN,
+			send: capture.send,
+		});
+		reporter.report(new Error("x"), {
+			route: `https://app.example.com/invite/${SECRET}`,
+		});
+		reporter.report(new Error("y"), {
+			route: `//app.example.com/invite/${SECRET}`,
+		});
+		await reporter.flush();
+		expect(capture.envelopes).toHaveLength(2);
+		for (const envelope of capture.envelopes) {
+			expect(envelope.raw).not.toContain(SECRET);
+		}
 	});
 
 	it("drops a raw URL passed as the route", async () => {

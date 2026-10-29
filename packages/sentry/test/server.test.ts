@@ -56,12 +56,14 @@ describe("sentryErrorReporting", () => {
 		for (const key of Object.keys(event)) {
 			expect(ALLOWED_EVENT_KEYS.has(key)).toBe(true);
 		}
-		expect(event).not.toHaveProperty("user");
+		// An empty location, so Sentry does not look one up from the IP.
+		expect(event.user).toEqual({ geo: {} });
 		expect(event).not.toHaveProperty("request");
 		expect(event).not.toHaveProperty("breadcrumbs");
 		expect(event).not.toHaveProperty("extra");
 		expect(event).not.toHaveProperty("server_name");
 		expect(event).not.toHaveProperty("modules");
+		expect(event.sdk.settings).toEqual({ infer_ip: "never" });
 		expect(Object.keys(event.contexts)).toEqual(["trace"]);
 		expect(event).toMatchObject({
 			platform: "node",
@@ -183,6 +185,36 @@ describe("sentryErrorReporting", () => {
 			"questpie.final": "false",
 		});
 		expect(capture.envelopes[0]!.raw).not.toContain(SECRET);
+	});
+
+	it("sends an AggregateError as its own type only, never its child errors", async () => {
+		const capture = captureTransport();
+		const adapter = sentryErrorReporting({
+			dsn: DSN,
+			formattedStacks: true,
+			send: capture.send,
+		})!;
+		const child = new Error(`child said ${SECRET}`, {
+			cause: new Error(SECRET),
+		});
+		Object.defineProperty(child, "stack", {
+			value: `Error: child said ${SECRET}\n    at ${IDENT_SECRET} (/srv/${IDENT_SECRET}/x.js:1:1)`,
+		});
+		await adapter.report(
+			new AggregateError(
+				[child, new TypeError(SECRET)],
+				`all failed ${SECRET}`,
+			),
+			{ source: "manual" },
+		);
+
+		const [envelope] = capture.envelopes;
+		expect(envelope!.raw).not.toContain(SECRET);
+		expect(envelope!.raw).not.toContain(IDENT_SECRET);
+		const values = envelope!.items[0]!.payload.exception.values;
+		expect(values.map((value: { type: string }) => value.type)).toEqual([
+			"AggregateError",
+		]);
 	});
 
 	it("bounds a custom transport by the deadline and frees its slot", async () => {

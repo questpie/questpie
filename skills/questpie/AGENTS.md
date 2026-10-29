@@ -7439,7 +7439,14 @@ thrown error, or retry and ack.
 `info` is closed (`source`, `kind`, `method`, `route` template, `status`, static
 `job` name, `final`); anything else is dropped. Within one request or job
 attempt the same error object is reported once, so report-then-rethrow is
-safe.
+safe. Pass a route template, never `request.url`: a value with a scheme or host
+is dropped, but a raw path is indistinguishable from a template.
+
+**Uncaught exceptions and unhandled rejections** are opt-in, once per process:
+`installProcessErrorHandlers(app.errors)` from `@questpie/sentry/server`. It
+reports with `source: "process"`, waits for delivery up to `flushTimeoutMs`
+(2 s), then rethrows so the process exits as before; with the app's own
+`uncaughtException` listener installed it only reports.
 
 **Browser and build** (`@questpie/sentry/browser`, `@questpie/sentry/vite`):
 
