@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/sentry",
-	"version": "3.41.0",
+	"version": "3.42.0",
 	"description": "Sentry error reporting for QUESTPIE — server adapter, browser reporter and source map upload",
 	"license": "MIT",
 	"repository": {
