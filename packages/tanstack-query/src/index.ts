@@ -710,6 +710,10 @@ export function createQuestpieQueryOptions<
 
 				return {
 					find: (options?: any, queryConfig?: RealtimeQueryConfig) => {
+						const readOptions =
+							locale === undefined
+								? options
+								: { ...options, locale: options?.locale ?? locale };
 						const qKey = buildKey(keyPrefix, [
 							...baseKey,
 							"find",
@@ -720,7 +724,7 @@ export function createQuestpieQueryOptions<
 
 						if (queryConfig?.realtime && client.realtime) {
 							const { realtime: _realtime, ...overrides } = queryConfig;
-							const topic = buildCollectionTopic(collectionName, options);
+							const topic = buildCollectionTopic(collectionName, readOptions);
 							return queryOptions({
 								queryKey: qKey,
 								retry: realtimeRetry,
@@ -744,10 +748,17 @@ export function createQuestpieQueryOptions<
 
 						return queryOptions({
 							queryKey: qKey,
-							queryFn: wrapQueryFn(() => collection.find(options), errorMap),
+							queryFn: wrapQueryFn(
+								() => collection.find(readOptions),
+								errorMap,
+							),
 						});
 					},
 					count: (options?: any, queryConfig?: RealtimeQueryConfig) => {
+						const readOptions =
+							locale === undefined
+								? options
+								: { ...options, locale: options?.locale ?? locale };
 						const qKey = buildKey(keyPrefix, [
 							...baseKey,
 							"count",
@@ -760,7 +771,7 @@ export function createQuestpieQueryOptions<
 							const { realtime: _realtime, ...overrides } = queryConfig;
 							const topic = buildCollectionTopic(
 								collectionName,
-								options,
+								readOptions,
 								"count",
 							);
 							return queryOptions({
@@ -787,7 +798,10 @@ export function createQuestpieQueryOptions<
 
 						return queryOptions({
 							queryKey: qKey,
-							queryFn: wrapQueryFn(() => collection.count(options), errorMap),
+							queryFn: wrapQueryFn(
+								() => collection.count(readOptions),
+								errorMap,
+							),
 						});
 					},
 					findOne: (options: any) =>
@@ -1061,6 +1075,10 @@ export function createQuestpieQueryOptions<
 
 			return {
 				get: (options?: any, queryConfig?: RealtimeQueryConfig) => {
+					const readOptions =
+						locale === undefined
+							? options
+							: { ...options, locale: options?.locale ?? locale };
 					const qKey = buildKey(keyPrefix, [
 						...baseKey,
 						"get",
@@ -1071,7 +1089,7 @@ export function createQuestpieQueryOptions<
 
 					if (queryConfig?.realtime && client.realtime) {
 						const { realtime: _realtime, ...overrides } = queryConfig;
-						const topic = buildGlobalTopic(globalName as string, options);
+						const topic = buildGlobalTopic(globalName as string, readOptions);
 						return queryOptions({
 							queryKey: qKey,
 							retry: realtimeRetry,
@@ -1096,7 +1114,7 @@ export function createQuestpieQueryOptions<
 
 					return queryOptions({
 						queryKey: qKey,
-						queryFn: wrapQueryFn(() => global.get(options), errorMap),
+						queryFn: wrapQueryFn(() => global.get(readOptions), errorMap),
 					});
 				},
 				update: () =>
