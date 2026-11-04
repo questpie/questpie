@@ -65,6 +65,8 @@ export interface CreateHookContextParams {
 		isBatch: true;
 		recordIds: (string | number)[];
 		records: any[];
+		/** Pre-images of a bulk update's rows (update `afterChange` only). */
+		originalRecords?: any[];
 		count: number;
 	};
 }
@@ -115,6 +117,7 @@ export function createHookContext(
 		ctx.isBatch = params.bulk.isBatch;
 		ctx.recordIds = params.bulk.recordIds;
 		ctx.records = params.bulk.records;
+		if (params.bulk.originalRecords) ctx.originalRecords = params.bulk.originalRecords;
 		ctx.count = params.bulk.count;
 	}
 

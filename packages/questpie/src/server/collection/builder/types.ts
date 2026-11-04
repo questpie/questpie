@@ -475,6 +475,11 @@ export type HookContextBase<TData = any> = AppContext & {
 	 * Semantics: post-image on update, pre-image on delete.
 	 */
 	records?: TData[];
+	/**
+	 * Pre-images of a bulk update's rows, by the same ids as {@link records}.
+	 * Present on update `afterChange` only.
+	 */
+	originalRecords?: TData[];
 	/** Total number of affected records in the batch */
 	count?: number;
 

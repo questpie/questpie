@@ -232,6 +232,14 @@ function relevantProjections(
 	if (event.operation === "update") {
 		return [event.payload?.before, event.payload?.after];
 	}
+	if (event.operation === "bulk_update" || event.operation === "bulk_delete") {
+		// Only a complete set of row images routes; a partial or missing one is unknown.
+		const rows = event.payload?.rows;
+		if (!rows || rows.length === 0 || rows.length !== event.payload?.count) return null;
+		return event.operation === "bulk_delete"
+			? rows.map((row) => row.before)
+			: rows.flatMap((row) => [row.before, row.after]);
+	}
 	return null;
 }
 

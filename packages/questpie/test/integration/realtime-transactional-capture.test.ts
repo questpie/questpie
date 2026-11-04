@@ -325,10 +325,25 @@ describe("realtime matrix transactional change capture", () => {
 
 		expect(bulkRows).toHaveLength(1);
 		expect(bulkNotices).toHaveLength(1);
-		expect(bulkRows[0]?.payload).toEqual({
+		// Within the default limit the batch carries every row's pre/post projection.
+		expect(bulkRows[0]?.payload).toMatchObject({
 			count: 2,
 			recordIds: [first.id, second.id],
 		});
+		const rowsById = new Map(
+			(bulkRows[0]?.payload as { rows: Array<{ before: { id: string; title: string }; after: { id: string; title: string } }> }).rows.map(
+				(row) => [row.after.id, row],
+			),
+		);
+		expect(rowsById.get(first.id)).toMatchObject({
+			before: { id: first.id, title: "First" },
+			after: { id: first.id, title: "Updated" },
+		});
+		expect(rowsById.get(second.id)).toMatchObject({
+			before: { id: second.id, title: "Second" },
+			after: { id: second.id, title: "Updated" },
+		});
+		expect(bulkNotices[0]?.payload?.rows).toHaveLength(2);
 	});
 
 	it("G9: emits exactly one outbox row and notify for a bulk delete", async () => {
@@ -367,10 +382,100 @@ describe("realtime matrix transactional change capture", () => {
 
 		expect(bulkRows).toHaveLength(1);
 		expect(bulkNotices).toHaveLength(1);
-		expect(bulkRows[0]?.payload).toEqual({
+		// A delete carries each row as it was.
+		expect(bulkRows[0]?.payload).toMatchObject({
 			count: 2,
 			recordIds: [first.id, second.id],
 		});
+		expect(
+			(bulkRows[0]?.payload as { rows: Array<{ before: { id: string }; after: null }> }).rows
+				.map((row) => [row.before.id, row.after])
+				.sort(),
+		).toEqual([[first.id, null], [second.id, null]].sort());
+	});
+
+	it("bulk row images: a moved row carries both scopes, so both watchers see it", async () => {
+		const stays = await setup.app.collections.posts.create({ title: "scope-a" }, ctx);
+		const moves = await setup.app.collections.posts.create({ title: "scope-a" }, ctx);
+		const other = await setup.app.collections.posts.create({ title: "scope-c" }, ctx);
+
+		await setup.app.collections.posts.update(
+			{ where: { id: { in: [moves.id] } }, data: { title: "scope-b" } },
+			ctx,
+		);
+		await setup.app.collections.posts.update(
+			{ where: { id: { in: [stays.id, other.id] } }, data: { title: "scope-a" } },
+			ctx,
+		);
+
+		const rows = await setup.app.db.select().from(questpieRealtimeLogTable);
+		const bulks = rows.filter((row: { operation: string }) => row.operation === "bulk_update");
+		expect(bulks).toHaveLength(2);
+		const move = bulks[0]?.payload as { rows: Array<{ before: { title: string }; after: { title: string } }> };
+		expect(move.rows).toEqual([
+			{ before: expect.objectContaining({ id: moves.id, title: "scope-a" }), after: expect.objectContaining({ id: moves.id, title: "scope-b" }) },
+		]);
+		// Each row keeps its own scope: the scope-c row never reads as scope-a before the write.
+		const second = bulks[1]?.payload as { rows: Array<{ before: { id: string; title: string } }> };
+		expect(
+			second.rows.map((row) => [row.before.id, row.before.title]).sort(),
+		).toEqual([[stays.id, "scope-a"], [other.id, "scope-c"]].sort());
+	});
+
+	it("bulk row images: a rolled-back bulk update leaves no outbox row", async () => {
+		const first = await setup.app.collections.posts.create({ title: "Kept" }, ctx);
+		const before = (await setup.app.db.select().from(questpieRealtimeLogTable)).length;
+
+		await expect(
+			withTransaction(setup.app.db, async () => {
+				await setup.app.collections.posts.update(
+					{ where: { id: { in: [first.id] } }, data: { title: "Discarded" } },
+					ctx,
+				);
+				throw new Error("roll back");
+			}),
+		).rejects.toThrow("roll back");
+
+		const rows = await setup.app.db.select().from(questpieRealtimeLogTable);
+		expect(rows).toHaveLength(before);
+		expect(rows.some((row: { operation: string }) => row.operation === "bulk_update")).toBe(false);
+	});
+
+	it("bulk row images: a batch over the declared limit carries ids and count only", async () => {
+		const limited = await buildMockApp(
+			{
+				collections: {
+					posts: collection("posts").fields(({ f }) => ({
+						title: f.text().required(),
+					})),
+				},
+			},
+			{ realtime: { pollIntervalMs: 10, bulkRowImageLimit: 1 } },
+		);
+		try {
+			await runTestDbMigrations(limited.app);
+			const limitedCtx = createTestContext(limited.app);
+			const one = await limited.app.collections.posts.create({ title: "One" }, limitedCtx);
+			const two = await limited.app.collections.posts.create({ title: "Two" }, limitedCtx);
+
+			await limited.app.collections.posts.update(
+				{ where: { id: { in: [one.id] } }, data: { title: "Within" } },
+				limitedCtx,
+			);
+			await limited.app.collections.posts.update(
+				{ where: { id: { in: [one.id, two.id] } }, data: { title: "Over" } },
+				limitedCtx,
+			);
+
+			const bulks = (await limited.app.db.select().from(questpieRealtimeLogTable)).filter(
+				(row: { operation: string }) => row.operation === "bulk_update",
+			);
+			expect(bulks).toHaveLength(2);
+			expect((bulks[0]?.payload as { rows?: unknown[] }).rows).toHaveLength(1);
+			expect(bulks[1]?.payload).toEqual({ count: 2, recordIds: [one.id, two.id] });
+		} finally {
+			await limited.cleanup();
+		}
 	});
 
 	it("G9: does not hold the bulk response open for adapter publish", async () => {

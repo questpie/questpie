@@ -3221,6 +3221,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							isBatch: true as const,
 							recordIds: refetchedRecords.map((r: any) => r.id),
 							records: refetchedRecords,
+							// Pre-images, so a bulk change can carry each row's before/after.
+							originalRecords: records,
 							count: refetchedRecords.length,
 						}
 					: undefined;

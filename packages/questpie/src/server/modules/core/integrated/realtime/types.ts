@@ -18,9 +18,17 @@ export type RealtimeEqualityValue = string | number | boolean | null;
  */
 export type RealtimeEqualityProjection = Record<string, RealtimeEqualityValue>;
 
+/** One row's pre/post projections inside a bulk change. */
+export type RealtimeRowImage = {
+	before: RealtimeEqualityProjection | null;
+	after: RealtimeEqualityProjection | null;
+};
+
 /**
  * Durable routing payload. Single-record changes carry pre/post projections;
- * bulk changes carry only their affected ids and count.
+ * bulk changes carry their affected ids and count, and every row's pre/post
+ * projections while the batch is within {@link RealtimeConfig.bulkRowImageLimit}.
+ * A bulk change without `rows` routes as `unknown`.
  */
 export type RealtimeChangePayload = {
 	origin?: "crdt_projection" | "crdt_replace";
@@ -28,6 +36,7 @@ export type RealtimeChangePayload = {
 	after?: RealtimeEqualityProjection | null;
 	count?: number;
 	recordIds?: (string | number)[];
+	rows?: RealtimeRowImage[];
 };
 
 export type RealtimeChangeEvent = {
@@ -163,6 +172,17 @@ export interface RealtimeConfig {
 	 * @default true
 	 */
 	changeCapture?: boolean;
+	/**
+	 * The most rows a bulk update or delete records row images for. Within the
+	 * limit, each row's scalar pre/post projection is written to the outbox, so
+	 * the change routes like single-row changes do: a watcher none of whose rows
+	 * match skips it. Above the limit the change carries only its ids and count
+	 * and routes as `unknown`, waking every candidate watcher of the collection.
+	 * `0` records no bulk row images.
+	 *
+	 * @default 100
+	 */
+	bulkRowImageLimit?: number;
 	/**
 	 * Serves collection/global row live queries. Refusing them here leaves
 	 * change capture, dependency watches, typed channels, and CRDT enabled: the

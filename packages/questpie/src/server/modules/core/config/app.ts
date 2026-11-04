@@ -24,6 +24,7 @@ import type {
 	RealtimeChangeEvent,
 	RealtimeChangePayload,
 	RealtimeEqualityProjection,
+	RealtimeRowImage,
 } from "#questpie/server/modules/core/integrated/realtime/types.js";
 import {
 	buildIndexParams,
@@ -51,14 +52,65 @@ function resolveRealtimeOperation(
 	return ctx.isBatch ? "bulk_update" : "update";
 }
 
+/** The default {@link RealtimeConfig.bulkRowImageLimit}. */
+const DEFAULT_BULK_ROW_IMAGE_LIMIT = 100;
+
+function bulkRowImageLimit(app: unknown): number {
+	const limit = (app as AppRealtimeSurface | undefined)?.config?.realtime
+		?.bulkRowImageLimit;
+	return typeof limit === "number" && Number.isInteger(limit) && limit >= 0
+		? limit
+		: DEFAULT_BULK_ROW_IMAGE_LIMIT;
+}
+
+/**
+ * Every row's pre/post projection of a bulk change, or `undefined` when the
+ * batch is over the limit or an image is missing: the change then routes as
+ * `unknown`, never on a partial set of rows.
+ */
+function resolveBulkRowImages(
+	ctx: GlobalCollectionHookContext,
+	hookType: "change" | "delete",
+	count: number,
+): RealtimeRowImage[] | undefined {
+	const records = ctx.records;
+	if (!records || records.length !== count || count > bulkRowImageLimit(ctx.app))
+		return undefined;
+	if (hookType === "delete") {
+		return records.map((record) => ({
+			before: projectRealtimeEqualityFields(record),
+			after: null,
+		}));
+	}
+	const originals = new Map<unknown, unknown>(
+		(ctx.originalRecords ?? []).map((record) => [
+			(record as { id?: unknown } | null)?.id,
+			record,
+		]),
+	);
+	const rows: RealtimeRowImage[] = [];
+	for (const record of records) {
+		const original = originals.get((record as { id?: unknown } | null)?.id);
+		if (!original) return undefined;
+		rows.push({
+			before: projectRealtimeEqualityFields(original),
+			after: projectRealtimeEqualityFields(record),
+		});
+	}
+	return rows;
+}
+
 function resolveRealtimePayload(
 	ctx: GlobalCollectionHookContext,
 	hookType: "change" | "delete",
 ): RealtimeChangePayload {
 	if (ctx.isBatch) {
+		const count = ctx.count ?? 0;
+		const rows = resolveBulkRowImages(ctx, hookType, count);
 		return {
-			count: ctx.count ?? 0,
+			count,
 			recordIds: ctx.recordIds ? [...ctx.recordIds] : [],
+			...(rows ? { rows } : {}),
 		};
 	}
 
@@ -143,7 +195,7 @@ function reportRealtimeCaptureError(
  * ({@link GlobalCollectionHookContext.app} is `unknown` pre-codegen).
  */
 interface AppRealtimeSurface {
-	config?: { realtime?: { changeCapture?: boolean } };
+	config?: { realtime?: { changeCapture?: boolean; bulkRowImageLimit?: number } };
 }
 
 interface AppCollectionConfigSurface {

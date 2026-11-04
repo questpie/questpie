@@ -221,4 +221,58 @@ describe("conservative realtime topic routing", () => {
 			if (matches) expect(outcome).not.toBe("miss");
 		}
 	});
+
+	test("routes a bulk change by its row images only while they are complete", () => {
+		const plan = compileRealtimeTopicRouting({ scopeId: "scope-a" });
+		const bulk = (
+			operation: "bulk_update" | "bulk_delete",
+			rows?: Array<{ before: Record<string, string> | null; after: Record<string, string> | null }>,
+			count = rows?.length ?? 2,
+		): RealtimeChangeEvent => ({
+			seq: 1,
+			resourceType: "collection",
+			resource: "items",
+			operation,
+			payload: { count, recordIds: ["a", "b"].slice(0, count), ...(rows ? { rows } : {}) },
+			createdAt: new Date(0),
+		});
+		const other = { scopeId: "scope-b" };
+		const own = { scopeId: "scope-a" };
+
+		// Every row proven unrelated: the watcher skips the change.
+		expect(evaluateRealtimeChangeRouting(plan, bulk("bulk_update", [{ before: other, after: other }, { before: other, after: other }]))).toBe("miss");
+		// One row enters or leaves the watched range: the watcher refreshes.
+		expect(evaluateRealtimeChangeRouting(plan, bulk("bulk_update", [{ before: other, after: other }, { before: other, after: own }]))).toBe("match");
+		expect(evaluateRealtimeChangeRouting(plan, bulk("bulk_update", [{ before: own, after: other }, { before: other, after: other }]))).toBe("match");
+		// A delete reads only the rows as they were.
+		expect(evaluateRealtimeChangeRouting(plan, bulk("bulk_delete", [{ before: other, after: null }, { before: other, after: null }]))).toBe("miss");
+		expect(evaluateRealtimeChangeRouting(plan, bulk("bulk_delete", [{ before: own, after: null }, { before: other, after: null }]))).toBe("match");
+		// No images (over the limit), a partial set, or a row missing the field: unknown.
+		expect(evaluateRealtimeChangeRouting(plan, bulk("bulk_update"))).toBe("unknown");
+		expect(evaluateRealtimeChangeRouting(plan, bulk("bulk_update", [{ before: other, after: other }], 2))).toBe("unknown");
+		expect(evaluateRealtimeChangeRouting(plan, bulk("bulk_update", [{ before: other, after: other }, { before: {}, after: {} }]))).toBe("unknown");
+		expect(evaluateRealtimeChangeRouting(plan, bulk("bulk_update", []  , 0))).toBe("unknown");
+	});
+
+	test("narrows bulk candidates by row images and falls back to every anchored watcher without them", () => {
+		const router = new RealtimeCandidateRouter<string>();
+		router.add("a", compileRealtimeTopicRouting({ scopeId: "scope-a" }));
+		router.add("b", compileRealtimeTopicRouting({ scopeId: "scope-b" }));
+		router.add("c", compileRealtimeTopicRouting({ scopeId: "scope-c" }));
+		const bulk = (rows?: Array<{ before: Record<string, string>; after: Record<string, string> }>): RealtimeChangeEvent => ({
+			seq: 1,
+			resourceType: "collection",
+			resource: "items",
+			operation: "bulk_update",
+			payload: { count: 2, recordIds: ["x", "y"], ...(rows ? { rows } : {}) },
+			createdAt: new Date(0),
+		});
+
+		// A move from scope-a to scope-b and an edit inside scope-b reach a and b, never c.
+		expect([...router.candidates(bulk([
+			{ before: { scopeId: "scope-a" }, after: { scopeId: "scope-b" } },
+			{ before: { scopeId: "scope-b" }, after: { scopeId: "scope-b" } },
+		]))].sort()).toEqual(["a", "b"]);
+		expect([...router.candidates(bulk())].sort()).toEqual(["a", "b", "c"]);
+	});
 });
