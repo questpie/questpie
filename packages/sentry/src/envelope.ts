@@ -179,6 +179,36 @@ export interface EventInput {
 	trace?: { traceId: string; spanId: string };
 	release?: string;
 	environment?: string;
+	/** Unvalidated; see {@link validFingerprint}. */
+	fingerprint?: unknown;
+}
+
+export const MAX_FINGERPRINT_PARTS = 4;
+const FINGERPRINT_PART = /^[A-Za-z0-9_\-.:]{1,64}$/;
+
+/**
+ * The fingerprint parts to send, or undefined to send none. Parts are short
+ * static labels the app declares in code (`["realtime", "rejected"]`), never
+ * a message, id or URL: one part outside the character set or length drops
+ * the whole fingerprint.
+ */
+export function validFingerprint(value: unknown): string[] | undefined {
+	if (
+		!Array.isArray(value) ||
+		value.length === 0 ||
+		value.length > MAX_FINGERPRINT_PARTS
+	) {
+		return undefined;
+	}
+	const parts: string[] = [];
+	for (let index = 0; index < value.length; index++) {
+		const part: unknown = value[index];
+		if (typeof part !== "string" || !FINGERPRINT_PART.test(part)) {
+			return undefined;
+		}
+		parts.push(part);
+	}
+	return parts;
 }
 
 /** The complete event. Every field is listed here; nothing else is sent. */
@@ -202,6 +232,10 @@ export function buildEvent(input: EventInput): Event {
 		.toReversed();
 
 	const images = debugImages(locations);
+	const fingerprint = validFingerprint(input.fingerprint);
+	const tags = fingerprint
+		? { ...input.tags, "questpie.fingerprint": fingerprint.join("/") }
+		: input.tags;
 	return {
 		event_id: uuid4(),
 		timestamp: dateTimestampInSeconds(),
@@ -220,7 +254,10 @@ export function buildEvent(input: EventInput): Event {
 		...(input.release ? { release: input.release } : {}),
 		...(input.environment ? { environment: input.environment } : {}),
 		...(input.transaction ? { transaction: input.transaction } : {}),
-		tags: input.tags,
+		tags,
+		// Added to Sentry's default grouping, so one call site still splits by
+		// stack and two labels at one call site split into two issues.
+		...(fingerprint ? { fingerprint: ["{{ default }}", ...fingerprint] } : {}),
 		exception: { values },
 		...(input.trace
 			? {

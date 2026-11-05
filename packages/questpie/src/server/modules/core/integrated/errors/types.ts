@@ -50,6 +50,13 @@ export interface ErrorReportInfo {
 	job?: string;
 	/** For jobs: true when the adapter will not retry this failure. */
 	final?: boolean;
+	/**
+	 * Static labels declared in code that tell apart failures reported from
+	 * one place, e.g. `["sync", "rejected"]`; an adapter groups by them. At
+	 * most 4 parts of 1–64 characters `A-Z a-z 0-9 _ - . :`; anything else
+	 * drops the whole fingerprint. Never an error message, id or URL.
+	 */
+	fingerprint?: readonly string[];
 }
 
 /**

@@ -110,6 +110,33 @@ describe("ErrorReportingService", () => {
 		]);
 	});
 
+	it("keeps a fingerprint of short static labels and drops any other", () => {
+		const { adapter, captured } = capturingAdapter();
+		const service = new ErrorReportingService({ adapter });
+		const labels = ["sync", "rejected", "resource.arm"];
+		service.report(new Error("x"), { source: "manual", fingerprint: labels });
+		for (const fingerprint of [
+			[`https://app.example.com/${SECRET}`],
+			[`token ${SECRET}`],
+			["x".repeat(65)],
+			["a", "b", "c", "d", "e"],
+			[],
+			["ok", 42],
+			"sync",
+		]) {
+			service.report(new Error("x"), {
+				source: "manual",
+				fingerprint: fingerprint as string[],
+			});
+		}
+		expect(captured[0]!.report.fingerprint).toEqual(labels);
+		// A copy: the caller's array cannot change after validation.
+		expect(captured[0]!.report.fingerprint).not.toBe(labels);
+		for (const { report } of captured.slice(1)) {
+			expect(report).toEqual({ source: "manual" });
+		}
+	});
+
 	it("adds trace correlation only when a span is actually active", () => {
 		const { adapter, captured } = capturingAdapter();
 		let active: { traceId: string; spanId: string } | undefined;

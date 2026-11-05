@@ -62,6 +62,8 @@ const ROUTE_PATTERN = /^[A-Za-z0-9_\-./:*[\]{}]{0,256}$/;
 /** A scheme (`https://host/…`) or protocol-relative host (`//host/…`). */
 const URL_LIKE = /:\/\/|^\/\//;
 const JOB_PATTERN = /^[A-Za-z0-9_\-.:/]{1,128}$/;
+const FINGERPRINT_PART = /^[A-Za-z0-9_\-.:]{1,64}$/;
+const MAX_FINGERPRINT_PARTS = 4;
 const TRACE_ID = /^[0-9a-f]{32}$/;
 const SPAN_ID = /^[0-9a-f]{16}$/;
 
@@ -212,6 +214,8 @@ export class ErrorReportingService {
 			report.job = info.job;
 		}
 		if (typeof info?.final === "boolean") report.final = info.final;
+		const fingerprint = validFingerprint(info?.fingerprint);
+		if (fingerprint) report.fingerprint = fingerprint;
 
 		const span = this.getActiveSpan();
 		if (
@@ -225,6 +229,26 @@ export class ErrorReportingService {
 		}
 		return report;
 	}
+}
+
+/** A copy of the parts when every one is a short static label, else none. */
+function validFingerprint(value: unknown): string[] | undefined {
+	if (
+		!Array.isArray(value) ||
+		value.length === 0 ||
+		value.length > MAX_FINGERPRINT_PARTS
+	) {
+		return undefined;
+	}
+	const parts: string[] = [];
+	for (let index = 0; index < value.length; index++) {
+		const part: unknown = value[index];
+		if (typeof part !== "string" || !FINGERPRINT_PART.test(part)) {
+			return undefined;
+		}
+		parts.push(part);
+	}
+	return parts;
 }
 
 /** Call an adapter method; a synchronous throw becomes a rejection. */

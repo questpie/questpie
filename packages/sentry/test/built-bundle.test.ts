@@ -38,11 +38,17 @@ function chargeCard(token) {
 	throw new TypeError("card declined for " + token);
 }
 
+class ClientFailure extends Error {
+	name = "ClientFailure";
+}
+
 const reporter = createBrowserErrorReporter({
 	dsn: ${JSON.stringify(DSN)},
 	release: "web@1.0.0",
 	environment: "staging",
 	formattedStacks: true,
+	errorNames: ["ClientFailure"],
+	errorClasses: [ClientFailure],
 	send: async ({ body }) => {
 		envelopes.push(typeof body === "string" ? body : new TextDecoder().decode(body));
 		return { statusCode: 200 };
@@ -55,6 +61,15 @@ globalThis.__run = (token) => {
 	} catch (error) {
 		reporter.report(error, { route: "/checkout/$orderId" });
 	}
+	return reporter.flush(1000);
+};
+
+globalThis.__runClientFailure = (kind) => {
+	reporter.report(new ClientFailure(), {
+		kind: "manual",
+		route: "/checkout/$orderId",
+		fingerprint: ["realtime", kind],
+	});
 	return reporter.flush(1000);
 };
 `;
@@ -106,6 +121,7 @@ describe("built browser bundle", () => {
 		delete (globalThis as any)._sentryDebugIds;
 		delete (globalThis as any).__envelopes;
 		delete (globalThis as any).__run;
+		delete (globalThis as any).__runClientFailure;
 		if (dir) rmSync(dir, { recursive: true, force: true });
 	});
 
@@ -168,5 +184,34 @@ describe("built browser bundle", () => {
 		});
 		expect(original.source).toEndWith("src/main.js");
 		expect(original.line).toBe(THROW_LINE);
+	});
+
+	it("reports a listed app error class with frames in the bundle and its fingerprint", async () => {
+		const envelopes: string[] = (globalThis as any).__envelopes;
+		const before = envelopes.length;
+		await (globalThis as any).__runClientFailure("rejected");
+		await (globalThis as any).__runClientFailure("dropped");
+
+		const events = envelopes
+			.slice(before)
+			.map((raw) => JSON.parse(raw.split("\n").filter(Boolean)[2]!));
+		expect(events).toHaveLength(2);
+		for (const event of events) {
+			const [exception] = event.exception.values;
+			expect(exception.type).toBe("ClientFailure");
+			const files = exception.stacktrace.frames.map(
+				(frame: { filename?: string }) => frame.filename,
+			);
+			expect(files).toContain("app:///assets/app.js");
+			expect(event.debug_meta.images[0]).toEqual({
+				type: "sourcemap",
+				code_file: "app:///assets/app.js",
+				debug_id: map.debugId ?? map.debug_id,
+			});
+		}
+		expect(events.map((event) => event.fingerprint)).toEqual([
+			["{{ default }}", "realtime", "rejected"],
+			["{{ default }}", "realtime", "dropped"],
+		]);
 	});
 });

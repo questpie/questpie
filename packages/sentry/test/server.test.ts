@@ -187,6 +187,32 @@ describe("sentryErrorReporting", () => {
 		expect(capture.envelopes[0]!.raw).not.toContain(SECRET);
 	});
 
+	it("groups a manual report by its validated fingerprint", async () => {
+		const capture = captureTransport();
+		const errors = new ErrorReportingService({
+			adapter: sentryErrorReporting({ dsn: DSN, send: capture.send })!,
+		});
+		errors.report(new Error(SECRET), {
+			source: "background",
+			fingerprint: ["sync", "rejected"],
+		});
+		errors.report(new Error(SECRET), {
+			source: "background",
+			fingerprint: ["sync", `https://example.com/${SECRET}`],
+		});
+		await errors.flush(1000);
+
+		const [grouped, dropped] = capture.envelopes.map(
+			(envelope) => envelope.items[0]!.payload,
+		);
+		expect(grouped.fingerprint).toEqual(["{{ default }}", "sync", "rejected"]);
+		expect(grouped.tags["questpie.fingerprint"]).toBe("sync/rejected");
+		expect(dropped).not.toHaveProperty("fingerprint");
+		for (const envelope of capture.envelopes) {
+			expect(envelope.raw).not.toContain(SECRET);
+		}
+	});
+
 	it("sends an AggregateError as its own type only, never its child errors", async () => {
 		const capture = captureTransport();
 		const adapter = sentryErrorReporting({

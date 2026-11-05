@@ -17,6 +17,15 @@ export interface BrowserErrorInfo {
 	kind?: BrowserErrorKind;
 	/** Route TEMPLATE (e.g. TanStack `routeId` `/invite/$token`), never `location.href`. */
 	route?: string;
+	/**
+	 * Static labels declared in code that tell apart failures the app reports
+	 * itself, e.g. `["realtime", "rejected", "resource.arm"]`. Sent as the
+	 * Sentry fingerprint (on top of default grouping) and the
+	 * `questpie.fingerprint` tag. At most 4 parts of 1–64 characters
+	 * `A-Z a-z 0-9 _ - . :`; anything else drops the whole fingerprint. Never
+	 * pass an error message, id or URL.
+	 */
+	fingerprint?: readonly string[];
 }
 
 /**
@@ -34,6 +43,16 @@ export interface BrowserErrorReporterOptions extends DeliveryOptions {
 	 * Built-in names are always sent; any other name is reported as `Error`.
 	 */
 	errorNames?: readonly string[];
+	/**
+	 * Your own error classes whose prototypes are safe to read, e.g.
+	 * `[ClientFailure]`. With `formattedStacks`, the stack of an error whose
+	 * prototype chain is not built-in is read only when `name`, `message` and
+	 * `code` resolve to plain data, and a custom prototype is trusted only when
+	 * listed here — otherwise such an error is sent without frames. Listing a
+	 * class does not send its name as the type; add it to `errorNames` too.
+	 * A subclass is not covered by its parent: list it as well.
+	 */
+	errorClasses?: ReadonlyArray<abstract new (...args: never[]) => Error>;
 	/**
 	 * Reports per rolling minute; more are dropped. Stops a render loop from
 	 * flooding the project. @default 30
@@ -91,6 +110,7 @@ export function createBrowserErrorReporter(
 	const release = options.release ?? injectedRelease();
 	const sanitizeOptions = {
 		errorNames: new Set(options.errorNames),
+		trustedPrototypes: classPrototypes(options.errorClasses),
 		formattedStacks: options.formattedStacks === true,
 		inertStackDescriptors: INERT_STACK_DESCRIPTORS,
 	};
@@ -136,6 +156,7 @@ export function createBrowserErrorReporter(
 							handled: kind === "manual" || kind === "boundary",
 							transaction: route,
 							tags,
+							fingerprint: info.fingerprint,
 							release,
 							environment: options.environment,
 						}),
@@ -219,6 +240,21 @@ function safeRoute(getRoute?: () => string | undefined): string | undefined {
 	} catch {
 		return undefined;
 	}
+}
+
+/** The `prototype` of each listed class; read once, at setup. */
+function classPrototypes(
+	classes: BrowserErrorReporterOptions["errorClasses"],
+): Set<object> {
+	const prototypes = new Set<object>();
+	for (const errorClass of classes ?? []) {
+		const prototype: unknown =
+			typeof errorClass === "function" ? errorClass.prototype : undefined;
+		if (prototype !== null && typeof prototype === "object") {
+			prototypes.add(prototype);
+		}
+	}
+	return prototypes;
 }
 
 /** `SENTRY_RELEASE` injected by the bundler plugin, read without getters. */

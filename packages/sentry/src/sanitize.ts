@@ -22,8 +22,9 @@
  * values are not examined: objects become `Error`, primitives `NonError`.
  * Only OWN properties of verified errors are read, through descriptors.
  * A prototype's descriptors are read only when it is a built-in error
- * prototype, or, on the server, a custom prototype `isProxy` has cleared (to
- * confirm `name`/`message`/`code` are plain data before the runtime formats the
+ * prototype, the prototype of a class the app listed in `trustedPrototypes`,
+ * or, on the server, a custom prototype `isProxy` has cleared (to confirm
+ * `name`/`message`/`code` are plain data before the runtime formats the
  * stack); a proxy prototype is never touched, and no prototype
  * accessor is called by those descriptor reads. With `formattedStacks`, the
  * browser's brand check may be a polyfill that runs getters. Stack access may
@@ -91,6 +92,12 @@ export interface SanitizeOptions {
 	inertStackDescriptors?: boolean;
 	/** Error class names the app vouches for, sent as the type as-is. */
 	errorNames?: ReadonlySet<string>;
+	/**
+	 * Prototypes of error classes the app vouches for (the browser's
+	 * `errorClasses`). Their own `name`, `message` and `code` are read like a
+	 * built-in prototype's: data properties only, getters are never called.
+	 */
+	trustedPrototypes?: ReadonlySet<object>;
 }
 
 export const MAX_FRAMES = 50;
@@ -225,7 +232,7 @@ function sanitizeOne(
 	if (!isErrorLike(error, options)) {
 		return { type: "NonError", frames: [], rawFilenames: new Map() };
 	}
-	const name = readName(error as object);
+	const name = readName(error as object, options);
 	const stack = readStack(error as object, options);
 	// The header to cut off is built from what the formatter itself read:
 	// the name may live on a custom prototype (Node's own error classes).
@@ -292,18 +299,18 @@ function ownValue(target: object, key: string): unknown {
 }
 
 /**
- * The built-in prototype directly behind `target`, or undefined for a custom
- * class prototype — which may be a proxy or carry getters, and is not read.
+ * A built-in error prototype or the prototype of a class the app listed. Any
+ * other custom prototype may be a proxy or carry getters, and is not read
+ * without `isProxy`.
  */
-function builtinPrototype(target: object): object | undefined {
-	try {
-		const prototype = Object.getPrototypeOf(target) as object | null;
-		return prototype && BUILTIN_PROTOTYPES.has(prototype)
-			? prototype
-			: undefined;
-	} catch {
-		return undefined;
-	}
+function isTrustedPrototype(
+	prototype: object,
+	options: SanitizeOptions,
+): boolean {
+	return (
+		BUILTIN_PROTOTYPES.has(prototype) ||
+		options.trustedPrototypes?.has(prototype) === true
+	);
 }
 
 function callNative(getter: () => unknown, target: object): unknown {
@@ -314,16 +321,28 @@ function callNative(getter: () => unknown, target: object): unknown {
 	}
 }
 
-function readName(target: object): unknown {
+/** `name` through trusted prototypes only; stops at the first untrusted one. */
+function readName(target: object, options: SanitizeOptions): unknown {
 	const own = ownDescriptor(target, "name");
 	if (own) return "value" in own ? own.value : undefined;
-	const prototype = builtinPrototype(target);
-	const inherited = prototype && ownDescriptor(prototype, "name");
-	if (!inherited) return undefined;
-	if ("value" in inherited) return inherited.value;
-	return inherited.get && inherited.get === NATIVE_DOM_EXCEPTION_NAME_GETTER
-		? callNative(inherited.get, target)
-		: undefined;
+	try {
+		let current = Object.getPrototypeOf(target) as object | null;
+		for (let depth = 0; current && depth < MAX_PROTOTYPE_DEPTH; depth++) {
+			if (!isTrustedPrototype(current, options)) return undefined;
+			const inherited = Object.getOwnPropertyDescriptor(current, "name");
+			if (inherited) {
+				if ("value" in inherited) return inherited.value;
+				return inherited.get &&
+					inherited.get === NATIVE_DOM_EXCEPTION_NAME_GETTER
+					? callNative(inherited.get, target)
+					: undefined;
+			}
+			current = Object.getPrototypeOf(current) as object | null;
+		}
+	} catch {
+		// An unreadable prototype chain yields no name.
+	}
+	return undefined;
 }
 
 function readStack(target: object, options: SanitizeOptions): unknown {
@@ -376,8 +395,9 @@ function headerFieldsArePlain(
 /**
  * True when `target[key]` resolves to a string (or nothing; a number too with
  * `allowNumber`) through data properties only. With `isProxy` (server) the whole chain is checked link by
- * link; without it (browser) only the error itself and a built-in prototype
- * are trusted, since a custom prototype cannot be told apart from a proxy.
+ * link; without it (browser) only the error itself, built-in prototypes and
+ * `trustedPrototypes` are trusted, since any other custom prototype cannot be
+ * told apart from a proxy.
  */
 function resolvesToPlainData(
 	target: object,
@@ -413,7 +433,7 @@ function plainData(
 		let current = Object.getPrototypeOf(target) as object | null;
 		for (let depth = 0; current; depth++) {
 			const trusted =
-				BUILTIN_PROTOTYPES.has(current) ||
+				isTrustedPrototype(current, options) ||
 				current === OBJECT_PROTOTYPE ||
 				(options.isProxy !== undefined && !options.isProxy(current));
 			if (!trusted || depth >= MAX_PROTOTYPE_DEPTH) return { plain: false };

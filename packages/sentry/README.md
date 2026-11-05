@@ -37,7 +37,8 @@ Events are built from an allowlist:
 - stack frames with line and column, keeping a file only when it is a build
   artifact registered by debug id or listed in `trustedFiles`, rewritten to
   `app:///`;
-- the framework's validated report fields.
+- the framework's validated report fields, including a `fingerprint` of
+  static labels you pass to tell apart failures from one call site.
 
 Error messages, function names, requests, sessions, payloads, breadcrumbs,
 tracing, logs and replays are never sent. No Sentry client or OpenTelemetry
