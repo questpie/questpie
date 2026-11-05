@@ -177,11 +177,25 @@ describe("browser error reporter", () => {
 		).not.toHaveProperty("stacktrace");
 	});
 
-	it("sends a valid fingerprint as fingerprint and tag, and drops any other", async () => {
+	it("sends a fingerprint of registered labels as fingerprint and tag, and drops any other", async () => {
+		const UUID = "550e8400-e29b-41d4-a716-446655440000";
 		const capture = captureTransport();
 		const reporter = createBrowserErrorReporter({
 			dsn: DSN,
 			send: capture.send,
+			fingerprintLabels: [
+				"realtime",
+				"rejected",
+				"dropped",
+				"resource.arm",
+				"a",
+				"b",
+				"c",
+				"d",
+				"e",
+				// Not a valid label itself, so never admitted.
+				`token ${SECRET}`,
+			],
 		});
 		const report = (fingerprint: unknown) =>
 			reporter.report(new Error("x"), {
@@ -192,12 +206,16 @@ describe("browser error reporter", () => {
 		report(["realtime", "rejected", "resource.arm"]);
 		report(["realtime", "dropped", "resource.arm"]);
 		for (const invalid of [
+			// Well-formed, but data rather than a registered label.
+			["realtime", UUID],
+			["realtime", "Unauthorized"],
+			["realtime", "customer.example.com"],
 			[`https://app.example.com/${SECRET}`],
 			[`token ${SECRET}`],
 			["x".repeat(65)],
 			["a", "b", "c", "d", "e"],
 			[],
-			["ok", 42],
+			["realtime", 42],
 			"realtime",
 		]) {
 			report(invalid);
@@ -205,7 +223,7 @@ describe("browser error reporter", () => {
 		await reporter.flush();
 
 		const events = capture.envelopes.map((e) => e.items[0]!.payload);
-		expect(events).toHaveLength(9);
+		expect(events).toHaveLength(12);
 		expect(events[0].fingerprint).toEqual([
 			"{{ default }}",
 			"realtime",
@@ -229,7 +247,22 @@ describe("browser error reporter", () => {
 		}
 		for (const envelope of capture.envelopes) {
 			expect(envelope.raw).not.toContain(SECRET);
+			expect(envelope.raw).not.toContain(UUID);
+			expect(envelope.raw).not.toContain("customer.example.com");
 		}
+	});
+
+	it("sends no fingerprint without registered labels", async () => {
+		const capture = captureTransport();
+		const reporter = createBrowserErrorReporter({
+			dsn: DSN,
+			send: capture.send,
+		});
+		reporter.report(new Error("x"), { fingerprint: ["realtime", "rejected"] });
+		await reporter.flush();
+		const event = capture.envelopes[0]!.items[0]!.payload;
+		expect(event).not.toHaveProperty("fingerprint");
+		expect(event.tags).not.toHaveProperty("questpie.fingerprint");
 	});
 
 	it("drops a URL without a query passed as the route", async () => {

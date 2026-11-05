@@ -97,12 +97,23 @@ export default route()
 ```
 
 When one place reports failures that are not the same problem, tell them apart
-with `fingerprint`: static labels declared in your code, at most four parts of
-1–64 characters `A-Z a-z 0-9 _ - . :`. Anything else drops the whole
-fingerprint. Never pass a message, an id or a URL. The Sentry adapter adds the
-labels to its default grouping and sends them as the `questpie.fingerprint` tag.
+with `fingerprint`, at most four labels. Every label must be registered up
+front in `errors.fingerprintLabels`. A format check cannot tell a static label
+from an id (`550e8400-…`), a short message (`Unauthorized`) or a host name, so
+a fingerprint with any unregistered part is dropped whole, and without
+registered labels none is passed on. The Sentry adapter adds the labels to its
+default grouping and sends them as the `questpie.fingerprint` tag.
 
 ```ts
+// questpie.config.ts
+runtimeConfig({
+	errors: {
+		adapter: sentryErrorReporting({ dsn: process.env.SENTRY_DSN }),
+		fingerprintLabels: ["inventory-sync", "rejected", "timeout"],
+	},
+});
+
+// a handler
 errors.report(error, {
 	source: "background",
 	fingerprint: ["inventory-sync", "rejected"],
@@ -230,9 +241,10 @@ router's catch hook. The reporter caps itself at 30 events a minute so a render
 loop cannot flood the project.
 
 Failures your app detects itself (a dropped connection, a rejected
-subscription) are reported with `report`. Pass a `fingerprint` of static labels
-so that different failures from one call site become different issues, with
-the same rules as on the server. To send frames for your own error class, list
+subscription) are reported with `report`. Pass a `fingerprint` so that
+different failures from one call site become different issues; as on the
+server, its labels must be registered, here in the reporter's
+`fingerprintLabels`. To send frames for your own error class, list
 it in `errorClasses` (its prototype is then read like a built-in one, see
 [What leaves the process](#what-leaves-the-process)) and its name in
 `errorNames`:
@@ -248,6 +260,7 @@ const errorReporter = createBrowserErrorReporter({
 	formattedStacks: true,
 	errorClasses: [ClientFailure],
 	errorNames: ["ClientFailure"],
+	fingerprintLabels: ["realtime", "rejected", "dropped"],
 });
 
 errorReporter.report(new ClientFailure(), {
@@ -346,8 +359,8 @@ the complete payload:
   - The value is a description built from `report`
     (`HTTP 500 POST items/:id (thrown)`), not the error message.
 - `tags` and `transaction`: the validated `report` fields.
-- `fingerprint`: `{{ default }}` and the validated labels, only when you
-  passed them.
+- `fingerprint`: `{{ default }}` and the labels you passed, only when every
+  one is registered in `fingerprintLabels`.
 - `release`, `environment`, `platform`, `level`, `timestamp`, `event_id`.
 - `contexts.trace`, only when a span was active.
 - `debug_meta`, the debug ids needed for source maps.

@@ -49,6 +49,7 @@ const reporter = createBrowserErrorReporter({
 	formattedStacks: true,
 	errorNames: ["ClientFailure"],
 	errorClasses: [ClientFailure],
+	fingerprintLabels: ["realtime", "rejected", "dropped"],
 	send: async ({ body }) => {
 		envelopes.push(typeof body === "string" ? body : new TextDecoder().decode(body));
 		return { statusCode: 200 };

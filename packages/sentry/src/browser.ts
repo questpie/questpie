@@ -2,6 +2,7 @@ import {
 	buildEvent,
 	createDelivery,
 	type DeliveryOptions,
+	fingerprintLabelSet,
 	registeredFiles,
 } from "./envelope.js";
 import { createRecentSet } from "./recent.js";
@@ -18,12 +19,11 @@ export interface BrowserErrorInfo {
 	/** Route TEMPLATE (e.g. TanStack `routeId` `/invite/$token`), never `location.href`. */
 	route?: string;
 	/**
-	 * Static labels declared in code that tell apart failures the app reports
-	 * itself, e.g. `["realtime", "rejected", "resource.arm"]`. Sent as the
-	 * Sentry fingerprint (on top of default grouping) and the
-	 * `questpie.fingerprint` tag. At most 4 parts of 1–64 characters
-	 * `A-Z a-z 0-9 _ - . :`; anything else drops the whole fingerprint. Never
-	 * pass an error message, id or URL.
+	 * Labels that tell apart failures the app reports itself, e.g.
+	 * `["realtime", "rejected", "resource.arm"]`. Every part must be listed in
+	 * the reporter's `fingerprintLabels`; otherwise the whole fingerprint is
+	 * dropped. Sent as the Sentry fingerprint (on top of default grouping) and
+	 * the `questpie.fingerprint` tag. At most 4 parts.
 	 */
 	fingerprint?: readonly string[];
 }
@@ -53,6 +53,14 @@ export interface BrowserErrorReporterOptions extends DeliveryOptions {
 	 * A subclass is not covered by its parent: list it as well.
 	 */
 	errorClasses?: ReadonlyArray<abstract new (...args: never[]) => Error>;
+	/**
+	 * The only labels a report's `fingerprint` may use: static strings declared
+	 * in code (1–64 characters `A-Z a-z 0-9 _ - . :`). A format check cannot
+	 * tell a label from an id or a short message, so nothing else is sent; a
+	 * fingerprint with an unlisted part is dropped whole. Without it, no
+	 * fingerprint is sent.
+	 */
+	fingerprintLabels?: readonly string[];
 	/**
 	 * Reports per rolling minute; more are dropped. Stops a render loop from
 	 * flooding the project. @default 30
@@ -108,6 +116,7 @@ export function createBrowserErrorReporter(
 	const recent = createRecentSet(60_000);
 	const maxPerMinute = options.maxReportsPerMinute ?? 30;
 	const release = options.release ?? injectedRelease();
+	const fingerprintLabels = fingerprintLabelSet(options.fingerprintLabels);
 	const sanitizeOptions = {
 		errorNames: new Set(options.errorNames),
 		trustedPrototypes: classPrototypes(options.errorClasses),
@@ -157,6 +166,7 @@ export function createBrowserErrorReporter(
 							transaction: route,
 							tags,
 							fingerprint: info.fingerprint,
+							fingerprintLabels,
 							release,
 							environment: options.environment,
 						}),

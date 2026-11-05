@@ -81,6 +81,7 @@ export class ErrorReportingService {
 		| { traceId: string; spanId: string }
 		| undefined;
 	private readonly pending = new Set<Promise<void>>();
+	private readonly fingerprintLabels: ReadonlySet<string>;
 	private closed = false;
 	private shutdownPromise: Promise<void> | undefined;
 
@@ -91,6 +92,11 @@ export class ErrorReportingService {
 	) {
 		this.config = config;
 		this.getActiveSpan = getActiveSpan;
+		this.fingerprintLabels = new Set(
+			(config.fingerprintLabels ?? []).filter(
+				(label) => typeof label === "string" && FINGERPRINT_PART.test(label),
+			),
+		);
 	}
 
 	/** True when an adapter is configured and the service is not shut down. */
@@ -214,7 +220,10 @@ export class ErrorReportingService {
 			report.job = info.job;
 		}
 		if (typeof info?.final === "boolean") report.final = info.final;
-		const fingerprint = validFingerprint(info?.fingerprint);
+		const fingerprint = validFingerprint(
+			info?.fingerprint,
+			this.fingerprintLabels,
+		);
 		if (fingerprint) report.fingerprint = fingerprint;
 
 		const span = this.getActiveSpan();
@@ -231,8 +240,14 @@ export class ErrorReportingService {
 	}
 }
 
-/** A copy of the parts when every one is a short static label, else none. */
-function validFingerprint(value: unknown): string[] | undefined {
+/**
+ * A copy of the parts when every one is a registered label, else none. A
+ * format check alone cannot tell a static label from an id or a short message.
+ */
+function validFingerprint(
+	value: unknown,
+	labels: ReadonlySet<string>,
+): string[] | undefined {
 	if (
 		!Array.isArray(value) ||
 		value.length === 0 ||
@@ -243,9 +258,7 @@ function validFingerprint(value: unknown): string[] | undefined {
 	const parts: string[] = [];
 	for (let index = 0; index < value.length; index++) {
 		const part: unknown = value[index];
-		if (typeof part !== "string" || !FINGERPRINT_PART.test(part)) {
-			return undefined;
-		}
+		if (typeof part !== "string" || !labels.has(part)) return undefined;
 		parts.push(part);
 	}
 	return parts;
