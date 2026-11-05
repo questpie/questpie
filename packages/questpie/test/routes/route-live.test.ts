@@ -794,6 +794,7 @@ describe("explicit route LIVE", () => {
 					resourceType: "collection",
 					resource: "live_tasks",
 					where: { tenant: "tenant-a" },
+					storedFieldWhere: true,
 				},
 				authority: true,
 			},

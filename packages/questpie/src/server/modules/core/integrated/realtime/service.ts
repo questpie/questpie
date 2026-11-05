@@ -1142,7 +1142,8 @@ export class RealtimeService {
 			resource: "*",
 		};
 		const relationNames =
-			resolvedTopics.resourceType === "collection"
+			resolvedTopics.resourceType === "collection" &&
+			!resolvedTopics.storedFieldWhere
 				? this.subscriptionContext?.resolveCollectionRelationNames?.(
 						resolvedTopics.resource,
 					)
@@ -1168,11 +1169,13 @@ export class RealtimeService {
 					resolvedTopics.resource,
 					resolvedTopics.with,
 				) ?? new Set([resolvedTopics.resource]);
-			const whereCollections =
-				this.subscriptionContext?.resolveCollectionDependencies?.(
-					resolvedTopics.resource,
-					resolvedTopics.where,
-				) ?? new Set([resolvedTopics.resource]);
+			// A stored-field WHERE reads no related row, so it depends on none.
+			const whereCollections = resolvedTopics.storedFieldWhere
+				? new Set([resolvedTopics.resource])
+				: (this.subscriptionContext?.resolveCollectionDependencies?.(
+						resolvedTopics.resource,
+						resolvedTopics.where,
+					) ?? new Set([resolvedTopics.resource]));
 			const collections = new Set([...withCollections, ...whereCollections]);
 			watchedResources = { collections, globals: new Set() };
 		} else if (

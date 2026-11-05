@@ -229,7 +229,7 @@ export function prepareRouteQueryTopic(
 				topic: {
 					resourceType: "collection",
 					resource,
-					...(where ? { where } : {}),
+					...(where ? { where, storedFieldWhere: true } : {}),
 				},
 				authority: authority || previous?.authority === true,
 			});

@@ -74,6 +74,13 @@ export type RealtimeTopics = {
 	 * Example: { user: true, attachments: true }
 	 */
 	with?: Record<string, any>;
+	/**
+	 * The WHERE holds only scalar equalities on the collection's own stored
+	 * fields, as a route's LIVE dependency anchor does. A relation field is then
+	 * its stored foreign key: changes route on their row images and no related
+	 * collection is watched. Set by the server only; client topics never carry it.
+	 */
+	storedFieldWhere?: true;
 };
 
 export type RealtimeSubscriptionContext = {
