@@ -116,6 +116,155 @@ describe("browser error reporter", () => {
 		expect(capture.envelopes).toHaveLength(2);
 	});
 
+	it("reads the stack of a listed error class and of no other", async () => {
+		class ClientFailure extends Error {
+			override name = "ClientFailure";
+		}
+		class Unlisted extends ClientFailure {}
+		const capture = captureTransport();
+		const options = {
+			dsn: DSN,
+			send: capture.send,
+			formattedStacks: true,
+			errorNames: ["ClientFailure"],
+		};
+		createBrowserErrorReporter(options).report(new ClientFailure());
+		const listed = createBrowserErrorReporter({
+			...options,
+			errorClasses: [ClientFailure],
+		});
+		listed.report(new ClientFailure());
+		listed.report(new Unlisted());
+		await listed.flush();
+
+		const values = capture.envelopes.map(
+			(envelope) => envelope.items[0]!.payload.exception.values[0],
+		);
+		expect(values.map((value) => value.type)).toEqual([
+			"ClientFailure",
+			"ClientFailure",
+			"ClientFailure",
+		]);
+		// Without the listing its prototype is not trusted, so the stack is not read.
+		expect(values[0]).not.toHaveProperty("stacktrace");
+		expect(values[1].stacktrace.frames.length).toBeGreaterThan(0);
+		// A subclass has its own, unlisted prototype.
+		expect(values[2]).not.toHaveProperty("stacktrace");
+	});
+
+	it("never calls a getter on a listed class's prototype", async () => {
+		let calls = 0;
+		class Tricky extends Error {}
+		Object.defineProperty(Tricky.prototype, "code", {
+			get() {
+				calls += 1;
+				return SECRET;
+			},
+		});
+		const capture = captureTransport();
+		const reporter = createBrowserErrorReporter({
+			dsn: DSN,
+			send: capture.send,
+			formattedStacks: true,
+			errorClasses: [Tricky],
+		});
+		reporter.report(new Tricky(SECRET));
+		await reporter.flush();
+		expect(calls).toBe(0);
+		expect(capture.envelopes[0]!.raw).not.toContain(SECRET);
+		expect(
+			capture.envelopes[0]!.items[0]!.payload.exception.values[0],
+		).not.toHaveProperty("stacktrace");
+	});
+
+	it("sends a fingerprint of registered labels as fingerprint and tag, and drops any other", async () => {
+		const UUID = "550e8400-e29b-41d4-a716-446655440000";
+		const capture = captureTransport();
+		const reporter = createBrowserErrorReporter({
+			dsn: DSN,
+			send: capture.send,
+			fingerprintLabels: [
+				"realtime",
+				"rejected",
+				"dropped",
+				"resource.arm",
+				"a",
+				"b",
+				"c",
+				"d",
+				"e",
+				// Not a valid label itself, so never admitted.
+				`token ${SECRET}`,
+			],
+		});
+		const report = (fingerprint: unknown) =>
+			reporter.report(new Error("x"), {
+				kind: "manual",
+				route: "/spaces/$spaceId",
+				fingerprint: fingerprint as string[],
+			});
+		report(["realtime", "rejected", "resource.arm"]);
+		report(["realtime", "dropped", "resource.arm"]);
+		for (const invalid of [
+			// Well-formed, but data rather than a registered label.
+			["realtime", UUID],
+			["realtime", "Unauthorized"],
+			["realtime", "customer.example.com"],
+			[`https://app.example.com/${SECRET}`],
+			[`token ${SECRET}`],
+			["x".repeat(65)],
+			["a", "b", "c", "d", "e"],
+			[],
+			["realtime", 42],
+			"realtime",
+		]) {
+			report(invalid);
+		}
+		await reporter.flush();
+
+		const events = capture.envelopes.map((e) => e.items[0]!.payload);
+		expect(events).toHaveLength(12);
+		expect(events[0].fingerprint).toEqual([
+			"{{ default }}",
+			"realtime",
+			"rejected",
+			"resource.arm",
+		]);
+		expect(events[0].tags["questpie.fingerprint"]).toBe(
+			"realtime/rejected/resource.arm",
+		);
+		// Same route, same call site: two groups because the labels differ.
+		expect(events[1].fingerprint).toEqual([
+			"{{ default }}",
+			"realtime",
+			"dropped",
+			"resource.arm",
+		]);
+		expect(events[0].transaction).toBe(events[1].transaction);
+		for (const event of events.slice(2)) {
+			expect(event).not.toHaveProperty("fingerprint");
+			expect(event.tags).not.toHaveProperty("questpie.fingerprint");
+		}
+		for (const envelope of capture.envelopes) {
+			expect(envelope.raw).not.toContain(SECRET);
+			expect(envelope.raw).not.toContain(UUID);
+			expect(envelope.raw).not.toContain("customer.example.com");
+		}
+	});
+
+	it("sends no fingerprint without registered labels", async () => {
+		const capture = captureTransport();
+		const reporter = createBrowserErrorReporter({
+			dsn: DSN,
+			send: capture.send,
+		});
+		reporter.report(new Error("x"), { fingerprint: ["realtime", "rejected"] });
+		await reporter.flush();
+		const event = capture.envelopes[0]!.items[0]!.payload;
+		expect(event).not.toHaveProperty("fingerprint");
+		expect(event.tags).not.toHaveProperty("questpie.fingerprint");
+	});
+
 	it("drops a URL without a query passed as the route", async () => {
 		const capture = captureTransport();
 		const reporter = createBrowserErrorReporter({

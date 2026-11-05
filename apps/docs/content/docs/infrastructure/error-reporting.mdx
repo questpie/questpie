@@ -63,7 +63,7 @@ import type { ErrorReportingAdapter } from "questpie/errors";
 const adapter: ErrorReportingAdapter = {
 	report(error, report) {
 		// error: the raw thrown value, which stays in your process
-		// report: { source, kind?, method?, route?, status?, job?, final?, trace? }
+		// report: { source, kind?, method?, route?, status?, job?, final?, fingerprint?, trace? }
 	},
 	flush: async (timeoutMs) => {},
 	shutdown: async (timeoutMs) => {},
@@ -94,6 +94,30 @@ export default route()
 		}
 		return { ok: true };
 	});
+```
+
+When one place reports failures that are not the same problem, tell them apart
+with `fingerprint`, at most four labels. Every label must be registered up
+front in `errors.fingerprintLabels`. A format check cannot tell a static label
+from an id (`550e8400-…`), a short message (`Unauthorized`) or a host name, so
+a fingerprint with any unregistered part is dropped whole, and without
+registered labels none is passed on. The Sentry adapter adds the labels to its
+default grouping and sends them as the `questpie.fingerprint` tag.
+
+```ts
+// questpie.config.ts
+runtimeConfig({
+	errors: {
+		adapter: sentryErrorReporting({ dsn: process.env.SENTRY_DSN }),
+		fingerprintLabels: ["inventory-sync", "rejected", "timeout"],
+	},
+});
+
+// a handler
+errors.report(error, {
+	source: "background",
+	fingerprint: ["inventory-sync", "rejected"],
+});
 ```
 
 Within one HTTP request or one job attempt, the same error object is reported
@@ -216,6 +240,35 @@ export function getRouter() {
 router's catch hook. The reporter caps itself at 30 events a minute so a render
 loop cannot flood the project.
 
+Failures your app detects itself (a dropped connection, a rejected
+subscription) are reported with `report`. Pass a `fingerprint` so that
+different failures from one call site become different issues; as on the
+server, its labels must be registered, here in the reporter's
+`fingerprintLabels`. To send frames for your own error class, list
+it in `errorClasses` (its prototype is then read like a built-in one, see
+[What leaves the process](#what-leaves-the-process)) and its name in
+`errorNames`:
+
+```ts
+class ClientFailure extends Error {
+	override name = "ClientFailure";
+}
+
+const errorReporter = createBrowserErrorReporter({
+	dsn: import.meta.env.VITE_SENTRY_DSN,
+	release: import.meta.env.VITE_RELEASE,
+	formattedStacks: true,
+	errorClasses: [ClientFailure],
+	errorNames: ["ClientFailure"],
+	fingerprintLabels: ["realtime", "rejected", "dropped"],
+});
+
+errorReporter.report(new ClientFailure(), {
+	kind: "manual",
+	fingerprint: ["realtime", "rejected"],
+});
+```
+
 ### Server-side rendering
 
 With TanStack Start, an error thrown while the server renders a page, in a
@@ -306,6 +359,8 @@ the complete payload:
   - The value is a description built from `report`
     (`HTTP 500 POST items/:id (thrown)`), not the error message.
 - `tags` and `transaction`: the validated `report` fields.
+- `fingerprint`: `{{ default }}` and the labels you passed, only when every
+  one is registered in `fingerprintLabels`.
 - `release`, `environment`, `platform`, `level`, `timestamp`, `event_id`.
 - `contexts.trace`, only when a span was active.
 - `debug_meta`, the debug ids needed for source maps.
@@ -341,13 +396,18 @@ reported without frames:
   every value is reported as `NonError`. Values that fail that check are
   also reported as `NonError`.
 - Only the error's own properties are read. Its prototype is read only when it
-  is a built-in error prototype, so a custom class reports its type only when
-  it sets `name` on the instance (`this.name = "ApiError"` or a class field)
-  and you list it in `errorNames`.
+  is a built-in error prototype or, in the browser, the prototype of a class
+  you list in `errorClasses`, and then only its data properties. So a custom
+  class reports its type only when it sets `name` on the instance
+  (`this.name = "ApiError"` or a class field) or on a listed prototype, and
+  you list it in `errorNames`.
 - With `formattedStacks` (below), a stack is formatted with a header built from
   `name`, `message` and, for Node's own errors, `code`. It is read only when
-  those are plain data on the error itself or on built-in prototypes; on the
-  server, also on custom prototypes that are verified not to be proxies.
+  those are plain data on the error itself, on built-in prototypes or on
+  prototypes of `errorClasses`; on the server, also on custom prototypes that
+  are verified not to be proxies. In the browser an error of an unlisted
+  custom class is therefore sent without frames. A subclass is not covered by
+  its listed parent.
 
 ### Reading stacks
 

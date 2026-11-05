@@ -187,6 +187,49 @@ describe("sentryErrorReporting", () => {
 		expect(capture.envelopes[0]!.raw).not.toContain(SECRET);
 	});
 
+	it("groups a manual report by its validated fingerprint", async () => {
+		const capture = captureTransport();
+		const errors = new ErrorReportingService({
+			adapter: sentryErrorReporting({ dsn: DSN, send: capture.send })!,
+			fingerprintLabels: ["sync", "rejected"],
+		});
+		const UUID = "550e8400-e29b-41d4-a716-446655440000";
+		errors.report(new Error(SECRET), {
+			source: "background",
+			fingerprint: ["sync", "rejected"],
+		});
+		for (const unlisted of [
+			`https://example.com/${SECRET}`,
+			UUID,
+			"Unauthorized",
+			"customer.example.com",
+		]) {
+			errors.report(new Error(SECRET), {
+				source: "background",
+				fingerprint: ["sync", unlisted],
+			});
+		}
+		await errors.flush(1000);
+
+		const [grouped, ...dropped] = capture.envelopes.map(
+			(envelope) => envelope.items[0]!.payload,
+		);
+		expect(grouped.fingerprint).toEqual(["{{ default }}", "sync", "rejected"]);
+		expect(grouped.tags["questpie.fingerprint"]).toBe("sync/rejected");
+		expect(dropped).toHaveLength(4);
+		for (const event of dropped) {
+			expect(event).not.toHaveProperty("fingerprint");
+			expect(event.tags).not.toHaveProperty("questpie.fingerprint");
+		}
+		for (const envelope of capture.envelopes) {
+			expect(envelope.raw).not.toContain(UUID);
+			expect(envelope.raw).not.toContain("customer.example.com");
+		}
+		for (const envelope of capture.envelopes) {
+			expect(envelope.raw).not.toContain(SECRET);
+		}
+	});
+
 	it("sends an AggregateError as its own type only, never its child errors", async () => {
 		const capture = captureTransport();
 		const adapter = sentryErrorReporting({

@@ -179,6 +179,62 @@ export interface EventInput {
 	trace?: { traceId: string; spanId: string };
 	release?: string;
 	environment?: string;
+	/** Unvalidated; see {@link validFingerprint}. */
+	fingerprint?: unknown;
+	/**
+	 * The labels a fingerprint may use. The browser always passes its
+	 * registered set; the server adapter passes none, because the framework's
+	 * error service already admitted only its registered labels.
+	 */
+	fingerprintLabels?: ReadonlySet<string>;
+}
+
+export const MAX_FINGERPRINT_PARTS = 4;
+const FINGERPRINT_PART = /^[A-Za-z0-9_\-.:]{1,64}$/;
+
+/** The registered labels that are themselves well-formed. */
+export function fingerprintLabelSet(
+	labels: readonly string[] | undefined,
+): Set<string> {
+	const set = new Set<string>();
+	for (const label of labels ?? []) {
+		if (typeof label === "string" && FINGERPRINT_PART.test(label)) {
+			set.add(label);
+		}
+	}
+	return set;
+}
+
+/**
+ * The fingerprint parts to send, or undefined to send none. A format check
+ * cannot tell a static label from an id or a short message, so with `labels`
+ * every part must be one the app registered; one unknown or malformed part
+ * drops the whole fingerprint.
+ */
+export function validFingerprint(
+	value: unknown,
+	labels?: ReadonlySet<string>,
+): string[] | undefined {
+	if (
+		!Array.isArray(value) ||
+		value.length === 0 ||
+		value.length > MAX_FINGERPRINT_PARTS
+	) {
+		return undefined;
+	}
+	const parts: string[] = [];
+	for (let index = 0; index < value.length; index++) {
+		const part: unknown = value[index];
+		if (
+			typeof part !== "string" ||
+			!FINGERPRINT_PART.test(part) ||
+			(labels !== undefined && !labels.has(part))
+		) {
+			return undefined;
+		}
+		parts.push(part);
+	}
+	return parts;
 }
 
 /** The complete event. Every field is listed here; nothing else is sent. */
@@ -202,6 +258,13 @@ export function buildEvent(input: EventInput): Event {
 		.toReversed();
 
 	const images = debugImages(locations);
+	const fingerprint = validFingerprint(
+		input.fingerprint,
+		input.fingerprintLabels,
+	);
+	const tags = fingerprint
+		? { ...input.tags, "questpie.fingerprint": fingerprint.join("/") }
+		: input.tags;
 	return {
 		event_id: uuid4(),
 		timestamp: dateTimestampInSeconds(),
@@ -220,7 +283,10 @@ export function buildEvent(input: EventInput): Event {
 		...(input.release ? { release: input.release } : {}),
 		...(input.environment ? { environment: input.environment } : {}),
 		...(input.transaction ? { transaction: input.transaction } : {}),
-		tags: input.tags,
+		tags,
+		// Added to Sentry's default grouping, so one call site still splits by
+		// stack and two labels at one call site split into two issues.
+		...(fingerprint ? { fingerprint: ["{{ default }}", ...fingerprint] } : {}),
 		exception: { values },
 		...(input.trace
 			? {

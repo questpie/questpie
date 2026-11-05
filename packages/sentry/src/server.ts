@@ -105,6 +105,7 @@ export function sentryErrorReporting(
 					handled: report.source === "manual" || report.source === "background",
 					transaction: transactionOf(report),
 					tags: tagsOf(report),
+					fingerprint: report.fingerprint,
 					trace: report.trace,
 					release: options.release,
 					environment: options.environment,

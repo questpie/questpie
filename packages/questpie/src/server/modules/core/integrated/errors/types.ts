@@ -50,6 +50,13 @@ export interface ErrorReportInfo {
 	job?: string;
 	/** For jobs: true when the adapter will not retry this failure. */
 	final?: boolean;
+	/**
+	 * Labels that tell apart failures reported from one place, e.g.
+	 * `["sync", "rejected"]`; an adapter groups by them. Every part must be
+	 * listed in `errors.fingerprintLabels`; otherwise the whole fingerprint is
+	 * dropped. At most 4 parts.
+	 */
+	fingerprint?: readonly string[];
 }
 
 /**
@@ -78,6 +85,14 @@ export interface ErrorReportingAdapter {
 
 export interface ErrorReportingConfig {
 	adapter?: ErrorReportingAdapter;
+	/**
+	 * The only labels a report's `fingerprint` may use: static strings declared
+	 * in code (1–64 characters `A-Z a-z 0-9 _ - . :`). A format check cannot
+	 * tell a label from an id or a short message, so nothing else reaches the
+	 * adapter; a fingerprint with an unlisted part is dropped whole. Without
+	 * it, no fingerprint is passed on.
+	 */
+	fingerprintLabels?: readonly string[];
 	/**
 	 * Maximum reports awaiting delivery. Further reports are dropped until
 	 * one settles, so an incident storm cannot grow memory without bound.
