@@ -237,11 +237,20 @@ export class RealtimeBindingOutputGate implements ClientSink {
 	}
 }
 
+// Resume progress is not query identity. Rewinding or dropping a cursor requests bootstrap.
 function sameSubscription(
 	left: RealtimeDesiredSubscription,
 	right: RealtimeDesiredSubscription,
 ): boolean {
-	return JSON.stringify(left) === JSON.stringify(right);
+	if (left.kind !== "query" || right.kind !== "query") {
+		return JSON.stringify(left) === JSON.stringify(right);
+	}
+	const { sinceSeq: leftSinceSeq, ...leftIdentity } = left;
+	const { sinceSeq: rightSinceSeq, ...rightIdentity } = right;
+	return (
+		(rightSinceSeq ?? -1) >= (leftSinceSeq ?? -1) &&
+		JSON.stringify(leftIdentity) === JSON.stringify(rightIdentity)
+	);
 }
 
 /**
@@ -325,7 +334,7 @@ export class RealtimeEdgeSession {
 			for (const subscription of input.topology.subscriptions) {
 				const current = this.bindings.get(subscription.id);
 				if (current && sameSubscription(current.subscription, subscription)) {
-					next.set(subscription.id, current);
+					next.set(subscription.id, { ...current, subscription });
 					continue;
 				}
 				let binding: RealtimeEdgeBinding;
@@ -372,7 +381,7 @@ export class RealtimeEdgeSession {
 
 		await Promise.allSettled(
 			[...previous.entries()]
-				.filter(([id, entry]) => next.get(id) !== entry)
+				.filter(([id, entry]) => next.get(id)?.binding !== entry.binding)
 				.map(([, entry]) => entry.binding.close()),
 		);
 	}
