@@ -117,7 +117,8 @@ export function createHookContext(
 		ctx.isBatch = params.bulk.isBatch;
 		ctx.recordIds = params.bulk.recordIds;
 		ctx.records = params.bulk.records;
-		if (params.bulk.originalRecords) ctx.originalRecords = params.bulk.originalRecords;
+		if (params.bulk.originalRecords)
+			ctx.originalRecords = params.bulk.originalRecords;
 		ctx.count = params.bulk.count;
 	}
 

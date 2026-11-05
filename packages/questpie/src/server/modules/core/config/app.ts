@@ -74,7 +74,11 @@ function resolveBulkRowImages(
 	count: number,
 ): RealtimeRowImage[] | undefined {
 	const records = ctx.records;
-	if (!records || records.length !== count || count > bulkRowImageLimit(ctx.app))
+	if (
+		!records ||
+		records.length !== count ||
+		count > bulkRowImageLimit(ctx.app)
+	)
 		return undefined;
 	if (hookType === "delete") {
 		return records.map((record) => ({
@@ -195,7 +199,9 @@ function reportRealtimeCaptureError(
  * ({@link GlobalCollectionHookContext.app} is `unknown` pre-codegen).
  */
 interface AppRealtimeSurface {
-	config?: { realtime?: { changeCapture?: boolean; bulkRowImageLimit?: number } };
+	config?: {
+		realtime?: { changeCapture?: boolean; bulkRowImageLimit?: number };
+	};
 }
 
 interface AppCollectionConfigSurface {
