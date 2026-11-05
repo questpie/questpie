@@ -27,7 +27,10 @@ function query(sinceSeq?: number): RealtimeDesiredSubscription {
 	};
 }
 
-function topology(revision: number, subscriptions: RealtimeDesiredSubscription[]): RealtimeDesiredTopology {
+function topology(
+	revision: number,
+	subscriptions: RealtimeDesiredSubscription[],
+): RealtimeDesiredTopology {
 	return { protocol: "questpie-realtime-topology", version: 2, revision, subscriptions };
 }
 
@@ -37,13 +40,21 @@ function harness() {
 	let revision = 0;
 	const apply = (subscriptions: RealtimeDesiredSubscription[], fail?: string) =>
 		edge.apply(
-			{ topology: topology(++revision, subscriptions), ownerGeneration: 1, signal: new AbortController().signal },
+			{
+				topology: topology(++revision, subscriptions),
+				ownerGeneration: 1,
+				signal: new AbortController().signal,
+			},
 			async (subscription): Promise<RealtimeEdgeBinding> => {
 				events.push(`bootstrap:${subscription.id}`);
 				if (subscription.id === fail) throw new Error("Staging refused");
 				return {
-					activate: () => { events.push(`activate:${subscription.id}`); },
-					close: () => { events.push(`close:${subscription.id}`); },
+					activate: () => {
+						events.push(`activate:${subscription.id}`);
+					},
+					close: () => {
+						events.push(`close:${subscription.id}`);
+					},
 				};
 			},
 		);
@@ -97,7 +108,9 @@ for (const [name, topic] of [
 test("failed graph admission does not commit a retained query's advanced cursor", async () => {
 	const h = harness();
 	await h.apply([query(5)]);
-	await expect(h.apply([query(10), { ...query(), id: "rejected" }], "rejected")).rejects.toThrow("Staging refused");
+	await expect(h.apply([query(10), { ...query(), id: "rejected" }], "rejected")).rejects.toThrow(
+		"Staging refused",
+	);
 	expect(h.edge.topology.subscriptions).toEqual([query(5)]);
 	h.events.length = 0;
 	await h.apply([query(7)]);
@@ -118,9 +131,46 @@ test("a new owner connection bootstraps and the closed owner cannot be reused", 
 
 test("channel replay cursor and CRDT binding changes keep their existing replacement contract", async () => {
 	const h = harness();
-	await h.apply([{ kind: "channel", id: "channel", channel: "presence", params: {}, lastEventId: "1" }, { kind: "crdt", id: "document", bindingId: "old" }]);
+	await h.apply([
+		{ kind: "channel", id: "channel", channel: "presence", params: {}, lastEventId: "1" },
+		{ kind: "crdt", id: "document", bindingId: "old" },
+	]);
 	h.events.length = 0;
-	await h.apply([{ kind: "channel", id: "channel", channel: "presence", params: {}, lastEventId: "2" }, { kind: "crdt", id: "document", bindingId: "new" }]);
-	expect(h.events).toEqual(["bootstrap:channel", "bootstrap:document", "activate:channel", "activate:document", "close:channel", "close:document"]);
+	await h.apply([
+		{ kind: "channel", id: "channel", channel: "presence", params: {}, lastEventId: "2" },
+		{ kind: "crdt", id: "document", bindingId: "new" },
+	]);
+	expect(h.events).toEqual([
+		"bootstrap:channel",
+		"bootstrap:document",
+		"activate:channel",
+		"activate:document",
+		"close:channel",
+		"close:document",
+	]);
+	await h.edge.close();
+});
+
+test("canonical object key order does not change the active query identity", async () => {
+	const h = harness();
+	await h.apply([query(1)]);
+	h.events.length = 0;
+	await h.apply([
+		{
+			kind: "query",
+			id: "first",
+			sinceSeq: 2,
+			topic: {
+				locale: "sk",
+				params: {},
+				input: { mine: true, companyId: "company" },
+				method: "POST",
+				operation: "query",
+				resource: "tasks/list",
+				resourceType: "route",
+			},
+		},
+	]);
+	expect(h.events).toEqual([]);
 	await h.edge.close();
 });

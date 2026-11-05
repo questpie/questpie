@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+
 import type {
 	RealtimeDesiredSubscription,
 	RealtimeDesiredTopology,
@@ -249,7 +251,7 @@ function sameSubscription(
 	const { sinceSeq: rightSinceSeq, ...rightIdentity } = right;
 	return (
 		(rightSinceSeq ?? -1) >= (leftSinceSeq ?? -1) &&
-		JSON.stringify(leftIdentity) === JSON.stringify(rightIdentity)
+		isDeepStrictEqual(leftIdentity, rightIdentity)
 	);
 }
 
