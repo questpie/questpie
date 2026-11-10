@@ -138,6 +138,12 @@ authorization. A binding that is still allowed continues; a denied binding
 ends with `access_revoked`. The receipt is
 `{ generation, transportEffect }`.
 
+Ordered frames for an exact authority binding are logically admitted against
+that channel/subject generation. Concurrent frame admissions can share a database
+transaction; a busy frame is checked again on every retry. A frame admitted
+before a cut may finish delivery afterward. Transport writes run outside the
+fence transaction so a blocked write does not delay an authority cut.
+
 | Transport     | `transportEffect`         | Physical effect                                 |
 | ------------- | ------------------------- | ----------------------------------------------- |
 | SSE           | `"exact-binding"`         | Only the matching logical binding is cut        |

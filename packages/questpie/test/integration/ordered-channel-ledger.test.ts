@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { channel } from "../../src/server/channels/channel-builder.js";
 import { ChannelsService } from "../../src/server/channels/service.js";
 import { withTransaction } from "../../src/server/collection/crud/shared/transaction.js";
+import type { ChannelAuthorityFrameAttempt } from "../../src/server/modules/core/integrated/realtime/channel-authority-fence.js";
 import {
 	ChannelEventLedger,
 	hashResolvedChannel,
@@ -1299,6 +1300,7 @@ describe("ordered channel event ledger", () => {
 		const read = fences.read.bind(fences);
 		const readChannelGenerations = fences.readChannelGenerations.bind(fences);
 		const admitExpected = fences.admitExpected.bind(fences);
+		const admitExpectedBatch = fences.admitExpectedBatch.bind(fences);
 		const calls = {
 			reads: 0,
 			admissions: 0,
@@ -1319,8 +1321,71 @@ describe("ordered channel event ledger", () => {
 			await before?.();
 			return admitExpected(...args);
 		};
+		fences.admitExpectedBatch = async (
+			channelHash: string,
+			entries: readonly ChannelAuthorityFrameAttempt[],
+		) => {
+			calls.admissions += entries.length;
+			const before = calls.beforeAdmission;
+			calls.beforeAdmission = undefined;
+			await before?.();
+			return admitExpectedBatch(channelHash, entries);
+		};
 		return calls;
 	}
+
+	test("65 exact subscribers share two frame admission transactions", async () => {
+		const subscriber = ledger();
+		const publisher = ledger();
+		const sinks = Array.from({ length: 65 }, (_, index) =>
+			createSink(`batch-${index}`),
+		);
+		for (const [index, sink] of sinks.entries()) {
+			await subscriber.subscribeLocal({
+				subscriptionId: sink.sessionId,
+				channel: "private-batch",
+				subject: `opaque-${index}`,
+				reauthorize: async () => true,
+				sink,
+			});
+		}
+		await publisher.append({
+			channel: "private-batch",
+			event: "message",
+			schemaIdentity: "space:message",
+			data: { id: "fan-out" },
+		});
+		const client = setup.app.db.$client as {
+			query: (...args: unknown[]) => unknown;
+		};
+		const query = client.query;
+		const lockReads: string[] = [];
+		client.query = function (this: unknown, ...args: unknown[]) {
+			const statement = String(args[0]);
+			if (
+				statement.includes('from "questpie_channel_authority_fence"') &&
+				/for share/i.test(statement)
+			) {
+				lockReads.push(statement);
+			}
+			return Reflect.apply(query, this, args);
+		};
+		try {
+			await subscriber.drain();
+		} finally {
+			client.query = query;
+		}
+		expect(
+			sinks.map((sink) => sink.frames.map((frame) => frame.data.id)),
+		).toEqual(sinks.map(() => ["fan-out"]));
+		// Two transactions, each with coordinator SHARE then bulk subject SHARE.
+		expect(lockReads).toHaveLength(4);
+		expect(
+			lockReads.filter((statement) =>
+				/order by .*subject.*asc/i.test(statement),
+			),
+		).toHaveLength(2);
+	});
 
 	test("an unchanged authority generation admits each frame without a fence read or a second encode", async () => {
 		// Every frame used to read the fence before its admission transaction,
@@ -1512,8 +1577,8 @@ describe("ordered channel event ledger", () => {
 		expect(
 			sinks.map((sink) => sink.frames.map((frame) => frame.data.id)),
 		).toEqual(bindings.map(([channelName]) => [channelName]));
-		// One reconciliation read per channel; frames are still admitted one by
-		// one inside their own fence transactions.
+		// One reconciliation read per channel; exact frame admissions use their
+		// own locked comparisons, potentially sharing a transaction.
 		expect(fenceReads).toHaveLength(2);
 	});
 
