@@ -1,0 +1,808 @@
+{
+	"postgres": "17.11",
+	"bun": "1.4.2",
+	"schema": "projection_access_5a664121a0e848a79634d5eda65ef54b",
+	"seedRowsPerTable": 100,
+	"measurement": "All Drizzle SQL during each evaluation; setup/cleanup excluded; no timing claim",
+	"cases": {
+		"A": "manual relation reads",
+		"B": "with batched relations",
+		"C": "with + per-row SQL field ACL",
+		"D": "with + fresh batched facts and pure field ACL"
+	},
+	"assertions": "36 evaluations: equal results; tenant, relation and principal isolation",
+	"results": [
+		{
+			"mode": "A",
+			"roots": 10,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 10,
+			"hiddenRelations": 2,
+			"visibleSecrets": 5,
+			"sql": {
+				"data": 11,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 12
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 10,
+				"grant": 0,
+				"field": 10
+			}
+		},
+		{
+			"mode": "B",
+			"roots": 10,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 10,
+			"hiddenRelations": 2,
+			"visibleSecrets": 5,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 0,
+				"other": 0,
+				"total": 4
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 0,
+				"field": 10
+			}
+		},
+		{
+			"mode": "C",
+			"roots": 10,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 10,
+			"hiddenRelations": 2,
+			"visibleSecrets": 5,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 10,
+				"other": 0,
+				"total": 14
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 10,
+				"field": 10
+			}
+		},
+		{
+			"mode": "D",
+			"roots": 10,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 10,
+			"hiddenRelations": 2,
+			"visibleSecrets": 5,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 1,
+				"other": 0,
+				"total": 5
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 1,
+				"field": 10
+			}
+		},
+		{
+			"mode": "A",
+			"roots": 10,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 10,
+			"hiddenRelations": 2,
+			"visibleSecrets": 5,
+			"sql": {
+				"data": 11,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 12
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 10,
+				"grant": 0,
+				"field": 10
+			}
+		},
+		{
+			"mode": "B",
+			"roots": 10,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 10,
+			"hiddenRelations": 2,
+			"visibleSecrets": 5,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 0,
+				"other": 0,
+				"total": 4
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 0,
+				"field": 10
+			}
+		},
+		{
+			"mode": "C",
+			"roots": 10,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 10,
+			"hiddenRelations": 2,
+			"visibleSecrets": 5,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 10,
+				"other": 0,
+				"total": 14
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 10,
+				"field": 10
+			}
+		},
+		{
+			"mode": "D",
+			"roots": 10,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 10,
+			"hiddenRelations": 2,
+			"visibleSecrets": 5,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 1,
+				"other": 0,
+				"total": 5
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 1,
+				"field": 10
+			}
+		},
+		{
+			"mode": "A",
+			"roots": 10,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 2
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 0,
+				"field": 0
+			}
+		},
+		{
+			"mode": "B",
+			"roots": 10,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 2
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 0,
+				"field": 0
+			}
+		},
+		{
+			"mode": "C",
+			"roots": 10,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 2
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 0,
+				"field": 0
+			}
+		},
+		{
+			"mode": "D",
+			"roots": 10,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 1,
+				"other": 0,
+				"total": 3
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 1,
+				"field": 0
+			}
+		},
+		{
+			"mode": "A",
+			"roots": 50,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 50,
+			"hiddenRelations": 10,
+			"visibleSecrets": 25,
+			"sql": {
+				"data": 51,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 52
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 50,
+				"grant": 0,
+				"field": 50
+			}
+		},
+		{
+			"mode": "B",
+			"roots": 50,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 50,
+			"hiddenRelations": 10,
+			"visibleSecrets": 25,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 0,
+				"other": 0,
+				"total": 4
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 0,
+				"field": 50
+			}
+		},
+		{
+			"mode": "C",
+			"roots": 50,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 50,
+			"hiddenRelations": 10,
+			"visibleSecrets": 25,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 50,
+				"other": 0,
+				"total": 54
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 50,
+				"field": 50
+			}
+		},
+		{
+			"mode": "D",
+			"roots": 50,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 50,
+			"hiddenRelations": 10,
+			"visibleSecrets": 25,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 1,
+				"other": 0,
+				"total": 5
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 1,
+				"field": 50
+			}
+		},
+		{
+			"mode": "A",
+			"roots": 50,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 50,
+			"hiddenRelations": 10,
+			"visibleSecrets": 25,
+			"sql": {
+				"data": 51,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 52
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 50,
+				"grant": 0,
+				"field": 50
+			}
+		},
+		{
+			"mode": "B",
+			"roots": 50,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 50,
+			"hiddenRelations": 10,
+			"visibleSecrets": 25,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 0,
+				"other": 0,
+				"total": 4
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 0,
+				"field": 50
+			}
+		},
+		{
+			"mode": "C",
+			"roots": 50,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 50,
+			"hiddenRelations": 10,
+			"visibleSecrets": 25,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 50,
+				"other": 0,
+				"total": 54
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 50,
+				"field": 50
+			}
+		},
+		{
+			"mode": "D",
+			"roots": 50,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 50,
+			"hiddenRelations": 10,
+			"visibleSecrets": 25,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 1,
+				"other": 0,
+				"total": 5
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 1,
+				"field": 50
+			}
+		},
+		{
+			"mode": "A",
+			"roots": 50,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 2
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 0,
+				"field": 0
+			}
+		},
+		{
+			"mode": "B",
+			"roots": 50,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 2
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 0,
+				"field": 0
+			}
+		},
+		{
+			"mode": "C",
+			"roots": 50,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 2
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 0,
+				"field": 0
+			}
+		},
+		{
+			"mode": "D",
+			"roots": 50,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 1,
+				"other": 0,
+				"total": 3
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 1,
+				"field": 0
+			}
+		},
+		{
+			"mode": "A",
+			"roots": 100,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 100,
+			"hiddenRelations": 20,
+			"visibleSecrets": 50,
+			"sql": {
+				"data": 101,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 102
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 100,
+				"grant": 0,
+				"field": 100
+			}
+		},
+		{
+			"mode": "B",
+			"roots": 100,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 100,
+			"hiddenRelations": 20,
+			"visibleSecrets": 50,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 0,
+				"other": 0,
+				"total": 4
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 0,
+				"field": 100
+			}
+		},
+		{
+			"mode": "C",
+			"roots": 100,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 100,
+			"hiddenRelations": 20,
+			"visibleSecrets": 50,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 100,
+				"other": 0,
+				"total": 104
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 100,
+				"field": 100
+			}
+		},
+		{
+			"mode": "D",
+			"roots": 100,
+			"principal": "alice",
+			"tenant": "alpha",
+			"returned": 100,
+			"hiddenRelations": 20,
+			"visibleSecrets": 50,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 1,
+				"other": 0,
+				"total": 5
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 1,
+				"field": 100
+			}
+		},
+		{
+			"mode": "A",
+			"roots": 100,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 100,
+			"hiddenRelations": 20,
+			"visibleSecrets": 50,
+			"sql": {
+				"data": 101,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 102
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 100,
+				"grant": 0,
+				"field": 100
+			}
+		},
+		{
+			"mode": "B",
+			"roots": 100,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 100,
+			"hiddenRelations": 20,
+			"visibleSecrets": 50,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 0,
+				"other": 0,
+				"total": 4
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 0,
+				"field": 100
+			}
+		},
+		{
+			"mode": "C",
+			"roots": 100,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 100,
+			"hiddenRelations": 20,
+			"visibleSecrets": 50,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 100,
+				"other": 0,
+				"total": 104
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 100,
+				"field": 100
+			}
+		},
+		{
+			"mode": "D",
+			"roots": 100,
+			"principal": "bob",
+			"tenant": "alpha",
+			"returned": 100,
+			"hiddenRelations": 20,
+			"visibleSecrets": 50,
+			"sql": {
+				"data": 2,
+				"count": 2,
+				"acl": 1,
+				"other": 0,
+				"total": 5
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 1,
+				"grant": 1,
+				"field": 100
+			}
+		},
+		{
+			"mode": "A",
+			"roots": 100,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 2
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 0,
+				"field": 0
+			}
+		},
+		{
+			"mode": "B",
+			"roots": 100,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 2
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 0,
+				"field": 0
+			}
+		},
+		{
+			"mode": "C",
+			"roots": 100,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 0,
+				"other": 0,
+				"total": 2
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 0,
+				"field": 0
+			}
+		},
+		{
+			"mode": "D",
+			"roots": 100,
+			"principal": "alice",
+			"tenant": "beta",
+			"returned": 0,
+			"hiddenRelations": 0,
+			"visibleSecrets": 0,
+			"sql": {
+				"data": 1,
+				"count": 1,
+				"acl": 1,
+				"other": 0,
+				"total": 3
+			},
+			"callbacks": {
+				"root": 1,
+				"relation": 0,
+				"grant": 1,
+				"field": 0
+			}
+		}
+	]
+}

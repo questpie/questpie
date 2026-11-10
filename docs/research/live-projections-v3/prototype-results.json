@@ -1,0 +1,25 @@
+{
+	"question": "Can existing v3 route execution host consistent projections and atomic output validation?",
+	"database": "prototype_live_0b459f47a546414698cee3c9f38577e9",
+	"ordinaryRoute": {
+		"task": 0,
+		"run": 1,
+		"tenants": ["alpha"]
+	},
+	"snapshotRoute": {
+		"task": 0,
+		"run": 0,
+		"tenants": ["alpha"]
+	},
+	"afterOrdinaryInvalidOutput": {
+		"task": 1,
+		"run": 1,
+		"tenants": ["alpha"]
+	},
+	"afterTransactionalInvalidOutput": {
+		"task": 0,
+		"run": 0,
+		"tenants": ["alpha"]
+	},
+	"verdict": "Existing executor can be wrapped, but ordinary routes promise neither a multi-read snapshot nor output-validation rollback. User-mode collection ACL remains effective inside the wrapper."
+}

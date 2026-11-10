@@ -1,0 +1,518 @@
+{
+	"sourceSha": "82fca046befe9cc487962ebdb49efa46e2d9ff09",
+	"bunVersion": "1.4.2",
+	"resolvedModules": {
+		"questpie": "file:///home/drepkovsky/.t3/worktrees/questpie/t3-0410df6b/packages/questpie/src/exports/index.ts",
+		"mcpSdk": "file:///home/drepkovsky/code/autopilot/node_modules/.bun/@modelcontextprotocol+sdk@1.32.1/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js",
+		"zod": "file:///home/drepkovsky/.t3/worktrees/questpie/t3-f9bcc92a/node_modules/.bun/zod@4.6.2/node_modules/zod/index.js"
+	},
+	"fixtureOnly": true,
+	"checks": [
+		"same catalog name/input/output schemas",
+		"human-http: same success, replay and server actor/workload",
+		"human-http: injection rejected before executor",
+		"human-http: shared product policy blocks executor",
+		"human-http: native error behavior reproduced",
+		"human-mcp: same success, replay and server actor/workload",
+		"human-mcp: injection rejected before executor",
+		"human-mcp: shared product policy blocks executor",
+		"human-mcp: native error behavior reproduced",
+		"agent-workload-mcp: same success, replay and server actor/workload",
+		"agent-workload-mcp: injection rejected before executor",
+		"agent-workload-mcp: shared product policy blocks executor",
+		"agent-workload-mcp: native error behavior reproduced",
+		"custom run extension bundle survives but flat field is lost"
+	],
+	"invocations": [
+		{
+			"actor": {
+				"kind": "human",
+				"subjectId": "human-1"
+			}
+		},
+		{
+			"actor": {
+				"kind": "human",
+				"subjectId": "human-1"
+			}
+		},
+		{
+			"actor": {
+				"kind": "human",
+				"subjectId": "human-1"
+			}
+		},
+		{
+			"actor": {
+				"kind": "human",
+				"subjectId": "human-1"
+			}
+		},
+		{
+			"actor": {
+				"kind": "human",
+				"subjectId": "human-1"
+			}
+		},
+		{
+			"actor": {
+				"kind": "human",
+				"subjectId": "human-1"
+			}
+		},
+		{
+			"actor": {
+				"kind": "agent",
+				"subjectId": "agent-1",
+				"credentialId": "fixture-credential",
+				"issuer": "fixture-issuer",
+				"scopes": ["tasks.rename"],
+				"expiresAt": "2099-01-01T00:00:00.000Z"
+			},
+			"workload": {
+				"type": "agent-run",
+				"id": "run-1"
+			},
+			"bundledRun": "run-1"
+		},
+		{
+			"actor": {
+				"kind": "agent",
+				"subjectId": "agent-1",
+				"credentialId": "fixture-credential",
+				"issuer": "fixture-issuer",
+				"scopes": ["tasks.rename"],
+				"expiresAt": "2099-01-01T00:00:00.000Z"
+			},
+			"workload": {
+				"type": "agent-run",
+				"id": "run-1"
+			},
+			"bundledRun": "run-1"
+		},
+		{
+			"actor": {
+				"kind": "agent",
+				"subjectId": "agent-1",
+				"credentialId": "fixture-credential",
+				"issuer": "fixture-issuer",
+				"scopes": ["tasks.rename"],
+				"expiresAt": "2099-01-01T00:00:00.000Z"
+			},
+			"workload": {
+				"type": "agent-run",
+				"id": "run-1"
+			},
+			"bundledRun": "run-1"
+		}
+	],
+	"authorizationRequests": [
+		{
+			"phase": "discovery",
+			"envelope": {
+				"credential": "fixture-verified-agent",
+				"runId": "run-1"
+			},
+			"tool": {
+				"kind": "route",
+				"name": "tasks.rename",
+				"operation": "execute",
+				"intent": "effect",
+				"transport": "workload",
+				"capabilities": ["tasks.rename"]
+			}
+		},
+		{
+			"phase": "call",
+			"envelope": {
+				"credential": "fixture-verified-agent",
+				"runId": "run-1"
+			},
+			"tool": {
+				"kind": "route",
+				"name": "tasks.rename",
+				"operation": "execute",
+				"intent": "effect",
+				"transport": "workload",
+				"capabilities": ["tasks.rename"]
+			}
+		},
+		{
+			"phase": "call",
+			"envelope": {
+				"credential": "fixture-verified-agent",
+				"runId": "run-1"
+			},
+			"tool": {
+				"kind": "route",
+				"name": "tasks.rename",
+				"operation": "execute",
+				"intent": "effect",
+				"transport": "workload",
+				"capabilities": ["tasks.rename"]
+			}
+		},
+		{
+			"phase": "call",
+			"envelope": {
+				"credential": "fixture-verified-agent",
+				"runId": "run-1"
+			},
+			"tool": {
+				"kind": "route",
+				"name": "tasks.rename",
+				"operation": "execute",
+				"intent": "effect",
+				"transport": "workload",
+				"capabilities": ["tasks.rename"]
+			}
+		},
+		{
+			"phase": "call",
+			"envelope": {
+				"credential": "fixture-verified-agent",
+				"runId": "run-1"
+			},
+			"tool": {
+				"kind": "route",
+				"name": "tasks.rename",
+				"operation": "execute",
+				"intent": "effect",
+				"transport": "workload",
+				"capabilities": ["tasks.rename"]
+			}
+		}
+	],
+	"raw": {
+		"catalog": {
+			"human": [
+				{
+					"name": "tasks.rename",
+					"inputSchema": {
+						"type": "object",
+						"properties": {
+							"companyId": {
+								"type": "string",
+								"const": "company-a"
+							},
+							"taskId": {
+								"type": "string",
+								"const": "task-1"
+							},
+							"expectedVersion": {
+								"type": "integer",
+								"exclusiveMinimum": 0,
+								"maximum": 9007199254740991
+							},
+							"idempotencyKey": {
+								"type": "string",
+								"minLength": 1
+							},
+							"title": {
+								"type": "string",
+								"minLength": 1
+							}
+						},
+						"required": [
+							"companyId",
+							"taskId",
+							"expectedVersion",
+							"idempotencyKey",
+							"title"
+						]
+					},
+					"outputSchema": {
+						"type": "object",
+						"properties": {
+							"taskId": {
+								"type": "string"
+							},
+							"title": {
+								"type": "string"
+							},
+							"version": {
+								"type": "integer",
+								"minimum": -9007199254740991,
+								"maximum": 9007199254740991
+							},
+							"replayed": {
+								"type": "boolean"
+							}
+						},
+						"required": ["taskId", "title", "version", "replayed"]
+					},
+					"annotations": {
+						"readOnlyHint": false
+					},
+					"execution": {
+						"taskSupport": "forbidden"
+					}
+				}
+			],
+			"agent": [
+				{
+					"name": "tasks.rename",
+					"inputSchema": {
+						"type": "object",
+						"properties": {
+							"companyId": {
+								"type": "string",
+								"const": "company-a"
+							},
+							"taskId": {
+								"type": "string",
+								"const": "task-1"
+							},
+							"expectedVersion": {
+								"type": "integer",
+								"exclusiveMinimum": 0,
+								"maximum": 9007199254740991
+							},
+							"idempotencyKey": {
+								"type": "string",
+								"minLength": 1
+							},
+							"title": {
+								"type": "string",
+								"minLength": 1
+							}
+						},
+						"required": [
+							"companyId",
+							"taskId",
+							"expectedVersion",
+							"idempotencyKey",
+							"title"
+						]
+					},
+					"outputSchema": {
+						"type": "object",
+						"properties": {
+							"taskId": {
+								"type": "string"
+							},
+							"title": {
+								"type": "string"
+							},
+							"version": {
+								"type": "integer",
+								"minimum": -9007199254740991,
+								"maximum": 9007199254740991
+							},
+							"replayed": {
+								"type": "boolean"
+							}
+						},
+						"required": ["taskId", "title", "version", "replayed"]
+					},
+					"annotations": {
+						"readOnlyHint": false
+					}
+				}
+			]
+		},
+		"human-http": {
+			"applied": {
+				"status": 200,
+				"body": {
+					"taskId": "task-1",
+					"title": "After",
+					"version": 2,
+					"replayed": false
+				}
+			},
+			"replay": {
+				"status": 200,
+				"body": {
+					"taskId": "task-1",
+					"title": "After",
+					"version": 2,
+					"replayed": true
+				}
+			},
+			"conflict": {
+				"status": 409,
+				"body": {
+					"error": {
+						"code": "CONFLICT",
+						"message": "error.conflict"
+					}
+				}
+			},
+			"injection": {
+				"status": 400,
+				"body": {
+					"error": {
+						"code": "VALIDATION_ERROR",
+						"message": "error.validation",
+						"fieldErrors": [
+							{
+								"path": "",
+								"message": "validation.object.unrecognizedKeys"
+							}
+						],
+						"cause": "[\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"actor\",\n      \"requesterRunId\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized keys: \\\"actor\\\", \\\"requesterRunId\\\"\"\n  }\n]"
+					}
+				}
+			},
+			"denied": {
+				"status": 403,
+				"body": {
+					"error": {
+						"code": "FORBIDDEN",
+						"message": "error.forbidden",
+						"context": {
+							"access": {
+								"operation": "read",
+								"resource": "route",
+								"reason": "Access denied"
+							}
+						}
+					}
+				}
+			}
+		},
+		"human-mcp": {
+			"applied": {
+				"content": [
+					{
+						"type": "text",
+						"text": "{\n  \"taskId\": \"task-1\",\n  \"title\": \"After\",\n  \"version\": 2,\n  \"replayed\": false\n}"
+					}
+				],
+				"structuredContent": {
+					"taskId": "task-1",
+					"title": "After",
+					"version": 2,
+					"replayed": false
+				}
+			},
+			"replay": {
+				"content": [
+					{
+						"type": "text",
+						"text": "{\n  \"taskId\": \"task-1\",\n  \"title\": \"After\",\n  \"version\": 2,\n  \"replayed\": true\n}"
+					}
+				],
+				"structuredContent": {
+					"taskId": "task-1",
+					"title": "After",
+					"version": 2,
+					"replayed": true
+				}
+			},
+			"conflict": {
+				"_meta": {
+					"questpie/error": {
+						"code": "internal",
+						"correlationId": "40a80b82-cdd5-4144-bc58-f14255b5c05a"
+					}
+				},
+				"content": [
+					{
+						"type": "text",
+						"text": "MCP operation failed"
+					}
+				],
+				"isError": true
+			},
+			"injection": {
+				"content": [
+					{
+						"type": "text",
+						"text": "MCP error -32602: Input validation error: Invalid arguments for tool tasks.rename: Unrecognized keys: \"actor\", \"requesterRunId\""
+					}
+				],
+				"isError": true
+			},
+			"denied": {
+				"_meta": {
+					"questpie/error": {
+						"code": "access_denied",
+						"correlationId": "3415bdaf-67d8-4e18-892c-be3b8a39288b"
+					}
+				},
+				"content": [
+					{
+						"type": "text",
+						"text": "MCP access denied"
+					}
+				],
+				"isError": true
+			}
+		},
+		"agent-workload-mcp": {
+			"applied": {
+				"content": [
+					{
+						"type": "text",
+						"text": "{\n  \"taskId\": \"task-1\",\n  \"title\": \"After\",\n  \"version\": 2,\n  \"replayed\": false\n}"
+					}
+				],
+				"structuredContent": {
+					"taskId": "task-1",
+					"title": "After",
+					"version": 2,
+					"replayed": false
+				}
+			},
+			"replay": {
+				"content": [
+					{
+						"type": "text",
+						"text": "{\n  \"taskId\": \"task-1\",\n  \"title\": \"After\",\n  \"version\": 2,\n  \"replayed\": true\n}"
+					}
+				],
+				"structuredContent": {
+					"taskId": "task-1",
+					"title": "After",
+					"version": 2,
+					"replayed": true
+				}
+			},
+			"conflict": {
+				"_meta": {
+					"questpie/error": {
+						"code": "internal",
+						"correlationId": "72a006e4-ea06-4493-ba22-059c4ae23004"
+					}
+				},
+				"content": [
+					{
+						"type": "text",
+						"text": "MCP operation failed"
+					}
+				],
+				"isError": true
+			},
+			"injection": {
+				"content": [
+					{
+						"type": "text",
+						"text": "MCP error -32602: Input validation error: Invalid arguments for tool tasks.rename: Unrecognized keys: \"actor\", \"requesterRunId\""
+					}
+				],
+				"isError": true
+			},
+			"denied": {
+				"_meta": {
+					"questpie/error": {
+						"code": "access_denied",
+						"correlationId": "6a06aa3f-5c43-45fa-bb4a-b04657591110"
+					}
+				},
+				"content": [
+					{
+						"type": "text",
+						"text": "MCP access denied"
+					}
+				],
+				"isError": true
+			}
+		}
+	},
+	"gaps": [
+		"Thrown ApiError.conflict becomes MCP internal; HTTP preserves CONFLICT/409.",
+		"Custom requesterRunId survives only inside ~contextExtensions, not as a flat route-handler field."
+	]
+}
