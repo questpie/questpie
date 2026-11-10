@@ -190,6 +190,27 @@ export async function executeJsonRouteInternal<
 	request?: Request,
 	params?: TParams,
 ): Promise<TOutput> {
+	return prepareJsonRoute(app, definition, input, request, params).execute(
+		context,
+	);
+}
+
+/**
+ * Parse route input once, then execute access, handler and output validation
+ * under the supplied context. Query executions retain their own snapshot.
+ * Adapters must verify credentials before preparing application input.
+ */
+export function prepareJsonRoute<
+	TInput,
+	TOutput,
+	TParams extends JsonRouteParams,
+>(
+	app: Questpie<any>,
+	definition: JsonRouteDefinition<TInput, TOutput, TParams>,
+	input: unknown,
+	request?: Request,
+	params?: TParams,
+) {
 	// Output-only routes (`.outputSchema()` with no `.schema()`) are valid JSON
 	// routes with `unknown` input (route-builder.ts) — their `schema` is undefined,
 	// so pass the raw input through rather than crashing on `.parse`.
@@ -201,35 +222,40 @@ export async function executeJsonRouteInternal<
 		if (!result.success) throw ApiError.fromZodError(result.error);
 		parsed = result.data;
 	}
-	const requestContext = unwrapRequestContext(context);
-	if (definition.query) {
-		return executeQueryRoute(
-			app,
-			definition,
-			parsed as TInput,
-			requestContext,
-			request,
-			params,
-		);
-	}
-	const resolvedContext =
-		requestContext ?? (await app.createContext({ accessMode: "system" }));
-	const adapterContext = isRouteAdapterContext(context)
-		? context
-		: toRouteAdapterContext(resolvedContext);
+	return {
+		input: parsed as TInput,
+		execute: async (context?: RouteExecutionContext): Promise<TOutput> => {
+			const requestContext = unwrapRequestContext(context);
+			if (definition.query) {
+				return executeQueryRoute(
+					app,
+					definition,
+					parsed as TInput,
+					requestContext,
+					request,
+					params,
+				);
+			}
+			const resolvedContext =
+				requestContext ?? (await app.createContext({ accessMode: "system" }));
+			const adapterContext = isRouteAdapterContext(context)
+				? context
+				: toRouteAdapterContext(resolvedContext);
 
-	return runWithContext(
-		createRouteStoreContext(app, resolvedContext, adapterContext),
-		() =>
-			runJsonRoute(
-				app,
-				definition,
-				parsed as TInput,
-				resolvedContext,
-				request,
-				params,
-			),
-	);
+			return runWithContext(
+				createRouteStoreContext(app, resolvedContext, adapterContext),
+				() =>
+					runJsonRoute(
+						app,
+						definition,
+						parsed as TInput,
+						resolvedContext,
+						request,
+						params,
+					),
+			);
+		},
+	};
 }
 
 /** Access, handler and output validation of one JSON route evaluation. */

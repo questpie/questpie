@@ -1,9 +1,15 @@
 import { describe, expect, it } from "bun:test";
 
+import { ApiError } from "questpie/errors";
+
 import {
 	McpExecutionBoundary,
+	McpPublicError,
+	McpProductError,
 	mcpPublicErrorCode,
+	toMcpToolError,
 } from "../src/server/execution-boundary.js";
+import { executeWorkloadTool } from "../src/server/workload-boundary.js";
 
 const userContext = (sessionId = "session-1") =>
 	({
@@ -41,6 +47,50 @@ const execute = (
 	});
 
 describe("MCP shared execution boundary", () => {
+	it("preserves known public and product errors through handoff execution", async () => {
+		for (const error of [
+			new McpPublicError("timeout"),
+			new McpProductError(ApiError.conflict("Stale version")),
+		]) {
+			const boundary = {
+				executeHandoff: async ({ invoke }: { invoke: () => unknown }) =>
+					invoke(),
+			};
+			const authorized = {
+				tool: { handoff: "approve" },
+				authorization: { context: {} },
+			};
+			const result = await executeWorkloadTool(
+				boundary as never,
+				authorized as never,
+				undefined,
+				{
+					signal: new AbortController().signal,
+					requestId: "test",
+					correlationId: "test",
+				},
+				() => {
+					throw error;
+				},
+			).catch((failure) => failure);
+			expect(result).toBe(error);
+		}
+	});
+	it("preserves legacy opaque ApiError classification outside route execution", async () => {
+		const error = ApiError.badRequest("private-custom-error");
+		const resolved = await execute(new McpExecutionBoundary(), {
+			invoke: () => {
+				throw error;
+			},
+		}).catch((failure) => failure);
+		expect(mcpPublicErrorCode(resolved)).toBe("internal");
+		expect(toMcpToolError(error)._meta?.["questpie/error"]).toMatchObject({
+			code: "internal",
+		});
+		expect(JSON.stringify(toMcpToolError(error))).not.toContain(
+			"private-custom-error",
+		);
+	});
 	it("rejects oversized, over-deep, cyclic, and accessor input before invocation", async () => {
 		const boundary = new McpExecutionBoundary({
 			maxInputBytes: 64,

@@ -24,7 +24,10 @@ import {
 import { extractAppServices } from "../../src/server/config/app-context.js";
 import { runInFreshRequestScope } from "../../src/server/config/request-scope.js";
 import { rowsOf } from "../../src/server/db/driver-result.js";
-import { executeJsonRoute } from "../../src/server/routes/execute.js";
+import {
+	executeJsonRoute,
+	prepareJsonRoute,
+} from "../../src/server/routes/execute.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { runTestDbMigrations } from "../utils/test-db";
 
@@ -312,6 +315,61 @@ describe("route().query() execution", () => {
 
 	afterAll(async () => {
 		await setup.cleanup();
+	});
+
+	it("prepares parsed dependencies once and executes policy and output once per owned snapshot", async () => {
+		let transforms = 0;
+		let outputs = 0;
+		let accessCalls = 0;
+		const prepared = prepareJsonRoute(
+			setup.app,
+			route()
+				.post()
+				.schema(
+					z.object({
+						size: z.string().transform((value) => {
+							transforms++;
+							return value.length;
+						}),
+					}),
+				)
+				.outputSchema(
+					z.object({ size: z.number() }).transform((value) => {
+						outputs++;
+						return value;
+					}),
+				)
+				.access(({ input }) => {
+					accessCalls++;
+					return input.size === 3;
+				})
+				.query()
+				.handler(async ({ input, db }) => {
+					expect((await readSettings(db)).readOnly).toBe("on");
+					return input;
+				}),
+			{ size: "abc" },
+		);
+		expect(prepared.input).toEqual({ size: 3 });
+		expect({ transforms, outputs, accessCalls }).toEqual({
+			transforms: 1,
+			outputs: 0,
+			accessCalls: 0,
+		});
+		for (let i = 0; i < 2; i++)
+			expect(await prepared.execute(userContext)).toEqual({ size: 3 });
+		expect({ transforms, outputs, accessCalls }).toEqual({
+			transforms: 1,
+			outputs: 2,
+			accessCalls: 2,
+		});
+		expect(isInTransaction()).toBe(false);
+		await expect(prepared.execute()).rejects.toThrow("explicit accessMode");
+		await withTransaction(setup.app.db, () =>
+			expect(prepared.execute(userContext)).rejects.toThrow(
+				"existing transaction",
+			),
+		);
 	});
 
 	it("runs access and the handler in one read-only repeatable-read transaction bound as the ambient db", async () => {

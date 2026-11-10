@@ -88,7 +88,7 @@ export class ApiError extends Error {
 		locale?: string,
 	): ApiErrorShape {
 		const result = formatPublicError(this, { t, locale });
-		return isDev ? { ...result, stack: this.stack } : result;
+		return isDev === true ? { ...result, stack: this.stack } : result;
 	}
 
 	/**

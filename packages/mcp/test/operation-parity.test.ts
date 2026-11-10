@@ -804,10 +804,17 @@ it("keeps referenced schemas valid inside parameter and union-result envelopes",
 			params: { id: "real" },
 			input: { left: { text: "left" }, right: { text: "right" } },
 		};
+		expect(descriptor.inputSchema.properties?.input).not.toHaveProperty(
+			"$schema",
+		);
+		expect(descriptor.outputSchema?.properties?.value).not.toHaveProperty(
+			"$schema",
+		);
 		expect(
 			new AjvJsonSchemaValidator().getValidator(descriptor.inputSchema)(input)
 				.valid,
 		).toBe(true);
+
 		const result = await connection.client.callTool({
 			name: "referenced",
 			arguments: input,
