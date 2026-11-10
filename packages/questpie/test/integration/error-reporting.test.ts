@@ -110,6 +110,59 @@ describe("ErrorReportingService", () => {
 		]);
 	});
 
+	it("keeps a fingerprint only of registered labels and drops any other", () => {
+		const { adapter, captured } = capturingAdapter();
+		const service = new ErrorReportingService({
+			adapter,
+			fingerprintLabels: [
+				"sync",
+				"rejected",
+				"resource.arm",
+				"a",
+				"b",
+				"c",
+				"d",
+				"e",
+			],
+		});
+		const labels = ["sync", "rejected", "resource.arm"];
+		service.report(new Error("x"), { source: "manual", fingerprint: labels });
+		for (const fingerprint of [
+			// Well-formed, but data rather than a declared label.
+			["sync", "550e8400-e29b-41d4-a716-446655440000"],
+			["sync", "Unauthorized"],
+			["sync", "customer.example.com"],
+			[`https://app.example.com/${SECRET}`],
+			[`token ${SECRET}`],
+			["x".repeat(65)],
+			["a", "b", "c", "d", "e"],
+			[],
+			["sync", 42],
+			"sync",
+		]) {
+			service.report(new Error("x"), {
+				source: "manual",
+				fingerprint: fingerprint as string[],
+			});
+		}
+		expect(captured[0]!.report.fingerprint).toEqual(labels);
+		// A copy: the caller's array cannot change after validation.
+		expect(captured[0]!.report.fingerprint).not.toBe(labels);
+		for (const { report } of captured.slice(1)) {
+			expect(report).toEqual({ source: "manual" });
+		}
+	});
+
+	it("passes no fingerprint when no labels are registered", () => {
+		const { adapter, captured } = capturingAdapter();
+		const service = new ErrorReportingService({ adapter });
+		service.report(new Error("x"), {
+			source: "manual",
+			fingerprint: ["sync", "rejected"],
+		});
+		expect(captured[0]!.report).toEqual({ source: "manual" });
+	});
+
 	it("adds trace correlation only when a span is actually active", () => {
 		const { adapter, captured } = capturingAdapter();
 		let active: { traceId: string; spanId: string } | undefined;

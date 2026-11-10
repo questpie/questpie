@@ -46,6 +46,7 @@ export const ALLOWED_EVENT_KEYS = new Set([
 	"environment",
 	"transaction",
 	"tags",
+	"fingerprint",
 	"exception",
 	"contexts",
 	"debug_meta",
